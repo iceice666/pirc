@@ -35,7 +35,7 @@ void main() {
   testWidgets('message clock keeps the web two-digit hour in 12-hour locales', (
     t,
   ) async {
-    final g = FakeGateway(), c = LiveController(g);
+    final g = FakeGateway(), c = LiveController(g, showing: 'engine');
     c.state = {
       'messages': [
         {
@@ -113,7 +113,7 @@ void main() {
   testWidgets(
     'failures auto-expand until the user chooses, including an incoming failure',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       c.state = {
         'messages': [
           {
@@ -167,7 +167,8 @@ void main() {
       t.view.physicalSize = const Size(390, 1400);
       addTearDown(t.view.reset);
       final g = FakeGateway(),
-          c = LiveController(g)..state = {'messages': fixture()['messages']};
+          c = LiveController(g, showing: 'engine')
+            ..state = {'messages': fixture()['messages']};
       String? copied;
       t.binding.defaultBinaryMessenger.setMockMethodCallHandler(
         SystemChannels.platform,
@@ -321,7 +322,8 @@ void main() {
       t.view.physicalSize = Size(width, 1400);
       addTearDown(t.view.reset);
       final g = FakeGateway(),
-          c = LiveController(g)..state = {'messages': fixture()['messages']};
+          c = LiveController(g, showing: 'engine')
+            ..state = {'messages': fixture()['messages']};
       await t.pumpWidget(shell(c, scale: 2));
       await t.pumpAndSettle();
       expect(t.takeException(), isNull);

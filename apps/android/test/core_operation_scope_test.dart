@@ -11,7 +11,8 @@ void main() {
     test(
       'new chat can send while old ${reading ? 'picker' : 'upload'} is pending',
       () async {
-        final g = FakeGateway(), c = LiveController(g)..sessionId = 'old';
+        final g = FakeGateway(),
+            c = LiveController(g, showing: 'engine')..sessionId = 'old';
         final pending = Completer<dynamic>();
         g.handler = (method, args) async {
           if (method == 'pickAttachments') {
@@ -50,7 +51,8 @@ void main() {
   }
 
   test('old upload completion cannot unblock a newer pending upload', () async {
-    final g = FakeGateway(), c = LiveController(g)..sessionId = 'old';
+    final g = FakeGateway(),
+        c = LiveController(g, showing: 'engine')..sessionId = 'old';
     final old = Completer<Json>(), fresh = Completer<Json>();
     g.handler = (method, args) async {
       if (method == 'pickAttachments') return [file('${c.sessionId}.png')];
@@ -93,7 +95,7 @@ void main() {
           t.view.physicalSize = Size(width, 900);
           addTearDown(t.view.reset);
           final g = FakeGateway(),
-              c = LiveController(g)
+              c = LiveController(g, showing: 'engine')
                 ..sessionId = 's'
                 ..connection = 'live'
                 ..control = {'held': true}
@@ -150,7 +152,7 @@ void main() {
   }
   test('Stop still requires a live connection and held control', () async {
     final g = FakeGateway(),
-        c = LiveController(g)
+        c = LiveController(g, showing: 'engine')
           ..sessionId = 's'
           ..busy = true;
     c.connection = 'offline';

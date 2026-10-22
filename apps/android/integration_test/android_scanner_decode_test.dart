@@ -45,7 +45,7 @@ void main() {
       );
 
       final gateway = _ScannerFixtureGateway();
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       final appTheme = await PircTheme.load();
       await tester.pumpWidget(
         MaterialApp(

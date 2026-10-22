@@ -269,7 +269,7 @@ void main() {
     'account change during a close flush cannot close a new context',
     (tester) async {
       final gateway = DocumentGateway();
-      final owner = LiveController(gateway)
+      final owner = LiveController(gateway, showing: 'engine')
         ..origin = 'https://gateway.example'
         ..clientId = 'client'
         ..pairingStamp = 'stamp';

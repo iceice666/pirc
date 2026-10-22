@@ -102,7 +102,7 @@ void main() {
   testWidgets(
     'ignored numeric letters clear optional values instead of retaining old limits',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       Json? saved;
       g.handler = (_, args) async => {'presets': []};
       await t.pumpWidget(
@@ -146,7 +146,7 @@ void main() {
   testWidgets(
     'invalid URL focuses the field and keeps key; valid syntax reaches server callback',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       final saved = <Json>[];
       g.handler = (_, args) async => {'presets': []};
       await t.pumpWidget(
@@ -196,7 +196,7 @@ void main() {
   testWidgets(
     'invalid tokens block save without clearing key or retaining old metadata',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       final saved = <Json>[];
       g.handler = (_, args) async => {'presets': []};
       await t.pumpWidget(
@@ -250,7 +250,7 @@ void main() {
   testWidgets(
     'save expands collapsed invalid model details and optional clearing omits values',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       final saved = <Json>[];
       g.handler = (_, args) async => {'presets': []};
       await t.pumpWidget(
@@ -294,7 +294,7 @@ void main() {
   testWidgets(
     'manual model Enter adds a model while ordinary field Enter submits',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       final saved = <Json>[];
       g.handler = (_, args) async => {'presets': []};
       await t.pumpWidget(

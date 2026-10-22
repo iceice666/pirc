@@ -243,7 +243,7 @@ void main() {
 }
 
 LiveController _controller(FakeGateway gateway, String sessionId) =>
-    LiveController(gateway)
+    LiveController(gateway, showing: 'engine')
       ..booting = false
       ..origin = 'https://gateway.example'
       ..clientId = 'phone'

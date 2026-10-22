@@ -40,7 +40,7 @@ void main() {
     tester,
   ) async {
     final gateway = FakeGateway();
-    final controller = LiveController(gateway)
+    final controller = LiveController(gateway, showing: 'engine')
       ..origin = 'https://gateway.example'
       ..clientId = 'phone'
       ..pairingStamp = 'pairing-one';
@@ -160,7 +160,7 @@ void main() {
     tester,
   ) async {
     final gateway = FakeGateway();
-    final controller = LiveController(gateway)
+    final controller = LiveController(gateway, showing: 'engine')
       ..origin = 'https://gateway.example'
       ..clientId = 'phone'
       ..pairingStamp = 'pairing-one';
@@ -217,7 +217,7 @@ void main() {
     'active expiry uses native remaining time despite phone clock skew',
     (tester) async {
       final gateway = FakeGateway();
-      final controller = LiveController(gateway)
+      final controller = LiveController(gateway, showing: 'engine')
         ..origin = 'https://gateway.example'
         ..clientId = 'phone'
         ..pairingStamp = 'pairing-one';
@@ -250,7 +250,7 @@ void main() {
     tester,
   ) async {
     final gateway = FakeGateway();
-    final controller = LiveController(gateway)
+    final controller = LiveController(gateway, showing: 'engine')
       ..origin = 'https://gateway.example'
       ..clientId = 'phone'
       ..pairingStamp = 'pairing-one';
@@ -289,7 +289,7 @@ void main() {
     tester,
   ) async {
     final gateway = FakeGateway();
-    final controller = LiveController(gateway)
+    final controller = LiveController(gateway, showing: 'engine')
       ..origin = 'https://gateway.example'
       ..clientId = 'phone'
       ..pairingStamp = 'pairing-one';

@@ -34,7 +34,7 @@ Future<LiveController> mount(
   t.view.devicePixelRatio = 1;
   t.view.physicalSize = const Size(390, 900);
   addTearDown(t.view.reset);
-  final c = LiveController(g)
+  final c = LiveController(g, showing: 'engine')
     ..nodes = [
       {'id': 'h'},
     ];

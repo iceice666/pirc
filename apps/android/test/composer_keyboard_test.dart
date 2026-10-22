@@ -27,7 +27,7 @@ Future<(LiveController, TextEditingController, FakeGateway)> mount(
   t.view.physicalSize = Size(width, 800);
   addTearDown(t.view.reset);
   final g = FakeGateway();
-  final c = LiveController(g)
+  final c = LiveController(g, showing: 'engine')
     ..sessionId = 's'
     ..connection = 'live'
     ..control = {'held': true};

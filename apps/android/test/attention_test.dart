@@ -56,7 +56,7 @@ Widget memoryApp(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   testWidgets('memory source links scale once and remain tappable', (t) async {
-    final g = AttentionGateway(), c = LiveController(g);
+    final g = AttentionGateway(), c = LiveController(g, showing: 'engine');
     (g.data['memory'] as Map)['sessions'] = {'chat': 'chat'};
     String? opened;
     await t.pumpWidget(memoryApp(c, onOpen: (id) => opened = id));
@@ -100,11 +100,18 @@ void main() {
       t.view.devicePixelRatio = 1;
       t.view.physicalSize = const Size(390, 844);
       addTearDown(t.view.reset);
-      final g = AttentionGateway(), c = LiveController(g);
+      final g = AttentionGateway(), c = LiveController(g, showing: 'engine');
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();
       expect(c.attentionCount, 1);
-      expect(t.widget<MobileTabs>(find.byType(MobileTabs)).waiting, 1);
+      expect(
+        t
+            .widget<MobileTabs>(find.byType(MobileTabs))
+            .tabs
+            .firstWhere((tab) => tab.id == 'engine')
+            .badge,
+        1,
+      );
       expect(find.text('Reply'), findsOneWidget);
       await t.pumpWidget(const SizedBox());
       await g.stream.close();
@@ -138,7 +145,7 @@ void main() {
       ];
       g.handler = (m, args) async =>
           m == 'answerRelayed' ? {} : g.normal(m, args);
-      final c = LiveController(g);
+      final c = LiveController(g, showing: 'engine');
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();
       expect(find.text('Run rm -rf build?'), findsOneWidget);
@@ -162,7 +169,7 @@ void main() {
   testWidgets(
     'forget requires the second inline click; restore history sends the selected version',
     (t) async {
-      final g = AttentionGateway(), c = LiveController(g);
+      final g = AttentionGateway(), c = LiveController(g, showing: 'engine');
       g.handler = (m, args) async {
         if ('${args['path']}'.endsWith('/history')) {
           return {
@@ -221,7 +228,7 @@ void main() {
     'history requests do not leak a late version into another entry',
     (t) async {
       final g = AttentionGateway(),
-          c = LiveController(g),
+          c = LiveController(g, showing: 'engine'),
           late = Completer<Json>();
       g.data['memory'] = {
         ...g.memory,
@@ -298,7 +305,7 @@ void main() {
   testWidgets(
     'native change events debounce, ignore old sessions and reconcile after reconnect',
     (t) async {
-      final g = AttentionGateway(), c = LiveController(g);
+      final g = AttentionGateway(), c = LiveController(g, showing: 'engine');
       await c.boot();
       await c.open('s');
       g.publish('s');
@@ -339,7 +346,7 @@ void main() {
       t.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(t.view.reset);
       addTearDown(t.platformDispatcher.clearTextScaleFactorTestValue);
-      final g = AttentionGateway(), c = LiveController(g);
+      final g = AttentionGateway(), c = LiveController(g, showing: 'engine');
       String? opened;
       await t.pumpWidget(memoryApp(c, onOpen: (id) => opened = id));
       await t.pumpAndSettle();

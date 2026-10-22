@@ -453,7 +453,7 @@ void main() {
           'method': 'GET',
         }, _pircShell),
       ]);
-    final owner = LiveController(gateway)
+    final owner = LiveController(gateway, showing: 'engine')
       ..origin = 'https://gateway.example'
       ..clientId = 'client'
       ..pairingStamp = 'stamp';

@@ -82,7 +82,7 @@ void main() {
         body: {'workspaceId': workspace['id']},
       );
       final sessionId = '${obj(created['session'])['id']}';
-      final c = LiveController(g), probe = _PlatformProbe();
+      final c = LiveController(g, showing: 'engine'), probe = _PlatformProbe();
       Timer? secondHeartbeat;
       final heartbeatErrors = <Object>[];
       final heartbeatJobs = <Future<void>>[];
@@ -322,7 +322,7 @@ void main() {
         );
         final sessionId = '${obj(created['session'])['id']}';
         final theme = await PircTheme.load();
-        final c = LiveController(g);
+        final c = LiveController(g, showing: 'engine');
         await t.pumpWidget(MobileApp(theme: theme, controller: c));
         await until(() => !c.booting, 'prepare process-death App boot');
         c.pairLink = null;
@@ -364,7 +364,7 @@ void main() {
         expect(expectedClient, isNotEmpty);
         final g = _RecordingGateway();
         final theme = await PircTheme.load();
-        final c = LiveController(g);
+        final c = LiveController(g, showing: 'engine');
         var restoreVerified = false;
         await t.pumpWidget(MobileApp(theme: theme, controller: c));
         try {

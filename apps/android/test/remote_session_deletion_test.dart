@@ -31,7 +31,7 @@ void main() {
             }
             return g.normal(method, args);
           };
-          final c = LiveController(g);
+          final c = LiveController(g, showing: 'engine');
           await t.pumpWidget(MobileApp(theme: theme, controller: c));
           await t.pumpAndSettle();
           c.preferences['appearance'] = brightness.name;
@@ -89,7 +89,7 @@ void main() {
       if (method == 'draft' && args['text'] == '') writes.add('clear');
       return g.normal(method, args);
     };
-    final c = LiveController(g);
+    final c = LiveController(g, showing: 'engine');
     await c.boot();
     await c.open('s');
     g.publish('s');

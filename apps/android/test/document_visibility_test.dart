@@ -6,7 +6,7 @@ import 'package:pirc_mobile/live/gateway.dart';
 import 'live_test.dart' show FakeGateway;
 
 Future<LiveController> _readyController(FakeGateway gateway) async {
-  final controller = LiveController(gateway);
+  final controller = LiveController(gateway, showing: 'engine');
   await controller.boot();
   await controller.open('s');
   gateway.publish('s');

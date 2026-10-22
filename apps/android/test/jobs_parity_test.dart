@@ -32,7 +32,7 @@ Json get fixture => {
     ],
   },
 };
-LiveController controller(FakeGateway g) => LiveController(g)
+LiveController controller(FakeGateway g) => LiveController(g, showing: 'engine')
   ..sessionId = 's'
   ..origin = 'https://test'
   ..clientId = 'phone'

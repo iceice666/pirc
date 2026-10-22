@@ -20,7 +20,7 @@ void main() {
     'shared panel reads coalesce and a fresh signal queues exactly one follow-up; account changes discard old replies',
     (t) async {
       final g = FakeGateway(),
-          c = LiveController(g)
+          c = LiveController(g, showing: 'engine')
             ..sessionId = 's'
             ..origin = 'one'
             ..clientId = 'a';
@@ -67,7 +67,8 @@ void main() {
   testWidgets(
     'task selection uses 400 lines, keeps scope, and refreshes after status changes without polling',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+      final g = FakeGateway(),
+          c = LiveController(g, showing: 'engine')..sessionId = 's';
       var data = obj(fixture['panel']);
       var outputs = 0;
       g.handler = (_, a) async {
@@ -130,7 +131,8 @@ void main() {
     },
   );
   testWidgets('a stale panel read cannot undo a confirmed stop', (t) async {
-    final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+    final g = FakeGateway(),
+        c = LiveController(g, showing: 'engine')..sessionId = 's';
     final p = c.panelData;
     g.handler = (_, _) async => fixture['panel'];
     await p.refresh();
@@ -159,7 +161,8 @@ void main() {
       t.view.devicePixelRatio = 1;
       t.view.physicalSize = const Size(390, 1000);
       addTearDown(t.view.reset);
-      final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+      final g = FakeGateway(),
+          c = LiveController(g, showing: 'engine')..sessionId = 's';
       g.handler = (_, a) async => '${a['path']}'.contains('/background/')
           ? fixture['output']
           : fixture['panel'];
@@ -228,7 +231,8 @@ void main() {
     t.view.physicalSize = const Size(390, 844);
     addTearDown(t.view.reset);
 
-    final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+    final g = FakeGateway(),
+        c = LiveController(g, showing: 'engine')..sessionId = 's';
     g.handler = (_, _) async => fixture['panel'];
     final baseTheme = theme.build(Brightness.light);
     await t.pumpWidget(

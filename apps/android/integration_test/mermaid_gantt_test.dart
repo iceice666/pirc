@@ -28,7 +28,7 @@ void main() {
       );
       final sessionId = '${obj(response['session'])['id']}';
       final scoped = DartScopedGateway(raw);
-      final controller = LiveController(scoped);
+      final controller = LiveController(scoped, showing: 'engine');
       final theme = await PircTheme.load();
       Future<void> until(bool Function() ready, String label) async {
         for (var i = 0; i < 200 && !ready(); i++) {

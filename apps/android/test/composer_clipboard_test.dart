@@ -16,7 +16,7 @@ Json image() => {
 void main() {
   test('mixed clipboard replaces selected text and uploads images', () async {
     final g = FakeGateway();
-    final c = LiveController(g)..sessionId = 's';
+    final c = LiveController(g, showing: 'engine')..sessionId = 's';
     final text = TextEditingController(text: 'before OLD after')
       ..selection = const TextSelection(baseOffset: 7, extentOffset: 10);
     g.handler = (method, args) async {
@@ -46,7 +46,7 @@ void main() {
     'delayed clipboard cannot replace a newer edit or another chat',
     () async {
       final g = FakeGateway();
-      final c = LiveController(g)..sessionId = 's';
+      final c = LiveController(g, showing: 'engine')..sessionId = 's';
       final text = TextEditingController(text: 'old');
       final clip = Completer<Json>();
       g.handler = (method, args) async =>
@@ -70,7 +70,7 @@ void main() {
 
   test('delayed read preserves a newer edit in the same chat', () async {
     final g = FakeGateway();
-    final c = LiveController(g)..sessionId = 's';
+    final c = LiveController(g, showing: 'engine')..sessionId = 's';
     final text = TextEditingController(text: 'old');
     final clip = Completer<Json>();
     g.handler = (method, args) async {
@@ -96,7 +96,7 @@ void main() {
 
   test('per-image read failure retains mixed clipboard text', () async {
     final g = FakeGateway();
-    final c = LiveController(g)..sessionId = 's';
+    final c = LiveController(g, showing: 'engine')..sessionId = 's';
     final text = TextEditingController();
     g.handler = (method, args) async => method == 'readClipboard'
         ? {
@@ -119,7 +119,7 @@ void main() {
     t,
   ) async {
     final g = FakeGateway();
-    final c = LiveController(g)
+    final c = LiveController(g, showing: 'engine')
       ..sessionId = 's'
       ..connection = 'live';
     final text = TextEditingController(text: 'draft');
@@ -169,7 +169,7 @@ void main() {
 
   testWidgets('keyboard Paste action uses native mixed clipboard', (t) async {
     final g = FakeGateway();
-    final c = LiveController(g)
+    final c = LiveController(g, showing: 'engine')
       ..sessionId = 's'
       ..connection = 'live';
     final text = TextEditingController(text: 'draft');

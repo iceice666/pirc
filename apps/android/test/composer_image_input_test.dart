@@ -11,7 +11,7 @@ void main() {
     t,
   ) async {
     final g = FakeGateway();
-    final c = LiveController(g)
+    final c = LiveController(g, showing: 'engine')
       ..sessionId = 's'
       ..connection = 'live';
     final text = TextEditingController(text: 'keep mixed text');
@@ -85,7 +85,7 @@ void main() {
     'missing image bytes reports error, non-image content is ignored',
     () async {
       final g = FakeGateway();
-      final c = LiveController(g)..sessionId = 's';
+      final c = LiveController(g, showing: 'engine')..sessionId = 's';
       await c.insertImage(
         const KeyboardInsertedContent(
           mimeType: 'image/png',

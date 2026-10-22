@@ -56,6 +56,28 @@ class DartScopedGateway extends Gateway {
     'managementCheck',
     'managementCancel',
     'managementOpen',
+    // The rooms are the account's, one state for every window.
+    'roomsStart',
+    'roomsStop',
+    'roomsVisible',
+    'roomsReload',
+    'roomsOpen',
+    'roomsOlder',
+    'roomsSend',
+    'roomsUpload',
+    'roomsTyping',
+    'roomsCreate',
+    'roomsArchived',
+    'roomsSetArchived',
+    'roomsUpdate',
+    'roomsMove',
+    'roomsPin',
+    'roomsFaceSaved',
+    'roomsFaces',
+    'roomsOpenThread',
+    'roomsCloseThread',
+    'roomDraft',
+    'saveRoomDraft',
   };
 
   static const Set<String> _rootBootRouteFields = <String>{
@@ -275,7 +297,7 @@ class DartScopedGateway extends Gateway {
       return false;
     }
 
-    if (event['scope'] == 'account') return true;
+    if (event['scope'] == 'account' || event['scope'] == 'rooms') return true;
 
     final eventContextId = event['contextId'];
     if (eventContextId is String) return eventContextId == contextId;

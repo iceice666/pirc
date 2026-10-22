@@ -110,7 +110,7 @@ void main() {
     tester,
   ) async {
     final gateway = FakeGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     final option = <String, dynamic>{
       ...provider,
       'requiresPolicyConsent': true,
@@ -158,7 +158,7 @@ void main() {
     tester,
   ) async {
     final gateway = FakeGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     gateway.handler = (method, args) async {
       if (method == 'request' &&
           args['path'] == '/api/provider-auth/sessions') {
@@ -188,7 +188,7 @@ void main() {
     tester,
   ) async {
     final gateway = FakeGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     gateway.handler = (method, args) async {
       if (method == 'request' &&
           args['path'] == '/api/provider-auth/sessions') {
@@ -218,7 +218,7 @@ void main() {
     expect(obj(oracle['newURL'])['success'], isFalse);
     final authUrl = '${oracle['raw']}'.replaceFirst('http://', 'https://');
     final gateway = FakeGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     gateway.handler = (method, args) async {
       if (method == 'request' &&
           args['path'] == '/api/provider-auth/sessions') {
@@ -246,7 +246,7 @@ void main() {
     expect(obj(oracle['newURL'])['success'], isTrue);
     final authUrl = '${oracle['raw']}'.replaceFirst('http://', 'https://');
     final gateway = FakeGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     gateway.handler = (method, args) async {
       if (method == 'request' &&
           args['path'] == '/api/provider-auth/sessions') {
@@ -268,7 +268,7 @@ void main() {
     tester,
   ) async {
     final gateway = FakeGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     final active = <bool>[];
     final busy = <bool>[];
     var succeeded = 0;
@@ -316,7 +316,8 @@ void main() {
   testWidgets('text login prompts keep exact entry and web input origin', (
     tester,
   ) async {
-    final gateway = FakeGateway(), controller = LiveController(gateway);
+    final gateway = FakeGateway(),
+        controller = LiveController(gateway, showing: 'engine');
     final prompt = <String, dynamic>{
       'id': 'code',
       'kind': 'text',
@@ -361,7 +362,7 @@ void main() {
   ) async {
     const answer = 'private-code-92817';
     final gateway = FakeGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     final prompt = <String, dynamic>{
       'id': 'callback',
       'kind': 'manual',
@@ -410,7 +411,7 @@ void main() {
     tester,
   ) async {
     final gateway = FakeGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     final answer = Completer<Json>();
     final prompt = <String, dynamic>{
       'id': 'code',
@@ -469,7 +470,7 @@ void main() {
 
   testWidgets('skipping select prompt omits the answer value', (tester) async {
     final gateway = FakeGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     final prompt = <String, dynamic>{
       'id': 'region',
       'kind': 'select',
@@ -509,7 +510,7 @@ void main() {
     tester,
   ) async {
     final gateway = FakeGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     final busy = <bool>[];
     final loggedOut = <String>[];
     final connectedProvider = <String, dynamic>{...provider, 'connected': true};
@@ -533,7 +534,7 @@ void main() {
     'late login from a changed account is not accepted or cancelled',
     (tester) async {
       final gateway = FakeGateway();
-      final controller = LiveController(gateway)
+      final controller = LiveController(gateway, showing: 'engine')
         ..origin = 'https://gateway-a.example'
         ..clientId = 'client-a';
       final response = Completer<Json>();
@@ -574,7 +575,7 @@ void main() {
     tester,
   ) async {
     final oldGateway = FakeGateway();
-    final oldController = LiveController(oldGateway)
+    final oldController = LiveController(oldGateway, showing: 'engine')
       ..origin = 'https://gateway-a.example'
       ..clientId = 'client-a';
     final oldResponse = Completer<Json>();
@@ -587,7 +588,7 @@ void main() {
     };
 
     final newGateway = FakeGateway();
-    final newController = LiveController(newGateway)
+    final newController = LiveController(newGateway, showing: 'engine')
       ..origin = 'https://gateway-b.example'
       ..clientId = 'client-b';
     final newResponse = Completer<Json>();

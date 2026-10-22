@@ -60,7 +60,7 @@ void main() {
     'read generations, exact paths, clamp focus, failed open and scope changes',
     () async {
       final g = FakeGateway(),
-          c = LiveController(g)
+          c = LiveController(g, showing: 'engine')
             ..sessionId = 'one'
             ..origin = 'a';
       final slow = Completer<Json>(), obsolete = Completer<Json>();
@@ -109,7 +109,8 @@ void main() {
   test(
     'hidden run completion defers refresh; reopen restores source and range',
     () async {
-      final g = FakeGateway(), c = LiveController(g)..sessionId = 'one';
+      final g = FakeGateway(),
+          c = LiveController(g, showing: 'engine')..sessionId = 'one';
       g.handler = (_, args) async => '${args['path']}'.contains('/content')
           ? content('guide.md', '# Guide\nnext\n')
           : {'path': '', 'entries': []};
@@ -148,7 +149,8 @@ void main() {
   testWidgets(
     'directory types, Markdown source toggle, relative links and back',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+      final g = FakeGateway(),
+          c = LiveController(g, showing: 'engine')..sessionId = 's';
       g.handler = (_, args) async {
         final uri = Uri.parse(args['path']), path = uri.queryParameters['path'];
         if (uri.path.endsWith('/files')) {
@@ -206,7 +208,8 @@ void main() {
       addTearDown(t.view.reset);
       t.view.devicePixelRatio = 1;
       t.view.physicalSize = const Size(390, 844);
-      final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+      final g = FakeGateway(),
+          c = LiveController(g, showing: 'engine')..sessionId = 's';
       g.handler = (_, args) async => '${args['path']}'.contains('/content')
           ? {...content('image.png', '', binary: true), 'imageTooLarge': true}
           : {'entries': []};
@@ -279,7 +282,8 @@ void main() {
     addTearDown(t.view.reset);
     t.view.devicePixelRatio = 1;
     t.view.physicalSize = const Size(861, 844);
-    final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+    final g = FakeGateway(),
+        c = LiveController(g, showing: 'engine')..sessionId = 's';
     g.handler = (_, args) async => '${args['path']}'.contains('/files?')
         ? {
             'path': '',

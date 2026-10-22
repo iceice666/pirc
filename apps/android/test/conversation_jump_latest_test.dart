@@ -14,7 +14,7 @@ void main() {
     t.view.physicalSize = const Size(390, 900);
     addTearDown(t.view.reset);
     final gateway = FakeGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     await t.pumpWidget(MobileApp(theme: theme, controller: controller));
     await t.pumpAndSettle();
     await controller.open('s');
@@ -66,7 +66,7 @@ void main() {
       addTearDown(tester.view.reset);
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       final gateway = FakeGateway();
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       await tester.pumpWidget(MobileApp(theme: theme, controller: controller));
       await tester.pumpAndSettle();
       await controller.open('s');

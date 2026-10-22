@@ -48,7 +48,7 @@ void main() {
             'detailsOpen': true,
             'sidebarCollapsed': false,
           };
-        final c = LiveController(g);
+        final c = LiveController(g, showing: 'engine');
         await t.pumpWidget(MobileApp(theme: theme, controller: c));
         await t.pumpAndSettle();
         await c.open('s');
@@ -188,7 +188,7 @@ void main() {
       t.view.devicePixelRatio = 1;
       t.view.physicalSize = const Size(1280, 900);
       addTearDown(t.view.reset);
-      final g = PanelGateway(), c = LiveController(g);
+      final g = PanelGateway(), c = LiveController(g, showing: 'engine');
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();
       await c.open('s');
@@ -235,7 +235,7 @@ void main() {
       t.view.physicalSize = const Size(500, 1000);
       addTearDown(t.view.reset);
       final g = PanelGateway(),
-          c = LiveController(g)
+          c = LiveController(g, showing: 'engine')
             ..sessionId = 's'
             ..origin = 'one'
             ..clientId = 'a';

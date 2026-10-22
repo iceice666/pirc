@@ -24,7 +24,7 @@ Json snapshot(List<Json> interactions) => {
 };
 
 LiveController readyController(FakeGateway gateway, Json q) =>
-    LiveController(gateway)
+    LiveController(gateway, showing: 'engine')
       ..sessionId = 'session-1'
       ..connection = 'live'
       ..control = {'held': true}

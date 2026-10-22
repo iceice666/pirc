@@ -66,7 +66,7 @@ Future<(PageNavigationGateway, LiveController)> _showPhone(
   WidgetTester tester,
 ) async {
   final gateway = PageNavigationGateway();
-  final controller = LiveController(gateway);
+  final controller = LiveController(gateway, showing: 'engine');
   await tester.pumpWidget(MobileApp(theme: theme, controller: controller));
   await tester.pumpAndSettle();
   return (gateway, controller);
@@ -81,7 +81,7 @@ void main() {
     addTearDown(() async => gateway.stream.close());
 
     final tabs = find.byType(MobileTabs);
-    expect(tester.widget<MobileTabs>(tabs).current, 'work');
+    expect(tester.widget<MobileTabs>(tabs).current, 'engine');
     await tester.tap(
       find.descendant(of: tabs, matching: find.text('Settings')),
     );
@@ -93,7 +93,7 @@ void main() {
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
     expect(find.byType(NativeSettingsDialog), findsNothing);
-    expect(tester.widget<MobileTabs>(tabs).current, 'work');
+    expect(tester.widget<MobileTabs>(tabs).current, 'engine');
     expect(tester.takeException(), isNull);
   });
 }

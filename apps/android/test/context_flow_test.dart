@@ -35,7 +35,8 @@ void main() {
       final paneTop = (expected['activePanelRectY'] as num).toDouble();
       final gateway = FakeGateway();
       gateway.handler = (_, _) async => fixture['context'];
-      final controller = LiveController(gateway)..sessionId = 's';
+      final controller = LiveController(gateway, showing: 'engine')
+        ..sessionId = 's';
       await t.pumpWidget(
         MaterialApp(
           theme: theme

@@ -722,6 +722,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      footerEntry('Rooms', LucideIcons.house, 'rooms'),
                       footerEntry('Settings', LucideIcons.settings, 'settings'),
                     ],
                   ),

@@ -19,7 +19,7 @@ Future<LiveController> ready(FakeGateway g) async {
     'approvalMode': 'auto',
     'defaultApprovalMode': 'auto',
   };
-  final c = LiveController(g);
+  final c = LiveController(g, showing: 'engine');
   await c.boot();
   await c.open('s');
   g.publish('s');

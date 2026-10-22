@@ -38,7 +38,8 @@ Android 目前沒有房間程式碼（`lib/` 與 Kotlin 都沒有 `/api/rooms`�
 ## 工作項目
 
 - [ ] Kotlin 傳輸層抽離 domain（`GatewayBridge.kt` 拆 transport / domain，決定 2）；domain 重寫成 rooms / faces / threads；`core/timeline` 換成房間推導，舊 session port 刪（決定 4）。
-- [ ] Dart app state 與導航重寫；房間列表（未讀點、「輪到你」、Archived 用 `GET /api/rooms?archived=1` 點開才載入）、訊息列、成員、討論串、引擎蓋 tab；草稿以房間為 key（跟 web `relay.room-draft.<room>` 同語意）；`POST /api/rooms/:id/read` 與 `room_read`；面孔 presence 與 thinking（ephemeral `seq 0`、ready payload 的 `brain_presence`）。
+- [x] Dart app state 與導航重寫；房間列表（未讀點、「輪到你」、Archived 用 `GET /api/rooms?archived=1` 點開才載入）、訊息列、成員、討論串、引擎蓋 tab；草稿以房間為 key（跟 web `relay.room-draft.<room>` 同語意）；`POST /api/rooms/:id/read` 與 `room_read`；面孔 presence 與 thinking（ephemeral `seq 0`、ready payload 的 `brain_presence`）。
+  - 2026-10-22 完成：狀態留在 Kotlin `RoomsRuntime`（snapshot 推給 Flutter），Dart 端 `rooms_state.dart`（`RoomsController`）、`rooms_page.dart`（列表 / 房間 / 成員 / 討論串、手機四個 tab）、`room_panels.dart`、`room_message_row.dart`（基本訊息列，kind 細節在下一項）；`LiveController.showing` 預設 `rooms`，引擎 tab 與側欄的 Rooms 入口切換；草稿存 `LocalStore` 的 `room-draft:<room>`。驗證：`flutter analyze` 0 issues；`test/rooms_test.dart` 8 個新測試過；全 suite +5098 / −361，失敗與開工前基準相同（全是缺 macOS 字型），無新失敗；Kotlin 294 過。舊 session 畫面的測試明確設 `showing: 'engine'`。
 - [ ] 訊息列：四種 kind（`text` / `line` / `progress` / `question`）；「正在做」照上面的推導；line 撤銷（Don't keep / loop / Cancel）與「Details」連到引擎蓋對應分頁；還在等的問題釘在 composer 上方；討論串入口與工人進度；附件上傳 `POST /api/rooms/:id/uploads` 與下載。
 - [ ] 通知與快速回覆改房間；UnifiedPush 註冊不變。
 - [ ] 引擎蓋六頁與深連（決定 3）：Nodes、Brain turns（`GET /api/brain/turns`）、Loops（`GET /api/loops`、`PATCH /api/loops/:id`）、Wakes（`GET /api/wakes`、`DELETE /api/wakes/:id`）、Memory（`GET /api/memory/preferences`、`GET /api/memory/records` 加 `DELETE`）、Sources（`/api/sources` 與 per-source 暫停）。

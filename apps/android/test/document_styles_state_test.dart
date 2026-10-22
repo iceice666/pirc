@@ -126,7 +126,7 @@ void main() {
     'account change during CSS fetch clears the old document context',
     () async {
       final gateway = _StylesGateway();
-      final owner = LiveController(gateway)
+      final owner = LiveController(gateway, showing: 'engine')
         ..origin = 'https://example.test'
         ..pairingStamp = 'stamp';
       final windows = NativeDocumentWindows(gateway, owner: owner);
@@ -162,7 +162,7 @@ void main() {
     'owner revision changes invalidate CSS before listener notification',
     () async {
       final gateway = _StylesGateway();
-      final owner = LiveController(gateway)
+      final owner = LiveController(gateway, showing: 'engine')
         ..origin = 'https://example.test'
         ..pairingStamp = 'stamp';
       final windows = NativeDocumentWindows(gateway, owner: owner);

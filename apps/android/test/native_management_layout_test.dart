@@ -16,7 +16,8 @@ void main() {
           addTearDown(tester.view.resetPhysicalSize);
           addTearDown(tester.view.resetDevicePixelRatio);
           final gateway = FakeGateway();
-          final controller = LiveController(gateway)..pairingStamp = 'paired';
+          final controller = LiveController(gateway, showing: 'engine')
+            ..pairingStamp = 'paired';
           final now = DateTime.now().millisecondsSinceEpoch;
           Json status = {};
           gateway.handler = (method, _) async => status;

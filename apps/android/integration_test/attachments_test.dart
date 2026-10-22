@@ -64,7 +64,7 @@ void main() {
         paired = true;
         await g.call('completeOnboarding');
         originalPreferences = obj(await g.call('preferences'));
-        controller = LiveController(g);
+        controller = LiveController(g, showing: 'engine');
         final c = controller;
         final theme = await PircTheme.load();
 

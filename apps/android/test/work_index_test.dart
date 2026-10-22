@@ -37,7 +37,7 @@ Json session(
   if (done) 'settledAt': 2,
   'runStatus': ?status,
 };
-LiveController fixture(FakeGateway g) => LiveController(g)
+LiveController fixture(FakeGateway g) => LiveController(g, showing: 'engine')
   ..booting = false
   ..origin = 'https://gateway.example'
   ..workspaces = [project, directory]

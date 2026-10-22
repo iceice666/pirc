@@ -84,7 +84,7 @@ void main() {
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.resetPhysicalSize);
     addTearDown(t.view.resetDevicePixelRatio);
-    final g = FakeGateway(), c = LiveController(g);
+    final g = FakeGateway(), c = LiveController(g, showing: 'engine');
     configureSettings(g, c);
     await t.pumpWidget(settingsHost(c, scale: 2));
     await t.tap(find.text('Open settings'));
@@ -106,7 +106,7 @@ void main() {
   testWidgets('close focus ring follows touch and keyboard input mode', (
     t,
   ) async {
-    final g = FakeGateway(), c = LiveController(g);
+    final g = FakeGateway(), c = LiveController(g, showing: 'engine');
     configureSettings(g, c);
     await t.pumpWidget(settingsHost(c));
     await t.tap(find.text('Open settings'));
@@ -128,7 +128,7 @@ void main() {
   testWidgets(
     'paired-token Models 403 hides management controls while model listing remains available',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       configureSettings(g, c);
       await t.pumpWidget(settingsHost(c));
       await t.tap(find.text('Open settings'));
@@ -198,7 +198,7 @@ void main() {
   );
 
   testWidgets('categories keep mounted panels', (t) async {
-    final g = FakeGateway(), c = LiveController(g);
+    final g = FakeGateway(), c = LiveController(g, showing: 'engine');
     configureSettings(g, c);
     await t.pumpWidget(settingsHost(c));
     await t.tap(find.text('Open settings'));
@@ -233,7 +233,7 @@ void main() {
   testWidgets(
     'roving keyboard navigation activates categories, Escape closes dialog',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       configureSettings(g, c);
       await t.pumpWidget(settingsHost(c));
       await t.tap(find.text('Open settings'));
@@ -260,7 +260,7 @@ void main() {
   testWidgets(
     'Show done persists and initializes workspace; reset invokes shell',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       configureSettings(g, c);
       var reset = 0;
       await t.pumpWidget(settingsHost(c, reset: () => reset++));
@@ -322,7 +322,7 @@ void main() {
         for (final scale in [1.0, 2.0]) {
           t.view.devicePixelRatio = 1;
           t.view.physicalSize = Size(width, 844);
-          final g = FakeGateway(), c = LiveController(g);
+          final g = FakeGateway(), c = LiveController(g, showing: 'engine');
           configureSettings(g, c);
           await t.pumpWidget(settingsHost(c, scale: scale));
           await t.tap(find.text('Open settings'));
@@ -337,7 +337,7 @@ void main() {
         }
       }
       t.view.physicalSize = const Size(390, 844);
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       configureSettings(g, c);
       await t.pumpWidget(settingsHost(c, keyboard: 320));
       await t.tap(find.text('Open settings'));
@@ -356,7 +356,9 @@ void main() {
   testWidgets('late registration read does not restart polling in background', (
     t,
   ) async {
-    final g = FakeGateway(), c = LiveController(g), pending = Completer<Json>();
+    final g = FakeGateway(),
+        c = LiveController(g, showing: 'engine'),
+        pending = Completer<Json>();
     var reads = 0;
     g.handler = (method, args) async {
       if (method == 'permissions') return {'notifications': true};
@@ -401,7 +403,7 @@ void main() {
   testWidgets(
     'notification actions use exact IDs, serialize mutations and report delivery',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       var enabled = true;
       final pending = Completer<Json>();
       g.handler = (method, args) async {

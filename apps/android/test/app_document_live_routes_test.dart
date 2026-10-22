@@ -83,7 +83,7 @@ void main() {
     tester,
   ) async {
     final gateway = RouteGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     await tester.pumpWidget(MobileApp(theme: theme, controller: controller));
     await tester.pumpAndSettle();
     await controller.open('session-latest');
@@ -103,7 +103,7 @@ void main() {
     tester,
   ) async {
     final gateway = RouteGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     await tester.pumpWidget(MobileApp(theme: theme, controller: controller));
     await tester.pumpAndSettle();
     final pending = Completer<Json>();
@@ -129,7 +129,7 @@ void main() {
     'a route with an empty refreshed session list clears the old session',
     (tester) async {
       final gateway = RouteGateway();
-      final c = LiveController(gateway);
+      final c = LiveController(gateway, showing: 'engine');
       await tester.pumpWidget(MobileApp(theme: theme, controller: c));
       await tester.pumpAndSettle();
       expect(c.sessionId, 'session-latest');

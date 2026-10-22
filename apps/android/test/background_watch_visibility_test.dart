@@ -12,7 +12,7 @@ void main() {
     () async {
       final transport = FakeGateway();
       final gateway = DartScopedGateway(transport);
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       addTearDown(() async {
         controller.dispose();
         await transport.stream.close();
@@ -66,7 +66,10 @@ void main() {
     'a hide before boot is sent before the first watch can acquire a lease',
     () async {
       final transport = FakeGateway();
-      final controller = LiveController(DartScopedGateway(transport));
+      final controller = LiveController(
+        DartScopedGateway(transport),
+        showing: 'engine',
+      );
       addTearDown(() async {
         controller.dispose();
         await transport.stream.close();
@@ -96,7 +99,10 @@ void main() {
     'a document covered before boot does not grant its first watch acquisition',
     () async {
       final transport = FakeGateway();
-      final controller = LiveController(DartScopedGateway(transport));
+      final controller = LiveController(
+        DartScopedGateway(transport),
+        showing: 'engine',
+      );
       addTearDown(() async {
         controller.dispose();
         await transport.stream.close();
@@ -123,7 +129,10 @@ void main() {
     'a delayed visible handshake does not cancel a current open after hide',
     () async {
       final transport = FakeGateway();
-      final controller = LiveController(DartScopedGateway(transport));
+      final controller = LiveController(
+        DartScopedGateway(transport),
+        showing: 'engine',
+      );
       final visibleStarted = Completer<void>();
       final releaseVisible = Completer<void>();
       final visibilityCalls = <Json>[];

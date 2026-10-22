@@ -321,7 +321,8 @@ void main() {
   testWidgets(
     'browser hidden lifecycle, scope reset, reconnect and unavailable',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+      final g = FakeGateway(),
+          c = LiveController(g, showing: 'engine')..sessionId = 's';
       g.handler = (_, _) async => null;
       final s = BrowserState(c);
       expect(g.calls, isEmpty);
@@ -376,7 +377,7 @@ void main() {
     'browser lease guards, URL edits, replay race and 150-entry log',
     (t) async {
       final g = FakeGateway(),
-          c = LiveController(g)
+          c = LiveController(g, showing: 'engine')
             ..sessionId = 's'
             ..clientId = 'phone';
       g.handler = (_, _) async => null;
@@ -451,7 +452,7 @@ void main() {
       t.view.physicalSize = const Size(390, 1000);
       addTearDown(t.view.reset);
       final g = FakeGateway(),
-          c = LiveController(g)
+          c = LiveController(g, showing: 'engine')
             ..sessionId = 's'
             ..control = {'held': true, 'generation': 2};
       g.handler = (_, _) async => null;
@@ -651,7 +652,7 @@ void main() {
     'tool recording remains inline when collapsed and limits tall video height',
     (t) async {
       final g = FakeGateway();
-      final controller = LiveController(g)..sessionId = 's';
+      final controller = LiveController(g, showing: 'engine')..sessionId = 's';
       g.handler = (_, _) async => {
         'id': 12,
         'width': 320,

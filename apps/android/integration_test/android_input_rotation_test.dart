@@ -125,7 +125,7 @@ void main() {
         );
         sessionId = '${obj(created['session'])['id']}';
 
-        final c = controller = LiveController(gateway);
+        final c = controller = LiveController(gateway, showing: 'engine');
         final theme = await PircTheme.load();
         await t.pumpWidget(MobileApp(theme: theme, controller: c));
         appMounted = true;

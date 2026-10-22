@@ -49,7 +49,7 @@ void main() {
       final gateway = FakeGateway(), q = relayed();
       gateway.snapshot = chatSnapshot([q]);
       // Another device holds the chat: ordinary questions would be read-only.
-      final controller = LiveController(gateway)
+      final controller = LiveController(gateway, showing: 'engine')
         ..sessionId = 'chat'
         ..connection = 'live'
         ..control = {'held': false, 'holderClientId': 'web'}
@@ -93,7 +93,7 @@ void main() {
     (tester) async {
       final gateway = FakeGateway(), q = relayed();
       gateway.snapshot = chatSnapshot([q]);
-      final controller = LiveController(gateway)
+      final controller = LiveController(gateway, showing: 'engine')
         ..sessionId = 'chat'
         ..connection = 'live'
         ..control = {'held': false}
@@ -146,7 +146,8 @@ void main() {
         method == 'stopDelegation' || method == 'answerRelayed'
         ? {'status': 'ok'}
         : gateway.normal(method, args);
-    final controller = LiveController(gateway)..pairingStamp = 'pairing-1';
+    final controller = LiveController(gateway, showing: 'engine')
+      ..pairingStamp = 'pairing-1';
     await controller.stopDelegation('d1');
     await controller.answerRelayedApproval('chat', relayId, false);
     expect(gateway.calls.firstWhere((c) => c.$1 == 'stopDelegation').$2, {

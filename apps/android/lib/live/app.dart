@@ -16,6 +16,7 @@ import 'interaction.dart';
 import 'permissions.dart';
 import 'pairing_scanner.dart';
 import 'mobile_tabs.dart';
+import 'rooms_page.dart';
 import 'session_sidebar.dart';
 import 'workspace_page.dart';
 import 'conversation_header.dart';
@@ -651,6 +652,10 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       }
       return;
     }
+    if (name == 'rooms') {
+      c.showRooms();
+      return;
+    }
     if (!documentRoute && name != 'settings' && name != 'memory') {
       _documentRouteTicket++;
       _documentRouting = false;
@@ -867,203 +872,219 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       );
     }
     final documentUrl = _currentDocumentUrl!;
-    final layout = LayoutBuilder(
-      builder: (context, size) {
-        final phone = size.maxWidth <= 650;
-        if (phoneLayout != phone) {
-          phoneLayout = phone;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) _update();
-          });
-        }
-        final sidebarWidth = size.maxWidth <= 860 ? 232.0 : 264.0;
-        final overlay = size.maxWidth <= 860;
-        final showList = phone && listOpen;
-        final showTabs = phone && (listOpen || section != null);
-        final canLeave = !panelOpen && (!phone || listOpen) && section == null;
-        return ListenableBuilder(
-          listenable: _documents,
-          builder: (context, _) {
-            final historyOwnsBack =
-                _documents.managedPresentation &&
-                (_documents.presented || _documents.active?.canBack == true);
-            return PopScope(
-              canPop: historyOwnsBack || canLeave,
-              onPopInvokedWithResult: (didPop, result) {
-                if (didPop || historyOwnsBack) return;
-                if (panelOpen) {
-                  _closePane();
-                } else if (phone && listOpen && section != null) {
-                  _closePhoneSidebar();
-                } else {
-                  _showList();
-                }
-              },
-              child: Focus(
-                autofocus: true,
-                onKeyEvent: (_, event) {
-                  if (event is KeyDownEvent &&
-                      event.logicalKey == LogicalKeyboardKey.escape &&
-                      listOpen &&
-                      (ModalRoute.of(context)?.isCurrent ?? false)) {
-                    _closePhoneSidebar();
-                    return KeyEventResult.handled;
-                  }
-                  return KeyEventResult.ignored;
-                },
-                child: Scaffold(
-                  key: scaffold,
-                  bottomNavigationBar: showTabs
-                      ? MobileTabs(
-                          current: settingsOpen
-                              ? 'settings'
-                              : listOpen ||
-                                    section?.startsWith('workspace:') == true
-                              ? 'work'
-                              : section ?? 'work',
-                          waiting: c.attentionCount,
-                          onPick: (tab) {
-                            if (tab == 'work') {
-                              c.workspaceFilter = null;
-                              if (section != null) {
-                                // The Web app opens its phone sidebar over the
-                                // current page. Offstage keeps page/editor state
-                                // alive until navigation or drawer close.
-                                setState(() => listOpen = true);
-                              } else {
-                                _showList();
-                              }
-                            } else {
-                              _page(tab);
-                            }
-                          },
-                        )
-                      : null,
-                  body: SafeArea(
-                    bottom: false,
-                    child: Stack(
-                      children: [
-                        SafeArea(
-                          top: false,
-                          bottom: !showTabs,
-                          child: Row(
+    final Widget layout = c.showing == 'rooms' && widget.documentWindow == null
+        ? RoomsPage(
+            rooms: c.rooms,
+            onEngine: c.showEngine,
+            onSettings: () => _page('settings'),
+          )
+        : LayoutBuilder(
+            builder: (context, size) {
+              final phone = size.maxWidth <= 650;
+              if (phoneLayout != phone) {
+                phoneLayout = phone;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) _update();
+                });
+              }
+              final sidebarWidth = size.maxWidth <= 860 ? 232.0 : 264.0;
+              final overlay = size.maxWidth <= 860;
+              final showList = phone && listOpen;
+              final showTabs = phone && (listOpen || section != null);
+              final canLeave =
+                  !panelOpen && (!phone || listOpen) && section == null;
+              return ListenableBuilder(
+                listenable: _documents,
+                builder: (context, _) {
+                  final historyOwnsBack =
+                      _documents.managedPresentation &&
+                      (_documents.presented ||
+                          _documents.active?.canBack == true);
+                  return PopScope(
+                    canPop: historyOwnsBack || canLeave,
+                    onPopInvokedWithResult: (didPop, result) {
+                      if (didPop || historyOwnsBack) return;
+                      if (panelOpen) {
+                        _closePane();
+                      } else if (phone && listOpen && section != null) {
+                        _closePhoneSidebar();
+                      } else {
+                        _showList();
+                      }
+                    },
+                    child: Focus(
+                      autofocus: true,
+                      onKeyEvent: (_, event) {
+                        if (event is KeyDownEvent &&
+                            event.logicalKey == LogicalKeyboardKey.escape &&
+                            listOpen &&
+                            (ModalRoute.of(context)?.isCurrent ?? false)) {
+                          _closePhoneSidebar();
+                          return KeyEventResult.handled;
+                        }
+                        return KeyEventResult.ignored;
+                      },
+                      child: Scaffold(
+                        key: scaffold,
+                        bottomNavigationBar: showTabs
+                            ? ListenableBuilder(
+                                listenable: c.rooms,
+                                builder: (context, _) => MobileTabs(
+                                  tabs: [
+                                    MobileTab(
+                                      'rooms',
+                                      badge: c.rooms.waitingCount,
+                                    ),
+                                    MobileTab(
+                                      'engine',
+                                      badge: c.attentionCount,
+                                    ),
+                                    const MobileTab('settings'),
+                                  ],
+                                  current: settingsOpen ? 'settings' : 'engine',
+                                  onPick: (tab) {
+                                    if (tab == 'rooms') {
+                                      c.showRooms();
+                                    } else if (tab == 'engine') {
+                                      c.workspaceFilter = null;
+                                      if (section != null) {
+                                        // The Web app opens its phone sidebar over the
+                                        // current page. Offstage keeps page/editor state
+                                        // alive until navigation or drawer close.
+                                        setState(() => listOpen = true);
+                                      } else {
+                                        _showList();
+                                      }
+                                    } else {
+                                      _page(tab);
+                                    }
+                                  },
+                                ),
+                              )
+                            : null,
+                        body: SafeArea(
+                          bottom: false,
+                          child: Stack(
                             children: [
-                              if (!phone) _desktopSidebar(sidebarWidth),
-                              Expanded(
-                                child: Stack(
-                                  fit: StackFit.expand,
+                              SafeArea(
+                                top: false,
+                                bottom: !showTabs,
+                                child: Row(
                                   children: [
-                                    ExcludeFocus(
-                                      excluding: showList,
-                                      child: Offstage(
-                                        offstage: showList,
-                                        child: Column(
-                                          children: [
-                                            Expanded(
-                                              child: section != null
-                                                  ? section!.startsWith(
-                                                          'workspace:',
-                                                        )
-                                                        ? LayoutBuilder(
-                                                            builder: (context, bounds) {
-                                                              final media =
-                                                                  MediaQuery.of(
-                                                                    context,
-                                                                  );
-                                                              final extra =
-                                                                  phone
-                                                                  ? max(
-                                                                      0.0,
-                                                                      56 +
-                                                                          media
-                                                                              .viewPadding
-                                                                              .bottom -
-                                                                          media
-                                                                              .viewInsets
-                                                                              .bottom,
-                                                                    )
-                                                                  : 0.0;
-                                                              return OverflowBox(
-                                                                alignment:
-                                                                    Alignment
-                                                                        .topLeft,
-                                                                minHeight:
-                                                                    bounds
-                                                                        .maxHeight +
-                                                                    extra,
-                                                                maxHeight:
-                                                                    bounds
-                                                                        .maxHeight +
-                                                                    extra,
-                                                                child: WorkspacePage(
-                                                                  key: ValueKey(
-                                                                    section,
-                                                                  ),
-                                                                  controller: c,
-                                                                  workspaceId:
-                                                                      section!
-                                                                          .substring(
-                                                                            10,
+                                    if (!phone) _desktopSidebar(sidebarWidth),
+                                    Expanded(
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          ExcludeFocus(
+                                            excluding: showList,
+                                            child: Offstage(
+                                              offstage: showList,
+                                              child: Column(
+                                                children: [
+                                                  Expanded(
+                                                    child: section != null
+                                                        ? section!.startsWith(
+                                                                'workspace:',
+                                                              )
+                                                              ? LayoutBuilder(
+                                                                  builder:
+                                                                      (
+                                                                        context,
+                                                                        bounds,
+                                                                      ) {
+                                                                        final media =
+                                                                            MediaQuery.of(
+                                                                              context,
+                                                                            );
+                                                                        final extra =
+                                                                            phone
+                                                                            ? max(
+                                                                                0.0,
+                                                                                56 +
+                                                                                    media.viewPadding.bottom -
+                                                                                    media.viewInsets.bottom,
+                                                                              )
+                                                                            : 0.0;
+                                                                        return OverflowBox(
+                                                                          alignment:
+                                                                              Alignment.topLeft,
+                                                                          minHeight:
+                                                                              bounds.maxHeight +
+                                                                              extra,
+                                                                          maxHeight:
+                                                                              bounds.maxHeight +
+                                                                              extra,
+                                                                          child: WorkspacePage(
+                                                                            key: ValueKey(
+                                                                              section,
+                                                                            ),
+                                                                            controller:
+                                                                                c,
+                                                                            workspaceId: section!.substring(
+                                                                              10,
+                                                                            ),
+                                                                            onBack:
+                                                                                _showList,
+                                                                            onOpen:
+                                                                                _openSession,
+                                                                            sidebarCollapsed:
+                                                                                sidebarCollapsed,
+                                                                            onExpand: () => _sidebarCollapsed(
+                                                                              false,
+                                                                            ),
                                                                           ),
+                                                                        );
+                                                                      },
+                                                                )
+                                                              : ManagementPage(
+                                                                  kind:
+                                                                      section!,
+                                                                  controller: c,
+                                                                  theme: widget
+                                                                      .theme,
                                                                   onBack:
                                                                       _showList,
-                                                                  onOpen:
-                                                                      _openSession,
-                                                                  sidebarCollapsed:
-                                                                      sidebarCollapsed,
-                                                                  onExpand: () =>
-                                                                      _sidebarCollapsed(
-                                                                        false,
-                                                                      ),
-                                                                ),
-                                                              );
-                                                            },
-                                                          )
-                                                        : ManagementPage(
-                                                            kind: section!,
-                                                            controller: c,
-                                                            theme: widget.theme,
-                                                            onBack: _showList,
-                                                          )
-                                                  : _conversationArea(
-                                                      overlay,
-                                                      phone,
-                                                      size.maxWidth,
-                                                    ),
+                                                                )
+                                                        : _conversationArea(
+                                                            overlay,
+                                                            phone,
+                                                            size.maxWidth,
+                                                          ),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                          if (phone)
+                                            ExcludeFocus(
+                                              excluding: !showList,
+                                              child: Offstage(
+                                                offstage: !showList,
+                                                child: _sidebar(),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ),
-                                    if (phone)
-                                      ExcludeFocus(
-                                        excluding: !showList,
-                                        child: Offstage(
-                                          offstage: !showList,
-                                          child: _sidebar(),
-                                        ),
-                                      ),
                                   ],
                                 ),
                               ),
+                              if (overlay &&
+                                  pane != null &&
+                                  !showList &&
+                                  section == null)
+                                ..._overlayPanel(phone, size.maxWidth),
                             ],
                           ),
                         ),
-                        if (overlay &&
-                            pane != null &&
-                            !showList &&
-                            section == null)
-                          ..._overlayPanel(phone, size.maxWidth),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
+                  );
+                },
+              );
+            },
+          );
     final source = ListenableBuilder(
       listenable: _documents,
       builder: (_, _) {
@@ -1349,6 +1370,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
   }
 
   void _openSession(String id) {
+    if (c.showing != 'engine') c.showEngine();
     _documentRouteTicket++;
     _documentRouting = false;
     _replaceDocumentAddress('session', id);

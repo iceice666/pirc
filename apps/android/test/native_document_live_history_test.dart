@@ -127,7 +127,7 @@ void main() {
             _pircShell,
           ),
         ]);
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       addTearDown(() async {
         await tester.pumpWidget(const SizedBox());
         await gateway.stream.close();

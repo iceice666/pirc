@@ -16,13 +16,14 @@ Json turn({String entryId = 'new'}) => {
   ],
 };
 
-LiveController ready(FakeGateway gateway) => LiveController(gateway)
-  ..sessionId = 's'
-  ..connection = 'live'
-  ..control = {'held': true}
-  ..state = {
-    'messages': [turn()],
-  };
+LiveController ready(FakeGateway gateway) =>
+    LiveController(gateway, showing: 'engine')
+      ..sessionId = 's'
+      ..connection = 'live'
+      ..control = {'held': true}
+      ..state = {
+        'messages': [turn()],
+      };
 
 void main() {
   test(

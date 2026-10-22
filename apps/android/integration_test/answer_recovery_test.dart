@@ -20,7 +20,8 @@ void main() {
       'link': const String.fromEnvironment('PIRC_PAIR_LINK'),
     });
     await g.call('completeOnboarding');
-    final c = LiveController(g), theme = await PircTheme.load();
+    final c = LiveController(g, showing: 'engine'),
+        theme = await PircTheme.load();
     String? created;
     Future<void> until(bool Function() ready, String step) async {
       for (var i = 0; i < 200 && !ready(); i++) {

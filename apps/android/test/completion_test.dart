@@ -54,7 +54,7 @@ void main() {
     'notification preferences persist and lock selection changes native preferences',
     (t) async {
       final g = CompleteGateway();
-      final c = LiveController(g);
+      final c = LiveController(g, showing: 'engine');
       await t.pumpWidget(
         MaterialApp(
           theme: theme.build(Brightness.light),
@@ -87,7 +87,7 @@ void main() {
       t.view.physicalSize = const Size(1024, 900);
       addTearDown(t.view.reset);
       final g = CompleteGateway();
-      final c = LiveController(g);
+      final c = LiveController(g, showing: 'engine');
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();
       await c.open('s');
@@ -124,7 +124,7 @@ void main() {
     'notification choice remains unsent and control denial blocks submission',
     (t) async {
       final g = CompleteGateway();
-      final c = LiveController(g)
+      final c = LiveController(g, showing: 'engine')
         ..sessionId = 's'
         ..origin = 'https://gateway.example'
         ..pairingStamp = 'test-pairing';
@@ -171,7 +171,7 @@ void main() {
     'notification without an id resolves current question and drops stale choice',
     (t) async {
       final g = CompleteGateway();
-      final c = LiveController(g)
+      final c = LiveController(g, showing: 'engine')
         ..sessionId = 's'
         ..origin = 'https://gateway.example'
         ..pairingStamp = 'test-pairing';
@@ -226,7 +226,7 @@ void main() {
           t.platformDispatcher.platformBrightnessTestValue = brightness;
           addTearDown(t.platformDispatcher.clearPlatformBrightnessTestValue);
           final g = CompleteGateway();
-          final c = LiveController(g);
+          final c = LiveController(g, showing: 'engine');
           await t.pumpWidget(MobileApp(theme: theme, controller: c));
           await t.pumpAndSettle();
           await c.open('s');

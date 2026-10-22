@@ -109,7 +109,7 @@ void main() {
         }
         return _notHandled;
       });
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       await controller.boot();
 
       await tester.pumpWidget(_host(controller));
@@ -146,7 +146,7 @@ void main() {
         if (method == 'pushEnable') return pendingEnable.future;
         return _notHandled;
       });
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       await controller.boot();
 
       await tester.pumpWidget(_host(controller));
@@ -206,11 +206,11 @@ void main() {
         }
         return _notHandled;
       });
-      final oldController = LiveController(oldGateway)
+      final oldController = LiveController(oldGateway, showing: 'engine')
         ..origin = _origin
         ..clientId = _clientId
         ..pairingStamp = 'same-stamp';
-      final newController = LiveController(newGateway)
+      final newController = LiveController(newGateway, showing: 'engine')
         ..origin = _origin
         ..clientId = _clientId
         ..pairingStamp = 'same-stamp';
@@ -270,7 +270,7 @@ void main() {
       }
       return _notHandled;
     });
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
 
     await tester.pumpWidget(_host(controller));
     await tester.pump();
@@ -321,7 +321,7 @@ void main() {
         }
         return _notHandled;
       });
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       await controller.boot();
 
       await tester.pumpWidget(

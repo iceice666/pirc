@@ -470,7 +470,7 @@ void main() {
       ..responses.add(
         response('/page', '<title>Account document</title><p>Body</p>'),
       );
-    final owner = LiveController(gateway)
+    final owner = LiveController(gateway, showing: 'engine')
       ..origin = 'https://gateway.example'
       ..clientId = 'client-one'
       ..pairingStamp = 'stamp';

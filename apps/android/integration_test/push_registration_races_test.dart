@@ -20,7 +20,7 @@ void main() {
       expect(link, isNotEmpty, reason: 'Missing private pairing link.');
 
       final gateway = Gateway();
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       final theme = (await PircTheme.load()).build(Brightness.light);
       var paired = false;
       var mounted = false;

@@ -20,7 +20,7 @@ void main() {
         }
         return g.normal(m, a);
       };
-      final c = LiveController(g);
+      final c = LiveController(g, showing: 'engine');
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();
       await t.tap(find.text('掃描 QR code'));
@@ -54,7 +54,7 @@ void main() {
         }
         return g.normal(m, a);
       };
-      final c = LiveController(g);
+      final c = LiveController(g, showing: 'engine');
       await t.pumpWidget(
         MaterialApp(
           theme: theme.build(brightness),
@@ -97,7 +97,7 @@ void main() {
       }
       return g.normal(method, args);
     };
-    final c = LiveController(g);
+    final c = LiveController(g, showing: 'engine');
     await t.pumpWidget(MobileApp(theme: theme, controller: c));
     await t.pumpAndSettle();
     expect(find.text('No session could be loaded.'), findsOneWidget);

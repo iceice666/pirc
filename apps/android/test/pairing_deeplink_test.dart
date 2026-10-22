@@ -10,7 +10,7 @@ void main() {
     'incoming pairing link updates an open pairing field without resetting edits for the same link',
     (tester) async {
       final gateway = PermissionGateway()..complete = true;
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       await tester.pumpWidget(MobileApp(theme: theme, controller: controller));
       await tester.pumpAndSettle();
 

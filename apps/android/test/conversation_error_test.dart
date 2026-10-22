@@ -18,7 +18,7 @@ void main() {
         t.view.physicalSize = Size(width, 900);
         addTearDown(t.view.reset);
         final gateway = FakeGateway();
-        final controller = LiveController(gateway);
+        final controller = LiveController(gateway, showing: 'engine');
         await t.pumpWidget(MobileApp(theme: theme, controller: controller));
         await t.pumpAndSettle();
         await controller.open('s');
@@ -119,7 +119,7 @@ void main() {
             }
             return gateway.normal(method, args);
           };
-          final controller = LiveController(gateway);
+          final controller = LiveController(gateway, showing: 'engine');
           await t.pumpWidget(MobileApp(theme: theme, controller: controller));
           await t.pumpAndSettle();
           expect(controller.error, isNotNull);

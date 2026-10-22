@@ -44,7 +44,7 @@ Json snapshot({
 
 void main() {
   test('backend errors keep status and redact upstream credentials', () async {
-    final g = FakeGateway(), c = LiveController(g);
+    final g = FakeGateway(), c = LiveController(g, showing: 'engine');
     for (final message in [
       'token abc',
       'api_key abc',
@@ -99,7 +99,7 @@ void main() {
   testWidgets(
     'file providers are read only; subscription models remain choices',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       g.handler = (_, args) async => snapshot(readOnly: true);
       await t.pumpWidget(shell(BackendSettings(controller: c)));
       await t.pumpAndSettle();
@@ -123,7 +123,7 @@ void main() {
   testWidgets(
     'deletion sends exact endpoint; failed mutation keeps card and safe error',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       var fail = true;
       g.handler = (_, args) async {
         if (args['method'] == 'DELETE') {
@@ -173,7 +173,7 @@ void main() {
   testWidgets(
     'default saves tuple, preserves unsaved choice on same saved default',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       dynamic body;
       g.handler = (_, args) async {
         if (args['path'] == '/api/models') return {'models': []};
@@ -215,7 +215,7 @@ void main() {
   testWidgets('successful mutation survives a secondary model-list failure', (
     t,
   ) async {
-    final g = FakeGateway(), c = LiveController(g);
+    final g = FakeGateway(), c = LiveController(g, showing: 'engine');
     g.handler = (_, args) async {
       if (args['path'] == '/api/models') {
         throw PlatformException(code: 'HTTP_503', message: 'Unavailable');
@@ -240,7 +240,7 @@ void main() {
   testWidgets(
     'subscription logout reaches parent mutation without locking it out',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       g.handler = (_, args) async {
         if (args['path'] == '/api/models') return {'models': []};
         return {
@@ -277,7 +277,7 @@ void main() {
   testWidgets(
     'failed edit retains editor, clears typed key, and can save again',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       var fail = true;
       final writes = <Json>[];
       g.handler = (_, args) async {
@@ -325,7 +325,8 @@ void main() {
   );
 
   testWidgets('old account snapshot cannot replace new account', (t) async {
-    final g = FakeGateway(), c = LiveController(g)..origin = 'old';
+    final g = FakeGateway(),
+        c = LiveController(g, showing: 'engine')..origin = 'old';
     final old = Completer<Json>();
     var calls = 0;
     g.handler = (_, args) async =>
@@ -345,8 +346,8 @@ void main() {
   });
 
   testWidgets('controller replacement drops old in-flight mutation', (t) async {
-    final g = FakeGateway(), c = LiveController(g);
-    final g2 = FakeGateway(), c2 = LiveController(g2);
+    final g = FakeGateway(), c = LiveController(g, showing: 'engine');
+    final g2 = FakeGateway(), c2 = LiveController(g2, showing: 'engine');
     final response = Completer<Json>();
     g.handler = (_, args) async =>
         args['method'] == 'DELETE' ? response.future : snapshot();
@@ -368,7 +369,7 @@ void main() {
   });
 
   testWidgets('demo performs no requests and loads when enabled', (t) async {
-    final g = FakeGateway(), c = LiveController(g);
+    final g = FakeGateway(), c = LiveController(g, showing: 'engine');
     g.handler = (_, args) async => snapshot();
     await t.pumpWidget(shell(BackendSettings(controller: c, disabled: true)));
     await t.pumpAndSettle();
@@ -390,7 +391,7 @@ void main() {
           for (final scale in [1.0, 2.0]) {
             t.view.devicePixelRatio = 1;
             t.view.physicalSize = Size(width, 844);
-            final g = FakeGateway(), c = LiveController(g);
+            final g = FakeGateway(), c = LiveController(g, showing: 'engine');
             g.handler = (_, args) async =>
                 snapshot(id: 'a-long-custom-provider-name');
             await t.pumpWidget(
@@ -425,7 +426,7 @@ void main() {
   );
 
   test('latest model refresh wins for the same account and session', () async {
-    final g = FakeGateway(), c = LiveController(g);
+    final g = FakeGateway(), c = LiveController(g, showing: 'engine');
     final first = Completer<Json>(), second = Completer<Json>();
     var calls = 0;
     g.handler = (_, args) => ++calls == 1 ? first.future : second.future;
@@ -448,7 +449,8 @@ void main() {
   });
 
   test('model refresh ignores old account and session response', () async {
-    final g = FakeGateway(), c = LiveController(g)..sessionId = 'one';
+    final g = FakeGateway(),
+        c = LiveController(g, showing: 'engine')..sessionId = 'one';
     final response = Completer<Json>();
     g.handler = (_, args) => response.future;
     final pending = c.refreshModels();

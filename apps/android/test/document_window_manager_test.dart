@@ -166,7 +166,7 @@ void main() {
   testWidgets(
     'account identity change invalidates a pending close completion',
     (tester) async {
-      final owner = LiveController(Gateway())
+      final owner = LiveController(Gateway(), showing: 'engine')
         ..origin = 'https://gateway.example'
         ..clientId = 'phone'
         ..pairingStamp = 'before';

@@ -42,7 +42,7 @@ void main() {
     expect(saved['start'], 1320);
     expect(saved['lock'], 'summary');
     await gateway.call('savePreferences', oldPreferences);
-    final c = LiveController(gateway);
+    final c = LiveController(gateway, showing: 'engine');
     final theme = await PircTheme.load();
     await t.pumpWidget(MobileApp(theme: theme, controller: c));
     Future<void> until(bool Function() ready) async {

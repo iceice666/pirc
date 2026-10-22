@@ -35,7 +35,7 @@ void main() {
     (tester) async {
       _setPhoneViewport(tester);
       final gateway = RouteGateway();
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       await tester.pumpWidget(MobileApp(theme: theme, controller: controller));
       await tester.pumpAndSettle();
 
@@ -71,7 +71,7 @@ void main() {
     (tester) async {
       _setPhoneViewport(tester);
       final gateway = RouteGateway();
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       await tester.pumpWidget(MobileApp(theme: theme, controller: controller));
       await tester.pumpAndSettle();
 

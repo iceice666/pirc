@@ -51,7 +51,8 @@ void main() {
   testWidgets(
     'history appends pages, prepends new commits and resets rewritten history',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+      final g = FakeGateway(),
+          c = LiveController(g, showing: 'engine')..sessionId = 's';
       g.handler = (_, a) async => gitResponse('${a['path']}');
       final s = GitState(c);
       await t.pump();
@@ -94,7 +95,8 @@ void main() {
   testWidgets(
     'stale diff/commit replies, session isolation and hidden refresh',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+      final g = FakeGateway(),
+          c = LiveController(g, showing: 'engine')..sessionId = 's';
       g.handler = (_, a) async => gitResponse('${a['path']}');
       final s = GitState(c);
       await t.pump();
@@ -153,7 +155,8 @@ void main() {
       t.view.devicePixelRatio = 1;
       t.view.physicalSize = const Size(390, 1100);
       addTearDown(t.view.reset);
-      final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+      final g = FakeGateway(),
+          c = LiveController(g, showing: 'engine')..sessionId = 's';
       g.handler = (_, a) async => gitResponse('${a['path']}');
       String? opened;
       await t.pumpWidget(
@@ -222,7 +225,8 @@ void main() {
     addTearDown(t.view.reset);
     t.view.devicePixelRatio = 1;
     t.view.physicalSize = const Size(861, 844);
-    final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+    final g = FakeGateway(),
+        c = LiveController(g, showing: 'engine')..sessionId = 's';
     g.handler = (_, a) async => gitResponse('${a['path']}');
     await t.pumpWidget(
       MaterialApp(
@@ -273,7 +277,8 @@ void main() {
   testWidgets('Git roving keys and error states preserve the current data', (
     t,
   ) async {
-    final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+    final g = FakeGateway(),
+        c = LiveController(g, showing: 'engine')..sessionId = 's';
     final pending = Completer<Json>();
     g.handler = (_, _) => pending.future;
     await t.pumpWidget(

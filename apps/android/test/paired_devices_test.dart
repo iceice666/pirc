@@ -13,7 +13,7 @@ void main() {
   String? clipboard;
   setUp(() {
     gateway = FakeGateway();
-    controller = LiveController(gateway)
+    controller = LiveController(gateway, showing: 'engine')
       ..origin = 'https://gateway.test'
       ..clientId = 'client-one';
     clipboard = null;

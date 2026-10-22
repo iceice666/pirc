@@ -155,7 +155,7 @@ void main() {
         await gateway.call('completeOnboarding');
         originalPreferences = obj(await gateway.call('preferences'));
 
-        final c = controller = LiveController(gateway);
+        final c = controller = LiveController(gateway, showing: 'engine');
         await tester.pumpWidget(
           MobileApp(theme: await PircTheme.load(), controller: c),
         );

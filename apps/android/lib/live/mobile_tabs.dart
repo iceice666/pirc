@@ -3,24 +3,41 @@ import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../theme.dart';
 
-/// MobileTabs.svelte: the phone list/pages own the bottom navigation. A
-/// conversation has a back action, leaving all available height for its content.
+/// One bottom tab: `rooms`, `members`, `engine` or `settings`, and how
+/// many things wait for the user there.
+class MobileTab {
+  const MobileTab(this.id, {this.badge = 0});
+  final String id;
+  final int badge;
+}
+
+const _tabLabels = {
+  'rooms': ('Rooms', LucideIcons.house),
+  'members': ('Members', LucideIcons.users),
+  'engine': ('Engine', LucideIcons.squareTerminal),
+  'settings': ('Settings', LucideIcons.settings),
+};
+
+/// MobileTabs.svelte: the phone pages own the bottom navigation, each with
+/// its own tabs (the rooms page: Rooms, Members, Engine, Settings; the
+/// engine: Rooms, Engine, Settings). A conversation has a back action,
+/// leaving all available height for its content.
 class MobileTabs extends StatelessWidget {
   const MobileTabs({
     super.key,
+    required this.tabs,
     required this.current,
-    required this.waiting,
     required this.onPick,
   });
+  final List<MobileTab> tabs;
   final String current;
-  final int waiting;
   final ValueChanged<String> onPick;
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).extension<PircColors>()!;
     final tabs = [
-      ('work', 'Work', LucideIcons.squareTerminal),
-      ('settings', 'Settings', LucideIcons.settings),
+      for (final tab in this.tabs)
+        (tab.id, _tabLabels[tab.id]!.$1, _tabLabels[tab.id]!.$2, tab.badge),
     ];
     final available = MediaQuery.sizeOf(context).width;
     final minimum = <double>[];
@@ -101,12 +118,12 @@ class MobileTabs extends StatelessWidget {
                                               ? 'text.primary'
                                               : 'text.muted'],
                                     ),
-                                    if (tab.$1 == 'work' && waiting > 0)
+                                    if (tab.$4 > 0)
                                       Positioned(
                                         top: -5,
                                         right: -9,
                                         child: Semantics(
-                                          label: '$waiting waiting for you',
+                                          label: '${tab.$4} waiting for you',
                                           child: Container(
                                             constraints: const BoxConstraints(
                                               minWidth: 16,
@@ -121,7 +138,7 @@ class MobileTabs extends StatelessWidget {
                                                   BorderRadius.circular(999),
                                             ),
                                             child: Text(
-                                              '$waiting',
+                                              '${tab.$4}',
                                               textAlign: TextAlign.center,
                                               style: const TextStyle(
                                                 color: Colors.white,

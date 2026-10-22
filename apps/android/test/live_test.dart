@@ -121,7 +121,7 @@ void main() {
     'ignores late events from another session and saves each draft separately',
     () async {
       final g = FakeGateway();
-      final c = LiveController(g);
+      final c = LiveController(g, showing: 'engine');
       await c.boot();
       await c.open('one');
       g.publish('one');
@@ -140,7 +140,7 @@ void main() {
     'session switch drains edits made during an in-flight draft save',
     (tester) async {
       final g = FakeGateway()..drafts['two'] = 'saved second draft';
-      final c = LiveController(g);
+      final c = LiveController(g, showing: 'engine');
       await c.boot();
       await c.open('one');
       c.editDraft('first version');
@@ -171,7 +171,7 @@ void main() {
       'revealing current chat cancels pending $destination navigation',
       (t) async {
         final g = FakeGateway();
-        final c = LiveController(g);
+        final c = LiveController(g, showing: 'engine');
         await c.boot();
         await c.open('s');
         g.publish('s');
@@ -211,7 +211,7 @@ void main() {
     'returning to a chat while unwatch is pending restores its subscription',
     () async {
       final g = FakeGateway();
-      final c = LiveController(g);
+      final c = LiveController(g, showing: 'engine');
       await c.boot();
       await c.open('s');
       g.publish('s');
@@ -243,7 +243,7 @@ void main() {
     tester,
   ) async {
     final g = FakeGateway();
-    final c = LiveController(g);
+    final c = LiveController(g, showing: 'engine');
     await c.boot();
     await c.open('one');
     final releaseSave = Completer<void>();
@@ -273,7 +273,7 @@ void main() {
     'unknown command stays blocked across reselect; acknowledgement never resends',
     () async {
       final g = FakeGateway()..unknown = true;
-      final c = LiveController(g);
+      final c = LiveController(g, showing: 'engine');
       await c.boot();
       await c.open('s');
       g.publish('s');
@@ -291,7 +291,7 @@ void main() {
   );
   test('network uncertainty keeps draft and does not auto retry', () async {
     final g = FakeGateway();
-    final c = LiveController(g);
+    final c = LiveController(g, showing: 'engine');
     await c.boot();
     await c.open('s');
     g.publish('s');
@@ -311,7 +311,7 @@ void main() {
   });
   test('accepted old-session command cannot erase new-session draft', () async {
     final g = FakeGateway();
-    final c = LiveController(g);
+    final c = LiveController(g, showing: 'engine');
     final receipt = Completer<Json>();
     await c.boot();
     await c.open('s');
@@ -330,7 +330,7 @@ void main() {
   });
   test('read-only and disconnected clients cannot send commands', () async {
     final g = FakeGateway();
-    final c = LiveController(g);
+    final c = LiveController(g, showing: 'engine');
     await c.boot();
     await c.open('s');
     c.editDraft('不能送');
@@ -353,7 +353,7 @@ void main() {
       addTearDown(tester.view.reset);
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       final g = FakeGateway();
-      final c = LiveController(g);
+      final c = LiveController(g, showing: 'engine');
       g.snapshot['widgets'] = {'goal': List.filled(20, '處理目標中')};
       await tester.pumpWidget(MobileApp(theme: theme, controller: c));
       await tester.pumpAndSettle();
@@ -378,7 +378,7 @@ void main() {
       tester.view.devicePixelRatio = 1;
       tester.view.physicalSize = const Size(1024, 900);
       addTearDown(tester.view.reset);
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       await tester.pumpWidget(MobileApp(theme: theme, controller: c));
       await tester.pumpAndSettle();
       await c.open('s');
@@ -415,7 +415,7 @@ void main() {
     tester,
   ) async {
     final g = FakeGateway();
-    final c = LiveController(g)
+    final c = LiveController(g, showing: 'engine')
       ..sessionId = 's'
       ..origin = 'https://gateway.example'
       ..pairingStamp = 'test-pairing';

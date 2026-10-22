@@ -55,7 +55,7 @@ LiveController _controller(
   List<Json> workspaces = modeWorkspacesFixture,
   List<Json> nodes = modeNodesFixture,
   List<Json> sessions = const [],
-}) => LiveController(g)
+}) => LiveController(g, showing: 'engine')
   ..booting = false
   ..origin = 'https://gateway.example'
   ..clientId = 'phone'

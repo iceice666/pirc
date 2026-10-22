@@ -17,7 +17,7 @@ void main() {
       addTearDown(tester.view.reset);
       final gateway = FakeGateway();
       gateway.snapshot = {...gateway.snapshot, 'messages': <Json>[]};
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       await tester.pumpWidget(MobileApp(theme: theme, controller: controller));
       await tester.pumpAndSettle();
       await controller.open('s');

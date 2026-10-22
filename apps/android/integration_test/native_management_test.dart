@@ -29,7 +29,7 @@ void main() {
           'link': const String.fromEnvironment('PIRC_PAIR_LINK'),
         }),
       );
-      final controller = LiveController(gateway)
+      final controller = LiveController(gateway, showing: 'engine')
         ..origin = paired['origin'] as String
         ..clientId = paired['clientId'] as String
         ..pairingStamp = paired['pairingStamp'] as String;

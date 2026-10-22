@@ -29,7 +29,7 @@ void main() {
     'networkAvailable refreshes paired account without session filtering',
     () async {
       final gateway = FakeGateway();
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       await boot(controller);
       // Explicitly return to the no-session state; bootstrap now selects the
       // first server session just as the web app does.
@@ -77,7 +77,7 @@ void main() {
       }
       return gateway.normal(method, args);
     };
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     final booting = controller.boot();
     await firstStarted.future.timeout(const Duration(seconds: 2));
 
@@ -110,7 +110,7 @@ void main() {
       if (method == 'boot') return {'origin': null, 'clientId': 'phone'};
       return unpairedGateway.normal(method, args);
     };
-    final unpaired = LiveController(unpairedGateway);
+    final unpaired = LiveController(unpairedGateway, showing: 'engine');
     await boot(unpaired);
     final unpairedCalls = unpairedGateway.calls.length;
     await sendNetworkAvailable(unpairedGateway);
@@ -119,7 +119,7 @@ void main() {
     await unpairedGateway.stream.close();
 
     final backgroundGateway = FakeGateway();
-    final background = LiveController(backgroundGateway);
+    final background = LiveController(backgroundGateway, showing: 'engine');
     await boot(background);
     background.active = false;
     final backgroundCalls = backgroundGateway.calls.length;

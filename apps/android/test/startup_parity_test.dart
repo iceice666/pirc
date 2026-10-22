@@ -148,7 +148,7 @@ void main() {
   ) async {
     _setSize(tester, 390);
     final gateway = StartupGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     await _showApp(tester, controller);
     await tester.pumpAndSettle();
 
@@ -168,7 +168,7 @@ void main() {
   ) async {
     _setSize(tester, 768);
     final gateway = StartupGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     await _showApp(tester, controller);
     await tester.pumpAndSettle();
 
@@ -195,7 +195,7 @@ void main() {
       sessions: [sessionRow('first'), sessionRow('requested')],
       targetSession: 'requested',
     );
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     await _showApp(tester, controller);
     await tester.pumpAndSettle();
 
@@ -229,7 +229,7 @@ void main() {
         sessions: [sessionRow('recent')],
         targetSession: 'deleted',
       );
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       await _showApp(tester, controller);
       await tester.pumpAndSettle();
 
@@ -259,7 +259,7 @@ void main() {
       targetSession: 'recent',
       pairLink: 'pirc://gateway.example/pair?token=synthetic',
     );
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     await _showApp(tester, controller);
     await tester.pumpAndSettle();
 
@@ -277,7 +277,7 @@ void main() {
   ) async {
     _setSize(tester, 390);
     final gateway = StartupGateway();
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     await _showApp(tester, controller);
     await tester.pumpAndSettle();
 
@@ -298,7 +298,7 @@ void main() {
   ) async {
     _setSize(tester, 768);
     final gateway = StartupGateway(delaySessions: true);
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     await _showApp(tester, controller);
     await gateway.sessionsRequestStarted.future.timeout(
       const Duration(seconds: 2),
@@ -323,7 +323,7 @@ void main() {
   ) async {
     _setSize(tester, 768);
     final gateway = StartupGateway(sessions: []);
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     await _showApp(tester, controller);
     await tester.pumpAndSettle();
 
@@ -352,7 +352,7 @@ void main() {
         'status': 'pending',
       },
     ];
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     await _showApp(tester, controller);
     await tester.pumpAndSettle();
 
@@ -390,7 +390,7 @@ void main() {
           'status': 'pending',
         },
       ];
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       await _showApp(tester, controller);
       await tester.pumpAndSettle();
       expect(controller.sessionId, 's');
@@ -421,7 +421,7 @@ void main() {
   ) async {
     _setSize(tester, 390);
     final gateway = StartupGateway(sessions: [sessionRow('recent')]);
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     await _showApp(tester, controller);
     await tester.pumpAndSettle();
     expect(controller.sessionId, 'recent');
@@ -465,7 +465,7 @@ void main() {
       _setSize(tester, 390);
       final sessions = [sessionRow('recent'), sessionRow('other')];
       final gateway = StartupGateway(sessions: sessions);
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       await _showApp(tester, controller);
       await tester.pumpAndSettle();
       expect(controller.sessionId, 'recent');
@@ -527,7 +527,7 @@ void main() {
     _setSize(tester, 390);
     final sessions = [sessionRow('recent'), sessionRow('target')];
     final gateway = StartupGateway(sessions: sessions, delaySessions: true);
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     await _showApp(tester, controller);
     await gateway.sessionsRequestStarted.future.timeout(
       const Duration(seconds: 2),
@@ -560,7 +560,7 @@ void main() {
     _setSize(tester, 390);
     final sessions = [sessionRow('first'), sessionRow('second')];
     final gateway = StartupGateway(sessions: sessions, delaySessions: true);
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     await _showApp(tester, controller);
     await gateway.sessionsRequestStarted.future.timeout(
       const Duration(seconds: 2),
@@ -589,7 +589,7 @@ void main() {
     tester,
   ) async {
     final gateway = StartupGateway(delaySessions: true);
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     final boot = controller.boot();
     await gateway.sessionsRequestStarted.future;
     await controller.unpair();

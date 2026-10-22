@@ -172,7 +172,7 @@ void main() {
         '<form action="/parity-documents/slow" method="get">'
         '<button>Open slow native document</button></form>',
       );
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       _disposeAfterTest(tester, gateway, controller);
       await _pumpApp(tester, gateway, controller);
 
@@ -239,7 +239,7 @@ void main() {
         '<form action="/parity-documents/back-test" method="get">'
         '<button>Open back-test document</button></form>',
       );
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       _disposeAfterTest(tester, gateway, controller);
       await _pumpApp(tester, gateway, controller);
 
@@ -280,7 +280,7 @@ void main() {
         '<input type="hidden" name="session" value="session-second">'
         '<button>Open second session</button></form>',
       );
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       _disposeAfterTest(tester, gateway, controller);
       await _pumpApp(tester, gateway, controller);
 
@@ -337,7 +337,7 @@ void main() {
   ) async {
     _desktopViewport(tester);
     final gateway = _HeldDocumentGateway('<p>Source without navigation</p>');
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
     _disposeAfterTest(tester, gateway, controller);
     await _pumpApp(tester, gateway, controller);
 

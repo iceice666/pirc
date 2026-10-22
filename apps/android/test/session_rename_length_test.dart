@@ -71,7 +71,7 @@ void main() {
             'name': 'Original',
             'workspaceId': 'host:chats',
           };
-          final c = LiveController(g)
+          final c = LiveController(g, showing: 'engine')
             ..booting = false
             ..origin = 'https://gateway.example'
             ..sessions = [obj(g.snapshot['session'])]

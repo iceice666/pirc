@@ -16,7 +16,7 @@ void main() {
             t.view.physicalSize = Size(width, 900);
             addTearDown(t.view.reset);
             final g = FakeGateway(),
-                c = LiveController(g)
+                c = LiveController(g, showing: 'engine')
                   ..sessionId = 's'
                   ..connection = 'live'
                   ..control = {'held': true, 'generation': 3}
@@ -100,7 +100,7 @@ void main() {
     'selection commands retain connection, control and unknown-result checks',
     () async {
       final g = FakeGateway(),
-          c = LiveController(g)
+          c = LiveController(g, showing: 'engine')
             ..sessionId = 's'
             ..busy = true;
       c.connection = 'offline';
@@ -123,7 +123,7 @@ void main() {
   );
   test('a pending preference keeps ordinary sending available', () async {
     final g = FakeGateway(),
-        c = LiveController(g)
+        c = LiveController(g, showing: 'engine')
           ..sessionId = 's'
           ..connection = 'live'
           ..control = {'held': true};

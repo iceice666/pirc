@@ -15,13 +15,14 @@ const _project = <String, dynamic>{
   'displayName': 'Project',
 };
 
-LiveController _controller(FakeGateway gateway) => LiveController(gateway)
-  ..booting = false
-  ..origin = 'https://gateway.example'
-  ..workspaces = [_project]
-  ..nodes = [
-    {'id': 'host'},
-  ];
+LiveController _controller(FakeGateway gateway) =>
+    LiveController(gateway, showing: 'engine')
+      ..booting = false
+      ..origin = 'https://gateway.example'
+      ..workspaces = [_project]
+      ..nodes = [
+        {'id': 'host'},
+      ];
 
 /// Unread, so the sidebar lists it under its workspace.
 Json _session(String id, {String? status}) => {

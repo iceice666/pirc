@@ -30,7 +30,8 @@ void main() {
       await g.call('pair', {'link': link});
       await g.call('completeOnboarding');
       final originalPreferences = obj(await g.call('preferences'));
-      final c = LiveController(g), theme = await PircTheme.load();
+      final c = LiveController(g, showing: 'engine'),
+          theme = await PircTheme.load();
       Future<void> until(bool Function() ready, String step) async {
         for (var i = 0; i < 150 && !ready(); i++) {
           await t.pump(const Duration(milliseconds: 200));

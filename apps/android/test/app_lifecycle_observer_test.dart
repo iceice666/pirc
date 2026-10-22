@@ -11,7 +11,7 @@ void main() {
     'visible inactive interruption keeps watch and draft without reconnect',
     (t) async {
       t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();
       await c.open('s');
@@ -43,7 +43,7 @@ void main() {
     'hidden and paused persist draft without unwatch; visible inactive refreshes once',
     (t) async {
       t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();
       await c.open('s');

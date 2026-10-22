@@ -12,22 +12,23 @@ const _project = <String, dynamic>{
   'displayName': 'Trip',
 };
 
-LiveController _controller(FakeGateway gateway) => LiveController(gateway)
-  ..booting = false
-  ..origin = 'https://gateway.example'
-  ..workspaces = [_project]
-  ..nodes = [
-    {'id': 'host'},
-  ]
-  ..sessions = [
-    {
-      'id': 's1',
-      'name': 'A long session title that should stay inside its row',
-      'workspaceId': _project['id'],
-      'runStatus': 'idle',
-      'unread': true,
-    },
-  ];
+LiveController _controller(FakeGateway gateway) =>
+    LiveController(gateway, showing: 'engine')
+      ..booting = false
+      ..origin = 'https://gateway.example'
+      ..workspaces = [_project]
+      ..nodes = [
+        {'id': 'host'},
+      ]
+      ..sessions = [
+        {
+          'id': 's1',
+          'name': 'A long session title that should stay inside its row',
+          'workspaceId': _project['id'],
+          'runStatus': 'idle',
+          'unread': true,
+        },
+      ];
 
 double _pageWidthFor(double viewportWidth) => switch (viewportWidth) {
   <= 650 => viewportWidth,

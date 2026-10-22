@@ -572,7 +572,7 @@ void main() {
 
   test('owner changes clear documents and suppress pending replies', () async {
     final gateway = _FakeDocumentGateway();
-    final owner = LiveController(gateway)
+    final owner = LiveController(gateway, showing: 'engine')
       ..origin = 'https://gateway.example'
       ..clientId = 'client'
       ..pairingStamp = 'stamp';

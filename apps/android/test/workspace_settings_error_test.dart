@@ -24,7 +24,7 @@ Json project(String hash, {bool trusted = false}) => {
   },
 };
 Future<LiveController> mount(WidgetTester t, FakeGateway g) async {
-  final c = LiveController(g)
+  final c = LiveController(g, showing: 'engine')
     ..nodes = [
       {'id': 'h'},
     ];

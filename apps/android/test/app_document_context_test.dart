@@ -309,7 +309,10 @@ void main() {
     'blank forms create isolated App contexts and switching watches only the selected window',
     (tester) async {
       final gateway = ContextRouteGateway();
-      final root = LiveController(DartScopedGateway(gateway));
+      final root = LiveController(
+        DartScopedGateway(gateway),
+        showing: 'engine',
+      );
       await tester.pumpWidget(MobileApp(theme: theme, controller: root));
       await tester.pumpAndSettle();
       expect(root.sessionId, 'session-latest');
@@ -420,7 +423,10 @@ void main() {
     'named target reuses its child scope and app history restores the same controller',
     (tester) async {
       final gateway = ContextRouteGateway();
-      final root = LiveController(DartScopedGateway(gateway));
+      final root = LiveController(
+        DartScopedGateway(gateway),
+        showing: 'engine',
+      );
       await tester.pumpWidget(MobileApp(theme: theme, controller: root));
       await tester.pumpAndSettle();
       root.editDraft('root draft retained through named app');
@@ -486,7 +492,7 @@ void main() {
     tester,
   ) async {
     final gateway = ContextRouteGateway();
-    final root = LiveController(DartScopedGateway(gateway));
+    final root = LiveController(DartScopedGateway(gateway), showing: 'engine');
     await tester.pumpWidget(MobileApp(theme: theme, controller: root));
     await tester.pumpAndSettle();
     final windows = scope(tester).windows;
@@ -530,7 +536,10 @@ void main() {
     'pairing change removes every document and closes child contexts',
     (tester) async {
       final gateway = ContextRouteGateway();
-      final root = LiveController(DartScopedGateway(gateway));
+      final root = LiveController(
+        DartScopedGateway(gateway),
+        showing: 'engine',
+      );
       await tester.pumpWidget(MobileApp(theme: theme, controller: root));
       await tester.pumpAndSettle();
       final windows = scope(tester).windows;
@@ -577,7 +586,7 @@ void main() {
     tester,
   ) async {
     final gateway = ContextRouteGateway();
-    final root = LiveController(DartScopedGateway(gateway));
+    final root = LiveController(DartScopedGateway(gateway), showing: 'engine');
     await tester.pumpWidget(MobileApp(theme: theme, controller: root));
     await tester.pumpAndSettle();
     root.editDraft('root draft survives appearance change');
@@ -633,14 +642,14 @@ void main() {
     () async {
       final gateway = ContextRouteGateway();
       final rootGateway = DartScopedGateway(gateway);
-      final root = LiveController(rootGateway);
+      final root = LiveController(rootGateway, showing: 'engine');
       await root.boot();
       await root.open('session-second');
       root.editDraft('root saved value');
       await root.flushDraft();
 
       final childGateway = DartScopedGateway(gateway, contextId: 'app-same');
-      final child = LiveController(childGateway);
+      final child = LiveController(childGateway, showing: 'engine');
       await child.boot();
       await child.open('session-second');
       expect(child.draft, 'root saved value');
@@ -663,7 +672,7 @@ void main() {
         gateway,
         contextId: 'app-sibling',
       );
-      final sibling = LiveController(siblingGateway);
+      final sibling = LiveController(siblingGateway, showing: 'engine');
       await sibling.boot();
       await sibling.open('session-second');
       expect(sibling.draft, 'child last saved value');

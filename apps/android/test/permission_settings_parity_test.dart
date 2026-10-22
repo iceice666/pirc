@@ -23,7 +23,7 @@ void main() {
         }
         return {};
       };
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
 
       await tester.pumpWidget(
         MaterialApp(
@@ -75,7 +75,7 @@ void main() {
       }
       return {};
     };
-    final controller = LiveController(gateway);
+    final controller = LiveController(gateway, showing: 'engine');
 
     await tester.pumpWidget(
       MaterialApp(

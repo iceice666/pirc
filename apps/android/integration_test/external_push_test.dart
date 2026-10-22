@@ -19,7 +19,7 @@ void main() {
       const link = String.fromEnvironment('PIRC_PAIR_LINK');
       expect(link, isNotEmpty);
       final gateway = Gateway();
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       final theme = await PircTheme.load();
       String? sessionId;
       Future<void> until(

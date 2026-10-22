@@ -130,7 +130,7 @@ void main() {
         paired = true;
         await gateway.call('completeOnboarding');
 
-        final c = controller = LiveController(gateway);
+        final c = controller = LiveController(gateway, showing: 'engine');
         await tester.pumpWidget(
           MobileApp(theme: await PircTheme.load(), controller: c),
         );

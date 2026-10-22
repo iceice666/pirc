@@ -16,7 +16,7 @@ void main() {
     'multiple attachments show sequential pending state and send only server IDs',
     () async {
       final g = FakeGateway();
-      final c = LiveController(g)..sessionId = 's';
+      final c = LiveController(g, showing: 'engine')..sessionId = 's';
       final first = Completer<Json>(), second = Completer<Json>();
       g.handler = (method, args) async {
         if (method == 'pickAttachments') {
@@ -61,7 +61,7 @@ void main() {
     'read/upload failure preserves earlier files and continues remaining files',
     () async {
       final g = FakeGateway();
-      final c = LiveController(g)..sessionId = 's';
+      final c = LiveController(g, showing: 'engine')..sessionId = 's';
       c.attachments.add({
         'id': 'existing',
         'name': 'existing.txt',
@@ -97,7 +97,7 @@ void main() {
 
   test('cancelled picker preserves existing attachments', () async {
     final g = FakeGateway();
-    final c = LiveController(g)..sessionId = 's';
+    final c = LiveController(g, showing: 'engine')..sessionId = 's';
     c.attachments.add({'id': 'existing'});
     g.handler = (method, args) async =>
         method == 'pickAttachments' ? null : g.normal(method, args);
@@ -113,7 +113,7 @@ void main() {
     'switch away and back discards old completion and does not upload remaining files',
     () async {
       final g = FakeGateway();
-      final c = LiveController(g)..sessionId = 's';
+      final c = LiveController(g, showing: 'engine')..sessionId = 's';
       final pending = Completer<Json>();
       g.handler = (method, args) async {
         if (method == 'pickAttachments') {
@@ -140,7 +140,7 @@ void main() {
     'disposed controller never starts uploads from delayed picker',
     () async {
       final g = FakeGateway();
-      final c = LiveController(g)..sessionId = 's';
+      final c = LiveController(g, showing: 'engine')..sessionId = 's';
       final picker = Completer<List<Json>>();
       g.handler = (method, args) async =>
           method == 'pickAttachments' ? picker.future : g.normal(method, args);

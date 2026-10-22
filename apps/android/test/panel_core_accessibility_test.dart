@@ -97,7 +97,8 @@ void main() {
       testWidgets('Context copy and source remain reachable in panel $name', (
         t,
       ) async {
-        final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+        final g = FakeGateway(),
+            c = LiveController(g, showing: 'engine')..sessionId = 's';
         final context = fixture('side-panel')['context'];
         g.handler = (_, _) async => context;
         String? clipboard, path;
@@ -149,7 +150,8 @@ void main() {
       testWidgets(
         'Memory filters and full expansion remain reachable in panel $name',
         (t) async {
-          final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+          final g = FakeGateway(),
+              c = LiveController(g, showing: 'engine')..sessionId = 's';
           g.handler = (_, _) async => memoryView('active');
           await mountPanel(
             t,
@@ -213,7 +215,8 @@ void main() {
         'Tasks activity and output controls remain reachable in panel $name',
         (t) async {
           final data = fixture('tasks');
-          final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+          final g = FakeGateway(),
+              c = LiveController(g, showing: 'engine')..sessionId = 's';
           var outputReads = 0;
           g.handler = (_, args) async {
             if ('${args['path']}'.contains('/background/')) {

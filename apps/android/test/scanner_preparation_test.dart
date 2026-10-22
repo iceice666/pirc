@@ -25,7 +25,7 @@ class PreparingGateway extends PermissionGateway {
 }
 
 Future<LiveController> mount(WidgetTester t, PreparingGateway g) async {
-  final c = LiveController(g);
+  final c = LiveController(g, showing: 'engine');
   await t.pumpWidget(
     MaterialApp(
       theme: theme.build(Brightness.light),

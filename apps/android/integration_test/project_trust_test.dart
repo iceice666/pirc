@@ -30,7 +30,7 @@ void main() {
       final gateway = Gateway();
       await gateway.call('pair', {'link': link});
       await gateway.call('completeOnboarding');
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       final theme = await PircTheme.load();
       final workspacePath = '/api/workspaces/${enc(workspaceId)}';
       const fixtureConfigPath = '/api/parity-project-trust/config';

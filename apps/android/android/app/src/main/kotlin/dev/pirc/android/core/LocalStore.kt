@@ -33,8 +33,19 @@ class LocalStore(context: Context) : Drafts {
         if (stale.isNotEmpty()) prefs.edit().apply { stale.forEach(::remove) }.apply()
     }
 
-    /** Unpairing: the drafts belong to the old gateway's sessions. */
-    fun clearDrafts() = pruneDrafts(emptyList())
+    /** Unpairing: the drafts belong to the old gateway's sessions and rooms. */
+    fun clearDrafts() {
+        pruneDrafts(emptyList())
+        val rooms = prefs.all.keys.filter { it.startsWith(ROOM_DRAFT) }
+        if (rooms.isNotEmpty()) prefs.edit().apply { rooms.forEach(::remove) }.apply()
+    }
+
+    /** What was being written in a room (the web's `relay.room-draft.<room>`). */
+    fun roomDraft(roomId: String): String = prefs.getString(ROOM_DRAFT + roomId, "") ?: ""
+
+    fun saveRoomDraft(roomId: String, text: String) {
+        prefs.edit().apply { if (text.isEmpty()) remove(ROOM_DRAFT + roomId) else putString(ROOM_DRAFT + roomId, text) }.apply()
+    }
 
     /** The terminal's text size, as last pinched. */
     var terminalFontSize: Float
@@ -58,5 +69,6 @@ class LocalStore(context: Context) : Drafts {
         const val TERMINAL_FONT = "terminal_font_size"
         const val CLIENT_ID = "client_id"
         const val DRAFT = "draft:"
+        const val ROOM_DRAFT = "room-draft:"
     }
 }

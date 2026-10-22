@@ -77,7 +77,10 @@ void main() {
     (t) async {
       final g = PermissionGateway();
       await t.pumpWidget(
-        MobileApp(theme: theme, controller: LiveController(g)),
+        MobileApp(
+          theme: theme,
+          controller: LiveController(g, showing: 'engine'),
+        ),
       );
       await t.pumpAndSettle();
       expect(find.text('歡迎使用 pirc'), findsOneWidget);
@@ -88,7 +91,10 @@ void main() {
       await t.pumpWidget(const SizedBox());
       await t.pump();
       await t.pumpWidget(
-        MobileApp(theme: theme, controller: LiveController(g)),
+        MobileApp(
+          theme: theme,
+          controller: LiveController(g, showing: 'engine'),
+        ),
       );
       await t.pumpAndSettle();
       expect(find.byType(PermissionPage), findsNothing);
@@ -101,7 +107,12 @@ void main() {
     t,
   ) async {
     final g = PermissionGateway()..deny = true;
-    await t.pumpWidget(MobileApp(theme: theme, controller: LiveController(g)));
+    await t.pumpWidget(
+      MobileApp(
+        theme: theme,
+        controller: LiveController(g, showing: 'engine'),
+      ),
+    );
     await t.pumpAndSettle();
     await t.tap(find.byKey(const Key('permission-notifications')));
     await t.pumpAndSettle();
@@ -174,7 +185,12 @@ void main() {
     t,
   ) async {
     final g = PermissionGateway()..failFinish = true;
-    await t.pumpWidget(MobileApp(theme: theme, controller: LiveController(g)));
+    await t.pumpWidget(
+      MobileApp(
+        theme: theme,
+        controller: LiveController(g, showing: 'engine'),
+      ),
+    );
     await t.pumpAndSettle();
     await finishGuide(t);
     expect(find.byType(PermissionPage), findsOneWidget);

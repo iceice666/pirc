@@ -33,7 +33,7 @@ void main() {
     );
     final sessionId = '${obj(created['session'])['id']}';
     final root = DartScopedGateway(raw);
-    final controller = LiveController(root);
+    final controller = LiveController(root, showing: 'engine');
     final theme = await PircTheme.load();
     Future<void> until(bool Function() ready, String label) async {
       for (var i = 0; i < 150 && !ready(); i++) {

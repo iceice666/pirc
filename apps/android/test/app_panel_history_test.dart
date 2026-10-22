@@ -80,7 +80,7 @@ void main() {
       gateway.responses.add(
         _documentResponse('/?session=session-second', _pircShell),
       );
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       addTearDown(() async {
         await tester.pumpWidget(const SizedBox());
         await gateway.stream.close();
@@ -122,7 +122,7 @@ void main() {
     (tester) async {
       _setDesktopViewport(tester);
       final gateway = LiveHistoryGateway();
-      final controller = LiveController(gateway);
+      final controller = LiveController(gateway, showing: 'engine');
       addTearDown(() async {
         await tester.pumpWidget(const SizedBox());
         await gateway.stream.close();

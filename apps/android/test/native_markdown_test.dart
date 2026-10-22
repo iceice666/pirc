@@ -319,7 +319,7 @@ void main() {
     'long assistant content stays inline instead of being replaced by a preview',
     (t) async {
       final g = FakeGateway();
-      final c = LiveController(g);
+      final c = LiveController(g, showing: 'engine');
       final content = 'START\n\n${'full message text ' * 100}\n\nEND';
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();

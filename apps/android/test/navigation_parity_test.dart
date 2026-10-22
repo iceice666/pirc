@@ -36,7 +36,7 @@ void main() {
       t.view.physicalSize = Size(width, 900);
       addTearDown(t.view.reset);
       final g = NavigationGateway();
-      final c = LiveController(g);
+      final c = LiveController(g, showing: 'engine');
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();
       expect(
@@ -62,8 +62,8 @@ void main() {
         expect(find.byType(MobileTabs), findsOneWidget);
         await t.tap(find.byTooltip('Close'));
         await t.pumpAndSettle();
-        expect(find.text('Work').hitTestable(), findsOneWidget);
-        await t.tap(find.text('Work'));
+        expect(find.text('Engine').hitTestable(), findsOneWidget);
+        await t.tap(find.text('Engine'));
         await t.pumpAndSettle();
         await t.tap(find.text('Workspace').first);
         await t.pumpAndSettle();
@@ -107,7 +107,7 @@ void main() {
       t.view.physicalSize = const Size(390, 844);
       addTearDown(t.view.reset);
       final g = NavigationGateway();
-      final c = LiveController(g);
+      final c = LiveController(g, showing: 'engine');
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();
       final sidebarState = t.state(find.byType(SessionSidebar));
@@ -176,7 +176,7 @@ void main() {
     t.view.physicalSize = const Size(390, 844);
     addTearDown(t.view.reset);
     final g = NavigationGateway();
-    final c = LiveController(g);
+    final c = LiveController(g, showing: 'engine');
     await t.pumpWidget(MobileApp(theme: theme, controller: c));
     await t.pumpAndSettle();
     g.publish('s');
@@ -213,7 +213,7 @@ void main() {
       t.view.physicalSize = const Size(650, 900);
       addTearDown(t.view.reset);
       final g = NavigationGateway();
-      final c = LiveController(g);
+      final c = LiveController(g, showing: 'engine');
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();
       g.publish('s');
@@ -266,7 +266,7 @@ void main() {
     t.view.physicalSize = const Size(390, 844);
     addTearDown(t.view.reset);
     final g = NavigationGateway();
-    final c = LiveController(g);
+    final c = LiveController(g, showing: 'engine');
     await t.pumpWidget(MobileApp(theme: theme, controller: c));
     await t.pumpAndSettle();
     await c.open('s');

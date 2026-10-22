@@ -45,7 +45,7 @@ void main() {
     'new artifact version never replaces selection or scroll until explicit switch',
     (t) async {
       final g = FakeGateway();
-      final c = LiveController(g)..sessionId = 's';
+      final c = LiveController(g, showing: 'engine')..sessionId = 's';
       final m = message(1, List.filled(60, '內容\n\n').join());
       c.state = {
         'messages': [m],
@@ -88,7 +88,7 @@ void main() {
       t,
     ) async {
       final g = FakeGateway();
-      final c = LiveController(g)..sessionId = 's';
+      final c = LiveController(g, showing: 'engine')..sessionId = 's';
       final a = Artifact({
         'id': 'a',
         'version': 1,

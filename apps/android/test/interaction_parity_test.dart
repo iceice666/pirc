@@ -18,12 +18,13 @@ Json question(String kind) => {
     {'value': 'b', 'label': 'Beta'},
   ],
 };
-LiveController readyController(FakeGateway gateway) => LiveController(gateway)
-  ..sessionId = 's'
-  ..connection = 'live'
-  ..control = {'held': true}
-  ..origin = 'https://gateway.test'
-  ..pairingStamp = 'test-pairing-stamp';
+LiveController readyController(FakeGateway gateway) =>
+    LiveController(gateway, showing: 'engine')
+      ..sessionId = 's'
+      ..connection = 'live'
+      ..control = {'held': true}
+      ..origin = 'https://gateway.test'
+      ..pairingStamp = 'test-pairing-stamp';
 Widget shell(Widget child, {double scale = 1}) => MaterialApp(
   theme: theme.build(Brightness.light),
   builder: (context, child) => MediaQuery(

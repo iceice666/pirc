@@ -28,7 +28,7 @@ void main() {
     await gateway.call('completeOnboarding');
     final boot = obj(await gateway.call('boot'));
     final theme = await PircTheme.load();
-    final owner = LiveController(gateway);
+    final owner = LiveController(gateway, showing: 'engine');
     owner.origin = boot['origin'] as String?;
     owner.pairingStamp = boot['pairingStamp'] as String?;
     final appRoutes = <NativeAppDocumentRoute>[];

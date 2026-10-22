@@ -43,7 +43,7 @@ Widget shell(
 );
 LiveController seeded(FakeGateway g) {
   final f = dockFixture();
-  return LiveController(g)
+  return LiveController(g, showing: 'engine')
     ..sessionId = 's'
     ..connection = 'live'
     ..control = {'held': true}

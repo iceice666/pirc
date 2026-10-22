@@ -12,7 +12,7 @@ void main() {
   test(
     'prompt settings failure retains draft and prevents submission',
     () async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       await c.boot();
       await c.open('s');
       g.publish('s');
@@ -38,7 +38,7 @@ void main() {
   test(
     'read-only choice rides with next prompt; duplicate sends are blocked',
     () async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       await c.boot();
       await c.open('s');
       g.publish('s');
@@ -77,7 +77,7 @@ void main() {
       t.view.devicePixelRatio = 1;
       t.view.physicalSize = const Size(390, 900);
       addTearDown(t.view.reset);
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();
       await c.open('s');
@@ -165,7 +165,7 @@ void main() {
   testWidgets(
     'reasoning selector is independent, changes the command and closes',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();
       await c.open('s');
@@ -194,7 +194,7 @@ void main() {
       t.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(t.view.reset);
       addTearDown(t.platformDispatcher.clearTextScaleFactorTestValue);
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       c.state = {
         'session': {'name': 'Review native layout', 'workspaceId': 'repo'},
       };
@@ -255,7 +255,7 @@ void main() {
           t.platformDispatcher.textScaleFactorTestValue = scale;
           addTearDown(t.view.reset);
           addTearDown(t.platformDispatcher.clearTextScaleFactorTestValue);
-          final g = FakeGateway(), c = LiveController(g);
+          final g = FakeGateway(), c = LiveController(g, showing: 'engine');
           await t.pumpWidget(MobileApp(theme: theme, controller: c));
           await t.pumpAndSettle();
           await c.open('s');
@@ -302,7 +302,7 @@ void main() {
       t.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(t.view.reset);
       addTearDown(t.platformDispatcher.clearTextScaleFactorTestValue);
-      final g = FakeGateway(), c = LiveController(g);
+      final g = FakeGateway(), c = LiveController(g, showing: 'engine');
       await t.pumpWidget(MobileApp(theme: theme, controller: c));
       await t.pumpAndSettle();
       await c.open('s');

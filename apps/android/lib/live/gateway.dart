@@ -6,6 +6,7 @@ import 'work_index.dart';
 import 'modes.dart';
 import 'attention.dart';
 import 'panel_resource.dart';
+import 'rooms_state.dart';
 
 typedef Json = Map<String, dynamic>;
 Json obj(dynamic value) =>
@@ -58,9 +59,45 @@ class ReadingState {
 }
 
 class LiveController extends ChangeNotifier {
-  LiveController(this.gateway) {
+  LiveController(this.gateway, {this.showing = 'rooms'}) {
     attention.addListener(changed);
   }
+
+  /// Which page the app shows: `rooms` (the default: the conversations) or
+  /// `engine` (sessions, nodes and the rest of the machinery).
+  String showing;
+
+  /// The rooms (plans/rewrite/12-android.md), started once they are shown.
+  late final RoomsController rooms = RoomsController(gateway);
+
+  /// Show the rooms, following them from the first time on.
+  void showRooms({String? roomId}) {
+    showing = 'rooms';
+    if (origin != null) {
+      if (!rooms.started) {
+        unawaited(rooms.start(roomId));
+      } else if (roomId != null) {
+        unawaited(rooms.open(roomId));
+      }
+      unawaited(rooms.setVisible(_appVisible));
+    }
+    changed();
+  }
+
+  /// Show the engine: sessions, workspaces, nodes.
+  void showEngine() {
+    showing = 'engine';
+    if (rooms.started) unawaited(rooms.setVisible(false));
+    unawaited(rooms.flushDraft());
+    changed();
+  }
+
+  /// Another account (or none): the rooms start over if they are shown.
+  Future<void> _restartRooms() async {
+    if (rooms.started) await rooms.stop();
+    if (origin != null && showing == 'rooms') await rooms.start();
+  }
+
   late final AttentionState attention = AttentionState(gateway);
   int get attentionCount => sessions.where(isWaiting).length;
   final Gateway gateway;
@@ -304,6 +341,11 @@ class LiveController extends ChangeNotifier {
           origin != null && data['targetSession'] == null && pairLink == null;
       booting = false;
       changed();
+      if (origin != null &&
+          showing == 'rooms' &&
+          data['targetSession'] == null) {
+        unawaited(rooms.start(data['targetRoom'] as String?));
+      }
       if (origin != null) {
         final account = _accountRevision;
         final navigation = _navigationIntent;
@@ -342,6 +384,8 @@ class LiveController extends ChangeNotifier {
     final account = _accountRevision;
     final navigation = ++_navigationIntent;
     _selectFirstSessionOnRefresh = false;
+    // A session lives in the engine.
+    if (showing != 'engine') showEngine();
     if (!sessions.any((session) => session['id'] == target)) {
       await refreshList();
     }
@@ -420,6 +464,7 @@ class LiveController extends ChangeNotifier {
       initializing = true;
       _selectFirstSessionOnRefresh = true;
       changed();
+      unawaited(_restartRooms());
       await Future.wait([refreshList(), attention.refresh()]);
     } catch (e) {
       error = describe(e);
@@ -443,6 +488,7 @@ class LiveController extends ChangeNotifier {
       _selection++;
       loading = false;
       await flushDraft();
+      if (rooms.started) await rooms.stop();
       await gateway.call('unpair');
       readers.clear();
       panelState.clear();
@@ -817,6 +863,7 @@ class LiveController extends ChangeNotifier {
       // Reset notifies listeners: publish the complete new identity/state first.
       attention.reset();
       changed();
+      unawaited(_restartRooms());
       final account = _accountRevision;
       unawaited(
         Future.wait([refreshList(), attention.refresh()]).whenComplete(() {
@@ -932,6 +979,9 @@ class LiveController extends ChangeNotifier {
   }) async {
     _appVisible = visible;
     active = visible && _documentDepth == 0;
+    if (rooms.started) {
+      unawaited(rooms.setVisible(visible && showing == 'rooms'));
+    }
     final ticket = ++_visibilityRevision, account = _accountRevision;
     bool current() =>
         !_disposed &&
@@ -1373,6 +1423,7 @@ class LiveController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    rooms.dispose();
     _panelData?.dispose();
     attention.removeListener(changed);
     attention.dispose();

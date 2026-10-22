@@ -29,7 +29,8 @@ String contents(Terminal t) => List.generate(
 ).join('\n');
 void main() {
   testWidgets('terminal list lease guards, removal and scope races', (t) async {
-    final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+    final g = FakeGateway(),
+        c = LiveController(g, showing: 'engine')..sessionId = 's';
     g.handler = (_, _) async => {
       'terminals': [terminalInfo('a'), terminalInfo('b', exited: true)],
     };
@@ -66,7 +67,7 @@ void main() {
   });
   testWidgets('terminal close errors and not-found removal', (t) async {
     final g = FakeGateway(),
-        c = LiveController(g)
+        c = LiveController(g, showing: 'engine')
           ..sessionId = 's'
           ..control = {'held': true, 'generation': 3};
     g.handler = (_, _) async => {
@@ -91,7 +92,7 @@ void main() {
     'PTY replay resets ANSI state, control gates and debounced visible resize',
     (t) async {
       final g = FakeGateway(),
-          c = LiveController(g)
+          c = LiveController(g, showing: 'engine')
             ..sessionId = 's'
             ..clientId = 'phone'
             ..control = {'held': true, 'generation': 2};
@@ -156,7 +157,8 @@ void main() {
   testWidgets('PTY reconnect backoff, stale tags, 4404 and app lifecycle', (
     t,
   ) async {
-    final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+    final g = FakeGateway(),
+        c = LiveController(g, showing: 'engine')..sessionId = 's';
     g.handler = (_, _) async => null;
     var exits = 0;
     final s = NativeTerminalSession(
@@ -210,7 +212,7 @@ void main() {
         t.view.physicalSize = const Size(390, 700);
         addTearDown(t.view.reset);
         final g = FakeGateway(),
-            c = LiveController(g)
+            c = LiveController(g, showing: 'engine')
               ..sessionId = 's'
               ..control = {'held': true, 'generation': 2};
         var next = 0;
@@ -273,7 +275,7 @@ void main() {
       addTearDown(t.view.reset);
       final semantics = t.ensureSemantics();
       final g = FakeGateway(),
-          c = LiveController(g)
+          c = LiveController(g, showing: 'engine')
             ..sessionId = 's'
             ..control = {'held': true, 'generation': 5};
       g.handler = (_, _) async => {

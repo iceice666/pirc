@@ -42,7 +42,8 @@ void main() {
   testWidgets(
     'memory observes only visible relevant events and retains filter/expansion across refresh',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+      final g = FakeGateway(),
+          c = LiveController(g, showing: 'engine')..sessionId = 's';
       g.handler = (_, _) async => memoryView('active');
       final s = ObservationalMemoryState(c)..setActive(true);
       await t.pump();
@@ -120,7 +121,8 @@ void main() {
         t.view.devicePixelRatio = 1;
         t.view.physicalSize = Size(width, 1200);
         addTearDown(t.view.reset);
-        final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+        final g = FakeGateway(),
+            c = LiveController(g, showing: 'engine')..sessionId = 's';
         g.handler = (_, _) async => memoryView('active');
         await t.pumpWidget(
           MaterialApp(
@@ -206,7 +208,8 @@ void main() {
       t.view.devicePixelRatio = 1;
       t.view.physicalSize = const Size(390, 844);
       addTearDown(t.view.reset);
-      final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+      final g = FakeGateway(),
+          c = LiveController(g, showing: 'engine')..sessionId = 's';
       g.handler = (_, _) async => memoryView('active');
       await t.pumpWidget(
         MaterialApp(
@@ -255,7 +258,8 @@ void main() {
       t.view.devicePixelRatio = 1;
       t.view.physicalSize = const Size(650, 844);
       addTearDown(t.view.reset);
-      final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+      final g = FakeGateway(),
+          c = LiveController(g, showing: 'engine')..sessionId = 's';
       g.handler = (_, _) async => memoryView('active');
       await t.pumpWidget(
         MaterialApp(
@@ -336,7 +340,8 @@ void main() {
   testWidgets(
     'loading, unavailable, disabled and runtime errors use exact states; old data survives a refresh error',
     (t) async {
-      final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+      final g = FakeGateway(),
+          c = LiveController(g, showing: 'engine')..sessionId = 's';
       final pending = Completer<Json>();
       g.handler = (_, _) => pending.future;
       await t.pumpWidget(

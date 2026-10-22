@@ -81,7 +81,7 @@ void main() {
       final expected = obj(fixture()['expected']);
       final snapshot = obj(expected['afterSnapshot']);
       final gateway = FakeGateway();
-      final controller = LiveController(gateway)
+      final controller = LiveController(gateway, showing: 'engine')
         ..sessionId = 's2'
         ..connection = 'live'
         ..control = {'held': true}
@@ -216,7 +216,7 @@ void main() {
           },
       ];
       final gateway = FakeGateway();
-      final controller = LiveController(gateway)
+      final controller = LiveController(gateway, showing: 'engine')
         ..sessionId = 's2'
         ..origin = 'https://gateway.test'
         ..pairingStamp = 'pairing-stamp'

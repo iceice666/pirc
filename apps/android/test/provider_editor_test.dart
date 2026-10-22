@@ -72,7 +72,8 @@ void main() {
   testWidgets(
     'two-times text keeps the complete input line inside the 40px control',
     (t) async {
-      final gateway = FakeGateway(), controller = LiveController(gateway);
+      final gateway = FakeGateway(),
+          controller = LiveController(gateway, showing: 'engine');
       gateway.handler = (_, args) async => {'presets': []};
       await t.pumpWidget(
         MaterialApp(
@@ -125,7 +126,8 @@ void main() {
   testWidgets(
     'model details support keyboard toggle and retain edited fields',
     (t) async {
-      final gateway = FakeGateway(), controller = LiveController(gateway);
+      final gateway = FakeGateway(),
+          controller = LiveController(gateway, showing: 'engine');
       gateway.handler = (_, args) async => {'presets': []};
       await t.pumpWidget(
         editorShell(
@@ -178,7 +180,8 @@ void main() {
   testWidgets(
     'preset selection suggests a free id and saves editable catalog models',
     (t) async {
-      final gateway = FakeGateway(), controller = LiveController(gateway);
+      final gateway = FakeGateway(),
+          controller = LiveController(gateway, showing: 'engine');
       String? savedId, editingId;
       Json? savedInput;
       gateway.handler = (_, args) async => presetResponse();
@@ -248,7 +251,8 @@ void main() {
   testWidgets(
     'edit reuses a write-only saved key on probes and clears it after saving',
     (t) async {
-      final gateway = FakeGateway(), controller = LiveController(gateway);
+      final gateway = FakeGateway(),
+          controller = LiveController(gateway, showing: 'engine');
       Json? savedInput;
       gateway.handler = (_, args) async {
         if (args['path'] == '/api/providers/presets') return presetResponse();
@@ -329,7 +333,8 @@ void main() {
   testWidgets(
     'explicit key removal probes without reuse and saves an empty key',
     (t) async {
-      final gateway = FakeGateway(), controller = LiveController(gateway);
+      final gateway = FakeGateway(),
+          controller = LiveController(gateway, showing: 'engine');
       Json? savedInput;
       gateway.handler = (_, args) async {
         if (args['path'] == '/api/providers/presets') return presetResponse();
@@ -378,7 +383,8 @@ void main() {
   testWidgets(
     'discovery, manual models, metadata editing, and safe test errors',
     (t) async {
-      final gateway = FakeGateway(), controller = LiveController(gateway);
+      final gateway = FakeGateway(),
+          controller = LiveController(gateway, showing: 'engine');
       Json? savedInput;
       gateway.handler = (_, args) async {
         if (args['path'] == '/api/providers/presets') return presetResponse();
@@ -515,7 +521,8 @@ void main() {
   testWidgets(
     'pending discovery result is ignored after the editor is disposed',
     (t) async {
-      final gateway = FakeGateway(), controller = LiveController(gateway);
+      final gateway = FakeGateway(),
+          controller = LiveController(gateway, showing: 'engine');
       final pending = Completer<Json>();
       gateway.handler = (_, args) async {
         if (args['path'] == '/api/providers/presets') return presetResponse();
