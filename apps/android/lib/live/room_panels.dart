@@ -80,10 +80,14 @@ class RoomMembers extends StatefulWidget {
     super.key,
     required this.rooms,
     required this.onClose,
+    this.onOpenFace,
     this.back = false,
   });
   final RoomsController rooms;
   final VoidCallback onClose;
+
+  /// A face's page.
+  final ValueChanged<String>? onOpenFace;
   final bool back;
 
   @override
@@ -92,6 +96,54 @@ class RoomMembers extends StatefulWidget {
 
 class _RoomMembersState extends State<RoomMembers> {
   bool showHidden = false;
+  String? error;
+
+  Future<void> _add() async {
+    final field = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('New face'),
+        content: TextField(
+          controller: field,
+          autofocus: true,
+          maxLength: 40,
+          decoration: const InputDecoration(hintText: 'Its name'),
+          onSubmitted: (value) => Navigator.pop(context, value),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, field.text),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    field.dispose();
+    if (name == null || name.trim().isEmpty) return;
+    try {
+      final id = await widget.rooms.createFace(name);
+      setState(() => error = null);
+      widget.onOpenFace?.call(id);
+    } catch (e) {
+      if (mounted) setState(() => error = LiveController.describe(e));
+    }
+  }
+
+  Future<void> _hide(Json face) async {
+    try {
+      await widget.rooms.updateFace('${face['id']}', {
+        'hidden': face['hiddenAt'] == null,
+      });
+      if (mounted) setState(() => error = null);
+    } catch (e) {
+      if (mounted) setState(() => error = LiveController.describe(e));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -131,6 +183,18 @@ class _RoomMembersState extends State<RoomMembers> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(color: colors['text.muted']),
                 ),
+                onTap: widget.onOpenFace == null
+                    ? null
+                    : () => widget.onOpenFace!('${face['id']}'),
+                // Only an archived face can be hidden (decision #18).
+                trailing: face['archivedAt'] != null
+                    ? TextButton(
+                        onPressed: () => _hide(face),
+                        child: Text(
+                          face['hiddenAt'] == null ? 'Hide' : 'Unhide',
+                        ),
+                      )
+                    : null,
               ),
             ),
           if (faces.isEmpty)
@@ -146,6 +210,23 @@ class _RoomMembersState extends State<RoomMembers> {
               onPressed: () => setState(() => showHidden = !showHidden),
               child: Text(
                 showHidden ? 'Hide the hidden faces' : 'Show $hidden hidden',
+              ),
+            ),
+          if (error != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                error!,
+                style: TextStyle(color: colors['status.danger']),
+              ),
+            ),
+          if (widget.onOpenFace != null)
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: OutlinedButton.icon(
+                onPressed: _add,
+                icon: const Icon(LucideIcons.plus, size: 16),
+                label: const Text('Add a face'),
               ),
             ),
         ],

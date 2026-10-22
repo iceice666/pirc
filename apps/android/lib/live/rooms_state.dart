@@ -368,6 +368,28 @@ class RoomsController extends ChangeNotifier {
     }),
   );
 
+  /// Make a face (the member list's "Add"); its event says the same later.
+  Future<String> createFace(String name) async {
+    final reply = await gateway.request(
+      '/api/faces',
+      method: 'POST',
+      body: {'name': name.trim()},
+    );
+    final face = obj(reply['face']);
+    await _quietly('roomsFaceSaved', {'face': face});
+    return '${face['id']}';
+  }
+
+  /// Change a face (name, bio, territory, archived, hidden, ...).
+  Future<void> updateFace(String faceId, Json input) async {
+    final reply = await gateway.request(
+      '/api/faces/${enc(faceId)}',
+      method: 'PATCH',
+      body: input,
+    );
+    await _quietly('roomsFaceSaved', {'face': reply['face']});
+  }
+
   // ---- what a line or a worker's message offers ----
   // Each answer comes back through the room's stream: the gateway rewrites
   // the line or the anchor, so nothing is changed here first.

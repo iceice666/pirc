@@ -701,13 +701,17 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       _documentRouteTicket++;
       _documentRouting = false;
     }
-    if (name == 'settings' || name == 'memory') {
+    // What pirc keeps is on the engine's front page now.
+    if (name == 'memory') {
+      _page('overview:memory', documentRoute: documentRoute);
+      return;
+    }
+    if (name == 'settings') {
       setState(() => settingsOpen = true);
       unawaited(
         showNativeSettings(
           context,
           controller: c,
-          initialTab: name == 'memory' ? 'Memory' : 'General',
           onOpenChat: _openSession,
           onResetLayout: () => setState(() {
             sidebarCollapsed = false;

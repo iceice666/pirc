@@ -338,6 +338,7 @@ void main() {
                     onResetLayout: () {},
                     onOpenChat: (_) {},
                     onAppOptions: () {},
+                    initialTab: 'Notifications',
                   );
                 },
                 child: const Text('Open settings'),
@@ -357,19 +358,33 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('settings-tab-About')));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 6));
-      expect(pushReads, 1, reason: 'hidden General must not keep polling');
+      expect(
+        pushReads,
+        1,
+        reason: 'hidden Notifications must not keep polling',
+      );
 
-      await tester.tap(find.byKey(const ValueKey('settings-tab-General')));
+      await tester.tap(
+        find.byKey(const ValueKey('settings-tab-Notifications')),
+      );
       await tester.pumpAndSettle();
       expect(pushReads, 2, reason: 'reveal should make one immediate read');
       await tester.pump(const Duration(seconds: 2));
       await tester.pump();
-      expect(pushReads, 3, reason: 'polling resumes after General is visible');
+      expect(
+        pushReads,
+        3,
+        reason: 'polling resumes after Notifications is visible',
+      );
 
       await tester.tap(find.byKey(const ValueKey('settings-tab-About')));
       await tester.pumpAndSettle();
       await tester.pump(const Duration(seconds: 6));
-      expect(pushReads, 3, reason: 'polling stops again after hiding General');
+      expect(
+        pushReads,
+        3,
+        reason: 'polling stops again after hiding Notifications',
+      );
 
       await tester.pumpWidget(const SizedBox());
       await tester.pump();

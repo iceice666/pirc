@@ -5,7 +5,7 @@ import 'permissions.dart';
 import '../demo.dart' as demo;
 import 'gateway.dart';
 import 'common.dart';
-import 'memory_settings.dart';
+import 'engine_overview.dart';
 import 'assistant_settings.dart';
 import 'web_controls.dart';
 
@@ -47,7 +47,10 @@ class ManagementPage extends StatelessWidget {
           theme: theme,
           onWindows: onWindows,
         ),
-        'memory' => MemoryPage(controller: controller),
+        'memory' => EngineOverview(
+          gateway: controller.gateway,
+          section: 'memory',
+        ),
         _ => ActivityPage(controller: controller, theme: theme),
       },
     ),
@@ -213,10 +216,11 @@ class _SettingsContentState extends State<SettingsContent> {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute<void>(
-                      builder: (_) => ManagementPage(
-                        kind: 'memory',
-                        controller: c,
-                        theme: widget.theme,
+                      builder: (_) => EngineOverview(
+                        gateway: c.gateway,
+                        section: 'memory',
+                        loopsRevision: c.rooms.loopsChanged,
+                        wakesRevision: c.rooms.wakesChanged,
                       ),
                     ),
                   ),
@@ -890,16 +894,6 @@ String _date(dynamic value) => value is num
         value.toInt(),
       ).toLocal().toString().split('.').first
     : '—';
-
-class MemoryPage extends StatelessWidget {
-  const MemoryPage({super.key, required this.controller});
-  final LiveController controller;
-  @override
-  Widget build(BuildContext context) => SingleChildScrollView(
-    padding: const EdgeInsets.all(20),
-    child: MemorySettings(controller: controller),
-  );
-}
 
 class ActivityPage extends StatelessWidget {
   const ActivityPage({

@@ -6,20 +6,28 @@ import 'gateway.dart';
 import 'common.dart';
 import 'web_controls.dart';
 import 'assistant_settings.dart';
-import 'memory_settings.dart';
+import 'source_settings.dart';
 import 'notification_settings.dart';
 import 'backend_settings.dart';
 import 'about_settings.dart';
 import 'paired_devices.dart';
 
-const settingsCategories = ['General', 'Memory', 'Models', 'Devices', 'About'];
+/// The same four as the web (plans/rewrite/11-web.md): what pirc keeps
+/// (memory, loops, wakes) is on the engine's front page, preferences on the
+/// host's page.
+const settingsCategories = [
+  'Models & sources',
+  'Devices',
+  'Notifications',
+  'About',
+];
 Future<void> showNativeSettings(
   BuildContext context, {
   required LiveController controller,
   required VoidCallback onResetLayout,
   required ValueChanged<String> onOpenChat,
   required VoidCallback onAppOptions,
-  String initialTab = 'General',
+  String initialTab = 'Models & sources',
   DateTime Function()? memoryClock,
   DateTime Function()? notificationClock,
 }) => showDialog<void>(
@@ -44,7 +52,7 @@ class NativeSettingsDialog extends StatefulWidget {
     required this.onResetLayout,
     required this.onOpenChat,
     required this.onAppOptions,
-    this.initialTab = 'General',
+    this.initialTab = 'Models & sources',
     this.memoryClock,
     this.notificationClock,
   });
@@ -179,10 +187,6 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
             AssistantParagraph(error!, error: true, live: true),
         ],
       ),
-      NativeNotificationSettings(
-        controller: c,
-        clock: widget.notificationClock,
-      ),
       AssistantSection(
         title: 'Layout',
         divider: true,
@@ -281,16 +285,13 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
         media.padding.vertical -
         40;
     final panels = [
-      general(),
-      MemorySettings(
-        controller: c,
-        clock: widget.memoryClock,
-        onOpenChat: (id) {
-          Navigator.pop(context);
-          widget.onOpenChat(id);
-        },
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          BackendSettings(controller: c),
+          NativeSourceSettings(gateway: c.gateway),
+        ],
       ),
-      BackendSettings(controller: c),
       Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -344,9 +345,20 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
           PairedDevices(controller: c),
         ],
       ),
-      NativeAboutSettings(
-        clientId: c.clientId,
-        onAppOptions: widget.onAppOptions,
+      NativeNotificationSettings(
+        controller: c,
+        clock: widget.notificationClock,
+      ),
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // The engine's own: its session list and layout.
+          general(),
+          NativeAboutSettings(
+            clientId: c.clientId,
+            onAppOptions: widget.onAppOptions,
+          ),
+        ],
       ),
     ];
     final nav = narrow
@@ -370,6 +382,7 @@ class _NativeSettingsDialogState extends State<NativeSettingsDialog> {
             ),
           );
     final body = SingleChildScrollView(
+      key: const Key('settings-scroll'),
       controller: scroll,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

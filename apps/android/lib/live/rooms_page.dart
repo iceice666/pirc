@@ -7,6 +7,7 @@ import 'common.dart';
 import 'gateway.dart';
 import 'mobile_tabs.dart';
 import 'room_message_row.dart';
+import 'face_page.dart';
 import 'room_panels.dart';
 import 'rooms_state.dart';
 
@@ -49,6 +50,9 @@ class RoomsPageState extends State<RoomsPage> {
 
   /// Beside the room: the members (a thread comes first).
   bool membersOpen = false;
+
+  /// A face's page, shown where the members are.
+  String? faceId;
   bool showArchived = false;
   final composer = TextEditingController();
   final scroll = ScrollController();
@@ -226,6 +230,8 @@ class RoomsPageState extends State<RoomsPage> {
           if (didPop) return;
           if (thread) {
             unawaited(rooms.closeThread());
+          } else if (faceId != null) {
+            setState(() => faceId = null);
           } else if (membersOpen) {
             setState(() => membersOpen = false);
           } else if (phone) {
@@ -251,6 +257,7 @@ class RoomsPageState extends State<RoomsPage> {
                         setState(() {
                           listOpen = false;
                           membersOpen = true;
+                          faceId = null;
                         });
                       case 'engine':
                         widget.onEngine();
@@ -264,18 +271,8 @@ class RoomsPageState extends State<RoomsPage> {
             child: phone
                 ? (listOpen
                       ? _list(phone: true)
-                      : thread
-                      ? RoomThread(
-                          rooms: rooms,
-                          back: true,
-                          onClose: () => unawaited(rooms.closeThread()),
-                        )
-                      : membersOpen
-                      ? RoomMembers(
-                          rooms: rooms,
-                          back: true,
-                          onClose: () => setState(() => membersOpen = false),
-                        )
+                      : side
+                      ? _side(phone: true)
                       : _room(phone: true))
                 : Row(
                     children: [
@@ -295,16 +292,7 @@ class RoomsPageState extends State<RoomsPage> {
                         ),
                         SizedBox(
                           width: (size.maxWidth * .32).clamp(280.0, 380.0),
-                          child: thread
-                              ? RoomThread(
-                                  rooms: rooms,
-                                  onClose: () => unawaited(rooms.closeThread()),
-                                )
-                              : RoomMembers(
-                                  rooms: rooms,
-                                  onClose: () =>
-                                      setState(() => membersOpen = false),
-                                ),
+                          child: _side(phone: false),
                         ),
                       ],
                     ],
@@ -314,6 +302,48 @@ class RoomsPageState extends State<RoomsPage> {
       );
     },
   );
+
+  /// Beside the room: a worker's thread, a face's page, or the members.
+  Widget _side({required bool phone}) {
+    if (rooms.threadId != null) {
+      return RoomThread(
+        rooms: rooms,
+        back: phone,
+        onClose: () => unawaited(rooms.closeThread()),
+      );
+    }
+    final face = faceId;
+    if (face != null) {
+      return FacePage(
+        key: ValueKey(('face', face)),
+        rooms: rooms,
+        faceId: face,
+        onBack: () => setState(() => faceId = null),
+        onPreferences: widget.onDetails == null
+            ? null
+            : () => widget.onDetails!('memory'),
+      );
+    }
+    return RoomMembers(
+      rooms: rooms,
+      back: phone,
+      onOpenFace: openFace,
+      onClose: () => setState(() {
+        membersOpen = false;
+        faceId = null;
+      }),
+    );
+  }
+
+  /// A face's page, from the members or a speaker's name.
+  void openFace(String id) {
+    unawaited(rooms.closeThread());
+    setState(() {
+      listOpen = false;
+      membersOpen = true;
+      faceId = id;
+    });
+  }
 
   Widget _list({required bool phone}) {
     final colors = palette(context);
@@ -576,7 +606,10 @@ class RoomsPageState extends State<RoomsPage> {
                   isSelected: membersOpen,
                   onPressed: () {
                     unawaited(rooms.closeThread());
-                    setState(() => membersOpen = !membersOpen);
+                    setState(() {
+                      membersOpen = !membersOpen;
+                      faceId = null;
+                    });
                   },
                   icon: const Icon(LucideIcons.users, size: 20),
                 ),
@@ -677,6 +710,7 @@ class RoomsPageState extends State<RoomsPage> {
                         onPin: (message, pinned) =>
                             unawaited(rooms.pin(message, pinned)),
                         onDetails: widget.onDetails,
+                        onOpenFace: openFace,
                       );
                     },
                   ),

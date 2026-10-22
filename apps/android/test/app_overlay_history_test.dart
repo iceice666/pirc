@@ -107,31 +107,39 @@ Future<void> _submitSourceForm(WidgetTester tester) async {
   await tester.pump();
 }
 
+/// Settings at its first tab, Models & sources: the stateful overlay these
+/// tests keep across document navigation (the Memory tab it once was moved
+/// to the engine, plans/rewrite/12-android.md).
 Future<void> _openMemorySettings(WidgetTester tester) async {
   final settings = find.widgetWithText(TextButton, 'Settings');
   expect(settings, findsOneWidget);
   await tester.ensureVisible(settings);
   await tester.tap(settings);
   await tester.pumpAndSettle();
-
-  final memoryTab = find.byKey(const ValueKey('settings-tab-Memory'));
-  expect(memoryTab, findsOneWidget);
-  await tester.tap(memoryTab);
-  await tester.pumpAndSettle();
-  expect(find.text("The assistant's notes · MEMORY"), findsOneWidget);
+  expect(
+    find.byKey(const ValueKey('settings-tab-Models & sources')),
+    findsOneWidget,
+  );
 }
 
-Finder _settingsScroll({bool skipOffstage = true}) => find.descendant(
-  of: find.byType(NativeSettingsDialog, skipOffstage: skipOffstage),
-  matching: find.byType(Scrollable, skipOffstage: skipOffstage),
-);
+Finder _settingsScroll({bool skipOffstage = true}) => find
+    .descendant(
+      of: find.byKey(const Key('settings-scroll'), skipOffstage: skipOffstage),
+      matching: find.byType(Scrollable, skipOffstage: skipOffstage),
+    )
+    .first;
 
+/// The add-a-source form open with a name typed: state the overlay keeps.
 Future<ScrollableState> _makeMemoryOverlayState(WidgetTester tester) async {
-  final forget = find.text('Forget').first;
-  await tester.ensureVisible(forget);
-  await tester.tap(forget);
+  final add = find.text('Add a source');
+  await tester.ensureVisible(add);
+  await tester.tap(add);
   await tester.pumpAndSettle();
-  expect(find.text('Forget for good'), findsOneWidget);
+  expect(find.text('New source'), findsOneWidget);
+  final name = find.widgetWithText(TextField, 'Name');
+  await tester.ensureVisible(name);
+  await tester.enterText(name, 'Overlay source');
+  await tester.pumpAndSettle();
 
   final scroll = _settingsScroll();
   expect(scroll, findsOneWidget);
@@ -217,17 +225,12 @@ void main() {
       expect(window.canForward, isTrue);
       expect(find.byType(NativeDocumentWorkspace), findsNothing);
       expect(find.byType(NativeSettingsDialog), findsOneWidget);
-      expect(find.text("The assistant's notes · MEMORY"), findsOneWidget);
+      expect(find.text('New source'), findsOneWidget);
       final restoredScroll = tester.state<ScrollableState>(_settingsScroll());
       expect(restoredScroll, same(retainedScroll));
       expect(restoredScroll.position.pixels, closeTo(scrollOffset, .01));
       expect(gateway.documentArguments, hasLength(1));
-      expect(find.text('Forget for good'), findsOneWidget);
-
-      gateway.changeMemoryOnNextRead = true;
-      await controller.attention.memoryChanged();
-      await tester.pumpAndSettle();
-      expect(find.text('Forget for good'), findsNothing);
+      expect(find.text('Overlay source'), findsOneWidget);
     },
   );
 
@@ -324,8 +327,8 @@ void main() {
       expect(controller.sessionId, 'session-latest');
       expect(find.byType(NativeDocumentWorkspace), findsNothing);
       expect(find.byType(NativeSettingsDialog), findsOneWidget);
-      expect(find.text("The assistant's notes · MEMORY"), findsOneWidget);
-      expect(find.text('Forget for good'), findsOneWidget);
+      expect(find.text('New source'), findsOneWidget);
+      expect(find.text('Overlay source'), findsOneWidget);
       final restoredScroll = tester.state<ScrollableState>(_settingsScroll());
       expect(restoredScroll, same(retainedScroll));
       expect(gateway.documentArguments, hasLength(1));

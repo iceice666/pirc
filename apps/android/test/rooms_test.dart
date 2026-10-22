@@ -311,6 +311,19 @@ void main() {
     expect(find.bySemanticsLabel(RegExp('Muted')), findsOneWidget);
   });
 
+  testWidgets("a member opens its face's page", (t) async {
+    await pumpRooms(t, width: 1024);
+    await t.tap(find.byTooltip('Members'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('pirc (host)'));
+    await t.pumpAndSettle();
+    expect(find.byTooltip('Back to the members'), findsOneWidget);
+    expect(find.text('Name'), findsOneWidget);
+    await t.tap(find.byTooltip('Back to the members'));
+    await t.pumpAndSettle();
+    expect(find.text('Add a face'), findsOneWidget);
+  });
+
   testWidgets('a wide screen shows the list, the room and the members', (
     t,
   ) async {
