@@ -4,6 +4,59 @@
 
 Sandbox and browser settings have their own page: [Sandbox and browser](sandbox-and-browser.md).
 
+## Experimental checkpoint capture
+
+`PIRC_CHECKPOINT_WORKSPACES` is an optional JSON array of **local workspace ids**
+(for example `["pirc"]`, without the node prefix). It is absent/off by default;
+`[]` also disables it. Restart the node to change the selection. Only Work
+directories using the built-in agent's file tools are covered. No recovery
+action, new public API or client UI is enabled by this setting.
+
+The node keeps a separate SQLite operation journal and SHA-256 content objects
+in `$PIRC_STATE_DIR/checkpoints/`. The node's registered private state protects
+this directory from sandboxed agents; keep state outside the workspace and
+include checkpoint objects in private-data backup/access policy. Files and
+state are never reset, restored or committed by capture. Raw object bytes are
+not sent to the agent or gateway.
+
+Direct `write`/`edit` observations include the actual dirty preimage and bounded
+postimage, file absence and executable bit. The node binds owner, workspace,
+session, epoch and run, and creates the group/operation ids. An edit with a stale
+eligible preimage is refused before that file-tool write. This is still an
+**observational** journal: an editor or another process can write between the
+observation and the tool's mutation. It does not prove exclusive ownership or
+authorize automatic undo. Shell/PTC/team/custom-tool starts record explicit
+coverage gaps; child effects, hooks, panel terminals and external writers do
+not acquire individual attribution. Missing coverage never means no changes.
+An explicitly allowed file outside the selected workspace retains its existing
+write permissions but is reported as uncovered; capture does not read that path.
+
+Ignored untracked files are excluded using Git in the existing read-only
+sandbox; tracked files remain eligible even when their names match ignore rules.
+Sandbox failure does not fall back to host Git or imply eligibility. Effective
+deny-read paths, `.git`, `.pirc`, common build/dependency directories, nested
+repositories, symlinks, hard links, special files and mount crossings are
+excluded. File contents are limited to 10 MiB each. A truncated or changed read
+does not become a valid version.
+
+Initial logical storage limits are 960 MiB of unique content plus a 64 MiB
+SQLite metadata ceiling, with metadata admission headroom reserved for closing
+and recovery. There are at most 100 captures per workspace and 1,000 operation
+records per capture. Closed unpinned captures expire after seven days; sweeps
+run on startup, capture activity and hourly while the node is running. Active
+and pinned evidence is retained. Transient SQLite journals, temporary object
+files and filesystem overhead need additional disk space; these limits are
+not a filesystem space reservation. Quota/IO failures are explicit: a failed
+preimage request prevents that file-tool write; a failed postimage produces an
+incomplete-checkpoint notification without retrying the completed write.
+
+Restart marks unfinished observations as interrupted/incomplete. Missing or
+corrupt objects fail manifest readback. Session deletion removes its unpinned
+references and only unreferenced objects; pinned evidence blocks deletion until
+reviewed. No workspace path is passed to blob cleanup. Recovery workspaces,
+cross-node writer coordination and persistent recovery jobs are later phases;
+see [Checkpoints](../../plans/checkpoints.md).
+
 ## Identity and link
 
 | Variable                             | Required | Default | Meaning                                                                                                                                               |

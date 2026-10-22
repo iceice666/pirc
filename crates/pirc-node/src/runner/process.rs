@@ -458,6 +458,9 @@ impl Runner {
         }
         self.prepared.cleanup();
         if let Some(node) = self.node() {
+            if let Some(capture) = &node.checkpoints {
+                capture.seal(self.session_id.clone(), self.epoch, None, true);
+            }
             let db = node.db.lock();
             let result = db
                 .mark_dispatched_unknown(&self.session_id, &error.message)
@@ -630,7 +633,29 @@ impl Runner {
                     }
                 };
                 self.lock().run_error = None;
+                if let Some(capture) = &node.checkpoints
+                    && capture.enabled(&self.workspace.id)
+                    && self.mode.workdir == pirc_protocol::mode::Workdir::Workspace
+                    && let Err(error) = capture.start(node, self)
+                {
+                    crate::log::error(&error);
+                }
                 self.update_run(node, &run, RunStatus::Running, None)
+            }
+            "tool_execution_start" => {
+                let tool = message
+                    .get("toolName")
+                    .and_then(Value::as_str)
+                    .unwrap_or("unknown_tool");
+                if !matches!(tool, "write" | "edit" | "read" | "ls" | "find" | "grep")
+                    && let Some(capture) = &node.checkpoints
+                    && capture.enabled(&self.workspace.id)
+                    && self.mode.workdir == pirc_protocol::mode::Workdir::Workspace
+                    && let Err(error) = capture.note(node, self, tool)
+                {
+                    crate::log::error(&error);
+                }
+                Ok(())
             }
             "agent_settled" => {
                 let (run, error) = {
@@ -638,6 +663,14 @@ impl Runner {
                     (inner.current_run.take(), inner.run_error.take())
                 };
                 if let Some(run) = run {
+                    if let Some(capture) = &node.checkpoints {
+                        capture.seal(
+                            self.session_id.clone(),
+                            self.epoch,
+                            Some(run.clone()),
+                            false,
+                        );
+                    }
                     let status = if error.is_none() {
                         RunStatus::Succeeded
                     } else {
@@ -837,6 +870,22 @@ fn spawn_child(
     for (name, value) in &prepared.env {
         set(name, value.clone());
     }
+    // Forced after repository env. Old/standalone agents and team children do
+    // not gain a new capture channel merely by inheriting the node's config.
+    set(
+        "PIRC_CHECKPOINT_CAPTURE",
+        if node
+            .checkpoints
+            .as_ref()
+            .is_some_and(|c| c.enabled(&workspace.id))
+            && mode.workdir == pirc_protocol::mode::Workdir::Workspace
+        {
+            "1"
+        } else {
+            "0"
+        }
+        .into(),
+    );
     // Repository env must never override the gateway's mode policy.
     set(
         "PIRC_MODE",

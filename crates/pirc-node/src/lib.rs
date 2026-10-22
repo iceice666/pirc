@@ -48,6 +48,7 @@ pub mod assistant_prompts;
 pub mod branch_cache;
 pub mod browser;
 pub mod chat;
+pub mod checkpoints;
 pub mod cli;
 pub mod error;
 pub mod events;

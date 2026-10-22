@@ -61,6 +61,7 @@ pub struct Services {
     pub router: Router,
     // runner
     pub writes: WriteBroker,
+    pub checkpoints: Option<Arc<crate::checkpoints::runtime::CaptureService>>,
     pub branches: BranchCache,
     pub agent_gateway: AgentGateway,
     pub inference: InferenceServer,
@@ -238,6 +239,7 @@ impl Services {
                 .chain(crate::panels::routes()),
         );
         let (terminate, _) = watch::channel(false);
+        let checkpoints = crate::checkpoints::runtime::CaptureService::configured(&config, &env)?;
         let node = Arc::new_cyclic(|weak: &WeakNode| Services {
             config,
             env,
@@ -249,6 +251,7 @@ impl Services {
             activity: Notify::new(),
             router,
             writes: WriteBroker::new(weak.clone()),
+            checkpoints,
             branches: BranchCache::new(),
             agent_gateway: AgentGateway::new(weak.clone()),
             inference: InferenceServer::new(weak.clone()),
@@ -261,6 +264,9 @@ impl Services {
             closing: AtomicBool::new(false),
             terminate,
         });
+        if let Some(capture) = &node.checkpoints {
+            tokio::spawn(capture.clone().maintenance(node.terminate.subscribe()));
+        }
         // Mandatory: say at start-up whether agents can start at all.
         let probe = node.sandbox.clone();
         tokio::spawn(async move {

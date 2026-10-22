@@ -2,9 +2,9 @@
 
 [Plans](README.md) · [Session UI](../docs/guides/session-ui.md) · [Tools](../docs/guides/tools.md)
 
-Status: phase 1 safety spike implemented locally, 2026-10-22. The user authorized
-phase 1 only; production capture, recovery APIs and Web/native Flutter Android
-actions remain proposed. Multiple agents and preservation of both existing and
+Status: phases 1–2 implemented locally, 2026-10-22: safety experiments and opt-in
+Node capture/journaling. The user authorized phases 1–2 only; recovery APIs and
+Web/native Flutter Android actions remain proposed. Multiple agents and preservation of both existing and
 later user changes are hard requirements. Keep work local; no deployment, remote
 push or Release is authorized. Integrate the independent memory update last,
 after the user requests rebasing onto its published changes.
@@ -348,9 +348,9 @@ first release never undoes files merely because a conversation branch changes.
 The executable experiment is
 [`checkpoint_safety.rs`](../crates/pirc-node/tests/checkpoint_safety.rs), with a
 test-only [helper](../crates/pirc-node/tests/checkpoint_support/mod.rs).
-Neither file is linked into the node executable. There is no new API, database
-schema, automatic checkpoint, sandbox permission, background capture worker or
-memory/session-history integration. Runtime behavior remains unchanged.
+Neither phase-1 file is linked into the node executable. The phase-1 commit
+introduced no API, database schema, automatic checkpoint, sandbox permission,
+background capture worker or memory/session-history integration.
 
 **Code audit, reconfirmed against the current Rust implementation:**
 
@@ -421,10 +421,83 @@ cargo test --locked -p pirc-node --lib runner::host::tests::an_aborted_command_l
 cargo test --locked -p pirc-agent --lib features::background::tests
 ```
 
-Phase 2 can build the trusted capture/journal and operation identity from these
-contracts; it must not expose recovery as ready merely because these fixture
-experiments pass. Keep memory lifecycle changes until the independent memory
-work is published and explicitly integrated.
+These contracts constrain the phase-2 implementation below; passing the
+experiments does not authorize exposing recovery as ready.
+
+### Phase 2: Node capture and operation journal
+
+Implemented in [`checkpoints/`](../crates/pirc-node/src/checkpoints/mod.rs), with
+main-agent file-tool handshakes, runner lifecycle binding and session cleanup.
+Configuration is opt-in per local workspace id; see the
+[deployment contract](../docs/deploy/node.md#experimental-checkpoint-capture).
+No local user workspace has been enabled, deployed or migrated by this work.
+
+- **Private durable storage:** separate versioned SQLite index and immutable
+  SHA-256 content objects under registered node state. Save/fsync each object
+  before committing its manifest reference. Record exact bytes, absence and
+  executable bit without rewriting Git index/refs or any source file. Reuse
+  identical objects; reject unsafe links/permissions and corrupt readback.
+- **Authority and ordering:** node-bound owner/workspace/session/epoch/run plus
+  node-issued capture, group and operation ids. The agent supplies a file-tool
+  request, never a root, owner or source blob. Postimage tokens are bound to the
+  complete runner identity; repeated completion does not resample later user
+  bytes. Durable run/epoch close fences and session-deletion tombstones prevent
+  delayed requests from reviving ended/deleted scopes.
+- **Direct-tool hooks:** capture the final guarded `write`/`edit` path after
+  hooks, policy and lease acquisition. Compare an eligible edit's expected
+  preimage digest before that tool writes. Capture the actual postimage after
+  success/failure. A postimage failure reports incomplete protection without
+  retrying the completed write; cancellation leaves an interrupted record.
+- **Coverage stays honest:** every shared-directory capture is observational,
+  not stable or independently attributed. Shell/PTC/team/custom tool starts add
+  explicit gap records. Children, arbitrary hooks, terminals and external
+  processes remain uncovered. A settled run cannot establish their quiescence.
+  The generic coverage descriptor applies even if no gap event was observable.
+- **Bounded reads:** descriptor-relative `NOFOLLOW` traversal, nonblocking file
+  opens, physical root identity, mount/nested-repository/link/type exclusions,
+  effective deny-read rules and 10 MiB/file bounds. Git ignore classification
+  reuses the read-only sandbox and keeps tracked ignored-name files eligible;
+  no host-Git fallback. Recheck runner authority after asynchronous classification.
+- **Retention/failure:** seven-day/100-capture workspace policy, 1,000 operation
+  bound, 960 MiB content plus 64 MiB metadata ceilings and metadata admission
+  headroom. Startup/traffic/hourly sweeps keep active or pinned evidence. Prune
+  commits before unlinking orphans; cleanup removes only known unreferenced
+  private objects. Session deletion retains pinned dependencies for review.
+  Quota and IO failures do not produce a successful checkpoint. Startup marks
+  unfinished operations interrupted/incomplete instead of sampling a new postimage.
+
+Validation includes the persistent
+[`checkpoint_capture.rs`](../crates/pirc-node/tests/checkpoint_capture.rs) suite,
+the phase-1 safety experiments, file-tool/channel tests, sandboxed Git dispatch,
+real Node-store/runner RPC binding, and existing runner/session/workspace tests.
+Final macOS acceptance: **133 passed, 0 failed**, with one existing ignored
+runner probe left ignored (28 persistent-capture, 25 phase-1 safety, 35 agent
+tool/channel, 15 Git inspector, 23 runner and 7 app tests). Focused all-target
+Clippy with warnings denied, Rust/Markdown formatting and diff checks pass.
+The real-node test uses only disposable non-Git files, no linked gateway,
+provider, live agent or browser. Git-dispatch tests use the existing sandbox
+stand-in on disposable repositories; they do not establish native OS sandbox
+enforcement for a recovery workspace.
+
+**Remaining phase boundaries:** no persistent recovery jobs, whole-tree atomic
+snapshot, isolated execution, cross-node writer fence, restore/continue API or
+Web/Android recovery UI. Direct tools still mutate from the agent process;
+the preflight check is not filesystem compare-and-swap against external writers.
+Only the captured observations exist, not a trusted reversible attribution of
+all effects. Physical ENOSPC/power-loss, Linux runtime and new recovery sandbox
+roots still require later acceptance. Logical quotas exclude transient SQLite
+journals, temporary objects and filesystem overhead. No Nix validation is run
+at the user's request. Memory lifecycle/model context integration is untouched
+and stays last, after the independent memory work is published and rebased.
+
+```sh
+cargo test --locked -p pirc-node --test checkpoint_capture --test checkpoint_safety
+cargo test --locked -p pirc-agent --lib tools::
+cargo test --locked -p pirc-node --lib panels::inspect::tests
+cargo test --locked -p pirc-node --lib runner::
+cargo test --locked -p pirc-node --lib app::tests
+cargo clippy --locked -p pirc-node -p pirc-agent --all-targets -- -D warnings
+```
 
 Required tests include:
 

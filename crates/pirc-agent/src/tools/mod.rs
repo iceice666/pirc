@@ -2,6 +2,7 @@
 //! the core file and shell tools here, feature tools in M5.
 
 pub mod bash;
+mod checkpoints;
 pub mod files;
 mod glob;
 pub mod js;

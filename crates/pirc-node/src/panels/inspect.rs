@@ -75,6 +75,32 @@ fn display(path: &Path) -> String {
 struct GitResult {
     stdout: String,
     truncated: bool,
+    exit_code: i32,
+    timed_out: bool,
+}
+
+/// Coverage classification only. Always run repository Git in the existing
+/// read-only sandbox; never execute host Git against an agent-writable config.
+pub(crate) async fn checkpoint_eligible(
+    sandbox: &dyn Sandbox,
+    root: &Path,
+    relative: &str,
+    env: &ChildEnv,
+) -> ApiResult<bool> {
+    let result = git(
+        sandbox,
+        root,
+        &["check-ignore", "--quiet", "--", relative],
+        env,
+    )
+    .await
+    .map_err(ApiError::from)?;
+    if result.truncated || result.timed_out || !matches!(result.exit_code, 0 | 1) {
+        return Err(ApiError::bad_request(
+            "Checkpoint Git eligibility is unavailable",
+        ));
+    }
+    Ok(result.exit_code == 1) // tracked files are not ignored by check-ignore
 }
 
 /// Why git did not give a result.
@@ -343,6 +369,8 @@ async fn run_prepared(
     Ok(GitResult {
         stdout: String::from_utf8_lossy(&out).into_owned(),
         truncated,
+        exit_code: code,
+        timed_out,
     })
 }
 

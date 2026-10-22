@@ -750,6 +750,15 @@ async fn remove_session(node: &Node, session: &SessionRow, workspace: &Workspace
         ));
         return Err(ApiError::internal());
     }
+    if let Some(capture) = &node.checkpoints {
+        let capture = capture.clone();
+        let owner = session.owner_user.clone().unwrap_or_default();
+        let id = session.id.clone();
+        tokio::task::spawn_blocking(move || capture.journal.delete_session(&owner, &id))
+            .await
+            .map_err(|_| ApiError::internal())?
+            .map_err(|error| ApiError::new(409, "checkpoint_retained", error))?;
+    }
     remove_tree(Path::new(&session.private_session_path))?;
     let base = session
         .id

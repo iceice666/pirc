@@ -63,14 +63,16 @@ deletion are not open work.
    verification and remaining device acceptance. Remote publication requires a
    later explicit request.
 9. **Agent checkpoints and safe recovery.** [Checkpoints](checkpoints.md):
-   phase 1 safety spike implemented locally; Web and native Android actions
+   phases 1–2 safety spike and opt-in Node capture/journal implemented locally;
+   Web and native Android actions
    remain proposed. Preserve dirty baselines and
    later user/agent changes, distinguish shared writer groups from independently
    attributed agents, and prepare inverse merges in new recovery workspaces.
    The original workspace is retained; no automatic in-place overwrite. Includes
    concurrency, attribution, sandbox/storage, disk quotas and crash acceptance.
-   Phase 1 has executable inverse/copy/concurrency fixtures and recorded
-   implementation gates. Later phases need separate authorization; memory
+   Includes persistent pre/post objects, owner/run binding, explicit coverage
+   gaps, quotas, retention and interruption recovery. Recovery jobs/isolation
+   and client actions remain later phases, requiring authorization; memory
    integration is deferred until the independent memory update is ready.
 
 ## Shelved: project-only memory (B)

@@ -130,6 +130,50 @@ struct Fixture {
     ws: PathBuf,
 }
 
+#[tokio::test]
+async fn checkpoint_eligibility_uses_readonly_git_and_keeps_tracked_ignored_files() {
+    let f = fixture();
+    let sandbox = FakeSandbox::new(None);
+    let env = env(&f.run);
+    run_git(&f.ws, &["init", "-q"]);
+    std::fs::write(f.ws.join(".gitignore"), "*.log\n").unwrap();
+    std::fs::write(f.ws.join("tracked.log"), "tracked").unwrap();
+    run_git(&f.ws, &["add", "-f", "tracked.log"]);
+    let index = std::fs::read(f.ws.join(".git/index")).unwrap();
+    std::fs::write(f.ws.join("ignored.log"), "ignored").unwrap();
+    assert!(
+        !checkpoint_eligible(&sandbox, &f.ws, "ignored.log", &env)
+            .await
+            .unwrap()
+    );
+    assert!(
+        checkpoint_eligible(&sandbox, &f.ws, "tracked.log", &env)
+            .await
+            .unwrap()
+    );
+    assert!(
+        checkpoint_eligible(&sandbox, &f.ws, "new.rs", &env)
+            .await
+            .unwrap()
+    );
+    assert_eq!(sandbox.calls.lock().unwrap().len(), 3);
+    assert_eq!(sandbox.cleaned.load(Ordering::SeqCst), 3);
+    assert_eq!(std::fs::read(f.ws.join(".git/index")).unwrap(), index);
+    let unavailable = FakeSandbox::new(Some("no wrapper"));
+    assert!(
+        checkpoint_eligible(&unavailable, &f.ws, "new.rs", &env)
+            .await
+            .is_err()
+    );
+    let mut broken = FakeSandbox::new(None);
+    broken.broken = Some("fakewrap: refused");
+    assert!(
+        checkpoint_eligible(&broken, &f.ws, "new.rs", &env)
+            .await
+            .is_err()
+    );
+}
+
 fn fixture() -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     let run = dir.path().canonicalize().unwrap();

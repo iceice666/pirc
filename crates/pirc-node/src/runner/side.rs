@@ -62,6 +62,43 @@ fn lexical(path: &Path) -> PathBuf {
 }
 
 impl Runner {
+    pub(crate) fn checkpoint_scope(
+        &self,
+        node: &Node,
+    ) -> Result<crate::checkpoints::Scope, String> {
+        use crate::checkpoints::Scope;
+        if self.lock().closed {
+            return Err("checkpoint runner is closed".into());
+        }
+        let mode = node.session_mode(&self.session_id).map_err(|e| e.message)?;
+        if mode.workdir != pirc_protocol::mode::Workdir::Workspace {
+            return Err("checkpoint capture is for Work directories only".into());
+        }
+        let run = self
+            .lock()
+            .current_run
+            .clone()
+            .ok_or("no active checkpoint run")?;
+        let db = node.db.lock();
+        let session = db.get_session(&self.session_id).map_err(|e| e.message)?;
+        if session.runner_epoch != self.epoch || session.workspace_id != self.workspace.id {
+            return Err("stale checkpoint runner".into());
+        }
+        Scope {
+            node: node.config.node_id.clone(),
+            owner: session.owner_user.ok_or("checkpoint owner unavailable")?,
+            workspace: self.workspace.id.clone(),
+            session: self.session_id.clone(),
+            epoch: self.epoch,
+            run,
+            root: self.workspace.canonical_path.clone().into(),
+            device: 0,
+            inode: 0,
+            policy: self.prepared.policy.paths.clone(),
+        }
+        .bind_root()
+    }
+
     /// Answer the agent's `write_lease_request` from the node-wide broker.
     pub(super) fn grant_write(
         &self,
@@ -195,6 +232,26 @@ impl Runner {
                         &error.message,
                         error.details.map(|d| *d),
                     ),
+                }
+                runner.lock().gateway_requests -= 1;
+                return;
+            }
+            // Never forward checkpoint operations to another node/gateway.
+            // The runner supplies identity and the effective sandbox policy.
+            if op.starts_with("checkpoint.") {
+                let answer = match runner.node() {
+                    Some(node) => match node.checkpoints.clone() {
+                        Some(service) => service.request(node, runner.clone(), op, args).await,
+                        None => Err("checkpoint capture disabled".into()),
+                    },
+                    None => Err("checkpoint node unavailable".into()),
+                };
+                match answer {
+                    Ok(result) => runner.gateway_reply(&id, json!({"ok":true,"result":result})),
+                    Err(error) => {
+                        runner.gateway_fail(&id, 409, "checkpoint_unavailable", &error, None)
+                    }
+
                 }
                 runner.lock().gateway_requests -= 1;
                 return;
@@ -916,6 +973,173 @@ mod tests {
     use crate::error::{ApiError, ApiResult};
     use crate::sandbox::Prepared;
     use crate::store::{ModeId, Workspace};
+
+    #[tokio::test]
+    async fn checkpoint_rpc_binds_real_node_authority_and_rejects_forged_or_stale_requests() {
+        use crate::checkpoints::{FileVersion, digest};
+        use pirc_config::{Env, NodeConfig};
+        use pirc_protocol::NodeRole;
+        // Short socket names on macOS. This node has no link, live agent,
+        // provider or browser; only its owned state and in-process RPC handlers.
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let state = root.join("state");
+        let work = root.join("work");
+        std::fs::create_dir(&work).unwrap();
+        let state_text = state.display().to_string();
+        let config_text = root.join("config").display().to_string();
+        let home = root.display().to_string();
+        let env = Env::new(
+            [
+                ("HOME", home.as_str()),
+                ("PIRC_STATE_DIR", state_text.as_str()),
+                ("PIRC_CONFIG_DIR", config_text.as_str()),
+                ("PIRC_NODE_ID", "checkpoint-test"),
+                ("PIRC_NODE_TOKEN", "0123456789abcdef0123456789abcdef"),
+                ("PIRC_DAEMON_URL", "ws://127.0.0.1:8787"),
+                ("PIRC_ALLOWED_USERS", "owner"),
+                ("PIRC_BROWSER", "false"),
+                ("PIRC_CHECKPOINT_WORKSPACES", "[\"w\"]"),
+            ],
+            &root,
+        );
+        let config = NodeConfig::load(&env, NodeRole::Node).unwrap();
+        let node = crate::services::Services::start(config, env).await.unwrap();
+        node.replace_modes(vec![pirc_protocol::mode::default_work()])
+            .await;
+        let (workspace, session, run) = {
+            let db = node.db.lock();
+            let workspace = db
+                .add_workspace(
+                    "w",
+                    "checkpoint-test",
+                    "test",
+                    work.to_str().unwrap(),
+                    ModeId::new("directory").unwrap(),
+                )
+                .unwrap();
+            let session = db
+                .create_session("w", state.join("sessions/test").to_str().unwrap(), "owner")
+                .unwrap();
+            assert_eq!(db.increment_epoch(&session.id).unwrap(), 1);
+            let run = db.create_run(&session.id).unwrap();
+            (workspace, session, run)
+        };
+        let mut policy = SessionPolicy::default();
+        policy.paths.allow_write.push(work.display().to_string());
+        let external = root.join("external");
+        std::fs::create_dir(&external).unwrap();
+        policy
+            .paths
+            .allow_write
+            .push(external.display().to_string());
+        policy.paths.deny_read.push(state_text);
+        let prepared = Prepared::new(
+            "/bin/false".into(),
+            Vec::new(),
+            Vec::new(),
+            policy,
+            Vec::new(),
+            None,
+            || {},
+        );
+        let (runner, _replies) = Runner::detached(&session.id, workspace, prepared);
+        runner.set_run(&run);
+        let capture = node.checkpoints.clone().unwrap();
+        let file = work.join("main");
+        std::fs::write(&file, "dirty user bytes").unwrap();
+        let args = json!({"path":file,"tool":"edit","expected":digest(b"dirty user bytes")});
+        let mut forged = args.clone();
+        forged["owner"] = json!("forged");
+        assert!(
+            capture
+                .clone()
+                .request(
+                    node.clone(),
+                    runner.clone(),
+                    "checkpoint.begin".into(),
+                    forged
+                )
+                .await
+                .is_err()
+        );
+        let response = capture
+            .clone()
+            .request(
+                node.clone(),
+                runner.clone(),
+                "checkpoint.begin".into(),
+                args,
+            )
+            .await
+            .unwrap();
+        let operation = response["operation"].as_str().unwrap().to_owned();
+        std::fs::write(&file, "agent postimage").unwrap();
+        assert!(
+            capture
+                .clone()
+                .request(
+                    node.clone(),
+                    runner.clone(),
+                    "checkpoint.finish".into(),
+                    json!({"operation":operation,"succeeded":true,"path":"/outside"})
+                )
+                .await
+                .is_err()
+        );
+        capture
+            .clone()
+            .request(
+                node.clone(),
+                runner.clone(),
+                "checkpoint.finish".into(),
+                json!({"operation":operation,"succeeded":true}),
+            )
+            .await
+            .unwrap();
+        let scope = runner.checkpoint_scope(&node).unwrap();
+        let ops = capture.journal.operations(&scope).unwrap();
+        let FileVersion::File { ref hash, .. } = ops[0].before else {
+            panic!("missing dirty baseline")
+        };
+        assert_eq!(
+            capture.journal.read_blob(hash).unwrap(),
+            b"dirty user bytes"
+        );
+        assert_eq!(ops.len(), 1);
+        assert_eq!(scope.owner, "owner");
+        let excluded = capture
+            .clone()
+            .request(
+                node.clone(),
+                runner.clone(),
+                "checkpoint.begin".into(),
+                json!({"path":external.join("main"),"tool":"write","expected":null}),
+            )
+            .await
+            .unwrap();
+        assert_eq!(excluded["excluded"], "outside_workspace");
+        assert!(capture.journal.info(&scope).unwrap().unwrap().gaps);
+        assert!(
+            !external.join("main").exists(),
+            "classification never grants or performs a file write"
+        );
+        node.db.lock().increment_epoch(&session.id).unwrap();
+        assert!(
+            capture
+                .clone()
+                .request(
+                    node.clone(),
+                    runner.clone(),
+                    "checkpoint.finish".into(),
+                    json!({"operation":operation,"succeeded":true})
+                )
+                .await
+                .is_err()
+        );
+        assert_eq!(std::fs::read(file).unwrap(), b"agent postimage");
+        node.close().await;
+    }
 
     /// A browser whose operations (named by `args.tag`) settle only when the
     /// test releases them, whether or not they were aborted (as the

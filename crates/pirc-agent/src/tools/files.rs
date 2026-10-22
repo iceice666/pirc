@@ -335,10 +335,18 @@ impl WriteTool {
         let resolved = ctx.guard.resolve(&requested, true)?;
         let file = write_target(resolved, &ctx, &requested).await?;
         (ctx.acquire_write)(file.clone()).await?;
+        let capture = super::checkpoints::Capture::begin(&ctx, &file, "write", None).await?;
         let dir = js::dirname(&file);
-        blocking(move || fs::create_dir_all(&dir).map_err(|e| fs_error(&e, "mkdir", Some(&dir))))
+        let written = async {
+            blocking(move || {
+                fs::create_dir_all(&dir).map_err(|e| fs_error(&e, "mkdir", Some(&dir)))
+            })
             .await?;
-        write_checked(&file, content.clone(), &ctx).await?;
+            write_checked(&file, content.clone(), &ctx).await
+        }
+        .await;
+        super::checkpoints::Capture::finish(capture, &ctx, written.is_ok()).await;
+        written?;
         let bytes = content.len();
         Ok(typed(
             format!("Wrote {bytes} bytes to {requested}"),
@@ -456,8 +464,12 @@ impl EditTool {
             before.replacen(old_text.as_str(), new_text, 1)
         };
         (ctx.acquire_write)(file.clone()).await?;
+        let capture =
+            super::checkpoints::Capture::begin(&ctx, &file, "edit", Some(&before)).await?;
         let diff = simple_diff(&before, &after, &requested);
-        write_checked(&file, after, &ctx).await?;
+        let written = write_checked(&file, after, &ctx).await;
+        super::checkpoints::Capture::finish(capture, &ctx, written.is_ok()).await;
+        written?;
         Ok(typed(
             format!(
                 "Edited {requested} ({count} replacement{})",
