@@ -2,10 +2,10 @@
 
 [Plans](README.md) · [Session UI](../docs/guides/session-ui.md) · [Tools](../docs/guides/tools.md)
 
-Status: phases 1–3 implemented locally, 2026-10-22: safety experiments, opt-in
-Node capture/journaling and the trusted-node recovery factory/isolation boundary.
-Gateway authorization/routing and Web/native Flutter Android actions remain
-phase 4. Multiple agents and preservation of both existing and later user
+Status: phases 1–4 implemented locally, 2026-10-22: safety experiments, opt-in
+Node capture/journaling, independent recovery/isolation, authenticated Gateway
+operations, Web/native Flutter Android review and durable continuation. Phase 5
+integrated device/Linux/crash acceptance remains. Multiple agents and preservation of both existing and later user
 changes are hard requirements. Keep work local; no deployment, remote push or
 Release is authorized. Integrate the independent memory update last, after the
 user requests rebasing onto its published changes.
@@ -257,10 +257,10 @@ result creates an authorized workspace/session linked to its source checkpoint;
 it does not retarget a live runner or replay tool effects. Preserve origin and
 untrusted-data provenance when transferring any conversation context.
 
-## Service/API sketch
+## Original service/API sketch
 
-Route through existing authenticated session/workspace access and node requests.
-Paths/names below are a proposal, not an API compatibility promise:
+The phase-4 implemented contract is documented below; these original paths are
+retained as design history, not an API compatibility promise:
 
 - `GET .../checkpoints`: paginated metadata/coverage and writer groups.
 - `GET .../checkpoints/:id/diff`: bounded selected changes and attribution.
@@ -504,8 +504,9 @@ Implemented in [`recovery.rs`](../crates/pirc-node/src/checkpoints/recovery.rs),
 [`inverse.rs`](../crates/pirc-node/src/checkpoints/inverse.rs) and
 [`isolation.rs`](../crates/pirc-node/src/checkpoints/isolation.rs).
 The opt-in capture service shares its journal with this trusted-node factory.
-There is **no new agent RPC, public route or client action** yet. Preparing,
-claiming or constructing a sandbox does not start/retarget a live conversation.
+At phase-3 delivery there was **no new agent RPC, public route or client action**.
+Phase 4 below adds user APIs and client actions. Preparing, claiming or
+constructing a sandbox never starts/retargets a live conversation.
 
 - **Original preservation:** read the canonical source using bounded descriptor
   traversal. Independently create private files under
@@ -549,7 +550,8 @@ claiming or constructing a sandbox does not start/retarget a live conversation.
   Filesystem overhead and outside writers mean this is not a physical allocation
   guarantee. Keep failed/interrupted outputs and their reservations/evidence;
   no automatic workspace deletion is provided, including after user edits.
-  Phase 4 needs an explicit reviewed cleanup action, never blob-GC recursion.
+  A reviewed cleanup action remains deferred; it must never use blob-GC
+  recursion against a workspace that may contain later user edits.
 - **Isolated execution boundary:** claiming a current job takes an account-level
   nonblocking file lock for that independently generated root and increments its
   durable generation. The unforgeable in-process ticket owns the lock through
@@ -582,8 +584,8 @@ Android emulator or real user workspace is used.
 
 **Remaining acceptance:** actual Linux bubblewrap execution of the new root,
 real power loss/physical full disk, distributed filesystems, descendant process
-escape/quiescence, and full Node-runner/Gateway/Web/Android continuation remain
-later gates. Shared directories remain observational; no new per-agent stable
+escape/quiescence, and real multi-client/device continuation remain later acceptance gates.
+Phase 4 below implements the Node-runner/Gateway/Web/Android continuation path. Shared directories remain observational; no new per-agent stable
 capture promise is made. Memory integration remains last. Nix validation is
 explicitly skipped at the user's request.
 
@@ -597,6 +599,91 @@ cargo test --locked -p pirc-node --lib app::tests
 cargo test --locked -p pirc-agent --lib tools::
 cargo clippy --locked -p pirc-node -p pirc-agent --all-targets -- -D warnings
 ```
+
+### Phase 4: user operations and durable continuation
+
+Implemented locally in Node [`api.rs`](../crates/pirc-node/src/checkpoints/api.rs)
+and [`continuation.rs`](../crates/pirc-node/src/checkpoints/continuation.rs),
+Gateway [`checkpoints.rs`](../crates/pirc-gateway/src/checkpoints.rs), Web's
+[`CheckpointsTab.svelte`](../apps/web/src/lib/components/panel/CheckpointsTab.svelte)
+and native Android's
+[`checkpoints_pane.dart`](../apps/android/lib/live/checkpoints_pane.dart).
+
+- **User API:** `/api/sessions/:id/checkpoints` lists ten captures per cursor page,
+  up to 100 operations per capture (with an explicit truncation flag) and the
+  twenty most recent recovery jobs. `POST /:capture/preview` accepts node-issued
+  operation ids and explicit observational review; `POST /:capture/recoveries`
+  binds the preview revision, version 1 and idempotency key. Select at most one
+  operation per path. No arbitrary path/blob/root request is accepted.
+  `GET /:capture/recoveries/:job` revalidates an unopened copy;
+  `POST /:capture/recoveries/:job/continue` requires a current revision, explicit
+  keep-current acknowledgment for unresolved paths and the session control lease.
+  `GET /:capture/file?operation=...&side=before|after|current|candidate&job=...`
+  returns bounded UTF-8 preview text (256 KiB), absent/binary/excluded/truncated
+  flags, never raw binary objects or private disk paths. Job `operations` retains
+  exact selected identities when one path has several recorded edits.
+- **Two authorization boundaries:** Gateway and Node both check owner/session
+  access; prepare and continue validate the current device control generation.
+  No agent RPC or short-lived administration grant authorizes recovery. Gateway
+  forwards pagination, maps Node-local continuation/origin ids to global ids and
+  retains private workspace ownership across reconnection. An unknown private
+  registration stays hidden until an authorized continuation reconciles it.
+  Owner-scoped `checkpoints_changed` and existing runner lifecycle events refresh
+  clients. Actions are disabled offline and never put in a mutation replay queue.
+- **Durable adoption:** a Node transaction creates one private owned workspace
+  and new blank conversation per recovery job. Persisted confirmation intent
+  bridges interruption between claiming the copy and publishing that mapping.
+  Repeated confirmations, including a lost response and Node/Gateway restart,
+  return the existing conversation. Deleting its conversation does not delete
+  files or allow a repeated continuation to resurrect that conversation. There
+  is no tool, prompt, history, source trust or memory replay.
+- **Actual runner path:** a new recovery conversation obtains the native
+  isolation ticket at runner startup, validating its private persisted origin,
+  root device/inode and account-wide writer lock. Rebuild current sandbox policy
+  and retain translated original path restrictions. Adopted workspaces remain
+  independent after source edits and later candidate edits are never recopied.
+  Capture opt-in is inherited; disabling future capture does not strand already
+  adopted workspaces. The original runner is never retargeted. Source workspace
+  memory remains disabled for this path until the final memory integration.
+- **Both clients:** Checkpoints is available from the existing Git/changes panel,
+  including non-Git directory workspaces. List captures/coverage, select an
+  observed operation, explicitly review observational limits, preview copy size
+  and exclusions, prepare, compare before/agent/current/result, acknowledge
+  keeping unresolved current bytes, then continue into the returned conversation.
+  Existing jobs can be refreshed/reopened. Original/origin navigation survives
+  reload through owner-checked list metadata. Web uses the existing code diff
+  renderer; Flutter uses native code highlighting and theme widgets. English
+  and Traditional Chinese strings are included. Account/re-pair/session/node
+  changes fence late file/mutation responses and drop cached private previews.
+- **Compatibility:** Node protocol is **14** because private recovery workspace
+  registration cannot safely be silently ignored by an older Gateway. Upgrade
+  Gateway and Node together; older peers fail version checks. Node main schema
+  is 2002, Gateway schema is 1007 with its private owner-table migration, and checkpoint
+  journal schema stays 2. Back up private state before a deliberate downgrade.
+
+The primary UI entry is the Git/changes panel; per-message/run shortcuts and
+workspace-wide cross-session filtering remain follow-ups. Safe deletion of
+retained workspaces/reservations is deliberately unavailable pending its own
+review: user changes must not be removed by retention, a stale confirmation or
+recursive cleanup. Selection is by operation/file, not arbitrary hunks or
+coherent ranges of multiple writes to the same path. Coverage remains
+observational; this phase does not claim verified per-agent attribution.
+
+Local automated acceptance covers the actual Node API/router/SQLite and native
+isolation ticket, Gateway authentication/router/node relay and private ownership,
+client state/components, retries, stale control, offline/re-pair fencing,
+pagination and exact diff selection. Rust verification passes **554 tests**
+(321 Node library, 74 checkpoint integration, 18 protocol and 141 Gateway), with
+two existing Node probes left ignored. Web focused verification passes **33
+tests** across five test files, Svelte type checking reports no errors/warnings,
+and the production build succeeds. Native Android focused state/widget suites
+pass **39 tests**, with clean Flutter analysis and matched locale catalogs;
+Kotlin compilation and all **6 TimelineWire tests** pass. Focused Rust Clippy,
+formatting and diff whitespace checks pass. These tests do not substitute for actual
+Android device review, two live clients, Linux bubblewrap execution, physical
+full-disk/power-loss or distributed-filesystem acceptance. Nix validation is
+skipped at the user's request. Memory integration remains last; no memory
+implementation is changed in this phase.
 
 Required tests include:
 

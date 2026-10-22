@@ -8,6 +8,28 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class TimelineWireTest {
+    @Test fun checkpointChangesReachTheSessionPanelWithoutForcingAResnapshot() {
+        val initial = SessionState(
+            Session("s", "w", "Session"),
+            "stopped",
+            null,
+            emptyList(),
+            emptyList(),
+            emptyList(),
+            "1:2",
+            "1",
+        )
+        val event = normalizeEvent(PircJson.parseToJsonElement(
+            """{"sessionId":"s","epoch":1,"sequence":3,"type":"checkpoints_changed"}""",
+        ))
+        assertEquals(TimelineEvent.CheckpointsChanged, event.event)
+        val updated = initial.reduce(event)
+        assertFalse(updated.needsSnapshot)
+        assertEquals("1:3", updated.cursor)
+        assertEquals(mapOf("type" to "checkpoints_changed", "sessionId" to "s", "data" to null),
+            scopedEventWire("checkpoints_changed", null, "s"))
+    }
+
     @Test fun messageBranchesSurviveSnapshotDecoderAndFlutterChannel() {
         val raw = PircJson.parseToJsonElement("""{"session":{"id":"s","workspaceId":"w","name":"Session"},"history":[{"role":"user","entryId":"new","timestamp":1000,"content":"Revised","branches":[{"entryId":"old","text":"Original","selected":false},{"entryId":"new","text":"Revised","selected":true},{"entryId":"invalid","text":"Missing selection"}]}]}""")
         val state = snapshotState(raw)

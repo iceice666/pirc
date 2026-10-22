@@ -216,7 +216,7 @@ void main() {
     await old.stream.close();
   });
 
-  test('assistant chrome and side panels follow capabilities', () {
+  test('side panels include checkpoints only for directory workspaces', () {
     final g = FakeGateway();
     final c = _controller(g, modes: modeCatalogFixture);
     void open(String workspace) => c.state = {
@@ -235,6 +235,17 @@ void main() {
     expect(c.chat, isTrue);
     expect(c.sessionPanel('git'), isFalse);
     expect(c.sessionPanel('terminals'), isFalse);
+    c.catalog = ModeCatalog([
+      ...modeCatalogFixture,
+      {...directoryModeFixture, 'id': 'plain', 'repository': false},
+    ]);
+    c.workspaces = [
+      ...modeWorkspacesFixture,
+      {'id': 'device:plain', 'hostId': 'device', 'kind': 'directory', 'mode': 'plain'},
+    ];
+    open('device:plain');
+    expect(c.sessionMode!.repository, isFalse);
+    expect(c.sessionPanel('git'), isTrue);
     c.dispose();
   });
 

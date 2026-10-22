@@ -777,8 +777,12 @@ class AppState {
             const current = this.sessionState;
             if (seq !== this.#openSeq || current?.session.id !== id) return;
             this.sessionState = reduceEvent(current, event);
+            if (event.checkpointInvalidation)
+              this.#emitPanel({ type: 'changed', sections: ['checkpoints'] });
             if (event.event.type === 'panel_changed')
               this.#emitPanel({ type: 'changed', sections: event.event.sections });
+            if (event.event.type === 'checkpoints_changed')
+              this.#emitPanel({ type: 'changed', sections: ['checkpoints'] });
             if (event.event.type === 'session_renamed') {
               const name = event.event.name;
               this.sessions = this.sessions.map((item) =>

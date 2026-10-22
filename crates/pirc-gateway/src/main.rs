@@ -9,6 +9,7 @@ mod app;
 mod auth;
 mod backends;
 mod calendar;
+mod checkpoints;
 mod db;
 mod delegations;
 mod devices;

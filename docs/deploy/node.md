@@ -9,15 +9,19 @@ Sandbox and browser settings have their own page: [Sandbox and browser](sandbox-
 `PIRC_CHECKPOINT_WORKSPACES` is an optional JSON array of **local workspace ids**
 (for example `["pirc"]`, without the node prefix). It is absent/off by default;
 `[]` also disables it. Restart the node to change the selection. Only Work
-directories using the built-in agent's file tools are covered. No recovery
-action, new public API or client UI is enabled by this setting.
+directories using the built-in agent's file tools are covered. Enabled directory
+workspaces expose experimental user recovery actions in the Web/native Android
+Git/changes panel, including non-Git workspaces. Agents cannot confirm recovery.
+Recovered workspaces inherit capture opt-in. Removing the selection stops new
+capture; existing journals remain available for adopted workspace execution.
 
 The node keeps a separate SQLite operation journal and SHA-256 content objects
 in `$PIRC_STATE_DIR/checkpoints/`. The node's registered private state protects
 this directory from sandboxed agents; keep state outside the workspace and
 include checkpoint objects in private-data backup/access policy. Files and
 state are never reset, restored or committed by capture. Raw object bytes are
-not sent to the agent or gateway.
+not sent to the agent. Authorized user file previews are relayed through Gateway;
+only bounded text is returned, with binary/excluded/truncated flags.
 
 Direct `write`/`edit` observations include the actual dirty preimage and bounded
 postimage, file absence and executable bit. The node binds owner, workspace,
@@ -59,10 +63,19 @@ cleanup.
 
 The trusted-node recovery factory prepares independent copies under
 `$PIRC_STATE_DIR/checkpoints/workspaces/<job-id>/root`. Original workspaces and
-Git metadata remain untouched. This internal boundary has no public route or
-Web/Android action yet. Journal schema 2 is forward-only: older schema-1 nodes
-refuse it, so retain a private backup before a deliberate downgrade. Memory
-integration remains deferred.
+Git metadata remain untouched. In the Checkpoints panel, review the observed
+operation and preview, prepare the copy, explicitly keep unresolved current
+content, then continue into a new blank conversation. This does not copy old
+conversation context, replay tools or transfer memory. Before adoption, source
+changes invalidate the copy; after adoption it is an independent user workspace
+and later edits are never overwritten by retries. The origin link returns to
+the source conversation. Repeated confirmation opens the same new conversation.
+
+Gateway and Node must both use Node protocol **14** for private recovery workspace
+registration. Node main database schema is 2002, Gateway schema is 1007;
+checkpoint journal schema remains 2. Older peers fail version checks; older schema-1 nodes refuse this journal.
+Retain a private backup before a deliberate downgrade. Recovery workspaces are
+owner-private, including after reconnect. Memory integration remains deferred.
 
 Copy limits default to 256 MiB and 20,000 entries, with a separate 1 GiB logical
 reservation ceiling and 64 MiB free-space headroom. Retained current/candidate
@@ -79,8 +92,8 @@ sandbox cleanup, source writes are denied, and source path restrictions carry
 over. Global extra write paths and shared `/tmp` grants are removed; only the
 session's private temporary directory stays writable. Custom srt wrappers cannot
 use this isolation mode. Legacy shared directories remain observational, and
-Linux runtime/full-disk/complete client continuation acceptance is still pending.
-See [Checkpoints](../../plans/checkpoints.md#phase-3-independent-recovery-preparation-and-isolation).
+Linux runtime/full-disk and real-device continuation acceptance is still pending.
+See [Checkpoints](../../plans/checkpoints.md#phase-4-user-operations-and-durable-continuation).
 
 ## Identity and link
 

@@ -296,6 +296,13 @@ void main() {
     final history = find.byKey(const ValueKey('git-view-history'));
     expect(t.widget<InkWell>(history).focusNode!.hasFocus, isTrue);
     expect(find.text('Load more'), findsOneWidget);
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await t.pumpAndSettle();
+    final checkpoints = find.byKey(const ValueKey('git-view-checkpoints'));
+    expect(t.widget<InkWell>(checkpoints).focusNode!.hasFocus, isTrue);
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await t.pumpAndSettle();
+    expect(t.widget<InkWell>(find.byKey(const ValueKey('git-view-changes'))).focusNode!.hasFocus, isTrue);
     await t.sendKeyEvent(LogicalKeyboardKey.home);
     await t.pumpAndSettle();
     expect(t.widget<InkWell>(changes).focusNode!.hasFocus, isTrue);

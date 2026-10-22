@@ -178,6 +178,10 @@ struct Running {
 #[derive(Default)]
 struct State {
     connections: HashMap<String, Connection>,
+    #[cfg(test)]
+    test_connections: HashMap<String, ConnectedNode>,
+    #[cfg(test)]
+    test_request: Option<Arc<dyn Fn(NodeHttpRequest) -> ApiResult<NodeHttpResponse> + Send + Sync>>,
     pending_registrations: usize,
     requests: HashMap<String, Pending>,
     streams: HashMap<String, Stream>,
@@ -249,25 +253,59 @@ impl NodeRegistry {
     }
 
     pub fn get(&self, node_id: &str) -> Option<ConnectedNode> {
-        self.lock()
+        let state = self.lock();
+        state
             .connections
             .get(node_id)
             .map(|connection| connection.node.clone())
+            .or_else(|| {
+                #[cfg(test)]
+                {
+                    state.test_connections.get(node_id).cloned()
+                }
+                #[cfg(not(test))]
+                {
+                    None
+                }
+            })
     }
 
     pub fn list(&self) -> Vec<ConnectedNode> {
-        let mut nodes: Vec<_> = self
-            .lock()
+        let state = self.lock();
+        let mut nodes: Vec<_> = state
             .connections
             .values()
             .map(|connection| connection.node.clone())
             .collect();
+        #[cfg(test)]
+        nodes.extend(state.test_connections.values().cloned());
         nodes.sort_by_key(|node| node.connected_at);
         nodes
     }
 
     pub fn count(&self) -> usize {
-        self.lock().connections.len()
+        let state = self.lock();
+        state.connections.len() + {
+            #[cfg(test)]
+            {
+                state.test_connections.len()
+            }
+            #[cfg(not(test))]
+            {
+                0
+            }
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_test_node(
+        &self,
+        node: ConnectedNode,
+        request: impl Fn(NodeHttpRequest) -> ApiResult<NodeHttpResponse> + Send + Sync + 'static,
+    ) {
+        let mut state = self.lock();
+        state.test_connections.insert(node.id.clone(), node);
+        state.test_request = Some(Arc::new(request));
     }
 
     /// `raw` is the node's answer the workspace was parsed from, listed
@@ -279,6 +317,20 @@ impl NodeRegistry {
         raw: Value,
     ) -> ApiResult<()> {
         let mut state = self.lock();
+        #[cfg(test)]
+        if let Some(node) = state.test_connections.get_mut(node_id) {
+            if let Some(existing) = node
+                .workspaces
+                .iter_mut()
+                .find(|item| item.id == workspace.id)
+            {
+                *existing = workspace.clone();
+            } else {
+                node.workspaces.push(workspace.clone());
+            }
+            node.added.insert(workspace.id, raw);
+            return Ok(());
+        }
         let node = &mut state
             .connections
             .get_mut(node_id)
@@ -288,6 +340,47 @@ impl NodeRegistry {
             node.added.insert(workspace.id.clone(), raw);
             node.workspaces.push(workspace);
         }
+        Ok(())
+    }
+
+    /// A continuation can add a private workspace without reconnecting. Keep
+    /// the live registry in step with the node's durable response.
+    pub fn upsert_workspace(
+        &self,
+        node_id: &str,
+        workspace: RegisteredWorkspace,
+        raw: Value,
+    ) -> ApiResult<()> {
+        let mut state = self.lock();
+        #[cfg(test)]
+        if let Some(node) = state.test_connections.get_mut(node_id) {
+            if let Some(existing) = node
+                .workspaces
+                .iter_mut()
+                .find(|item| item.id == workspace.id)
+            {
+                *existing = workspace.clone();
+            } else {
+                node.workspaces.push(workspace.clone());
+            }
+            node.added.insert(workspace.id, raw);
+            return Ok(());
+        }
+        let node = &mut state
+            .connections
+            .get_mut(node_id)
+            .ok_or_else(node_offline)?
+            .node;
+        if let Some(existing) = node
+            .workspaces
+            .iter_mut()
+            .find(|item| item.id == workspace.id)
+        {
+            *existing = workspace.clone();
+        } else {
+            node.workspaces.push(workspace.clone());
+        }
+        node.added.insert(workspace.id, raw);
         Ok(())
     }
 
@@ -309,6 +402,20 @@ impl NodeRegistry {
         node_id: &str,
         data: NodeHttpRequest,
     ) -> ApiResult<NodeHttpResponse> {
+        #[cfg(test)]
+        {
+            let test_request = {
+                let state = self.lock();
+                state
+                    .test_connections
+                    .contains_key(node_id)
+                    .then(|| state.test_request.clone())
+                    .flatten()
+            };
+            if let Some(test_request) = test_request {
+                return test_request(data);
+            }
+        }
         let request_id = uuid();
         let (reply, answer) = oneshot::channel();
         {

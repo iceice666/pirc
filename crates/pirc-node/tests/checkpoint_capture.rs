@@ -714,4 +714,11 @@ fn configuration_is_explicit_and_empty_selection_creates_no_capture_store() {
     let service = CaptureService::configured(&config, &env).unwrap().unwrap();
     assert!(service.enabled("workspace"));
     assert!(!service.enabled("other"));
+    drop(service);
+    let disabled = Env::new(vars, f.work.path());
+    let retained = CaptureService::configured(&config, &disabled)
+        .unwrap()
+        .unwrap();
+    assert!(!retained.enabled("workspace"));
+    assert!(!retained.enabled("other"));
 }

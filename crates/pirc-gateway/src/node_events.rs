@@ -92,6 +92,19 @@ impl App {
             let conn = self.db.lock();
             conn.sync_remote_workspaces(&node.id, &workspaces)
                 .and_then(|()| conn.set_workspace_repos(&node.id, &repos))
+                .and_then(|()| {
+                    for workspace in node
+                        .workspaces
+                        .iter()
+                        .filter(|item| item.checkpoint_private)
+                    {
+                        conn.mark_checkpoint_workspace_private(&format!(
+                            "{}:{}",
+                            node.id, workspace.id
+                        ))?;
+                    }
+                    Ok(())
+                })
         };
         if let Err(error) = synced {
             crate::log::error(&format!("workspace sync of {}: {error}", node.id));
@@ -162,6 +175,13 @@ impl App {
                 self.apply_session_name(&session_id, session.runner_epoch, data);
             }
             self.sessions_changed(session.owner_user.as_deref());
+        } else if kind == Some("checkpoints_changed") {
+            self.events.publish(
+                &session_id,
+                session.runner_epoch,
+                "checkpoints_changed",
+                json!({ "sessionId": session_id }),
+            );
         } else if let Some(kind) = kind {
             // An absent `data` stays absent, as `undefined` did.
             self.events

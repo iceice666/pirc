@@ -4,6 +4,94 @@ import { getClientId } from './storage';
 
 export type PanelTab = 'files' | 'git' | 'memory' | 'context' | 'tasks' | 'terminal' | 'browser';
 
+export interface CheckpointVersion {
+  kind: 'file' | 'absent' | 'excluded';
+  hash?: string;
+  size?: number;
+  executable?: boolean;
+  reason?: string;
+}
+
+export interface CheckpointOperation {
+  id: string;
+  path: string;
+  state: string;
+  before: CheckpointVersion;
+  after?: CheckpointVersion;
+}
+
+export interface CheckpointCapture {
+  id: string;
+  state: string;
+  coverage: string;
+  gaps: boolean | string[];
+  pinned: boolean;
+  created?: number | string;
+  createdAt?: number | string;
+  run?: string | { id?: string; status?: string } | null;
+  operations: CheckpointOperation[];
+  operationsTruncated?: boolean;
+}
+
+export interface CheckpointPathReview {
+  path: string;
+  status: 'inverse_reviewed_observation' | 'review_observational' | 'conflict' | 'excluded';
+  before: CheckpointVersion;
+  after: CheckpointVersion;
+  current: CheckpointVersion;
+  candidate: CheckpointVersion;
+}
+
+export interface CheckpointRecoveryJob {
+  id: string;
+  state: 'preparing' | 'ready' | 'opened' | 'stale' | 'failed' | 'interrupted' | string;
+  revision: number;
+  reservedBytes: number;
+  captureId: string;
+  operations: string[];
+  manifest: {
+    paths: CheckpointPathReview[];
+    exclusions: Record<string, string>;
+    copiedBytes: number;
+    coverage: string;
+  };
+  continuation?: { sessionId: string; workspaceId: string };
+}
+
+export interface CheckpointList {
+  version: 1;
+  enabled: boolean;
+  origin?: {
+    sessionId: string;
+    workspaceId: string;
+    jobId: string;
+    captureId: string;
+  } | null;
+  captures: CheckpointCapture[];
+  jobs: CheckpointRecoveryJob[];
+  more: boolean;
+  cursor?: string;
+}
+
+export interface CheckpointPreview {
+  version: 1;
+  revision: string;
+  copiedBytes: number;
+  exclusions: Record<string, string>;
+  coverage: string;
+}
+
+export interface CheckpointFileView {
+  path: string;
+  side: 'before' | 'after' | 'current' | 'candidate';
+  text: string | null;
+  binary: boolean;
+  absent: boolean;
+  excluded: boolean;
+  truncated: boolean;
+  executable?: boolean;
+}
+
 export interface ContextPanel {
   agentRunning: boolean;
   source: 'live' | 'snapshot';
@@ -297,6 +385,73 @@ export const panelApi = {
     ),
   gitShow: (sessionId: string, sha: string, signal?: AbortSignal) =>
     get<CommitDetail>(`${base(sessionId)}/git/commits/${encodeURIComponent(sha)}`, signal),
+  checkpoints: (sessionId: string, cursor?: string, signal?: AbortSignal) =>
+    get<CheckpointList>(`${base(sessionId)}/checkpoints${qs({ cursor })}`, signal),
+  checkpointPreview: (
+    sessionId: string,
+    captureId: string,
+    selection: { operations: string[]; reviewObservational: boolean },
+    signal?: AbortSignal,
+  ) =>
+    request<CheckpointPreview>(
+      `${base(sessionId)}/checkpoints/${encodeURIComponent(captureId)}/preview`,
+      { method: 'POST', body: JSON.stringify(selection), signal },
+    ),
+  prepareCheckpointRecovery: (
+    sessionId: string,
+    captureId: string,
+    input: {
+      version: 1;
+      key: string;
+      previewRevision: string;
+      operations: string[];
+      reviewObservational: boolean;
+      clientId: string;
+      generation: number;
+    },
+    signal?: AbortSignal,
+  ) =>
+    request<CheckpointRecoveryJob>(
+      `${base(sessionId)}/checkpoints/${encodeURIComponent(captureId)}/recoveries`,
+      { method: 'POST', body: JSON.stringify(input), signal },
+    ),
+  checkpointRecovery: (sessionId: string, captureId: string, jobId: string, signal?: AbortSignal) =>
+    get<CheckpointRecoveryJob>(
+      `${base(sessionId)}/checkpoints/${encodeURIComponent(captureId)}/recoveries/${encodeURIComponent(jobId)}`,
+      signal,
+    ),
+  continueCheckpointRecovery: (
+    sessionId: string,
+    captureId: string,
+    jobId: string,
+    input: {
+      revision: number;
+      acceptUnresolved: boolean;
+      clientId: string;
+      generation: number;
+    },
+    signal?: AbortSignal,
+  ) =>
+    request<{
+      session: { id: string };
+      workspaceId: string;
+      job: CheckpointRecoveryJob;
+    }>(
+      `${base(sessionId)}/checkpoints/${encodeURIComponent(captureId)}/recoveries/${encodeURIComponent(jobId)}/continue`,
+      { method: 'POST', body: JSON.stringify(input), signal },
+    ),
+  checkpointFile: (
+    sessionId: string,
+    captureId: string,
+    operationId: string,
+    side: CheckpointFileView['side'],
+    jobId?: string,
+    signal?: AbortSignal,
+  ) =>
+    get<CheckpointFileView>(
+      `${base(sessionId)}/checkpoints/${encodeURIComponent(captureId)}/file${qs({ operation: operationId, side, job: jobId })}`,
+      signal,
+    ),
   files: (sessionId: string, path = '', signal?: AbortSignal) =>
     get<{ path: string; entries: DirEntry[]; truncated: boolean }>(
       `${base(sessionId)}/files${qs({ path })}`,

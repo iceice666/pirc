@@ -530,6 +530,8 @@ export interface EventEnvelope<T extends GatewayEvent = GatewayEvent> {
   sequence: number;
   cursor: string;
   event: T;
+  /** Local hint from lifecycle events that can close an automatic checkpoint capture. */
+  checkpointInvalidation?: boolean;
 }
 
 export type GatewayEvent =
@@ -565,6 +567,8 @@ export type GatewayEvent =
   | { type: 'session_renamed'; name: string }
   /** Side-panel data changed (memory, background, team, git); refetch lazily. */
   | { type: 'panel_changed'; sections: string[] }
+  /** The owner-scoped checkpoint list or recovery jobs changed. */
+  | { type: 'checkpoints_changed' }
   | { type: 'reset'; reason: 'cursor_expired' | 'epoch_changed' | 'backpressure' };
 
 export interface ClientSessionState extends SessionSnapshot {

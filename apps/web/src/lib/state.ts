@@ -33,6 +33,7 @@ export function reduceEvent(
     case 'session_deleted': // The app closes the session and returns to its chat list.
     case 'noop':
     case 'panel_changed':
+    case 'checkpoints_changed':
       return base;
     case 'widget_updated': {
       const widgets = { ...(state.widgets ?? {}) };

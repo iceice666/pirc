@@ -16,17 +16,19 @@
   import { ago } from '../../time';
   import { watch } from '../../watch.svelte';
   import DiffView from './DiffView.svelte';
+  import CheckpointsTab from './CheckpointsTab.svelte';
 
   interface Props {
     sessionId: string;
+    repository?: boolean;
     /** Shown in the panel; refreshes wait until then. */
     active?: boolean;
     onopenfile?: (path: string) => void;
   }
 
-  let { sessionId, active = true, onopenfile = () => {} }: Props = $props();
+  let { sessionId, repository = true, active = true, onopenfile = () => {} }: Props = $props();
 
-  let view: 'changes' | 'history' = $state('changes');
+  let view: 'changes' | 'history' | 'checkpoints' = $state('changes');
   let status: GitStatus | undefined = $state.raw();
   let selected: { file: GitFile; staged: boolean } | undefined = $state.raw();
   let diff: { diff: string; truncated: boolean } | undefined = $state.raw();
@@ -40,6 +42,13 @@
   const diffLoader = new Loader();
   const commitLoader = new Loader();
   const listError = $derived(statusLoader.error || historyLoader.error || commitLoader.error);
+  const workspace = $derived(app.activeWorkspace);
+  const checkpointScope = $derived(
+    [sessionId, workspace?.id ?? '', workspace?.hostId ?? 'local', app.clientId].join('\0'),
+  );
+  const checkpointOnline = $derived(
+    app.connection === 'connected' && app.workspaceOnline(workspace) && !app.usingDemo,
+  );
 
   const label: Record<string, string> = $derived({
     M: tr('Modified'),
@@ -58,6 +67,14 @@
 
   async function load() {
     stale = false;
+    if (!repository) {
+      status = { repo: false };
+      selected = undefined;
+      diff = undefined;
+      commits = [];
+      more = false;
+      return;
+    }
     const id = sessionId;
     const next = await statusLoader.run(
       (signal) => panelApi.gitStatus(id, signal),
@@ -65,6 +82,10 @@
     );
     if (!next || id !== sessionId) return;
     status = next;
+    if (!next.repo && view !== 'checkpoints') {
+      view = 'checkpoints';
+      return;
+    }
     if (view === 'history' && next.repo) void refreshHistory();
     if (selected) void openDiff(selected.file, selected.staged, false);
   }
@@ -135,7 +156,7 @@
     commit = undefined;
   }
 
-  async function switchView(next: 'changes' | 'history') {
+  async function switchView(next: 'changes' | 'history' | 'checkpoints') {
     view = next;
     back();
     if (next === 'history' && status?.repo && !commits.length) await loadHistory(true);
@@ -146,8 +167,8 @@
   const code = (file: GitFile, isStaged: boolean) => (isStaged ? file.index : file.worktree);
 
   watch(
-    () => sessionId,
-    () => {
+    () => [sessionId, repository] as const,
+    ([, isRepository]) => {
       for (const loader of [statusLoader, historyLoader, diffLoader, commitLoader]) loader.abort();
       status = undefined;
       commits = [];
@@ -155,6 +176,7 @@
       commit = undefined;
       selected = undefined;
       diff = undefined;
+      if (!isRepository) view = 'checkpoints';
       void load();
     },
     { immediate: true },
@@ -224,119 +246,152 @@
         aria-label={tr('Git view')}
         use:rovingFocus={{ selector: '[role="tab"]', activate: true }}
       >
+        {#if repository && status?.repo !== false}
+          <button
+            role="tab"
+            type="button"
+            id="git-view-changes"
+            aria-controls="git-view-panel"
+            class:active={view === 'changes'}
+            aria-selected={view === 'changes'}
+            tabindex={view === 'changes' ? 0 : -1}
+            onclick={() => switchView('changes')}
+            >{tr('Changes')}{#if files.length}<span class="count">{files.length}</span>{/if}</button
+          >
+          <button
+            role="tab"
+            type="button"
+            id="git-view-history"
+            aria-controls="git-view-panel"
+            class:active={view === 'history'}
+            aria-selected={view === 'history'}
+            tabindex={view === 'history' ? 0 : -1}
+            onclick={() => switchView('history')}>{tr('History')}</button
+          >
+        {/if}
         <button
           role="tab"
           type="button"
-          id="git-view-changes"
+          id="git-view-checkpoints"
           aria-controls="git-view-panel"
-          class:active={view === 'changes'}
-          aria-selected={view === 'changes'}
-          tabindex={view === 'changes' ? 0 : -1}
-          onclick={() => switchView('changes')}
-          >{tr('Changes')}{#if files.length}<span class="count">{files.length}</span>{/if}</button
-        >
-        <button
-          role="tab"
-          type="button"
-          id="git-view-history"
-          aria-controls="git-view-panel"
-          class:active={view === 'history'}
-          aria-selected={view === 'history'}
-          tabindex={view === 'history' ? 0 : -1}
-          onclick={() => switchView('history')}>{tr('History')}</button
+          class:active={view === 'checkpoints'}
+          aria-selected={view === 'checkpoints'}
+          tabindex={view === 'checkpoints' ? 0 : -1}
+          onclick={() => switchView('checkpoints')}>{tr('Checkpoints')}</button
         >
       </div>
-      <button
-        class="icon-button small"
-        type="button"
-        aria-label={tr('Refresh')}
-        onclick={load}
-        disabled={statusLoader.loading}
-        ><RefreshCw class={statusLoader.loading ? 'spin' : ''} size={15} /></button
+      {#if view !== 'checkpoints'}<button
+          class="icon-button small"
+          type="button"
+          aria-label={tr('Refresh')}
+          onclick={load}
+          disabled={statusLoader.loading}
+          ><RefreshCw class={statusLoader.loading ? 'spin' : ''} size={15} /></button
+        >{/if}
+    </div>
+    {#if view === 'checkpoints'}
+      <div
+        class="checkpoint-panel"
+        role="tabpanel"
+        id="git-view-panel"
+        aria-labelledby="git-view-checkpoints"
       >
-    </div>
-    <div class="tab-view" role="tabpanel" id="git-view-panel" aria-labelledby="git-view-{view}">
-      {#if listError}<p class="panel-error">{listError}</p>{/if}
-      {#if status && !status.repo}
-        <p class="panel-empty">{tr('This workspace is not a Git repository.')}</p>
-      {:else if status?.repo}
-        <div class="branch-line">
-          <GitBranch size={14} />
-          <strong>{status.branch ?? tr('detached')}</strong>
-          {#if status.upstream}<span class="muted">→ {status.upstream}</span>{/if}
-          {#if status.ahead}<span class="chip">↑{status.ahead}</span>{/if}
-          {#if status.behind}<span class="chip">↓{status.behind}</span>{/if}
-        </div>
-        {#if view === 'changes'}
-          {#if !files.length}
-            <p class="panel-empty">{tr('Working tree clean.')}</p>
+        <CheckpointsTab
+          {sessionId}
+          scope={checkpointScope}
+          online={checkpointOnline}
+          hasControl={app.hasControl}
+          generation={app.generation}
+          {active}
+        />
+      </div>
+    {:else}<div
+        class="tab-view"
+        role="tabpanel"
+        id="git-view-panel"
+        aria-labelledby="git-view-{view}"
+      >
+        {#if listError}<p class="panel-error">{listError}</p>{/if}
+        {#if status && !status.repo}
+          <p class="panel-empty">{tr('This workspace is not a Git repository.')}</p>
+        {:else if status?.repo}
+          <div class="branch-line">
+            <GitBranch size={14} />
+            <strong>{status.branch ?? tr('detached')}</strong>
+            {#if status.upstream}<span class="muted">→ {status.upstream}</span>{/if}
+            {#if status.ahead}<span class="chip">↑{status.ahead}</span>{/if}
+            {#if status.behind}<span class="chip">↓{status.behind}</span>{/if}
+          </div>
+          {#if view === 'changes'}
+            {#if !files.length}
+              <p class="panel-empty">{tr('Working tree clean.')}</p>
+            {:else}
+              {#each [{ title: 'Staged', list: staged, isStaged: true }, { title: 'Changes', list: unstaged, isStaged: false }] as group}
+                {#if group.list.length}
+                  <div class="group-title">{group.title}<span>{group.list.length}</span></div>
+                  <ul class="file-list">
+                    {#each group.list as file (file.path + group.isStaged)}
+                      <li>
+                        <button
+                          type="button"
+                          class="file-row"
+                          onclick={() => openDiff(file, group.isStaged)}
+                        >
+                          <span
+                            class="status-code s-{code(file, group.isStaged) === '?'
+                              ? 'U'
+                              : code(file, group.isStaged)}"
+                            title={label[code(file, group.isStaged)] ?? ''}
+                            >{code(file, group.isStaged) === '?'
+                              ? tr('U')
+                              : code(file, group.isStaged)}</span
+                          >
+                          <span class="file-name">{base(file.path)}</span>
+                          <span class="file-dir"
+                            >{file.origPath ? `${file.origPath} →` : dir(file.path)}</span
+                          >
+                        </button>
+                      </li>
+                    {/each}
+                  </ul>
+                {/if}
+              {/each}
+              {#if status.truncated}<p class="panel-empty">
+                  {tr('Showing the first 5,000 files.')}
+                </p>{/if}
+            {/if}
+          {:else if !commits.length}
+            <p class="panel-empty">{tr('No commits yet.')}</p>
           {:else}
-            {#each [{ title: 'Staged', list: staged, isStaged: true }, { title: 'Changes', list: unstaged, isStaged: false }] as group}
-              {#if group.list.length}
-                <div class="group-title">{group.title}<span>{group.list.length}</span></div>
-                <ul class="file-list">
-                  {#each group.list as file (file.path + group.isStaged)}
-                    <li>
-                      <button
-                        type="button"
-                        class="file-row"
-                        onclick={() => openDiff(file, group.isStaged)}
+            <ul class="commit-list">
+              {#each commits as item (item.sha)}
+                <li>
+                  <button type="button" class="commit-row" onclick={() => openCommit(item)}>
+                    <GitCommitHorizontal size={15} />
+                    <span class="commit-text">
+                      <span class="commit-subject">{item.subject}</span>
+                      <span class="commit-sub"
+                        ><span class="mono">{item.short}</span> · {item.author} · {ago(
+                          item.time,
+                        )}{#each item.refs.slice(0, 2) as ref}
+                          <span class="chip">{ref.replace('HEAD -> ', '')}</span>{/each}</span
                       >
-                        <span
-                          class="status-code s-{code(file, group.isStaged) === '?'
-                            ? 'U'
-                            : code(file, group.isStaged)}"
-                          title={label[code(file, group.isStaged)] ?? ''}
-                          >{code(file, group.isStaged) === '?'
-                            ? tr('U')
-                            : code(file, group.isStaged)}</span
-                        >
-                        <span class="file-name">{base(file.path)}</span>
-                        <span class="file-dir"
-                          >{file.origPath ? `${file.origPath} →` : dir(file.path)}</span
-                        >
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
-              {/if}
-            {/each}
-            {#if status.truncated}<p class="panel-empty">
-                {tr('Showing the first 5,000 files.')}
-              </p>{/if}
+                    </span>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+            {#if more}<button
+                class="load-more"
+                type="button"
+                disabled={historyLoader.loading}
+                onclick={() => loadHistory(false)}>{tr('Load more')}</button
+              >{/if}
           {/if}
-        {:else if !commits.length}
-          <p class="panel-empty">{tr('No commits yet.')}</p>
-        {:else}
-          <ul class="commit-list">
-            {#each commits as item (item.sha)}
-              <li>
-                <button type="button" class="commit-row" onclick={() => openCommit(item)}>
-                  <GitCommitHorizontal size={15} />
-                  <span class="commit-text">
-                    <span class="commit-subject">{item.subject}</span>
-                    <span class="commit-sub"
-                      ><span class="mono">{item.short}</span> · {item.author} · {ago(
-                        item.time,
-                      )}{#each item.refs.slice(0, 2) as ref}
-                        <span class="chip">{ref.replace('HEAD -> ', '')}</span>{/each}</span
-                    >
-                  </span>
-                </button>
-              </li>
-            {/each}
-          </ul>
-          {#if more}<button
-              class="load-more"
-              type="button"
-              disabled={historyLoader.loading}
-              onclick={() => loadHistory(false)}>{tr('Load more')}</button
-            >{/if}
+        {:else if statusLoader.loading}
+          <p class="panel-empty">{tr('Loading…')}</p>
         {/if}
-      {:else if statusLoader.loading}
-        <p class="panel-empty">{tr('Loading…')}</p>
-      {/if}
-    </div>
+      </div>{/if}
   {/if}
 </div>
 
@@ -345,6 +400,9 @@
     display: grid;
     align-content: start;
     gap: 8px;
+  }
+  .checkpoint-panel {
+    min-height: 0;
   }
   .segmented .count {
     color: var(--muted);

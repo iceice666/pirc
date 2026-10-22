@@ -29,6 +29,8 @@ sealed interface TimelineEvent {
     data object SessionDeleted : TimelineEvent
     /** Side-panel data changed (memory, background, team, git); refetch lazily. */
     data class PanelChanged(val sections: List<String>) : TimelineEvent
+    /** A session's observational checkpoints changed; refresh that panel lazily. */
+    data object CheckpointsChanged : TimelineEvent
     /** Only a new snapshot can tell what changed. */
     data class Reset(val reason: String) : TimelineEvent
     data object Noop : TimelineEvent
@@ -158,6 +160,7 @@ fun normalizeEvent(raw: JsonElement, now: () -> Long = System::currentTimeMillis
         }
         type == "session_renamed" && data["name"].string != null -> TimelineEvent.SessionRenamed(data["name"].string!!)
         type == "session_deleted" -> TimelineEvent.SessionDeleted
+        type == "checkpoints_changed" -> TimelineEvent.CheckpointsChanged
         type == "delegations_changed" && data["delegations"].array != null ->
             TimelineEvent.DelegationsChanged(chatDelegations(data["delegations"]))
         type == "runner_stderr" -> TimelineEvent.Noop
@@ -291,7 +294,8 @@ fun SessionState.reduce(envelope: EventEnvelope, now: () -> Long = System::curre
     val base = copy(cursor = envelope.cursor)
     return when (event) {
         is TimelineEvent.Reset -> base.copy(needsSnapshot = true)
-        TimelineEvent.SessionDeleted, TimelineEvent.Noop, is TimelineEvent.PanelChanged -> base
+        TimelineEvent.SessionDeleted, TimelineEvent.Noop, TimelineEvent.CheckpointsChanged,
+        is TimelineEvent.PanelChanged -> base
         is TimelineEvent.WidgetUpdated -> base.copy(
             widgets = if (!event.lines.isNullOrEmpty()) widgets + (event.key to event.lines) else widgets - event.key,
         )

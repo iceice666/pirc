@@ -2,6 +2,8 @@
 //!
 //! Shared directories supply observations, NOT exclusive writer attribution.
 //! Only private node code binds owner/session/run/root; RPC arguments cannot.
+pub mod api;
+pub(crate) mod continuation;
 mod files;
 mod inverse;
 pub mod isolation;
@@ -58,7 +60,7 @@ impl Default for Limits {
 }
 
 /// Constructed by the runner from its own stored authorization and sandbox.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Scope {
     pub node: String,
     pub owner: String,

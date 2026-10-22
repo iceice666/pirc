@@ -21,7 +21,7 @@ use crate::util::{new_id, now_ms, safe_json};
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1006;
+pub const SCHEMA_VERSION: i64 = 1007;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = concat!(
@@ -84,6 +84,15 @@ const MIGRATIONS: &[(i64, &str)] = &[
     ),
     (1006, "ALTER TABLE memory_mirrors ADD COLUMN digest TEXT;"),
     (1007, include_str!("calendar/schema.sql")),
+    (
+        // Private node-owned checkpoint continuation workspaces.
+        1008,
+        "CREATE TABLE IF NOT EXISTS checkpoint_workspace_owners (
+           workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+           owner_user TEXT
+         );",
+    ),
+
 ];
 
 /// Placeholder name of a new session until the agent's title replaces it.
@@ -653,6 +662,21 @@ pub trait Store {
     fn workspace_history_session_ids(&self, workspace_id: &str) -> ApiResult<Vec<String>>;
     /// Chat projects being deleted (`deleting`), for their owner to finish.
     fn deleting_workspaces(&self) -> ApiResult<Vec<Workspace>>;
+    /// Workspaces visible to this user, including only their own private
+    /// checkpoint continuations. Unclaimed checkpoint workspaces stay hidden.
+    fn list_workspaces_for_user(&self, user: &str) -> ApiResult<Vec<Workspace>>;
+    /// Checkpoint workspaces are imported before their continuation response
+    /// can be mapped; an absent owner therefore means private and unavailable.
+    fn mark_checkpoint_workspace_private(&self, workspace_id: &str) -> ApiResult<()>;
+    /// Bind a private checkpoint workspace to the user whose continuation
+    /// response explicitly returned it. A different owner cannot take it over.
+    fn claim_checkpoint_workspace(&self, workspace_id: &str, user: &str) -> ApiResult<()>;
+    /// Whether a workspace is public or belongs to `user`.
+    fn checkpoint_workspace_visible_to_user(
+        &self,
+        workspace_id: &str,
+        user: &str,
+    ) -> ApiResult<bool>;
     fn get_workspace_capabilities(&self, workspace_id: &str) -> ApiResult<Capabilities>;
     fn patch_workspace_capabilities(
         &self,
@@ -668,6 +692,15 @@ pub trait Store {
     -> ApiResult<()>;
 
     fn create_session(
+        &self,
+        workspace_id: &str,
+        private_session_path: &str,
+        node_id: &str,
+        remote_session_id: &str,
+        owner_user: &str,
+    ) -> ApiResult<Session>;
+    /// Idempotently map a node-owned recovery continuation into the gateway.
+    fn create_checkpoint_session(
         &self,
         workspace_id: &str,
         private_session_path: &str,
@@ -886,10 +919,89 @@ impl Store for Connection {
 
     fn list_workspaces(&self) -> ApiResult<Vec<Workspace>> {
         let mut statement = self.prepare(
-            "SELECT * FROM workspaces WHERE id NOT IN (SELECT workspace_id FROM workspace_deletions) ORDER BY display_name",
+            "SELECT * FROM workspaces WHERE id NOT IN (SELECT workspace_id FROM workspace_deletions) AND id NOT IN (SELECT workspace_id FROM checkpoint_workspace_owners) ORDER BY display_name",
         )?;
         let rows = statement.query_map([], Workspace::from_row)?;
         Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    fn list_workspaces_for_user(&self, user: &str) -> ApiResult<Vec<Workspace>> {
+        let mut statement = self.prepare(
+            "SELECT w.* FROM workspaces w
+             WHERE w.id NOT IN (SELECT workspace_id FROM workspace_deletions)
+               AND NOT EXISTS (
+                 SELECT 1 FROM checkpoint_workspace_owners c
+                 WHERE c.workspace_id=w.id AND (c.owner_user IS NULL OR c.owner_user!=?)
+               )
+             ORDER BY w.display_name",
+        )?;
+        let rows = statement.query_map([user], Workspace::from_row)?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    fn mark_checkpoint_workspace_private(&self, workspace_id: &str) -> ApiResult<()> {
+        self.execute(
+            "INSERT OR IGNORE INTO checkpoint_workspace_owners (workspace_id,owner_user) VALUES (?,NULL)",
+            [workspace_id],
+        )?;
+        Ok(())
+    }
+
+    fn claim_checkpoint_workspace(&self, workspace_id: &str, user: &str) -> ApiResult<()> {
+        self.get_workspace(workspace_id)?;
+        let owner: Option<Option<String>> = self
+            .query_row(
+                "SELECT owner_user FROM checkpoint_workspace_owners WHERE workspace_id=?",
+                [workspace_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        match owner {
+            Some(Some(owner)) if owner != user => Err(ApiError::not_found("Workspace not found")),
+            Some(Some(_)) => Ok(()),
+            Some(None) => {
+                self.execute(
+                    "UPDATE checkpoint_workspace_owners SET owner_user=? WHERE workspace_id=? AND owner_user IS NULL",
+                    params![user, workspace_id],
+                )?;
+                let owner: Option<String> = self.query_row(
+                    "SELECT owner_user FROM checkpoint_workspace_owners WHERE workspace_id=?",
+                    [workspace_id],
+                    |row| row.get(0),
+                )?;
+                if owner.as_deref() == Some(user) {
+                    Ok(())
+                } else {
+                    Err(ApiError::not_found("Workspace not found"))
+                }
+            }
+            None => {
+                self.execute(
+                    "INSERT INTO checkpoint_workspace_owners (workspace_id,owner_user) VALUES (?,?)",
+                    params![workspace_id, user],
+                )?;
+                Ok(())
+            }
+        }
+    }
+
+    fn checkpoint_workspace_visible_to_user(
+        &self,
+        workspace_id: &str,
+        user: &str,
+    ) -> ApiResult<bool> {
+        let owner: Option<Option<String>> = self
+            .query_row(
+                "SELECT owner_user FROM checkpoint_workspace_owners WHERE workspace_id=?",
+                [workspace_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(match owner {
+            None => true,
+            Some(Some(owner)) => owner == user,
+            Some(None) => false,
+        })
     }
 
     fn get_workspace(&self, workspace_id: &str) -> ApiResult<Workspace> {
@@ -1079,6 +1191,71 @@ impl Store for Connection {
             ],
         )?;
         self.get_session(&session_id)
+    }
+
+    fn create_checkpoint_session(
+        &self,
+        workspace_id: &str,
+        private_session_path: &str,
+        node_id: &str,
+        remote_session_id: &str,
+        owner_user: &str,
+    ) -> ApiResult<Session> {
+        atomic(self, |tx| {
+            let existing: Option<Session> = tx
+                .query_row(
+                    "SELECT * FROM sessions WHERE node_id=? AND pi_session_id=?",
+                    params![node_id, remote_session_id],
+                    Session::from_row,
+                )
+                .optional()?;
+            if let Some(existing) = existing {
+                if existing.owner_user.as_deref() != Some(owner_user)
+                    || existing.workspace_id != workspace_id
+                {
+                    return Err(ApiError::new(
+                        502,
+                        "node_error",
+                        "Node answered an inconsistent checkpoint continuation",
+                    ));
+                }
+                return Ok(existing);
+            }
+
+            let workspace_owner: Option<String> = tx
+                .query_row(
+                    "SELECT owner_user FROM checkpoint_workspace_owners WHERE workspace_id=?",
+                    [workspace_id],
+                    |row| row.get(0),
+                )
+                .optional()?
+                .flatten();
+            if workspace_owner.as_deref() != Some(owner_user) {
+                return Err(ApiError::not_found("Workspace not found"));
+            }
+            let session_id = new_id("session");
+            let stamp = now_ms();
+            tx.execute(
+                "INSERT INTO sessions (id,workspace_id,private_session_path,name,name_source,node_id,pi_session_id,owner_user,created_at,updated_at) VALUES (?,?,?,?,'auto',?,?,?,?,?)",
+                params![
+                    session_id,
+                    workspace_id,
+                    private_session_path,
+                    PLACEHOLDER_SESSION_NAME,
+                    node_id,
+                    remote_session_id,
+                    owner_user,
+                    stamp,
+                    stamp
+                ],
+            )?;
+            tx.query_row(
+                "SELECT * FROM sessions WHERE id=?",
+                [session_id],
+                Session::from_row,
+            )
+            .map_err(Into::into)
+        })
     }
 
     fn list_sessions(&self) -> ApiResult<Vec<Session>> {

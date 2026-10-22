@@ -190,6 +190,21 @@ it('normalizes all answered interactions with their row epoch', () => {
   });
 });
 
+it('invalidates checkpoint panels when an automatic capture can close', () => {
+  expect(
+    normalizeEvent({
+      sessionId: 's1',
+      epoch: 2,
+      sequence: 1,
+      type: 'pi_event',
+      data: { type: 'agent_settled' },
+    }),
+  ).toMatchObject({ checkpointInvalidation: true, event: { type: 'reset' } });
+  expect(
+    normalizeEvent({ sessionId: 's1', epoch: 2, sequence: 2, type: 'runner_exit' }),
+  ).toMatchObject({ checkpointInvalidation: true, event: { type: 'reset' } });
+});
+
 it('sends the delegation checkbox only when an approval ticks it', async () => {
   const bodies: any[] = [];
   vi.stubGlobal(

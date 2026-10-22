@@ -136,3 +136,20 @@ CREATE TABLE session_deletions (
   status TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
+
+-- Durable, owner-bound recovery adoption; no copied conversation/memory.
+CREATE TABLE IF NOT EXISTS checkpoint_intents (
+  job TEXT PRIMARY KEY, owner TEXT NOT NULL, source_session TEXT NOT NULL,
+  capture TEXT NOT NULL, expected_revision INTEGER NOT NULL,
+  accept_unresolved INTEGER NOT NULL, scope_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+-- Keep adoption tombstones if conversation/workspace metadata is deleted.
+-- Repeated continuation must not recreate deleted conversations or remove files.
+CREATE TABLE IF NOT EXISTS checkpoint_workspaces (
+  workspace_id TEXT PRIMARY KEY,
+  job TEXT NOT NULL UNIQUE REFERENCES checkpoint_intents(job),
+  owner TEXT NOT NULL,
+  session_id TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL
+);

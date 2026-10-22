@@ -33,18 +33,36 @@ use crate::util::{now_ms, prefix_uuid, safe_json};
 /// the gateway's migrations (1 to 19) and the Rust gateway's schema is 1000;
 /// the node's line starts apart from both, so each is recognized.
 /// 2001: uploads record their workspace and session; `workspace_deletions`.
-pub const SCHEMA_VERSION: i64 = 2001;
+pub const SCHEMA_VERSION: i64 = 2002;
 /// Upgrades from each earlier node schema, applied in order.
-const MIGRATIONS: &[(i64, &str)] = &[(
-    2001,
-    "ALTER TABLE uploads ADD COLUMN workspace_id TEXT;
+const MIGRATIONS: &[(i64, &str)] = &[
+    (
+        2001,
+        "ALTER TABLE uploads ADD COLUMN workspace_id TEXT;
      ALTER TABLE uploads ADD COLUMN session_id TEXT;
      CREATE INDEX uploads_workspace ON uploads(workspace_id);
      CREATE TABLE workspace_deletions (
        workspace_id TEXT PRIMARY KEY, owner_user TEXT NOT NULL,
        status TEXT NOT NULL, created_at INTEGER NOT NULL
      );",
-)];
+    ),
+    (
+        2002,
+        r#"CREATE TABLE IF NOT EXISTS checkpoint_intents (
+  job TEXT PRIMARY KEY, owner TEXT NOT NULL, source_session TEXT NOT NULL,
+  capture TEXT NOT NULL, expected_revision INTEGER NOT NULL,
+  accept_unresolved INTEGER NOT NULL, scope_json TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS checkpoint_workspaces (
+  workspace_id TEXT PRIMARY KEY,
+  job TEXT NOT NULL UNIQUE REFERENCES checkpoint_intents(job),
+  owner TEXT NOT NULL,
+  session_id TEXT NOT NULL UNIQUE,
+  created_at INTEGER NOT NULL
+);"#,
+    ),
+];
 /// The first node schema.
 const FIRST_SCHEMA_VERSION: i64 = 2000;
 /// The Rust gateway's `user_version`.

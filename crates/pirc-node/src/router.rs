@@ -472,6 +472,15 @@ impl Router {
             user: request.user,
             body,
         };
+        if route.pattern.starts_with("/api/workspaces/:id")
+            && let Err(error) = crate::checkpoints::continuation::require_workspace_owner(
+                &node.db.lock(),
+                routed.param("id").unwrap_or_default(),
+                &routed.user,
+            )
+        {
+            return error_reply(&error);
+        }
         // In a task of its own: a panic is a 500, not a lost response, and
         // the handler runs to its end as Fastify's did.
         match tokio::spawn(route.call(node.clone(), routed)).await {

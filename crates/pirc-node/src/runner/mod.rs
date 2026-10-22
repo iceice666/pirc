@@ -793,10 +793,25 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
         let workspace = node.db.lock().get_workspace(&session.workspace_id)?;
         let mode = node.workspace_mode(&workspace)?;
         let root = crate::chat::session_root(&workspace, session_id, &mode)?;
-        let ledger = workspace_ledger(node, &workspace, &root).await;
-        let prepared = node
-            .sandbox
-            .prepare(crate::sandbox::PrepareInput {
+        let recovery = crate::checkpoints::continuation::runner_ticket(
+            node,
+            &workspace,
+            session.owner_user.as_deref().unwrap_or_default(),
+        )
+        .await?;
+        let ledger = if recovery.is_none() {
+            workspace_ledger(node, &workspace, &root).await
+        } else {
+            None
+        };
+        let input = if let Some(ticket) = recovery {
+            ticket.prepare_input(
+                session_id.to_owned(),
+                session.private_session_path.clone().into(),
+                node.models.inference().map(|i| i.socket_path.into()),
+            )
+        } else {
+            crate::sandbox::PrepareInput {
                 session_id: session_id.to_owned(),
                 workspace_root: root,
                 session_dir: session.private_session_path.clone().into(),
@@ -812,8 +827,9 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
                 // Read-only and shared: uploads reach the running session.
                 project_files_dir: crate::project_files::existing_files_dir(&workspace, &mode),
                 recovery: None,
-            })
-            .await?;
+            }
+        };
+        let prepared = node.sandbox.prepare(input).await?;
         if node.workspace_mode(&workspace)? != mode {
             prepared.cleanup();
             return Err(ApiError::runner_unavailable(

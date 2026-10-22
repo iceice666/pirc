@@ -306,13 +306,14 @@ class LiveController extends ChangeNotifier {
   /// Assistant chrome (no Work jobs/control) for the open session.
   bool get chat => sessionMode?.assistant ?? false;
 
-  /// Side panels by capability: Git needs a repository, terminals a shared
-  /// workspace directory. Unknown workspaces keep every panel, as before.
+  /// Side panels by capability. The Git pane also hosts checkpoints, which
+  /// exist for non-Git directory workspaces. Per-session chat/scratch modes
+  /// have no checkpoint capture. Terminals need a shared workspace directory.
   bool sessionPanel(String kind) {
     if (isDraftSession) return false;
     final mode = sessionMode;
     if (mode == null) return true;
-    if (kind == 'git') return mode.repository;
+    if (kind == 'git') return mode.repository || mode.sharedDirectory;
     if (kind == 'terminals') return mode.sharedDirectory;
     return true;
   }

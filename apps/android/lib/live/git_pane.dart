@@ -12,6 +12,7 @@ import 'tasks_pane.dart' show PanelChip;
 import 'git_state.dart';
 import 'diff_view.dart';
 import 'timeline_models.dart' show instant;
+import 'checkpoints_pane.dart';
 
 const gitLabels = {
   'M': 'Modified',
@@ -50,7 +51,7 @@ class GitPane extends StatefulWidget {
 
 class _GitPaneState extends State<GitPane> {
   late final state = GitState(widget.controller);
-  final tabs = [FocusNode(), FocusNode()];
+  final tabs = [FocusNode(), FocusNode(), FocusNode()];
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -128,7 +129,7 @@ class _GitPaneState extends State<GitPane> {
           scrollDirection: Axis.horizontal,
           child: Semantics(
             role: SemanticsRole.tabBar,
-            label: tr("Git view"),
+            label: tr("Git and checkpoints view"),
             child: Container(
               padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
@@ -138,7 +139,11 @@ class _GitPaneState extends State<GitPane> {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  for (final (i, view) in ['changes', 'history'].indexed) ...[
+                  for (final (i, view) in [
+                    'changes',
+                    'history',
+                    'checkpoints',
+                  ].indexed) ...[
                     if (i > 0) const SizedBox(width: 2),
                     Focus(
                       onKeyEvent: (node, event) {
@@ -147,14 +152,16 @@ class _GitPaneState extends State<GitPane> {
                         }
                         final key = event.logicalKey;
                         int? next;
-                        if (key == LogicalKeyboardKey.arrowLeft ||
-                            key == LogicalKeyboardKey.arrowRight) {
-                          next = 1 - i;
+                        if (key == LogicalKeyboardKey.arrowLeft) {
+                          next = (i - 1 + 3) % 3;
+                        }
+                        if (key == LogicalKeyboardKey.arrowRight) {
+                          next = (i + 1) % 3;
                         }
                         if (key == LogicalKeyboardKey.home) next = 0;
-                        if (key == LogicalKeyboardKey.end) next = 1;
+                        if (key == LogicalKeyboardKey.end) next = 2;
                         if (next == null) return KeyEventResult.ignored;
-                        state.switchView(['changes', 'history'][next]);
+                        state.switchView(['changes', 'history', 'checkpoints'][next]);
                         final target = next;
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           if (mounted) tabs[target].requestFocus();
@@ -170,7 +177,9 @@ class _GitPaneState extends State<GitPane> {
                                     ? ''
                                     : ' ${state.files.length}',
                               ])
-                            : tr("History"),
+                            : i == 1
+                            ? tr("History")
+                            : tr("Checkpoints"),
                         onTap: () => state.switchView(view),
                         excludeSemantics: true,
                         child: InkWell(
@@ -209,7 +218,11 @@ class _GitPaneState extends State<GitPane> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        i == 0 ? tr("Changes") : tr("History"),
+                                        i == 0
+                                            ? tr("Changes")
+                                            : i == 1
+                                            ? tr("History")
+                                            : tr("Checkpoints"),
                                         style: text(
                                           12.5,
                                           color: state.view == view
@@ -241,12 +254,14 @@ class _GitPaneState extends State<GitPane> {
           ),
         ),
       ),
-      const SizedBox(width: 8),
-      WebIconButton(
-        LucideIcons.refreshCw,
-        tr("Refresh"),
-        onPressed: state.statusRead.loading ? null : state.load,
-      ),
+      if (state.view != 'checkpoints') ...[
+        const SizedBox(width: 8),
+        WebIconButton(
+          LucideIcons.refreshCw,
+          tr("Refresh"),
+          onPressed: state.statusRead.loading ? null : state.load,
+        ),
+      ],
     ],
   );
   Widget branchChip(String label) => Container(
@@ -633,7 +648,13 @@ class _GitPaneState extends State<GitPane> {
             ),
           ] else ...[
             toolbar(),
-            LayoutBuilder(
+            if (state.view == 'checkpoints')
+              CheckpointsPane(
+                key: ValueKey('checkpoints-pane-${widget.controller.sessionId}'),
+                controller: widget.controller,
+              )
+            else
+              LayoutBuilder(
               builder: (context, constraints) {
                 final rowWidth = _contentWidth(constraints.maxWidth);
                 return OverflowBox(
@@ -647,7 +668,9 @@ class _GitPaneState extends State<GitPane> {
                       role: SemanticsRole.tabPanel,
                       label: state.view == 'changes'
                           ? tr("Changes")
-                          : tr("History"),
+                          : state.view == 'history'
+                          ? tr("History")
+                          : tr("Checkpoints"),
                       child: sequence([
                         if (state.listError != null) error(state.listError!),
                         if (state.status != null &&

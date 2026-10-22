@@ -407,6 +407,7 @@ pub fn router(app: AppState) -> Router {
             "/api/sessions/{id}/browser/recording",
             get(routes::recording),
         )
+        .merge(crate::checkpoints::routes())
         .merge(routes::feature_routes())
         .merge(crate::management::routes())
         .merge(crate::project_deletion::routes())
@@ -445,6 +446,21 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
     ("PATCH", "/api/sessions/{id}"),
     ("POST", "/api/sessions/{id}/read"),
     ("GET", "/api/sessions/{id}/snapshot"),
+    ("GET", "/api/sessions/{id}/checkpoints"),
+    ("POST", "/api/sessions/{id}/checkpoints/{capture}/preview"),
+    (
+        "POST",
+        "/api/sessions/{id}/checkpoints/{capture}/recoveries",
+    ),
+    (
+        "GET",
+        "/api/sessions/{id}/checkpoints/{capture}/recoveries/{job}",
+    ),
+    (
+        "POST",
+        "/api/sessions/{id}/checkpoints/{capture}/recoveries/{job}/continue",
+    ),
+    ("GET", "/api/sessions/{id}/checkpoints/{capture}/file"),
     ("POST", "/api/sessions/{id}/commands"),
     ("GET", "/api/sessions/{id}/control"),
     ("POST", "/api/sessions/{id}/control/acquire"),

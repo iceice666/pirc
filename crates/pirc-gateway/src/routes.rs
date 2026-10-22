@@ -120,11 +120,30 @@ pub async fn health(State(app): State<AppState>) -> Response {
     ok(json!({ "ok": true, "version": 2, "nodes": app.nodes.count() }))
 }
 
-pub async fn list_nodes(State(app): State<AppState>) -> Response {
+pub async fn list_nodes(
+    State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
+) -> Response {
     let mut nodes = json!(app.nodes.list());
     if let Some(nodes) = nodes.as_array_mut() {
         for node in nodes {
+            let node_id = node["id"].as_str().unwrap_or_default().to_owned();
             if let Some(workspaces) = node["workspaces"].as_array_mut() {
+                workspaces.retain(|workspace| {
+                    if workspace["checkpointPrivate"].as_bool() != Some(true) {
+                        return true;
+                    }
+                    let Some(local_id) = workspace["id"].as_str() else {
+                        return false;
+                    };
+                    app.db
+                        .lock()
+                        .checkpoint_workspace_visible_to_user(
+                            &format!("{node_id}:{local_id}"),
+                            &identity.user,
+                        )
+                        .unwrap_or(false)
+                });
                 for workspace in workspaces {
                     let mode = workspace["mode"]
                         .as_str()
@@ -283,13 +302,16 @@ pub async fn list_workspaces(
 ) -> Handled {
     let conn = app.db.lock();
     let mut workspaces: Vec<Value> = conn
-        .list_workspaces()?
+        .list_workspaces_for_user(&identity.user)?
         .into_iter()
         .filter(|workspace| workspace.id.contains(':'))
         .map(|workspace| public_workspace(&app, &workspace))
         .collect();
     // A project whose deletion did not finish stays listed, for its owner to finish it.
     for workspace in conn.deleting_workspaces()? {
+        if !conn.checkpoint_workspace_visible_to_user(&workspace.id, &identity.user)? {
+            continue;
+        }
         let owner = conn
             .workspace_deletion(&workspace.id)?
             .map(|d| d.owner_user);
@@ -302,10 +324,30 @@ pub async fn list_workspaces(
     Ok(ok(json!({ "workspaces": workspaces })))
 }
 
+/// Checkpoint workspaces are private, including before their owner has been
+/// learned from an explicit continuation response.
+pub fn require_workspace_visible(
+    app: &AppState,
+    identity: &Identity,
+    workspace_id: &str,
+) -> Result<(), ApiError> {
+    if app
+        .db
+        .lock()
+        .checkpoint_workspace_visible_to_user(workspace_id, &identity.user)?
+    {
+        Ok(())
+    } else {
+        Err(ApiError::not_found("Workspace not found"))
+    }
+}
+
 pub async fn get_capabilities(
     State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
     Path(workspace_id): Path<String>,
 ) -> Handled {
+    require_workspace_visible(&app, &identity, &workspace_id)?;
     let capabilities = app.db.lock().get_workspace_capabilities(&workspace_id)?;
     Ok(ok(json!({ "capabilities": capabilities })))
 }
@@ -318,10 +360,12 @@ struct CapabilitiesBody {
 
 pub async fn patch_capabilities(
     State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
     Path(workspace_id): Path<String>,
     ReqBody(body): ReqBody,
 ) -> Handled {
     let CapabilitiesBody { capabilities } = body.parse()?;
+    require_workspace_visible(&app, &identity, &workspace_id)?;
     let workspace = app.db.lock().get_workspace(&workspace_id)?;
     if !app.require_mode(&workspace)?.full_assistant() {
         return Err(ApiError::invalid_input().into());
@@ -335,7 +379,12 @@ pub async fn patch_capabilities(
 }
 
 /// The workspaces a chat project is linked to (docs/architecture/assistant-memory.md).
-pub async fn get_links(State(app): State<AppState>, Path(workspace_id): Path<String>) -> Handled {
+pub async fn get_links(
+    State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Path(workspace_id): Path<String>,
+) -> Handled {
+    require_workspace_visible(&app, &identity, &workspace_id)?;
     let links = crate::project_links::project_links(&app.db.lock(), &app.catalog(), &workspace_id)?;
     Ok(ok(crate::project_links::view(&app, &links)?))
 }
@@ -350,6 +399,7 @@ struct LinksBody {
 /// the workspace list of chats started from now on.
 pub async fn put_links(
     State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
     Path(workspace_id): Path<String>,
     ReqBody(body): ReqBody,
 ) -> Handled {
@@ -359,7 +409,9 @@ pub async fn put_links(
     }
     for id in &workspace_ids {
         length_within(id, 1, 300)?;
+        require_workspace_visible(&app, &identity, id)?;
     }
+    require_workspace_visible(&app, &identity, &workspace_id)?;
     let links = crate::project_links::set_links(
         &app.db.lock(),
         &app.catalog(),
@@ -399,10 +451,12 @@ impl NodeResource {
 /// `resource`.
 fn workspace_on_node(
     app: &AppState,
+    identity: &Identity,
     workspace_id: &str,
     resource: NodeResource,
     rest: &str,
 ) -> Result<(String, String), ApiError> {
+    require_workspace_visible(app, identity, workspace_id)?;
     let workspace = app.db.lock().get_workspace(workspace_id)?;
     let local = match workspace.local_id() {
         Some(local)
@@ -437,6 +491,7 @@ pub async fn get_instructions(
 ) -> Handled {
     let (node_id, url) = workspace_on_node(
         &app,
+        &identity,
         &workspace_id,
         NodeResource::Instructions,
         "/instructions",
@@ -461,6 +516,7 @@ pub async fn patch_instructions(
 ) -> Handled {
     let (node_id, url) = workspace_on_node(
         &app,
+        &identity,
         &workspace_id,
         NodeResource::Instructions,
         "/instructions",
@@ -485,7 +541,13 @@ pub async fn get_project_files(
     Extension(identity): Extension<Identity>,
     Path(workspace_id): Path<String>,
 ) -> Handled {
-    let (node_id, url) = workspace_on_node(&app, &workspace_id, NodeResource::Files, "/files")?;
+    let (node_id, url) = workspace_on_node(
+        &app,
+        &identity,
+        &workspace_id,
+        NodeResource::Files,
+        "/files",
+    )?;
     Ok(forward(
         app.relay(&node_id, &identity, HttpMethod::Get, url, None)
             .await?,
@@ -515,6 +577,7 @@ pub async fn upload_project_file(
     let filename = query_value(&uri, "filename")?;
     let (node_id, url) = workspace_on_node(
         &app,
+        &identity,
         &workspace_id,
         NodeResource::Files,
         &format!("/files?filename={}", urlencoding_component(&filename)),
@@ -562,6 +625,7 @@ pub async fn delete_project_file(
     let name = query_value(&uri, "name")?;
     let (node_id, url) = workspace_on_node(
         &app,
+        &identity,
         &workspace_id,
         NodeResource::Files,
         &format!("/files?name={}", urlencoding_component(&name)),
@@ -579,6 +643,7 @@ pub async fn project_config(
 ) -> Handled {
     let (node_id, url) = workspace_on_node(
         &app,
+        &identity,
         &workspace_id,
         NodeResource::ProjectConfig,
         "/project-config",
@@ -605,6 +670,7 @@ pub async fn project_trust(
 ) -> Handled {
     let (node_id, url) = workspace_on_node(
         &app,
+        &identity,
         &workspace_id,
         NodeResource::ProjectConfig,
         "/project-trust",
@@ -803,6 +869,7 @@ pub async fn create_session(
 ) -> Handled {
     let CreateSession { workspace_id } = body.parse()?;
     length_within(&workspace_id, 1, usize::MAX)?;
+    require_workspace_visible(&app, &identity, &workspace_id)?;
     let workspace = app.db.lock().get_workspace(&workspace_id)?;
     app.require_mode(&workspace)?;
     let node_id = workspace.host_id.clone();

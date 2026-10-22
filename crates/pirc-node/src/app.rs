@@ -630,6 +630,11 @@ async fn write_prompt(node: Node, request: Request) -> ApiResult<Response> {
 async fn create_session(node: Node, request: Request) -> ApiResult<Response> {
     let map = object(request.json())?;
     let workspace_id = string(map, "workspaceId", false, 1, usize::MAX)?;
+    crate::checkpoints::continuation::require_workspace_owner(
+        &node.db.lock(),
+        &workspace_id,
+        &request.user,
+    )?;
     let workspace = node.db.lock().get_workspace(&workspace_id)?;
     node.workspace_mode(&workspace)?;
     let storage = node.config.sessions_dir.join(prefix_uuid("pi"));

@@ -11,6 +11,13 @@ CREATE TABLE workspaces (
   repo TEXT
 );
 
+-- A recovery root is node-private until the Gateway maps the continuation
+-- response to its owner. A NULL owner is deliberately unavailable to users.
+CREATE TABLE checkpoint_workspace_owners (
+  workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+  owner_user TEXT
+);
+
 CREATE TABLE sessions (
   id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL REFERENCES workspaces(id), pi_session_id TEXT,
   private_session_path TEXT NOT NULL UNIQUE, name TEXT NOT NULL,

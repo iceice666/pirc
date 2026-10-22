@@ -685,6 +685,11 @@ async fn registration(node: &Node) -> Registration {
             .into_iter()
             .zip(details)
             .map(|(workspace, (roles, repo))| RegisteredWorkspace {
+                checkpoint_private: crate::checkpoints::continuation::is_workspace(
+                    &node.db.lock(),
+                    &workspace.id,
+                )
+                .unwrap_or(true),
                 id: workspace.id,
                 display_name: workspace.display_name,
                 mode: workspace.mode,

@@ -58,6 +58,9 @@ fn project(
     workspace_id: &str,
     user: &str,
 ) -> ApiResult<Option<Workspace>> {
+    if !conn.checkpoint_workspace_visible_to_user(workspace_id, user)? {
+        return Err(ApiError::not_found("Workspace not found"));
+    }
     if let Some(deletion) = conn.workspace_deletion(workspace_id)? {
         if deletion.owner_user != user {
             return Err(ApiError::new(

@@ -102,6 +102,9 @@ pub enum NodeRole {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegisteredWorkspace {
+    /// Private recovery root: newer gateway must fence unknown ownership.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub checkpoint_private: bool,
     pub id: String,
     pub display_name: String,
     pub mode: ModeId,

@@ -17,7 +17,7 @@ afterEach(async () => {
   app.modeCatalog = [];
 });
 
-function render(workspaceId: string) {
+function render(workspaceId: string, open = false, tab = 'terminal') {
   app.workspaces = [
     { id: 'home:chats', hostId: 'home', displayName: 'Chats', kind: 'chat' } as never,
     { id: 'node:ws', hostId: 'node', displayName: 'Project' } as never,
@@ -25,10 +25,13 @@ function render(workspaceId: string) {
     { id: 'node:gpu', hostId: 'node', displayName: 'GPU', kind: 'chat', mode: 'scratch' } as never,
     { id: 'node:checkout', hostId: 'node', displayName: 'Checkout', mode: 'plain' } as never,
   ];
-  app.sessionState = { session: { id: 's', workspaceId } } as never;
+  app.sessionState = {
+    session: { id: 's', workspaceId },
+    control: { heldByCurrentClient: false },
+  } as never;
   target = document.createElement('div');
   document.body.append(target);
-  component = mount(SidePanel, { target, props: { open: false, tab: 'terminal' } });
+  component = mount(SidePanel, { target, props: { open, tab: tab as never } });
   flushSync();
   const tabs = Array.from(target.querySelectorAll('[role="tab"]'));
   return {
@@ -58,20 +61,26 @@ it('keeps every tab for directory workspaces', () => {
   expect(directory.active).toBe('Terminal');
 });
 
-it('shows Git only with a repository and the terminal only in a workspace directory', () => {
+it('shows checkpoints for non-repository workspace directories', async () => {
   const plain: ModeInfo = { ...demoModes[1]!, id: 'plain', repository: false };
   app.modeCatalog = [...demoModes, plain];
   // Scratch: one directory per session, no repository.
   expect(render('node:gpu').labels).toEqual(['Files', 'Memory', 'Context', 'Tasks', 'Browser']);
-  unmount(component!);
+  await unmount(component!);
   target!.remove();
   // A workspace directory that is not a repository keeps its terminal.
   expect(render('node:checkout').labels).toEqual([
     'Files',
+    'Checkpoints',
     'Memory',
     'Context',
     'Tasks',
     'Terminal',
     'Browser',
   ]);
+  await unmount(component!);
+  target!.remove();
+  render('node:checkout', true, 'git');
+  expect(target!.textContent).toContain('Checkpoints');
+  expect(target!.textContent).toContain('Reconnect to inspect or prepare a recovery.');
 });

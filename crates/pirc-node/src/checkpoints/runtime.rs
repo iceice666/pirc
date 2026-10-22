@@ -1,4 +1,4 @@
-//! Runner binding and opt-in. No gateway/public API and no agent-chosen roots.
+//! Runner capture opt-in and durable recovery service; no agent-chosen roots.
 use super::{Journal, Limits, Scope};
 use crate::runner::Runner;
 use crate::services::Node;
@@ -12,6 +12,8 @@ use std::sync::Arc;
 pub struct CaptureService {
     pub journal: Arc<Journal>,
     enabled: BTreeSet<String>,
+    inherited: std::sync::RwLock<BTreeSet<String>>,
+    pub(super) continuation_gate: tokio::sync::Mutex<()>,
 }
 
 #[derive(Deserialize)]
@@ -24,21 +26,30 @@ struct Begin {
 
 impl CaptureService {
     pub fn configured(config: &NodeConfig, env: &Env) -> Result<Option<Arc<Self>>, String> {
-        let Some(value) = env.get("PIRC_CHECKPOINT_WORKSPACES") else {
-            return Ok(None);
-        };
+        let value = env.get("PIRC_CHECKPOINT_WORKSPACES").unwrap_or("[]");
         let enabled: BTreeSet<String> = serde_json::from_str(value).map_err(|_| {
             "PIRC_CHECKPOINT_WORKSPACES must be a JSON array of workspace ids".to_owned()
         })?;
         if enabled.len() > 1000 || enabled.iter().any(|s| s.is_empty() || s.len() > 200) {
             return Err("invalid checkpoint workspace ids".into());
         }
-        if enabled.is_empty() {
+        // Disabling future capture must not strand already adopted workspaces.
+        // A fresh opt-out still creates no store; existing private journals keep
+        // their recovery execution authority and retained evidence available.
+        if enabled.is_empty()
+            && !config
+                .state_dir
+                .join("checkpoints/index.sqlite")
+                .try_exists()
+                .map_err(super::err)?
+        {
             return Ok(None);
         }
         Ok(Some(Arc::new(Self {
             journal: Arc::new(Journal::open(&config.state_dir, Limits::default())?),
             enabled,
+            inherited: Default::default(),
+            continuation_gate: tokio::sync::Mutex::new(()),
         })))
     }
 
@@ -50,8 +61,47 @@ impl CaptureService {
         super::recovery::RecoveryFactory::new(self.journal.clone(), limits)
     }
 
+    pub(super) fn inherit(&self, id: &str, source: &str) {
+        if self.enabled(source) {
+            self.inherited
+                .write()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(id.into());
+        }
+    }
+    pub(crate) fn load_inherited(&self, db: &rusqlite::Connection) -> crate::error::ApiResult<()> {
+        let mut statement=db.prepare("SELECT w.workspace_id,i.scope_json FROM checkpoint_workspaces w JOIN checkpoint_intents i ON i.job=w.job")?;
+        let rows: Vec<(String, String)> = statement
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<rusqlite::Result<_>>()?;
+        let mut pending = rows;
+        loop {
+            let before = pending.len();
+            pending.retain(|(id, json)| {
+                let Ok(scope) = serde_json::from_str::<super::Scope>(json) else {
+                    return true;
+                };
+                if self.enabled(&scope.workspace) {
+                    self.inherit(id, &scope.workspace);
+                    false
+                } else {
+                    true
+                }
+            });
+            if pending.len() == before {
+                break;
+            }
+        }
+        Ok(())
+    }
+
     pub fn enabled(&self, workspace: &str) -> bool {
         self.enabled.contains(workspace)
+            || self
+                .inherited
+                .read()
+                .unwrap_or_else(|e| e.into_inner())
+                .contains(workspace)
     }
 
     pub(crate) async fn maintenance(self: Arc<Self>, mut stop: tokio::sync::watch::Receiver<bool>) {

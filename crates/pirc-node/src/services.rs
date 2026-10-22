@@ -62,6 +62,7 @@ pub struct Services {
     // runner
     pub writes: WriteBroker,
     pub checkpoints: Option<Arc<crate::checkpoints::runtime::CaptureService>>,
+    pub(crate) recovery_roots: RwLock<BTreeMap<String, String>>,
     pub branches: BranchCache,
     pub agent_gateway: AgentGateway,
     pub inference: InferenceServer,
@@ -110,7 +111,15 @@ impl Services {
         &self,
         workspace: &crate::store::Workspace,
     ) -> crate::error::ApiResult<Mode> {
-        let mode = self.mode(&workspace.mode)?;
+        let mut mode = self.mode(&workspace.mode)?;
+        if self
+            .recovery_roots
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .contains_key(&workspace.id)
+        {
+            mode.workspace_memory = false;
+        }
         let state = self.config.state_dir.canonicalize().map_err(|_| {
             crate::error::ApiError::new(
                 409,
@@ -124,7 +133,15 @@ impl Services {
         let managed = actual == expected;
         let compatible = match mode.workdir {
             pirc_protocol::mode::Workdir::PerSession => managed,
-            pirc_protocol::mode::Workdir::Workspace => !actual.starts_with(&state),
+            pirc_protocol::mode::Workdir::Workspace => {
+                !actual.starts_with(&state)
+                    || self
+                        .recovery_roots
+                        .read()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .get(&workspace.id)
+                        == Some(&workspace.canonical_path)
+            }
         };
         if !compatible {
             return Err(crate::error::ApiError::new(
@@ -236,10 +253,18 @@ impl Services {
         let router = Router::new(
             crate::app::routes(&config)
                 .into_iter()
-                .chain(crate::panels::routes()),
+                .chain(crate::panels::routes())
+                .chain(crate::checkpoints::api::routes()),
         );
         let (terminate, _) = watch::channel(false);
         let checkpoints = crate::checkpoints::runtime::CaptureService::configured(&config, &env)?;
+        if let Some(service) = &checkpoints {
+            service
+                .load_inherited(&db.lock())
+                .map_err(|e| e.startup_text())?;
+        }
+        let recovery_roots =
+            crate::checkpoints::continuation::roots(&db.lock()).map_err(|e| e.startup_text())?;
         let node = Arc::new_cyclic(|weak: &WeakNode| Services {
             config,
             env,
@@ -252,6 +277,7 @@ impl Services {
             router,
             writes: WriteBroker::new(weak.clone()),
             checkpoints,
+            recovery_roots: RwLock::new(recovery_roots),
             branches: BranchCache::new(),
             agent_gateway: AgentGateway::new(weak.clone()),
             inference: InferenceServer::new(weak.clone()),

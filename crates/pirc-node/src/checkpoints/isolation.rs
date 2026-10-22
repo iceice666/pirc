@@ -22,6 +22,7 @@ pub struct RecoveryIsolation {
     device: u64,
     inode: u64,
     fence: i64,
+    adopted: bool,
     source_scope: Scope,
     source_revision: String,
     source_git: Option<std::collections::BTreeSet<String>>,
@@ -73,16 +74,18 @@ impl RecoveryIsolation {
         }
     }
     pub(crate) fn constrain(&self, input: &mut SessionPolicyInput) -> Result<()> {
-        let source = snapshot::scan(
-            &self.source_scope,
-            &self.limits,
-            self.file_limit,
-            self.source_git.as_ref(),
-        )?;
-        if source.fingerprint != self.source_revision {
-            return Err(err(
-                "source changed before isolated execution; refresh the recovery",
-            ));
+        if !self.adopted {
+            let source = snapshot::scan(
+                &self.source_scope,
+                &self.limits,
+                self.file_limit,
+                self.source_git.as_ref(),
+            )?;
+            if source.fingerprint != self.source_revision {
+                return Err(err(
+                    "source changed before isolated execution; refresh the recovery",
+                ));
+            }
         }
         let meta = std::fs::symlink_metadata(&self.root).map_err(err)?;
         if !meta.is_dir()
@@ -277,6 +280,7 @@ impl RecoveryFactory {
             device: out.device,
             inode: out.inode,
             fence: expected_revision + 1,
+            adopted: false,
             source_scope: scope,
             source_revision: job.manifest.source_revision,
             source_git: git,
@@ -284,5 +288,88 @@ impl RecoveryFactory {
             file_limit: self.journal.limits.file_bytes,
             _lease: Arc::new(lease),
         })
+    }
+}
+
+impl RecoveryFactory {
+    /// Only the trusted Node's durable adoption mapping may invoke this. Once
+    /// adopted, the candidate is the user's independent workspace: original
+    /// edits no longer invalidate it or trigger recopying/overwriting it.
+    pub(crate) async fn reopen_adopted(
+        &self,
+        scope: Scope,
+        id: String,
+        expected_root: PathBuf,
+    ) -> Result<RecoveryIsolation> {
+        let factory = self.clone();
+        tokio::task::spawn_blocking(move || {
+            let journal = &factory.journal;
+            let job = journal.recovery_job(&scope, &id)?;
+            let claimed: bool = journal
+                .lock()?
+                .query_row(
+                    "SELECT claimed FROM recovery_jobs WHERE id=?1",
+                    [&id],
+                    |r| r.get(0),
+                )
+                .map_err(err)?;
+            if !claimed || !matches!(job.state.as_str(), "opened" | "stale") {
+                return Err(err("recovery workspace has not been adopted"));
+            }
+            let root = journal.root.join("workspaces").join(&id).join("root");
+            if root != expected_root {
+                return Err(err("adopted recovery root binding changed"));
+            }
+            let lease = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .custom_flags(nix::libc::O_NOFOLLOW | nix::libc::O_CLOEXEC | nix::libc::O_NONBLOCK)
+                .open(
+                    root.parent()
+                        .ok_or_else(|| err("invalid recovery root"))?
+                        .join("writer.lock"),
+                )
+                .map_err(err)?;
+            let m = lease.metadata().map_err(err)?;
+            if !m.is_file()
+                || m.nlink() != 1
+                || m.uid() != nix::unistd::getuid().as_raw()
+                || m.mode() & 0o077 != 0
+            {
+                return Err(err("unsafe recovery writer lock"));
+            }
+            rustix::fs::flock(&lease, rustix::fs::FlockOperation::NonBlockingLockExclusive)
+                .map_err(|_| err("Recovery workspace already has an active writer group"))?;
+            let m = std::fs::symlink_metadata(&root).map_err(err)?;
+            if !m.is_dir()
+                || (m.dev(), m.ino()) != (job.manifest.output_device, job.manifest.output_inode)
+            {
+                return Err(err("adopted recovery workspace identity changed"));
+            }
+            journal
+                .lock()?
+                .execute(
+                    "UPDATE recovery_jobs SET revision=revision+1 WHERE id=?1",
+                    [&id],
+                )
+                .map_err(err)?;
+            Ok(RecoveryIsolation {
+                root,
+                source: scope.root.clone(),
+                source_policy: scope.policy.clone(),
+                device: m.dev(),
+                inode: m.ino(),
+                fence: job.revision + 1,
+                adopted: true,
+                source_scope: scope,
+                source_revision: job.manifest.source_revision,
+                source_git: None,
+                limits: job.manifest.limits,
+                file_limit: journal.limits.file_bytes,
+                _lease: Arc::new(lease),
+            })
+        })
+        .await
+        .map_err(err)?
     }
 }

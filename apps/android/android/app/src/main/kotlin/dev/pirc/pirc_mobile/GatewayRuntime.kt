@@ -977,6 +977,9 @@ class GatewayRuntime private constructor(val context: Context) {
                                     stopSessionWatch(entry.sessionId, release = false)
                                     return@collect
                                 }
+                                if (event == TimelineEvent.CheckpointsChanged) {
+                                    emitSessionWatch(entry, "checkpoints_changed", null)
+                                }
                                 if (event is TimelineEvent.PanelChanged) {
                                     emitSessionWatch(entry, "panelChange", event.sections)
                                 }

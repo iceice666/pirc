@@ -770,6 +770,10 @@ export function normalizeEvent(raw: any): EventEnvelope {
     sequence: raw.sequence ?? 0,
     cursor,
     event,
+    ...(raw.type === 'runner_exit' ||
+    (raw.type === 'pi_event' && raw.data?.type === 'agent_settled')
+      ? { checkpointInvalidation: true }
+      : {}),
   };
 }
 

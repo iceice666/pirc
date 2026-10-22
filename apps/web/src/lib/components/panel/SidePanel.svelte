@@ -83,11 +83,15 @@
   );
   const shownTabs = $derived(
     mode
-      ? tabs.filter(
-          (item) =>
-            (item.id !== 'git' || mode.repository) &&
-            (item.id !== 'terminal' || mode.workdir === 'workspace'),
-        )
+      ? tabs
+          .filter(
+            (item) =>
+              (item.id !== 'git' || mode.repository || mode.workdir === 'workspace') &&
+              (item.id !== 'terminal' || mode.workdir === 'workspace'),
+          )
+          .map((item) =>
+            item.id === 'git' && !mode.repository ? { ...item, label: tr('Checkpoints') } : item,
+          )
       : tabs,
   );
   $effect.pre(() => {
@@ -216,7 +220,12 @@
             {#if item.id === 'files'}
               <FilesTab {sessionId} {openRequest} active={open && tab === 'files'} />
             {:else if item.id === 'git'}
-              <GitTab {sessionId} active={open && tab === 'git'} onopenfile={openFile} />
+              <GitTab
+                {sessionId}
+                repository={mode?.repository ?? false}
+                active={open && tab === 'git'}
+                onopenfile={openFile}
+              />
             {:else if item.id === 'memory'}
               <MemoryTab active={open && tab === 'memory'} />
             {:else if item.id === 'context'}
