@@ -1,6 +1,6 @@
 # Rooms, faces, memory, open loops, workers and sources
 
-[User guides](README.md) · [Assistant memory reference](../architecture/assistant-memory.md)
+[User guides](README.md) · [Memory reference](../architecture/memory.md)
 
 pirc lives in the gateway and talks with you in rooms. This guide covers what it keeps
 between conversations. The reference has the exact rules and routes.
@@ -82,7 +82,7 @@ can come back to them.
   put it in memory: …"); **Not done yet** brings one back.
 
 The engine's Open loops page lists what is open, with the next time of each, and what closed
-recently. A loop pirc opened from something it read (a search, later an email) is marked as
+recently. A loop pirc opened from something it read (a search, an email) is marked as
 such, and never counts as your word for anything it does.
 
 ## When pirc speaks up by itself

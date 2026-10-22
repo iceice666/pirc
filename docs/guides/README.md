@@ -10,8 +10,8 @@
 | [Model backends and logins](model-backends.md)                               | Gateway backend sources, precedence, reloads, subscription logins and credentials                                     |
 | [Browser](browser.md)                                                        | Fetching, interaction, takeover, recording and browser settings                                                       |
 
-[Workspace modes](modes.md) covers gateway-owned mode files, accepted node ids,
-prompt sections, feature/tool restrictions and reload behavior. Dynamic client
-navigation remains a phase-3 follow-up.
+[Workspace modes](modes.md) covers gateway-owned mode files (Work and Scratch),
+accepted node ids, what a node declares it can do, prompt sections, feature/tool
+restrictions and reload behavior.
 
 For environment variables and host prerequisites, use the [gateway](../deploy/gateway.md), [node](../deploy/node.md), and [sandbox/browser deployment](../deploy/sandbox-and-browser.md) references. For pending UI work, see the [mobile follow-ups](../../plans/mobile.md), not the completed design history.

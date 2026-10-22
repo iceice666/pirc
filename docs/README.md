@@ -4,6 +4,7 @@ Start with the [project README](../README.md) for the security model, requiremen
 
 | I want to…                                 | Start here                                                                  |
 | ------------------------------------------ | --------------------------------------------------------------------------- |
+| Talk with pirc in the rooms                | [Rooms, faces, memory, workers and sources](guides/rooms-and-memory.md)     |
 | Configure or use an agent                  | [User guides](guides/README.md)                                             |
 | Deploy, upgrade or recover an installation | [Deployment guide](deploy/README.md)                                        |
 | Understand implementation boundaries       | [Architecture references](architecture/README.md)                           |

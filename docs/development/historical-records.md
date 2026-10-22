@@ -18,7 +18,21 @@ git show af7074fc51742e79c8f0c76a9aaf64f80b414f7e:docs/history/security-audit.md
 git show af7074fc51742e79c8f0c76a9aaf64f80b414f7e:docs/evaluations/ptc/ptc-only.md
 ```
 
-That snapshot also contains the assistant, browser, schedules (`cron.md`), sandbox and old Android client designs, plus the full implementation/validation diaries in `plans/README.md` and `plans/mobile.md`. Current assistant contracts and accepted security decisions are maintained in [assistant memory](../architecture/assistant-memory.md) and [security decisions](../architecture/security-decisions.md).
+That snapshot also contains the assistant, browser, schedules (`cron.md`), sandbox and old Android client designs, plus the full implementation/validation diaries in `plans/README.md` and `plans/mobile.md`. Current memory contracts and accepted security decisions are maintained in [memory](../architecture/memory.md) and [security decisions](../architecture/security-decisions.md).
+
+## Before the rewrite
+
+The rewrite ([plans/rewrite/](../../plans/rewrite/README.md), 2026-10-20 to 2026-10-22) replaced the chat node, chat projects, schedules, memory proposals and the Chat/Work client with the brain in the gateway. The last commit before it removed anything is `c483379`: its `docs/` and `plans/` still describe the old model, including the retired guides (`chat-projects.md`, `schedules.md`, `session-ui.md`), the old queue in `plans/README.md`, `plans/delegation-autonomy.md` and `plans/modes.md`:
+
+```sh
+git ls-tree -r --name-only c483379 -- docs plans
+git show c483379:docs/guides/chat-projects.md
+git show c483379:plans/README.md
+```
+
+The last release of the old model is `v0.9.1` on `main`; the rewrite's branch forks from `v0.9.0` (`a4e3039`) and took the Android renderer fixes from `main` up to `0ee934e` by cherry-pick.
+
+## Earlier plans
 
 Earlier consolidated plans (`assistant.md`, `project-isolation.md`, `backlog.md`, `mobile-audit.md`, `security-audit.md`) can be read with `git show 7677d24:plans/<file>.md`. Prompt customization's baseline is `69ae62c`; the former UI redesign was implemented in `4ce2c40`, `4a3e46f` and `ea76001`. Prompt customization's current contracts are in [Prompt and Context](../architecture/prompt-context.md).
 

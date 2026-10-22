@@ -1,20 +1,49 @@
 # Upgrades
 
-## Next release (the rewrite): rooms and a new gateway database
+## 0.10.0+harmony (the rewrite): pirc lives in the gateway
 
-The gateway starts a new database, `$PIRC_STATE_DIR/pirc.sqlite`, from nothing
-(plans/rewrite/decisions.md #14). An existing `gateway.sqlite` is left exactly
-as it is, never read or changed, and the gateway logs one line saying so; back
-it up or delete it when you choose. Nothing moves over: pair devices again,
-enable notifications again, and nodes re-register their workspaces (sessions
-already on a node stay on its disk and are not re-imported). A
-`PIRC_DATABASE_PATH` that points at the old file is refused; unset it or point
-it at a new path. Nodes keep their own databases.
+The rewrite does not upgrade old state: the gateway starts again from nothing,
+and leaves the old database where it is. To move from 0.9.x:
 
-The web opens on the rooms at `/` (`?room=<id>`); workspaces and sessions moved
-to `/engine` (`/engine?session=<id>`, `/engine?open=memory`). Reverse proxies
-need the SPA fallback for `/engine` too (docs/deploy/reverse-proxy.md already
-falls back to `index.html` for every path).
+1. Upgrade the gateway and every node together. The node protocol is **15**;
+   the gateway closes a link of any other version (4426). The node
+   database migrates to schema 2002 on first start (an older node refuses it).
+2. The gateway starts a new database, `$PIRC_STATE_DIR/pirc.sqlite`
+   (plans/rewrite/decisions.md #14). An existing `gateway.sqlite` is left
+   exactly as it is, never read or changed, and the gateway logs one line saying
+   so; back it up or delete it when you choose. A `PIRC_DATABASE_PATH` that
+   points at the old file is refused; unset it or point it at a new path.
+   Nothing moves over: pair phones again, enable notifications again, and let
+   nodes re-register their workspaces. Sessions already on a node stay on its
+   disk and are not re-imported. USER and MEMORY of the old assistant, chat
+   projects and schedules are not converted; tell pirc again what matters.
+3. Remove the chat node. `PIRC_CHAT` is refused, and on NixOS
+   `services.pirc.chat` and `chatPackage` are gone. Copy `SOUL.md` and
+   `CHAT.md` to the gateway's `PIRC_CONFIG_DIR` (on NixOS,
+   `services.pirc.soulPrompt` / `chatPrompt` now link them there). See
+   [gateway configuration](gateway.md#the-brain) for `brain.json`,
+   `PIRC_WAKES_PER_DAY` and `PIRC_TIMEZONE`.
+4. Add `modes/scratch.md` to an existing modes directory
+   (`pirc-gateway modes --print-defaults` prints it) and reload, or the scratch
+   workspaces stay unavailable. Mode files that name the removed capabilities
+   (`assistant`, `delegate`, `schedule_scope`, `project_instructions`,
+   `project_files`, `projects`, `delete_sessions`) or tools (`delegate`,
+   `delegation_status`, `memory_note`, `memory_search`) no longer load.
+5. The web opens on the rooms at `/` (`?room=<id>`); workspaces and sessions
+   are under `/engine` (`/engine?session=<id>`, `/engine?open=memory`), so
+   reverse proxies need the SPA fallback for `/engine` too
+   ([reverse proxy](reverse-proxy.md) already falls back to `index.html` for
+   every path). Update the Android app with the gateway: it follows the new
+   API and no longer opens session conversations.
+6. Add sources (mail, calendars, Moodle) in Settings → Models & sources; their
+   credentials go to `$PIRC_STATE_DIR/sources/secrets.json`, which backups
+   must include ([backup and recovery](backup-and-recovery.md)).
+
+### If you ran a development build of the rewrite
+
+Each plan of the rewrite migrated `pirc.sqlite` one schema further; an older
+gateway refuses a newer schema. A gateway from the end of the rewrite migrates
+any of them in order.
 
 The brain answers in the rooms (plans/rewrite/02-brain-host.md): the gateway
 now runs an agent loop itself, with the default model and no node. A
@@ -34,8 +63,6 @@ whenever a gateway changes how it indexes). An older gateway refuses schema 3.
 `PIRC_MEMORY_NOTE_CHARS` is gone; `PIRC_MEMORY_USER_CHARS` is now the
 preference budget. The memory routes moved: `/api/memory/entries/:id/*` is
 `/api/memory/preferences/:id/*`, and facts are under `/api/memory/records`.
-The Android app's memory settings still read the old shape until
-plans/rewrite/12-android.md.
 
 The brain keeps open loops (plans/rewrite/04-open-loops.md). On first start
 `pirc.sqlite` migrates to schema 4: the `open_loops` table, and

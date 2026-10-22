@@ -1,6 +1,6 @@
 # Workspace modes
 
-[Guides](README.md) · [Implementation plan](../../plans/modes.md)
+[Guides](README.md) · [Nodes as capabilities](../../plans/rewrite/08-nodes.md)
 
 Workspace modes are gateway-managed combinations of capabilities, prompt
 sections, features and tools. Work (`directory`) and Scratch (`scratch`) are
@@ -15,8 +15,8 @@ the node enforces in the agent and its sandbox (decided 2026-10-21,
 [plans/rewrite/08-nodes.md](../../plans/rewrite/08-nodes.md)); no mode file can
 widen that.
 
-Web and Android list workspaces under **Work**, grouped by device; a
-workspace whose mode is missing from the catalog appears under Work, read-only.
+The engine (web and Android) lists workspaces grouped by device; a workspace
+whose mode is missing from the catalog is listed read-only.
 Panels and settings follow capabilities: Git with `repository`, terminals with
 `workdir: workspace`; the session noun comes from `ui.noun`. **Add workspace**
 offers the modes the chosen device accepts and asks for a path only for

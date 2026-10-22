@@ -12,7 +12,7 @@ The gateway refuses to start when a required value is missing or when it sees a 
 | `PIRC_PORT`          | no       | `8787`               | Listen port.                                                                       |
 | `PIRC_STATE_DIR`     | no       | `./.state`           | State directory (created `0700`). Set it explicitly in production.                 |
 | `PIRC_DATABASE_PATH` | no       | `$STATE/pirc.sqlite` | SQLite file. A file that is not pirc's (an old `gateway.sqlite`) is refused.       |
-| `PIRC_UPLOADS_DIR`   | no       | `$STATE/uploads`     | Created but uploads are stored on nodes; leave the default.                        |
+| `PIRC_UPLOADS_DIR`   | no       | `$STATE/uploads`     | Files attached to room messages. Session uploads are stored on their nodes.        |
 
 ## Browser authentication
 
@@ -91,13 +91,14 @@ The gateway runs the brain, the agent that answers in the rooms ([reference](../
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SOUL.md`    | Its persona, replacing the built-in identity. At most 8000 characters. Editable in the web UI unless it is a Nix store link, a symlink or read-only. |
 | `CHAT.md`    | House rules for talking in the rooms, after the persona. Same limits.                                                                                |
-| `brain.json` | Settings: `{"debounceSeconds": 3}`, how long it waits after someone's last message or keystroke (0 to 60). Plan 03's preferences take it over.       |
+| `brain.json` | Settings: `{"debounceSeconds": 3}`, how long it waits after someone's last message or keystroke (0 to 60).                                           |
 
-| Variable                     | Default  | Meaning                                                                                                    |
-| ---------------------------- | -------- | ---------------------------------------------------------------------------------------------------------- |
-| `PIRC_BRAIN_TURN_TIMEOUT_MS` | `600000` | A turn running longer is stopped, with a line in its room.                                                 |
-| `PIRC_BRAIN`                 | `true`   | `false` starts no brain (development only: rooms become plain chat, nothing answers in them).              |
-| `PIRC_WAKES_PER_DAY`         | `24`     | Times the brain may wake up on its own per day, from midnight in `PIRC_TIMEZONE`. `0` turns waking up off. |
+| Variable                     | Default  | Meaning                                                                                                                               |
+| ---------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `PIRC_BRAIN_TURN_TIMEOUT_MS` | `600000` | A turn running longer is stopped, with a line in its room.                                                                            |
+| `PIRC_BRAIN`                 | `true`   | `false` starts no brain (development only: rooms become plain chat, nothing answers in them).                                         |
+| `PIRC_WAKES_PER_DAY`         | `24`     | Times the brain may wake up on its own per day, from midnight in `PIRC_TIMEZONE`. `0` turns waking up off.                            |
+| `PIRC_TIMEZONE`              | system   | IANA time zone of the household: the wakes' day, loop times without a zone, one move suggestion a day. Else `$TZ`, else the system's. |
 
 Each room's conversation with the brain is kept in `$PIRC_STATE_DIR/brain/rooms/<room>/`; back it up with the rest of the state directory.
 
@@ -120,7 +121,7 @@ read-only provisioned config, supply the modes directory and its files before
 startup. `pirc-gateway modes --print-defaults` prints the shipped files without
 starting the daemon.
 
-## Assistant and notifications
+## Memory, web search and notifications
 
 | Variable                                          | Default              | Meaning                                                                                                                                                  |
 | ------------------------------------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -140,7 +141,7 @@ starting the daemon.
 
 ## Signals and lifecycle
 
-- `SIGHUP`: reload `models.json`.
+- `SIGHUP`: reload `models.json` and the mode files.
 - `SIGTERM`: graceful shutdown. On the next start, unfinished runs become `interrupted`, pending interactions `stale`, leases are dropped and commands whose acknowledgement was lost become `outcome_unknown` (never retried automatically).
 - Logs use the native gateway’s text format. They contain request metadata, never provider bodies or tokens.
 

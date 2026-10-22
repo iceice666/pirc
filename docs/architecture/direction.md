@@ -2,9 +2,11 @@
 
 [Architecture references](README.md) · [All documentation](../README.md) · [Open work](../../plans/README.md)
 
+**已實作**（2026-10-22，[plans/rewrite/](../../plans/rewrite/README.md) 01–13）：現在的行為見 [rooms-and-memory](../guides/rooms-and-memory.md) 等 guides 與 [memory](memory.md)；本文件留作當初的方向。
+
 這是一份**方向文件**，不是工作隊列，也不是授權。它寫下 pirc 想變成什麼、用哪些概念描述它、哪些現有原則因此要改。每一項實作都要另外拆成 `plans/` 下的計畫並取得使用者同意；本文件不授權任何部署、刪除狀態或安全邊界的變更。
 
-整理自 2026-10-19 的討論。當時的現況參照：[Chat projects](../guides/chat-projects.md)、[Session navigation](../guides/session-ui.md)、[Observational memory](observational-memory.md)、[Security decisions](security-decisions.md)、[Delegation autonomy](../../plans/delegation-autonomy.md)、[Modes](../../plans/modes.md)。
+整理自 2026-10-19 的討論。當時的現況參照：[Observational memory](observational-memory.md)、[Security decisions](security-decisions.md)。
 
 ## 1. 一句話
 
@@ -133,7 +135,7 @@ Discord 的形狀：一個 server（你的 gateway）、很多頻道。
 今天的 coding session 和 delegation，角色不變，關係變清楚：
 
 - **工人沒有人的記憶。** 它只有：任務、人交給它的脈絡（相關的事實、未了結的事、quote 過的你的原話）、repo 的 workspace memory。
-- **人叫工人不問你**（[Delegation autonomy](../../plans/delegation-autonomy.md) 的方向，policy 預設為不出卡）。叫了在房間裡說一聲，附 Stop。
+- **人叫工人不問你**（Delegation autonomy 的方向，policy 預設為不出卡）。叫了在房間裡說一聲，附 Stop。
 - **工人的結果回到房間**：今天的 `deliver` → `assistant-delegation-update` 路徑，就是「它在房間裡回報」。
 - **工人碰到紅線時，問題 relay 進房間**（delegation-autonomy phase 2）。你在房間裡回，不用去工人的 session。
 - 人替工人挑 node（3.2）、挑 workspace（既有的 linked workspace，或 scratch）。
@@ -185,7 +187,7 @@ Discord 的形狀：一個 server（你的 gateway）、很多頻道。
 
 - Node 註冊時**宣告能力**：OS、架構、GPU（型號、數量、顯存）、可用的 workspaces、瀏覽器、terminals、沙箱狀態、閒忙。
 - 人替每個任務**挑手**：「要測 macOS 的東西」→ Apple 的 node；「要跑這個模型」→ 有 NVIDIA 的 node；「要改這個 repo」→ 有那個 workspace 的 node（多個時挑閒的）。挑選是它的判斷，依據是宣告的能力和任務描述；你可以在房間裡指定（「在 mac 上跑」）。
-- 沒有合適的 workspace 時，用 **scratch**（[Modes](../../plans/modes.md) phase 3 的 per-session workspace）。
+- 沒有合適的 workspace 時，用 **scratch**（Modes phase 3 的 per-session workspace）。
 - Node 離線：掛著的任務等它回來（今天 delegation 的 retry 語意），人在房間裡說一聲「mac 不在線，等它回來」。
 - Node 仍然 outbound-only、不監聽、per-node secret；這部分不變。
 - Node 不再有 `chat` role；chat node 退場（第 5 節）。
@@ -214,18 +216,18 @@ Discord 的形狀：一個 server（你的 gateway）、很多頻道。
 
 這一節只列**原則**的改動；物件的退場與遷移在拆 plan 時處理。
 
-| 現有原則                                                 | 改為                                                                                 | 原因                                                           |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------ | -------------------------------------------------------------- |
-| The gateway never runs agents or tools                   | The gateway never runs **sandboxed** tools；它跑那個人，人只有 gateway 側 connectors | 2.1                                                            |
-| Nothing runs unasked                                     | Nothing **writes** unasked                                                           | 2.5、2.6                                                       |
-| Delegation is a human-only operation                     | 人可以自己叫工人；紅線 relay 進房間                                                  | 2.7，[Delegation autonomy](../../plans/delegation-autonomy.md) |
-| Project instructions / USER / MEMORY 在第一次 run 時凍結 | 熱更新，下一個 turn 生效                                                             | 2.2，房間永遠在                                                |
-| 記憶寫入需要審核                                         | 不審核；origin tagging + 事後可撤銷                                                  | 2.4                                                            |
-| Chat node 是一種 node role                               | 退場；人住在 gateway，`SOUL.md` / `CHAT.md` 搬到 gateway                             | 2.1                                                            |
-| Schedule 是你管理的物件，每次 run 開新 session           | 退成未了結的事的實作細節；wake 在同一條 thread                                       | 2.3、2.6                                                       |
-| Session 是第一級物件                                     | 房間是第一級物件；session 退到引擎蓋                                                 | 2.2、第 4 節                                                   |
-| Chat project 是一組設定（instructions / files / links）  | 專案是一張面孔加一個房間；設定變成面孔的角色和地盤                                   | 2.8                                                            |
-| 房間（chat / project）由你建立和整理                     | 主持人也可以建、提議搬家、封存                                                       | 2.2                                                            |
+| 現有原則                                                 | 改為                                                                                 | 原因                     |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------ |
+| The gateway never runs agents or tools                   | The gateway never runs **sandboxed** tools；它跑那個人，人只有 gateway 側 connectors | 2.1                      |
+| Nothing runs unasked                                     | Nothing **writes** unasked                                                           | 2.5、2.6                 |
+| Delegation is a human-only operation                     | 人可以自己叫工人；紅線 relay 進房間                                                  | 2.7，Delegation autonomy |
+| Project instructions / USER / MEMORY 在第一次 run 時凍結 | 熱更新，下一個 turn 生效                                                             | 2.2，房間永遠在          |
+| 記憶寫入需要審核                                         | 不審核；origin tagging + 事後可撤銷                                                  | 2.4                      |
+| Chat node 是一種 node role                               | 退場；人住在 gateway，`SOUL.md` / `CHAT.md` 搬到 gateway                             | 2.1                      |
+| Schedule 是你管理的物件，每次 run 開新 session           | 退成未了結的事的實作細節；wake 在同一條 thread                                       | 2.3、2.6                 |
+| Session 是第一級物件                                     | 房間是第一級物件；session 退到引擎蓋                                                 | 2.2、第 4 節             |
+| Chat project 是一組設定（instructions / files / links）  | 專案是一張面孔加一個房間；設定變成面孔的角色和地盤                                   | 2.8                      |
+| 房間（chat / project）由你建立和整理                     | 主持人也可以建、提議搬家、封存                                                       | 2.2                      |
 
 不變的：單用戶、私網、forward-auth、node outbound-only、沙箱是真正的邊界、auto mode 的 deny/danger、OM、`deliver`、push、linked workspaces、delegation 的機制、「忘掉」的 tombstone 語意、「never delete old state without approval」。
 

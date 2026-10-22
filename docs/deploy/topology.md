@@ -4,10 +4,10 @@
 
 Two native executables implement the gateway and node roles:
 
-| Executable     | Runs on                              | Listens on                                                  | Does                                                                                                                     |
-| -------------- | ------------------------------------ | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `pirc-gateway` | one always-on host                   | `PIRC_HOST:PIRC_PORT` (default `127.0.0.1:8787`), HTTP + WS | Authenticates browsers and phones, indexes sessions, routes requests, runs **all model requests**, keeps memory and push |
-| `pirc-node`    | every machine with coding workspaces | nothing (connects out over one WebSocket)                   | Runs coding agents, side-panel shells, file/Git inspection, uploads and the agents' browser; owns session transcripts    |
+| Executable     | Runs on                     | Listens on                                                  | Does                                                                                                                                                                                                           |
+| -------------- | --------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pirc-gateway` | one always-on host          | `PIRC_HOST:PIRC_PORT` (default `127.0.0.1:8787`), HTTP + WS | Runs the brain; keeps the rooms, faces, memory, open loops, wakes and sources; authenticates browsers and phones; runs **all model requests**; indexes the workers' sessions and routes requests to them; push |
+| `pirc-node`    | every machine pirc works on | nothing (connects out over one WebSocket)                   | The brain's hands: declares what its machine can do, runs workers (coding agents), side-panel shells, file/Git inspection, uploads and the agents' browser; owns session transcripts                           |
 
 The node executable's internal worker commands are not independently deployed services:
 
@@ -20,7 +20,7 @@ The node executable's internal worker commands are not independently deployed se
 
 The Nix gateway package includes the Web UI, but not sandbox/browser runtime. The node includes native sandbox/CDP drivers, but not the Web UI; OAuth runs in the gateway process. Keep every role on the same release/protocol version. The executable split is **not privacy isolation**: OS accounts, filesystem permissions and sandboxing define the protection boundaries.
 
-The gateway runs the brain (the agent that answers in the rooms, with gateway-side tools only) but never runs sandboxed tools, shells or workspace inspection, and never learns real workspace paths. A node never listens on a port; agents reach their node through a Unix socket in the node's state directory.
+There is one gateway and any number of nodes, and no chat node: pirc itself lives in the gateway. The gateway runs the brain (the agent that answers in the rooms, with gateway-side tools only) but never runs sandboxed tools, shells or workspace inspection, and never learns real workspace paths. A node never listens on a port; agents reach their node through a Unix socket in the node's state directory.
 
 ## Who talks to whom
 
@@ -55,19 +55,21 @@ The gateway host has no workspaces (`services.pirc.localNode.enable = false`, or
 
 ## Where state lives
 
-| Data                                                                                     | Process | Location                                                                    |
-| ---------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------- |
-| Rooms and their messages, session index, control leases, command outcomes, device tokens | gateway | `$PIRC_STATE_DIR/pirc.sqlite`, room uploads in `PIRC_UPLOADS_DIR`           |
-| Assistant memory, delegations, push subscriptions                                        | gateway | same database                                                               |
-| Web-managed model backends and subscription logins                                       | gateway | `$PIRC_STATE_DIR/backends/settings.json` (0600)                             |
-| Sources' credentials (mail, calendars, Moodle)                                           | gateway | `$PIRC_STATE_DIR/sources/secrets.json` (0600)                               |
-| VAPID key pair for push (unless given by environment)                                    | gateway | `$PIRC_STATE_DIR/vapid.json`                                                |
-| Session transcripts (the conversation source of truth), runs, interactions               | node    | `$PIRC_STATE_DIR/sessions/<id>/`, `gateway.sqlite`                          |
-| Uploads                                                                                  | node    | `$PIRC_STATE_DIR/uploads/`, and `<workspace>/.pirc/uploads/` for non-images |
-| Workspace memory ledgers (mirrored to the gateway without paths)                         | node    | `$PIRC_STATE_DIR/workspace-memory/`                                         |
-| Browser profiles (logins)                                                                | node    | `$PIRC_STATE_DIR/browser/`                                                  |
-| Agent config, global `AGENTS.md`, skills                                                 | node    | `$PIRC_CONFIG_DIR` (default `~/.config/.pirc`)                              |
-| Node ↔ agent inference socket (random per start)                                        | node    | `$PIRC_STATE_DIR/i-*/socket` (0600)                                         |
+| Data                                                                                                 | Process | Location                                                                    |
+| ---------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------- |
+| Rooms and their messages, session index, control leases, command outcomes, device tokens             | gateway | `$PIRC_STATE_DIR/pirc.sqlite`, room uploads in `PIRC_UPLOADS_DIR`           |
+| The brain's memory, open loops, wakes, faces, workers, sources and what they saw, push subscriptions | gateway | same database                                                               |
+| The brain's conversation in each room                                                                | gateway | `$PIRC_STATE_DIR/brain/rooms/<room>/`                                       |
+| Web-managed model backends and subscription logins                                                   | gateway | `$PIRC_STATE_DIR/backends/settings.json` (0600)                             |
+| Sources' credentials (mail, calendars, Moodle)                                                       | gateway | `$PIRC_STATE_DIR/sources/secrets.json` (0600)                               |
+| VAPID key pair for push (unless given by environment)                                                | gateway | `$PIRC_STATE_DIR/vapid.json`                                                |
+| Session transcripts (the conversation source of truth), runs, interactions                           | node    | `$PIRC_STATE_DIR/sessions/<id>/`, `gateway.sqlite`                          |
+| Uploads                                                                                              | node    | `$PIRC_STATE_DIR/uploads/`, and `<workspace>/.pirc/uploads/` for non-images |
+| Workspace memory ledgers (mirrored to the gateway without paths)                                     | node    | `$PIRC_STATE_DIR/workspace-memory/`                                         |
+| Browser profiles (logins)                                                                            | node    | `$PIRC_STATE_DIR/browser/`                                                  |
+| Scratch directories (one per scratch session, removed after 7 idle days)                             | node    | `$PIRC_STATE_DIR/scratch/sessions/<session>/`                               |
+| Agent config, global `AGENTS.md`, skills                                                             | node    | `$PIRC_CONFIG_DIR` (default `~/.config/.pirc`)                              |
+| Node ↔ agent inference socket (random per start)                                                    | node    | `$PIRC_STATE_DIR/i-*/socket` (0600)                                         |
 
 Both state directories are created with mode `0700`. See [Backup and recovery](backup-and-recovery.md) for what to copy.
 

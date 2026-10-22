@@ -1,6 +1,6 @@
 # Backup and recovery
 
-**0.4.0 cutover:** restore TS 0.3.0 backups only with the old release. Rust requires fresh state; do not import old databases, provider settings, VAPID keys or sessions. See [Upgrades](upgrades.md).
+**The rewrite:** the gateway starts a new `pirc.sqlite` and never reads the old `gateway.sqlite`; restore a backup of the old database only with a release from before the rewrite. **0.4.0 cutover:** restore TS 0.3.0 backups only with the old release. Rust requires fresh state; do not import old databases, provider settings, VAPID keys or sessions. See [Upgrades](upgrades.md).
 
 ## What to back up
 
@@ -28,6 +28,7 @@ Two kinds of state exist, and they are not interchangeable.
 | `uploads/`                    | Uploaded files                                                                            | Images in old messages no longer load.                                                                    |
 | `workspace-memory/`           | Per-repository memory ledgers                                                             | New sessions lose their cross-session notes (the gateway's mirror keeps searchable copies without paths). |
 | `browser/`                    | Browser profiles (logins)                                                                 | Log in again in the agent's browser.                                                                      |
+| `scratch/`                    | Scratch sessions' working directories, removed after `PIRC_SCRATCH_RETENTION_DAYS`        | Nothing to keep: workers report what matters. No need to back it up.                                      |
 
 Workspaces (repositories) are not pirc state; back them up as you already do. `<workspace>/.pirc/` holds project config, uploads copied for the agent and recordings.
 

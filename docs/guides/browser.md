@@ -2,7 +2,7 @@
 
 [User guides](README.md) · [All documentation](../README.md)
 
-Each node gives its agents a real Chromium through [playwright-core](https://playwright.dev). The node owns one browser per workspace, with a persistent profile under `$PIRC_STATE_DIR/browser/`, so a login made once serves every session in that workspace. Each session drives its own tabs.
+Each node gives its agents a real Chromium, driven over the Chrome DevTools Protocol by a native port of the parts of [playwright-core](https://playwright.dev) it needs (nothing JavaScript is installed). The node owns one browser per workspace, with a persistent profile under `$PIRC_STATE_DIR/browser/`, so a login made once serves every session in that workspace. Each session drives its own tabs.
 
 - **Tools**:
   - `web_fetch` renders a URL (JavaScript runs, logins apply) and returns readable markdown, text or HTML, in pages of `maxChars`.
@@ -10,9 +10,9 @@ Each node gives its agents a real Chromium through [playwright-core](https://pla
   - `browser_handoff` asks you to take over, for example to log in or pass a CAPTCHA, and waits until you return control.
   - `browser_record` records a video.
 
-  Snapshots mask password values, and `browser_type` refuses password fields, so logins go through a handoff. Only the node's main agent has the browser (not teammates or subagents), and only `http(s)` URLs open. Auto mode does not judge browser actions; the system prompt tells the agent to ask before consequential submissions.
+  Snapshots mask password values, and `browser_type` refuses password fields, so logins go through a handoff. Only the node's main agent has the browser (not teammates or subagents), and only `http(s)` URLs open. Clicking, typing, choosing or pressing a key on another site is [sending something out](tools.md): the node refuses it until you allow that site, once or for the session.
 
-- **Side panel → Browser** (web and Android):
+- **Engine → a session → Browser** (web and Android):
   - A live JPEG screencast of the session's active tab, streamed only while you watch.
   - **Take over** pauses the agent's browser tools (they wait up to 5 minutes, or for the handoff) and forwards your clicks, scrolling and typing, IME included. **Return control** hands it back.
   - An address bar, tabs, and a **Record** button.
