@@ -715,7 +715,7 @@ fn maybe_consolidate(state: &Shared, agent: &Rc<Agent>) {
 }
 
 /// `workspaceOn`: chats have no repository to hand over; the gateway's
-/// MEMORY serves them (docs/architecture/assistant-memory.md).
+/// MEMORY serves them (docs/architecture/memory.md).
 fn workspace_on(agent: &Agent, config: &MemoryConfig) -> bool {
     config.enabled
         && config.workspace.enabled

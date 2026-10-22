@@ -1,6 +1,6 @@
 <script lang="ts">
   /**
-   * The brain's memory (docs/architecture/assistant-memory.md): your preferences, which
+   * The brain's memory (docs/architecture/memory.md): your preferences, which
    * pirc always has in mind, and the facts it keeps and finds when they matter. Review
    * where each came from, take preferences out or back, and forget for good.
    */

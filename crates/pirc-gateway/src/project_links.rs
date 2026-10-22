@@ -1,6 +1,6 @@
 //! Links from a face to the directory workspaces it is about (its
 //! territory, plans/rewrite/10-faces.md; chat projects owned them before,
-//! docs/architecture/assistant-memory.md). A link is a default and an
+//! docs/architecture/memory.md). A link is a default and an
 //! ordering, never a permission: an unlinked workspace stays reachable.
 //!
 //! - The brain's list of workspaces, as a face, has the face's linked

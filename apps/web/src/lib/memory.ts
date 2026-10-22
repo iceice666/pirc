@@ -1,5 +1,5 @@
 /**
- * The brain's memory, held by the gateway (docs/architecture/assistant-memory.md):
+ * The brain's memory, held by the gateway (docs/architecture/memory.md):
  * preferences (always in its prompt, only on your word) and facts (searchable; the
  * household's, and the repositories' workspace notes).
  */

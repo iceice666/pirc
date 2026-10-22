@@ -228,7 +228,7 @@ CREATE TABLE faces (
 CREATE UNIQUE INDEX faces_one_host ON faces(is_host) WHERE is_host = 1;
 
 -- The directory workspaces a face is about (plan 10; the chat projects'
--- links before, docs/architecture/assistant-memory.md): a default and an
+-- links before, docs/architecture/memory.md): a default and an
 -- ordering, never a permission. No foreign key on workspace_id: a link to a
 -- workspace that went away stays, shown as such. repo is the workspace's
 -- normalized origin, so a link also covers the other clones of its repository.
