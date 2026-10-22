@@ -155,19 +155,22 @@ expression: t.into_value()
   {
     "observed": [
       {
-        "end": 70,
-        "ledgerKey": "<hex16:3>",
+        "end": 26,
+        "ledgerKey": "<hex16:1>",
         "lines": [
           {
+            "type": "cleared"
+          },
+          {
             "digest": "<sha256:10>",
-            "end": 70,
-            "legacyProjection": "<sha256:11>",
-            "previousDigest": "<sha256:10>",
+            "end": 26,
+            "legacyProjection": "<sha256:2>",
+            "previousDigest": "<sha256:3>",
             "type": "integrity",
             "version": 2
           }
         ],
-        "offset": 70,
+        "offset": 0,
         "type": "memory_mirror"
       },
       {
@@ -187,22 +190,19 @@ expression: t.into_value()
         "type": "memory_mirror"
       },
       {
-        "end": 26,
-        "ledgerKey": "<hex16:1>",
+        "end": 70,
+        "ledgerKey": "<hex16:3>",
         "lines": [
           {
-            "type": "cleared"
-          },
-          {
-            "digest": "<sha256:12>",
-            "end": 26,
-            "legacyProjection": "<sha256:2>",
-            "previousDigest": "<sha256:3>",
+            "digest": "<sha256:11>",
+            "end": 70,
+            "legacyProjection": "<sha256:12>",
+            "previousDigest": "<sha256:11>",
             "type": "integrity",
             "version": 2
           }
         ],
-        "offset": 0,
+        "offset": 70,
         "type": "memory_mirror"
       }
     ],

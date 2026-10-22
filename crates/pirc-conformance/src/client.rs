@@ -186,6 +186,30 @@ impl WebSocket {
             .expect("WebSocket send");
     }
 
+    /// Wait for the server to enter its receive loop. Return preceding JSON
+    /// frames so callers can preserve them when their scenario needs them.
+    pub async fn ping(&mut self) -> Vec<Value> {
+        self.stream
+            .send(Message::Ping(Vec::new().into()))
+            .await
+            .unwrap();
+        let mut frames = Vec::new();
+        tokio::time::timeout(TIMEOUT, async {
+            loop {
+                match self.stream.next().await {
+                    Some(Ok(Message::Pong(_))) => return frames,
+                    Some(Ok(Message::Text(text))) => {
+                        frames.push(serde_json::from_str(&text).expect("JSON frame"));
+                    }
+                    Some(Ok(Message::Ping(_))) => {}
+                    other => panic!("socket ended before pong: {other:?}"),
+                }
+            }
+        })
+        .await
+        .expect("timed out waiting for a WebSocket pong")
+    }
+
     /// The next JSON text frame, or `Err` with the close frame (code, reason)
     /// once the peer closes.
     pub async fn next_json(&mut self) -> Result<Value, (u16, String)> {

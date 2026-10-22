@@ -91,6 +91,9 @@ async fn device_token_lifecycle() {
         .connect(&format!("/api/events?sessionId={session}"), &device)
         .await
         .open();
+    // The upgrade completes before event-socket authentication and tracking.
+    // A pong proves the receive loop has started before we revoke the token.
+    socket.ping().await;
     let revoked = api
         .send(
             "DELETE",

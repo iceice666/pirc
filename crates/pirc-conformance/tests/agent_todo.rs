@@ -124,6 +124,9 @@ async fn agent_todo_commands() {
         .call(json!({ "type": "prompt", "message": "work" }))
         .await;
     r.note("a busy run: response", response);
+    // Admission responds before the run starts. Wait for its gated request so
+    // startup events precede the first steer, rather than racing either steer.
+    agent.wait_for_request().await;
     send_until(&mut agent, &mut r, "steer", "/todo add Later", "notify").await;
     send_until(&mut agent, &mut r, "steer", "/todo list", "notify").await;
     gate.open();

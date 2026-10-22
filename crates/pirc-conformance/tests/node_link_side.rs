@@ -826,7 +826,9 @@ async fn node_link_side_mirror() {
         ))
         .await;
     gw.wait(|frame| frame["type"] == "activity").await;
-    let mirrored: Vec<Value> = gw.link.skipped.drain(..).filter(is_mirror).collect();
+    let mut mirrored: Vec<Value> = gw.link.skipped.drain(..).filter(is_mirror).collect();
+    // Directory iteration order is not part of the mirror protocol.
+    mirrored.sort_by_key(|frame| frame["ledgerKey"].as_str().unwrap_or_default().to_owned());
     t.note(
         "registered again: only what the gateway lacks",
         json!(mirrored),

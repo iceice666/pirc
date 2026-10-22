@@ -543,6 +543,11 @@ async fn node_panels_state() {
         json!({ "type": "prompt", "message": "Say hello" }),
     )
     .await;
+    // agent_settled precedes repository extraction; snapshot the idle panel.
+    p.poll("/panel/state", |body| {
+        body["workspaceMemory"]["extracting"] == false
+    })
+    .await;
     p.get("state with a live agent", "/panel/state").await;
     let context = p
         .api
