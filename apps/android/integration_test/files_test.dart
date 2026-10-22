@@ -9,7 +9,6 @@ import 'package:integration_test/integration_test.dart';
 import 'package:pirc_mobile/live/app.dart';
 import 'package:pirc_mobile/live/files_pane.dart';
 import 'package:pirc_mobile/live/side_panel.dart';
-import 'package:pirc_mobile/live/context_pane.dart';
 import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/theme.dart';
 
@@ -69,14 +68,13 @@ void main() {
           () =>
               c.sessionId == id &&
               c.state.isNotEmpty &&
-              find.byTooltip('Show side panel').evaluate().isNotEmpty,
+              find.byType(NativeSidePanel).evaluate().isNotEmpty,
           'open chat and present its panel action',
         );
         expect(
           find.byType(NativeSidePanel),
-          findsNothing,
-        ); // phone never restores a covering panel
-        await tap(find.byTooltip('Show side panel'));
+          findsOneWidget,
+        ); // a session is its panes (plan 12 decision 4)
         await until(
           () =>
               find.byType(FilesPane).evaluate().isNotEmpty &&
@@ -261,34 +259,8 @@ void main() {
           () => find.text('Binary file — not shown.').evaluate().isNotEmpty,
           'binary response',
         );
-        await tap(find.byTooltip('Hide side panel'));
-        await until(
-          () => c.canWrite && c.models.isNotEmpty,
-          'context request ready',
-        );
-        c.editDraft('Inspect this isolated request context.');
-        await c.send('prompt');
-        await until(
-          () => !c.running && c.messages.any((m) => m['role'] == 'assistant'),
-          'context request completed',
-        );
-        await tap(find.byTooltip('Show side panel'));
-        await tap(find.byKey(const ValueKey('panel-tab-context')));
-        await until(
-          () =>
-              find.byType(ContextPane).evaluate().isNotEmpty &&
-              find.textContaining('Estimated input:').evaluate().isNotEmpty,
-          'real context snapshot',
-        );
-        await t.ensureVisible(find.text('Copy all'));
-        await tap(find.text('Copy all'));
-        await until(
-          () => find.text('Copied system prompt.').evaluate().isNotEmpty,
-          'native context clipboard',
-        );
-        debugPrint(
-          'REAL_GATEWAY:side-panel-native-context-and-layout-preferences',
-        );
+        // The context pane needs a run, sent from a room now (plan 12
+        // decision 4): not exercised from the engine any more.
         debugPrint(
           'REAL_GATEWAY:files-native-directory-markdown-lines-svg-binary',
         );

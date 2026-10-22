@@ -53,7 +53,8 @@ Android 目前沒有房間程式碼（`lib/` 與 Kotlin 都沒有 `/api/rooms`�
   - 2026-10-22 完成：`6a36f14` 刪兩套 matrix fixture 與六個工具；`a0b5e7c` 再刪退場畫面的 fixture（composer、conversation-\*、docks、dock-parsers、interactions、memory、timeline、timeline-image、timeline-models）與它們的擷取 / 比對工具，`capture_web.mjs` 收掉 interactions / timeline / docks / composer / memory，`real_gateway.ts` 的 history 模式改為明確報錯。renderer 類 fixture 不動。
 - [x] 刪 00 沒刪乾淨的舊畫面與測試：`lib/live/{attention,interaction,interaction_card}.dart`、Kotlin `core/Control.kt`，測試 `attention_test.dart`、`attention_history_resume_test.dart`、`interaction_parity_test.dart`、`interaction_remote_resolution_test.dart`；`workspace_*` 隨面孔頁重寫再收。
   - 2026-10-22 完成（`a0b5e7c`、`3bdf33f`）：`attention` / `interaction` / `interaction_card` 與四個測試刪除；`Control.kt` 只剩 `ControlLease`（engine 的 terminal 等 pane 仍要 lease，所以不整檔刪）。`workspace_*` 沒刪：面孔頁的地盤只選 workspace，引擎蓋仍用 workspace 頁瀏覽 session，留待之後跟 web 的 `WorkspaceDetail` 對齊。
-- [ ] `flutter analyze`、unit/widget suite、Kotlin unit tests；integration tests 中綁舊導航的改寫（決定 6：由使用者跑）。
+- [x] `flutter analyze`、unit/widget suite、Kotlin unit tests；integration tests 中綁舊導航的改寫（決定 6：由使用者跑）。
+  - 2026-10-22 完成：`flutter analyze` 0 issues；`flutter test` +4961 / −362，失敗全在開工前的基準清單內（缺 macOS Arial / Menlo），沒有新失敗；Kotlin unit tests 262 過；instrumented tests 可編譯。integration tests：只按「Show side panel」再用 pane 的 12 個改成直接用 pane（panes 就是 session 的頁面）；靠 session composer 產生內容的 8 個刪除（`gateway_smoke`（它的 `dev/fake-gateway.ts` 早已不在）、`run_control`、`attachments`、`attachments_picker`、`android_input_rotation`、`platform_lifecycle`、`mermaid_gantt`、`tasks`）與兩支 runner 腳本；`files_test` 去掉靠 composer 產生 context 的尾段。房間流程的 integration tests 還沒寫，列在 `plans/mobile.md`。模擬器與真機都沒跑（使用者跑）。文件：`apps/android/README.md`（房間、引擎蓋、本機靜音、驗證分工）、`plans/mobile.md`（依 existing-plans §5 改寫驗收清單與 corpus 說明）。
 
 ## 驗證
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:pirc_mobile/live/app.dart';
+import 'package:pirc_mobile/live/side_panel.dart';
 import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/live/observational_memory_pane.dart';
 import 'package:pirc_mobile/theme.dart';
@@ -65,10 +66,9 @@ void main() {
           () =>
               c.sessionId == id &&
               c.state.isNotEmpty &&
-              find.byTooltip('Show side panel').evaluate().isNotEmpty,
+              find.byType(NativeSidePanel).evaluate().isNotEmpty,
           'open fixture',
         );
-        await tap(find.byTooltip('Show side panel'));
         await tap(find.byKey(const ValueKey('panel-tab-memory')));
         await until(
           () =>

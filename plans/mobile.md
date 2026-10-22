@@ -15,19 +15,24 @@ are available from Git through Historical records, not repeated here.
       font/ink coverage, synchronous DOM write/read layout, inline-fragment
       measurements and common-library coverage. Broader image/framework flows
       remain unverified; preserve explicit unsupported errors.
-- [ ] **Physical phone/tablet acceptance:** use a real account for pairing,
-      streaming/cancel/reconnect, panels, management consent and simultaneous
-      web/app confirmations. Check keyboard (including CJK IME), safe areas,
-      rotation, background, low memory, OEM permissions/notifications, terminal
-      HTTPS asset origin and a release build. Verify multi-line USER/delegation
-      confirmation bodies and labels, PTC approval declines/rendering, browser
-      takeover tap mapping/IME/drag scrolling and WebM playback.
-- [ ] **Project deletion interruption acceptance:** controlled HTTP failures
-      cover partial-deletion retry UI, but physical-device/network-interruption
-      recovery is unverified. Keep real-account/provider subscription acceptance
-      separate from synthetic management-consent tests.
-- [ ] **Remote background push:** real relay/delivery remains unverified. The
-      user declined third-party relay testing; do not run it without authorization.
+- [ ] **Physical phone/tablet acceptance of the rooms** ([plan 12](rewrite/12-android.md)):
+      use a real account for pairing; a room's streaming replies, reconnect and
+      typing; a notification opening its room; inline Reply (the message waits
+      the usual 3 s before the brain answers); mute on this phone; a worker's
+      thread and its red-line question answered in the room; the engine's six
+      tabs and links into them; panes, management consent, terminal and browser
+      takeover (tap mapping, IME, drag scrolling) and WebM playback. Check the
+      keyboard (including CJK IME), safe areas, rotation, background, low memory,
+      OEM permissions/notifications, terminal HTTPS asset origin and a release
+      build.
+- [ ] **Integration tests after plan 12:** the tests that drove the session
+      composer (run control, session attachments, input rotation, drafts across
+      lifecycle, the smoke test whose `dev/fake-gateway.ts` was already gone,
+      the Gantt and `/bg` task flows) were removed with the transcript. Room
+      flows still need integration tests against an isolated gateway.
+- [ ] **Remote background push:** real relay/delivery remains unverified, now for
+      notifications that open rooms. The user declined third-party relay testing;
+      do not run it without authorization.
 - [ ] **Distribution decisions:** production signing and sideload-only versus
       F-Droid/Play; token rotation before the 30-day expiry versus monthly
       re-pairing, including the near-expiry warning (A7); native Context inspector
@@ -36,10 +41,12 @@ are available from Git through Historical records, not repeated here.
 
 ## Deferred presentation and compatibility boundaries
 
-The frozen visual corpus is web revision `bd3d909`. Small visual differences,
-uncommon syntax and the legacy audit's fine-grained layout/style findings remain
-deferred, not verified pixel parity. New 0.6.x features, including native project
-files/deletion, are outside that corpus. Original audit IDs and file references
+Renderer fixtures keep their web revision `bd3d909` as provenance; the retired
+screens' fixtures and the settings/notification matrices were removed and are
+not re-captured ([plan 12](rewrite/12-android.md), decision 5). Rooms and threads
+are held to the shared golden cases in `fixtures/timeline/rooms`. Small visual
+differences, uncommon syntax and the legacy audit's fine-grained layout/style
+findings remain deferred, not verified pixel parity. Original audit IDs and file references
 are at `git show 7677d24:plans/mobile-audit.md`.
 
 ### Native layout and geometry

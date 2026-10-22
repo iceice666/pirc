@@ -67,7 +67,6 @@ void main() {
       );
       await c.takeControl();
       await until(() => c.control['held'] == true, 'control lease');
-      await tap(find.byTooltip('Show side panel'));
       await tap(find.byKey(const ValueKey('panel-tab-terminals')));
       await until(
         () =>

@@ -72,7 +72,6 @@ void main() {
         await until(() => c.sessionId == id && c.state.isNotEmpty, 'session');
         await c.takeControl();
         await until(() => c.control['held'] == true, 'lease');
-        await tap(find.byTooltip('Show side panel'));
         await tap(find.byKey(const ValueKey('panel-tab-browser')));
         await until(
           () =>

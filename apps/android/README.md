@@ -3,10 +3,11 @@
 Native Flutter Android client for pirc. Its Android transport lives in
 `android/app/src/main/kotlin`; pairing uses Settings → Devices on the web.
 
-The app includes work sessions, streaming and cancellation, approvals,
-memory, workspace panels, attachments,
-notifications and native content rendering. Provider and device management uses a short-lived grant that
-you approve in the authenticated web UI. HTML, JavaScript-backed documents,
+The app opens on the rooms, like the web: the room list, the messages of a
+room, its members (the faces) and a worker's thread beside it. Behind them the
+engine shows the nodes, the brain's turns, open loops, wakes, memory, sources
+and the sessions' panes. Notifications open rooms. Provider and device
+management uses a short-lived grant that you approve in the authenticated web UI. HTML, JavaScript-backed documents,
 Markdown, code, math and supported diagrams render through Flutter; browser
 compatibility is incomplete. See the [remaining mobile work](../../plans/mobile.md).
 
@@ -42,13 +43,48 @@ Upgrade the gateway and every node together. The 0.6.x server uses node protocol
 management grants and cross-device interaction synchronization need the matching
 gateway/web update from this change.
 
+## Rooms
+
+The state of the rooms lives in the native runtime (`RoomsRuntime.kt`): it
+loads the list and the open room, follows `/api/events?rooms=1` and reduces
+each event with `core/rooms/RoomEvents.kt`, the port of the web's
+`room-events.ts`, held to the shared cases in `fixtures/timeline/rooms`.
+Flutter (`lib/live/rooms_*.dart`, `room_*.dart`) renders its snapshots.
+
+- The list sorts by activity with unread dots and "Your turn"; archived rooms
+  load when the fold opens. A phone has the web's tabs: Rooms, Members,
+  Engine, Settings.
+- Messages show by kind: text, lines (undo "Don't keep", the loop's action,
+  Cancel; "Details" opens the engine), progress, and a worker's anchor with
+  what its thread did last. A worker's red-line question is answered in the
+  room and stays above the composer while it waits.
+- Typing is signalled at most every 3 s. Send waits for more as usual; a long
+  press on Send (Ctrl+Enter on a keyboard) sends at once. Drafts are kept per
+  room. Files are uploaded to the room; images and files come back with this
+  phone's token.
+- A face's page edits its name, voice, role and territory; the host's page
+  also edits `SOUL.md` and `CHAT.md`.
+
+Notifications about a room open it and carry an inline Reply, which is sent
+as your message in the room. **Mute** (the bell in a room) is kept on this
+phone only and never sent to the gateway; a muted room, or the room on screen,
+does not notify. Settings → Notifications lists the muted rooms.
+
+## Engine
+
+The engine's overview has six tabs, also opened by links
+(`/engine?open=nodes|brain|loops|wakes|memory|sources`): Nodes, Brain turns,
+Open loops, Wakes, Memory (preferences and facts) and Sources. A session is
+shown by its header and panes (files, git, terminals, browser, tasks): the
+app does not show sessions as conversations.
+
 ## Workspace modes
 
 The app loads the gateway's mode catalog (`GET /api/modes`) with the workspace
 index and asks capabilities, never mode ids, as described in the
 [modes guide](../../docs/guides/modes.md); `lib/live/modes.dart` holds the
 lookups. Every workspace, including per-session ones such as a scratch mode, is
-under Work, grouped by device. Side panels, settings sections and
+in the engine, grouped by device. Side panels, settings sections and
 nouns follow the mode's capabilities. Add workspace offers the node's accepted
 modes and asks for a path only for `workdir: workspace`. A
 workspace whose mode is missing from the catalog is read-only under Work. An
@@ -61,6 +97,11 @@ flutter analyze
 flutter test
 node --test tool/parity/*_test.mjs
 ```
+
+Whoever changes the app runs `flutter analyze`, `flutter test` and the JVM
+tests below; integration tests, emulator and physical-device acceptance are
+run by the maintainer ([plan 12](../../plans/rewrite/12-android.md), decision 6).
+Some widget tests compare against macOS Arial and Menlo and fail without them.
 
 Install the root Bun dependencies for the JavaScript tooling. Android JVM tests
 run with `./gradlew testDebugUnitTest` from `android/`. Device integration tests

@@ -55,7 +55,6 @@ void main() {
           () => c.sessionId == id && c.state.isNotEmpty,
           'open session',
         );
-        await tap(find.byTooltip('Show side panel'));
         await until(
           () => find.text('docs').evaluate().isNotEmpty,
           'files root',
