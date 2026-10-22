@@ -303,6 +303,37 @@ impl Cluster {
         self.gateway.signal(Signal::SIGHUP);
     }
 
+    /// Restart only this fixture's Gateway, preserving its SQLite/device state.
+    /// The real Node reconnects over its existing WebSocket retry path.
+    pub async fn restart_gateway(&mut self, crash: bool) {
+        self.gateway.restart(crash);
+        self.wait_ready(u64::from(self.node.is_some()))
+            .await
+            .unwrap();
+    }
+
+    /// Restart only this fixture's Node. Source files/config are never reseeded.
+    /// Await the actual disconnect before starting the replacement, so a cached
+    /// health result from the old registration cannot count as readiness.
+    pub async fn restart_node(&mut self, crash: bool) {
+        let mut old = self.node.take().expect("cluster has a node");
+        old.stop_for_restart(crash);
+        let api = self.api();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let health = api
+                .send("GET", "/api/health", &crate::browser_headers(), None)
+                .await;
+            if health.body["nodes"] == 0 {
+                break;
+            }
+            assert!(Instant::now() < deadline, "old Node did not disconnect");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        self.node = Some(Process::from_launch("node", &old.launch));
+        self.wait_ready(1).await.unwrap();
+    }
+
     /// `http://127.0.0.1:<port>`
     pub fn base_url(&self) -> String {
         format!("http://127.0.0.1:{}", self.port)
@@ -539,6 +570,16 @@ struct Process {
     child: Child,
     log: PathBuf,
     stopped: bool,
+    launch: Launch,
+}
+
+#[derive(Clone)]
+struct Launch {
+    program: PathBuf,
+    args: Vec<String>,
+    root: PathBuf,
+    home: String,
+    env: Vec<(&'static str, String)>,
 }
 
 impl Process {
@@ -569,7 +610,40 @@ impl Process {
             child,
             log,
             stopped: false,
+            launch: Launch {
+                program: program.into(),
+                args: args.iter().map(|s| (*s).into()).collect(),
+                root: root.into(),
+                home: home.into(),
+                env: env.to_vec(),
+            },
         }
+    }
+
+    fn stop_for_restart(&mut self, crash: bool) {
+        if crash {
+            let _ = self.child.kill();
+            let _ = self.child.wait();
+            self.stopped = true;
+        } else {
+            self.stop();
+        }
+    }
+    fn restart(&mut self, crash: bool) {
+        self.stop_for_restart(crash);
+        let launch = self.launch.clone();
+        *self = Self::from_launch(self.name, &launch);
+    }
+    fn from_launch(name: &'static str, launch: &Launch) -> Self {
+        let args: Vec<&str> = launch.args.iter().map(String::as_str).collect();
+        Self::spawn(
+            name,
+            &launch.program,
+            &args,
+            &launch.root,
+            &launch.home,
+            &launch.env,
+        )
     }
 
     /// The exit status, once the process has exited.

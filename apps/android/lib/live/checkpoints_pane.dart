@@ -257,21 +257,24 @@ class _CheckpointsPaneState extends State<CheckpointsPane> {
 
   Widget consent() => Container(
     decoration: box(color: 'web.bg-hover', radius: 8),
-    child: CheckboxListTile(
-      key: const ValueKey('checkpoint-observational-consent'),
-      value: reviewObservational,
-      onChanged: state.offline || !state.enabled
-          ? null
-          : (value) => setState(() {
-              reviewObservational = value == true;
-              state.preview = null;
-              state.previewFor = null;
-            }),
-      controlAffinity: ListTileControlAffinity.leading,
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
-      title: Text(tr('I reviewed this observational checkpoint and consent to recovery.'),
-          style: text(12, height: 1.4)),
+    child: Material(
+      type: MaterialType.transparency,
+      child: CheckboxListTile(
+        key: const ValueKey('checkpoint-observational-consent'),
+        value: reviewObservational,
+        onChanged: state.offline || !state.enabled
+            ? null
+            : (value) => setState(() {
+                reviewObservational = value == true;
+                state.preview = null;
+                state.previewFor = null;
+              }),
+        controlAffinity: ListTileControlAffinity.leading,
+        dense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+        title: Text(tr('I reviewed this observational checkpoint and consent to recovery.'),
+            style: text(12, height: 1.4)),
+      ),
     ),
   );
 
@@ -408,15 +411,18 @@ class _CheckpointsPaneState extends State<CheckpointsPane> {
           if (unresolved && allowKeepCurrentReview) ...[
             gap(8),
             alert(tr('Continuing keeps the current workspace versions for unresolved paths.')),
-            CheckboxListTile(
-              key: ValueKey('checkpoint-keep-current-${job['id']}'),
-              value: state.reviewedKeepCurrent['${job['id']}'] == true,
-              onChanged: (value) => state.setKeepCurrentReviewed('${job['id']}', value == true),
-              controlAffinity: ListTileControlAffinity.leading,
-              dense: true,
-              contentPadding: EdgeInsets.zero,
-              title: Text(tr('I reviewed the conflicts and exclusions; keep current versions.'),
-                  style: text(11.5, height: 1.4)),
+            Material(
+              type: MaterialType.transparency,
+              child: CheckboxListTile(
+                key: ValueKey('checkpoint-keep-current-${job['id']}'),
+                value: state.reviewedKeepCurrent['${job['id']}'] == true,
+                onChanged: (value) => state.setKeepCurrentReviewed('${job['id']}', value == true),
+                controlAffinity: ListTileControlAffinity.leading,
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(tr('I reviewed the conflicts and exclusions; keep current versions.'),
+                    style: text(11.5, height: 1.4)),
+              ),
             ),
           ],
         ],

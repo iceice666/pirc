@@ -5,7 +5,8 @@
 Status: phases 1–4 implemented locally, 2026-10-22: safety experiments, opt-in
 Node capture/journaling, independent recovery/isolation, authenticated Gateway
 operations, Web/native Flutter Android review and durable continuation. Phase 5
-integrated device/Linux/crash acceptance remains. Multiple agents and preservation of both existing and later user
+local macOS integration/crash/client acceptance is complete; real Android and
+Linux runtime acceptance remain. Multiple agents and preservation of both existing and later user
 changes are hard requirements. Keep work local; no deployment, remote push or
 Release is authorized. Integrate the independent memory update last, after the
 user requests rebasing onto its published changes.
@@ -684,6 +685,80 @@ Android device review, two live clients, Linux bubblewrap execution, physical
 full-disk/power-loss or distributed-filesystem acceptance. Nix validation is
 skipped at the user's request. Memory integration remains last; no memory
 implementation is changed in this phase.
+
+### Phase 5: local integrated acceptance
+
+Local macOS acceptance completed on 2026-10-22. All services, identities,
+credentials, repositories, model replies and files used by these tests are
+synthetic and test-owned. No external provider, real conversation, browser,
+emulator, deployment, push or Release is used. Memory implementation and the
+independent memory checkout remain untouched.
+
+The assertion-based
+[`checkpoints.rs`](../crates/pirc-conformance/tests/checkpoints.rs) suite runs
+real Gateway, Node and Agent executables over HTTP/WebSocket with a local model
+server and the **native sandbox**. It explicitly removes the conformance
+harness's unconfined fake-srt override. Unlike the historical transcript suite,
+it has no Linux-only snapshots and can run on macOS. Restart helpers stop only
+processes launched by their own fixture; no user browser/process is closed and
+no workspace files are reseeded on restart.
+
+| Acceptance                    | Local result                                                                                                                                                                                                                                                                                             |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Real file tools and dirty Git | Capture the staged dirty preimage; preserve untracked files and exact Git index/ref/object bytes through preparation, adoption and subsequent execution.                                                                                                                                                 |
+| Web + paired App API          | Two real authenticated clients receive owner-scoped invalidation; concurrent preparation shares one job, stale control fails, repeated continuation shares one global conversation/workspace. A concurrent retry may report `preparing`; refresh its revision before confirmation.                       |
+| Four file review sides        | Before/after work without a job; current/candidate require their job. Invalid, duplicate or arbitrary-path parameters fail. Actual Gateway/Node bounded text responses match all four expected versions.                                                                                                 |
+| Reconnect and restart         | SIGKILL/restart the Gateway and then Node, preserving SQLite and device tokens. Ownership, global ids, source links, continuation mapping and later user edits survive. Reacquire the invalidated control lease after Node restart.                                                                      |
+| Real continuation             | The new Agent writes successfully inside the adopted recovery root through the native sandbox. The original tree stays byte-identical; later candidate edits survive. Source conversation prompts are absent from the new model requests. A second session cannot start another writer in that root.     |
+| Conflict and stale source     | Changes after preview refuse preparation; changes after preparation refuse continuation. Same-hunk conflicts require keep-current acknowledgment and retain the latest user bytes. Work-mode deletion remains disallowed by its existing capability.                                                     |
+| Active Node crash             | Kill while a covered write has completed and an uncovered shell is active. Restart reports an incomplete observational capture with its gap; it does not invent a completed run, new postimage or recovery job.                                                                                          |
+| Factory hard crashes          | A separate test process is killed during copy, after `ready`, and after `claim`. Restart retains reservations/evidence, fences partial output, refuses edited unopened output, releases the dead writer's lock and never recreates/overwrites user-edited output. Fault hooks exist only in test builds. |
+| Native review constraints     | Eight light/dark phone/tablet/landscape fixtures include 2x text and keyboard insets. Conflict acknowledgment and the final action remain scrollable and usable; reviewing never implicitly continues.                                                                                                   |
+
+**Fixes found during acceptance:** Gateway incorrectly required `job` for every
+file preview and rejected `current`/`candidate`; it now implements the same
+contract as both clients and Node. Checkpoint replies, including authentication
+and invalid/stale responses, now explicitly use `Cache-Control: no-store`.
+Gateway router regression assertions cover the header and all four query forms.
+Flutter consent/conflict checkboxes now have their own transparent Material
+surface so the enclosing background cannot hide their ink/background painting
+or trigger the framework's ListTile assertion.
+
+**Verification:** 225 Rust tests pass (3 real-process native scenarios, 7 Node
+checkpoint/fault tests, 74 capture/recovery/safety integrations and 141 Gateway
+regressions), plus 33 Web and 47 Flutter state/widget tests. The subprocess-only
+helper is excluded from ordinary discovery and is explicitly launched/killed
+three times by its parent acceptance test. Flutter analysis, focused all-target
+Clippy for Node/Gateway/conformance, Rust formatting and diff checks pass.
+Dedicated Rust targets, test directories and disposable Flutter/Vite outputs
+are removed after verification; existing APKs/history/dependency caches remain.
+
+**Pending acceptance:**
+
+- Android physical device: real IME show/hide, actual phone/tablet ergonomics,
+  pairing, network interruption and return to the recovered conversation. Widget
+  keyboard insets and paired HTTP tokens do not establish device acceptance.
+- Actual Linux bubblewrap execution. The existing Linux native-sandbox CI job
+  now builds the executables and runs this new suite with
+  `PIRC_CONFORMANCE_REQUIRED=1` and `PIRC_CHECKPOINT_NATIVE_REQUIRED=1`; absence of
+  the required native backend fails. It has not run remotely because this work
+  remains local. No Nix validation is performed, per the user's instruction.
+- Physical power-loss/filesystem durability, physical full-disk exhaustion and
+  distributed filesystems. SIGKILL, quota limits and injected IO/copy failure
+  are covered; they are not power-loss or real full-disk evidence.
+- Memory integration remains last. Per-turn shortcuts, cross-session filtering,
+  multi-operation ranges and reviewed disposal of retained workspaces remain
+  separate product follow-ups; there is still no automatic in-place overwrite.
+
+Reproduce using test-owned output paths (build Gateway and Node together):
+
+```sh
+cargo build --locked -p pirc-gateway -p pirc-node
+PIRC_CONFORMANCE_BIN_DIR=target/debug PIRC_CONFORMANCE_REQUIRED=1 PIRC_CHECKPOINT_NATIVE_REQUIRED=1 cargo test --locked -p pirc-conformance --test checkpoints -- --test-threads=1
+cargo test --locked -p pirc-node --lib checkpoints::
+cargo test --locked -p pirc-node --test checkpoint_capture --test checkpoint_recovery --test checkpoint_safety
+cargo test --locked -p pirc-gateway
+```
 
 Required tests include:
 

@@ -92,8 +92,10 @@ sandbox cleanup, source writes are denied, and source path restrictions carry
 over. Global extra write paths and shared `/tmp` grants are removed; only the
 session's private temporary directory stays writable. Custom srt wrappers cannot
 use this isolation mode. Legacy shared directories remain observational, and
+Local macOS real-process continuation, multi-client HTTP/WebSocket, restart and
+SIGKILL acceptance pass; all checkpoint API replies explicitly disable caching.
 Linux runtime/full-disk and real-device continuation acceptance is still pending.
-See [Checkpoints](../../plans/checkpoints.md#phase-4-user-operations-and-durable-continuation).
+See [Checkpoints](../../plans/checkpoints.md#phase-5-local-integrated-acceptance).
 
 ## Identity and link
 

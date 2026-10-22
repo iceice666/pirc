@@ -512,16 +512,23 @@ pub async fn file(
     };
     let operation = value("operation")?;
     let side = value("side")?;
-    let job = value("job")?;
-    if !matches!(side.as_str(), "before" | "after") {
+    let job = query.get("job").map(|_| value("job")).transpose()?;
+    if !matches!(side.as_str(), "before" | "after" | "current" | "candidate")
+        || (matches!(side.as_str(), "current" | "candidate") && job.is_none())
+    {
         return Err(ApiError::invalid_input().into());
     }
     let claimed = app.claim(&identity, &session_id)?;
-    let encoded_query = form_urlencoded::Serializer::new(String::new())
-        .append_pair("operation", &operation)
-        .append_pair("side", &side)
-        .append_pair("job", &job)
-        .finish();
+    let encoded_query = {
+        let mut encoded = form_urlencoded::Serializer::new(String::new());
+        encoded
+            .append_pair("operation", &operation)
+            .append_pair("side", &side);
+        if let Some(job) = job {
+            encoded.append_pair("job", &job);
+        }
+        encoded.finish()
+    };
     let response = app
         .relay(
             &claimed.node_id,
@@ -605,6 +612,11 @@ mod tests {
                         "continuation": { "sessionId": "new-session", "workspaceId": "recovery-workspace" }
                     }
                 }),
+            )
+        } else if url.ends_with("/file") {
+            (
+                200,
+                json!({"path":"file.txt","text":"private fixture","binary":false,"absent":false,"truncated":false}),
             )
         } else if url.contains("/recoveries/job-1") {
             (
@@ -944,6 +956,7 @@ mod tests {
         )
         .await;
         assert_eq!(listed.status().as_u16(), 200);
+        assert_eq!(listed.headers()["cache-control"], "no-store");
         let listed = response_json(listed).await;
         assert_eq!(listed["origin"]["sessionId"], source.id);
         assert_eq!(listed["origin"]["workspaceId"], "work:source-workspace");
@@ -1083,5 +1096,51 @@ mod tests {
                 .iter()
                 .all(|workspace| workspace["id"] != "orphan-recovery")
         );
+        for query in [
+            "operation=op&side=before",
+            "operation=op&side=after",
+            "operation=op&side=current&job=job-1",
+            "operation=op&side=candidate&job=job-1",
+        ] {
+            let reply = call(
+                &router,
+                Method::GET,
+                &format!("{base}/capture-1/file?{query}"),
+                Some("alice"),
+                None,
+                None,
+            )
+            .await;
+            assert_eq!(reply.status().as_u16(), 200);
+            assert_eq!(reply.headers()["cache-control"], "no-store");
+        }
+        for query in [
+            "operation=op&side=current",
+            "operation=op&side=before&job=",
+            "operation=op&side=before&side=after",
+        ] {
+            let reply = call(
+                &router,
+                Method::GET,
+                &format!("{base}/capture-1/file?{query}"),
+                Some("alice"),
+                None,
+                None,
+            )
+            .await;
+            assert_eq!(reply.status().as_u16(), 400);
+            assert_eq!(reply.headers()["cache-control"], "no-store");
+        }
+        let unauthorized = call(
+            &router,
+            Method::GET,
+            &format!("{base}/capture-1/file?operation=op&side=before"),
+            None,
+            None,
+            None,
+        )
+        .await;
+        assert_eq!(unauthorized.status().as_u16(), 401);
+        assert_eq!(unauthorized.headers()["cache-control"], "no-store");
     }
 }

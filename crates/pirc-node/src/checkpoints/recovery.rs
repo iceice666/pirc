@@ -818,3 +818,6 @@ mod tests {
         assert_eq!(fs::read(output).unwrap(), b"current");
     }
 }
+
+#[cfg(test)]
+mod crash_tests;

@@ -36,6 +36,9 @@ fn no_store_route(method: &Method, path: &str) -> bool {
     let one = |s: &str| !s.is_empty();
     match (method.as_str(), segments.as_slice()) {
         (_, ["api", "calendar", ..]) => true,
+        // Checkpoint manifests and file previews contain private workspace data;
+        // deny caching for authentication/stale/invalid responses as well.
+        (_, ["api", "sessions", id, "checkpoints", ..]) => one(id),
         ("GET" | "POST", ["api", "devices"]) => true,
         ("DELETE", ["api", "devices", id]) => one(id),
         ("GET" | "POST", ["api", "providers"]) => true,

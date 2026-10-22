@@ -137,3 +137,13 @@ jobs:
           --test sandbox_linux_readonly --test sandbox_linux_agent
           --test sandbox_linux_panel_git --test sandbox_network
           -- --nocapture
+      # Native checkpoint continuation uses real Gateway/Node/Agent processes;
+      # its assertion-based suite runs on macOS too, without Linux snapshots.
+      - name: Native checkpoint end-to-end acceptance
+        run: |
+          cargo build --locked -p pirc-gateway -p pirc-node
+          cargo test --locked -p pirc-conformance --test checkpoints -- --test-threads=1
+        env:
+          PIRC_CONFORMANCE_BIN_DIR: target/debug
+          PIRC_CONFORMANCE_REQUIRED: '1'
+          PIRC_CHECKPOINT_NATIVE_REQUIRED: '1'
