@@ -20,6 +20,7 @@ workspace_memory: false
 repository: false
 recap: false
 ---
+
 Work in this session's own directory. It is not a repository and is removed
 some days after the work ends: report what matters, and keep nothing there
 you need later.
