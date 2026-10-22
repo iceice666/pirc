@@ -68,7 +68,14 @@ class LiveController extends ChangeNotifier {
   String showing;
 
   /// The rooms (plans/rewrite/12-android.md), started once they are shown.
-  late final RoomsController rooms = RoomsController(gateway);
+  late final RoomsController rooms = RoomsController(
+    gateway,
+    pairingStampOf: () => pairingStamp,
+  );
+
+  /// The engine section a room line's "Details" asked for (`memory`,
+  /// `loops`, `wakes`), until the engine shows it.
+  String? engineSection;
 
   /// Show the rooms, following them from the first time on.
   void showRooms({String? roomId}) {
@@ -85,7 +92,8 @@ class LiveController extends ChangeNotifier {
   }
 
   /// Show the engine: sessions, workspaces, nodes.
-  void showEngine() {
+  void showEngine({String? section}) {
+    engineSection = section;
     showing = 'engine';
     if (rooms.started) unawaited(rooms.setVisible(false));
     unawaited(rooms.flushDraft());

@@ -280,6 +280,27 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
             bytes.toRequestBody(mimeType.toMediaType()),
         )["upload"]
 
+    /** A file of a room message: its bytes and type (bearer-authenticated, so fetched here). */
+    open suspend fun download(path: String, limit: Int = 32 * 1024 * 1024): Pair<ByteArray, String> = withContext(Dispatchers.IO) {
+        client.newCall(request(path).build()).execute().use { response ->
+            if (!response.isSuccessful) throw failure(response, response.body.string())
+            val length = response.body.contentLength()
+            if (length > limit) throw ApiException(413, "too_large", "The file is too large to open here.")
+            val bytes = response.body.byteStream().use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    if (out.size() + read > limit) throw ApiException(413, "too_large", "The file is too large to open here.")
+                    out.write(buffer, 0, read)
+                }
+                out.toByteArray()
+            }
+            bytes to (response.header("Content-Type") ?: "application/octet-stream")
+        }
+    }
+
     // ---- push notifications ----
 
     open suspend fun pushInfo(): PushInfo = get("/api/push")

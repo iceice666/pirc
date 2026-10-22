@@ -877,6 +877,12 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
             rooms: c.rooms,
             onEngine: c.showEngine,
             onSettings: () => _page('settings'),
+            onDetails: (section) {
+              c.showEngine(section: section);
+              // The engine's own pages come with plan 12's engine step;
+              // until then memory opens where it lives today.
+              if (section == 'memory') _page('memory');
+            },
           )
         : LayoutBuilder(
             builder: (context, size) {

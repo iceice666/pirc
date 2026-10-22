@@ -1,5 +1,6 @@
 package dev.pirc.pirc_mobile
 
+import dev.pirc.android.core.urlSegment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
@@ -54,6 +55,12 @@ internal suspend fun GatewayRuntime.domainCall(method: String, args: CallArgs, c
         withContext(Dispatchers.IO) {
             rooms.upload(args.str("roomId"), bytes, args.str("mimeType"), args.str("name"))
         }
+    }
+    "roomsDownload" -> {
+        val (bytes, mimeType) = api().download(
+            "/api/rooms/${args.str("roomId").urlSegment()}/uploads/${args.str("uploadId").urlSegment()}",
+        )
+        mapOf("bytes" to bytes, "mimeType" to mimeType)
     }
     "roomsTyping" -> { rooms.keystroke(args.str("roomId")); null }
     "roomsCreate" -> rooms.createRoom(args.str("name"))

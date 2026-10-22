@@ -65,6 +65,7 @@ class DartScopedGateway extends Gateway {
     'roomsOlder',
     'roomsSend',
     'roomsUpload',
+    'roomsDownload',
     'roomsTyping',
     'roomsCreate',
     'roomsArchived',

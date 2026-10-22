@@ -23,10 +23,14 @@ class RoomsPage extends StatefulWidget {
     required this.rooms,
     required this.onEngine,
     required this.onSettings,
+    this.onDetails,
     this.clock = _now,
   });
   final RoomsController rooms;
   final VoidCallback onEngine, onSettings;
+
+  /// A line's "Details": the engine at that section.
+  final ValueChanged<String>? onDetails;
 
   /// Milliseconds since the epoch (tests pass their own).
   final int Function() clock;
@@ -639,19 +643,33 @@ class RoomsPageState extends State<RoomsPage> {
                         },
                         onPin: (message, pinned) =>
                             unawaited(rooms.pin(message, pinned)),
+                        onDetails: widget.onDetails,
                       );
                     },
                   ),
           ),
+          // A worker's question still waiting here: answered without
+          // scrolling back to it.
           if (asking != null)
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              color: colors['accent.soft'],
-              child: Text(
-                '${rooms.speakerName(asking)} is waiting for your answer'
-                '${obj(obj(obj(asking['body'])['question'])['request'])['title'] is String ? ': ${obj(obj(obj(asking['body'])['question'])['request'])['title']}' : ''}',
-                style: TextStyle(fontSize: 13, color: colors['text.primary']),
+              key: const Key('room-asking'),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: colors['web.line'])),
+              ),
+              constraints: const BoxConstraints(maxHeight: 220),
+              child: SingleChildScrollView(
+                child: RoomMessageRow(
+                  key: ValueKey(('asking', asking['id'])),
+                  message: asking,
+                  rooms: rooms,
+                  onOpenRoom: (id) => unawaited(openRoom(id)),
+                  onOpenThread: (id) {
+                    setState(() => membersOpen = false);
+                    unawaited(rooms.openThread(id));
+                  },
+                  onPin: (message, pinned) =>
+                      unawaited(rooms.pin(message, pinned)),
+                ),
               ),
             ),
           if (thinking.isNotEmpty || typing.isNotEmpty)
@@ -699,9 +717,9 @@ class RoomsPageState extends State<RoomsPage> {
   );
 
   Widget _composer(PircColors colors, String name) {
-    final empty = composer.text.trim().isEmpty;
+    final empty = composer.text.trim().isEmpty && rooms.files.isEmpty;
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 6, 6, 8),
+      padding: const EdgeInsets.fromLTRB(4, 6, 6, 8),
       decoration: BoxDecoration(
         border: Border(top: BorderSide(color: colors['web.line'])),
       ),
@@ -716,9 +734,29 @@ class RoomsPageState extends State<RoomsPage> {
                 style: TextStyle(color: colors['status.danger'], fontSize: 13),
               ),
             ),
+          if (rooms.files.isNotEmpty)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 6,
+                children: [
+                  for (final (index, file) in rooms.files.indexed)
+                    InputChip(
+                      label: Text('${file['name']}'),
+                      deleteButtonTooltipMessage: 'Remove ${file['name']}',
+                      onDeleted: () => rooms.removeFile(index),
+                    ),
+                ],
+              ),
+            ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              IconButton(
+                tooltip: 'Attach files',
+                onPressed: () => unawaited(rooms.attach()),
+                icon: Icon(LucideIcons.paperclip, color: colors['text.muted']),
+              ),
               Expanded(
                 child: CallbackShortcuts(
                   bindings: {
