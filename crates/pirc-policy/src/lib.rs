@@ -415,7 +415,7 @@ pub fn truncate_output(text: &str, max_bytes: usize) -> (String, bool) {
     (out, true)
 }
 
-/// Decision #8 of plans/rewrite/decisions.md: the only hosts that are this
+/// Decision #8 (docs/architecture/direction.md §6): the only hosts that are this
 /// machine for the red lines (a browser action, a request with a body):
 /// `localhost`, `127.0.0.1` and `::1`. Anything else, `*.localhost` and
 /// private addresses included, counts as another host.

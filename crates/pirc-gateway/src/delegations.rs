@@ -49,7 +49,7 @@ pub const RESULT_CHUNK_CHARS: usize = 12_000;
 /// What the room is shown of a worker's report (plans/rewrite/06-workers.md):
 /// the rest is in the thread and in `worker_status`.
 pub const REPORT_MAX_CHARS: usize = 2000;
-/// Workers that may run at once (plans/rewrite/decisions.md #10).
+/// Workers that may run at once (decision #10, docs/architecture/direction.md §6).
 pub const RUNNING_MAX: usize = 4;
 /// Of those, called by a wake (decision #3: two read-only researches).
 pub const WAKE_RUNNING_MAX: usize = 2;

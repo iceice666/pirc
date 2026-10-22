@@ -605,7 +605,7 @@ struct BrowserTool {
 }
 
 /// Operations that act on a page rather than read it: on another site they
-/// are sending something out (decision #8 of plans/rewrite/decisions.md).
+/// are sending something out (decision #8, docs/architecture/direction.md §6).
 const ACTIONS: [&str; 4] = ["click", "type", "select", "press"];
 
 /// `channel()`.
