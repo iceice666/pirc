@@ -103,6 +103,43 @@ pub(crate) async fn checkpoint_eligible(
     Ok(result.exit_code == 1) // tracked files are not ignored by check-ignore
 }
 
+/// Complete eligibility list for checkpoint copies. No checkout, filters or hooks.
+pub(crate) async fn checkpoint_files(
+    sandbox: &dyn Sandbox,
+    root: &Path,
+    env: &ChildEnv,
+) -> ApiResult<std::collections::BTreeSet<String>> {
+    let result = git(
+        sandbox,
+        root,
+        &[
+            "ls-files",
+            "-z",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+        ],
+        env,
+    )
+    .await
+    .map_err(ApiError::from)?;
+    if result.truncated
+        || result.timed_out
+        || result.exit_code != 0
+        || result.stdout.contains('\u{fffd}')
+    {
+        return Err(ApiError::bad_request(
+            "Complete checkpoint Git eligibility is unavailable",
+        ));
+    }
+    Ok(result
+        .stdout
+        .split('\0')
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned)
+        .collect())
+}
+
 /// Why git did not give a result.
 enum GitError {
     /// 400 from its exit code (or anything the caller answers as such).

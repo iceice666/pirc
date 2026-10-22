@@ -1,9 +1,13 @@
-//! Node-owned phase-2 capture journal. No restoration or memory access.
+//! Node-owned capture journal and independent recovery preparation. No memory access.
 //!
 //! Shared directories supply observations, NOT exclusive writer attribution.
 //! Only private node code binds owner/session/run/root; RPC arguments cannot.
 mod files;
+mod inverse;
+pub mod isolation;
+pub mod recovery;
 pub mod runtime;
+mod snapshot;
 
 use pirc_policy::PathPolicy;
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
@@ -54,7 +58,7 @@ impl Default for Limits {
 }
 
 /// Constructed by the runner from its own stored authorization and sandbox.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Scope {
     pub node: String,
     pub owner: String,
@@ -197,7 +201,7 @@ impl Journal {
         let version: i64 = db
             .pragma_query_value(None, "user_version", |r| r.get(0))
             .map_err(err)?;
-        if version > 1 {
+        if version > 2 {
             return Err(err("unsupported checkpoint journal version"));
         }
         db.execute_batch("PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL;
@@ -219,7 +223,20 @@ impl Journal {
             CREATE INDEX IF NOT EXISTS operations_pre ON operations(pre_blob);
             CREATE INDEX IF NOT EXISTS operations_post ON operations(post_blob);
             CREATE INDEX IF NOT EXISTS captures_workspace ON captures(workspace,created);
-            PRAGMA user_version=1;
+            CREATE TABLE IF NOT EXISTS recovery_jobs (
+                id TEXT PRIMARY KEY, node TEXT NOT NULL, owner TEXT NOT NULL, workspace TEXT NOT NULL,
+                session TEXT NOT NULL, epoch INTEGER NOT NULL, run TEXT NOT NULL,
+                request_key TEXT NOT NULL, request_hash TEXT NOT NULL,
+                capture TEXT REFERENCES captures(id) ON DELETE RESTRICT,
+                state TEXT NOT NULL, revision INTEGER NOT NULL DEFAULT 1,
+                claimed INTEGER NOT NULL DEFAULT 0, reserved INTEGER NOT NULL, manifest TEXT NOT NULL, created INTEGER NOT NULL,
+                UNIQUE(node,owner,workspace,request_key));
+            CREATE INDEX IF NOT EXISTS recovery_capture ON recovery_jobs(capture);
+            CREATE TABLE IF NOT EXISTS recovery_blobs (
+                job TEXT NOT NULL REFERENCES recovery_jobs(id) ON DELETE CASCADE,
+                hash TEXT NOT NULL REFERENCES blobs(hash), PRIMARY KEY(job,hash));
+            UPDATE recovery_jobs SET state='interrupted',revision=revision+1 WHERE state='preparing';
+            PRAGMA user_version=2;
             INSERT OR IGNORE INTO closed(session,epoch,run,created)
                 SELECT session,epoch,'',unixepoch('now')*1000 FROM captures WHERE state='capturing';
             UPDATE operations SET state='interrupted' WHERE state='open';
@@ -694,6 +711,12 @@ impl Journal {
                 |r| r.get(0),
             )
             .map_err(err)?;
+        let retained: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM recovery_jobs r JOIN captures c ON c.id=r.capture WHERE c.owner=?1 AND c.session=?2)",params![owner,session],|r|r.get(0)).map_err(err)?;
+        if retained {
+            return Err(err(
+                "session has retained recovery inputs; review recovery jobs before deleting",
+            ));
+        }
         if pinned {
             return Err(err(
                 "session has pinned checkpoint evidence; review it before deleting",
@@ -715,9 +738,9 @@ impl Journal {
     }
 
     fn prune(&self, db: &Connection, workspace: &str, reserve: bool) -> Result<()> {
-        db.execute("DELETE FROM captures WHERE workspace=?1 AND pinned=0 AND state!='capturing' AND EXISTS(SELECT 1 FROM closed f WHERE f.session=captures.session AND f.epoch=captures.epoch AND (f.run='' OR f.run=captures.run)) AND created<?2",params![workspace,now_ms().saturating_sub(self.limits.retention_ms)]).map_err(err)?;
+        db.execute("DELETE FROM captures WHERE workspace=?1 AND pinned=0 AND NOT EXISTS(SELECT 1 FROM recovery_jobs r WHERE r.capture=captures.id) AND state!='capturing' AND EXISTS(SELECT 1 FROM closed f WHERE f.session=captures.session AND f.epoch=captures.epoch AND (f.run='' OR f.run=captures.run)) AND created<?2",params![workspace,now_ms().saturating_sub(self.limits.retention_ms)]).map_err(err)?;
         // Reserve one slot, retaining active and explicitly pinned evidence.
-        db.execute("DELETE FROM captures WHERE id IN (SELECT id FROM captures WHERE workspace=?1 AND pinned=0 AND state!='capturing' AND EXISTS(SELECT 1 FROM closed f WHERE f.session=captures.session AND f.epoch=captures.epoch AND (f.run='' OR f.run=captures.run)) ORDER BY created,id LIMIT MAX(0,(SELECT COUNT(*) FROM captures WHERE workspace=?1)-?2+?3))",params![workspace,self.limits.captures_per_workspace,i64::from(reserve)]).map_err(err)?;
+        db.execute("DELETE FROM captures WHERE id IN (SELECT id FROM captures WHERE workspace=?1 AND pinned=0 AND NOT EXISTS(SELECT 1 FROM recovery_jobs r WHERE r.capture=captures.id) AND state!='capturing' AND EXISTS(SELECT 1 FROM closed f WHERE f.session=captures.session AND f.epoch=captures.epoch AND (f.run='' OR f.run=captures.run)) ORDER BY created,id LIMIT MAX(0,(SELECT COUNT(*) FROM captures WHERE workspace=?1)-?2+?3))",params![workspace,self.limits.captures_per_workspace,i64::from(reserve)]).map_err(err)?;
         Ok(())
     }
 
@@ -746,7 +769,7 @@ impl Journal {
     /// Only unreferenced private blobs; no workspace paths are ever deleted.
     pub fn collect_orphans(&self) -> Result<()> {
         let db = self.lock()?;
-        db.execute("DELETE FROM blobs WHERE hash NOT IN (SELECT pre_blob FROM operations WHERE pre_blob IS NOT NULL UNION SELECT post_blob FROM operations WHERE post_blob IS NOT NULL)",[]).map_err(err)?;
+        db.execute("DELETE FROM blobs WHERE hash NOT IN (SELECT pre_blob FROM operations WHERE pre_blob IS NOT NULL UNION SELECT post_blob FROM operations WHERE post_blob IS NOT NULL UNION SELECT hash FROM recovery_blobs)",[]).map_err(err)?;
         for entry in fs::read_dir(self.root.join("blobs")).map_err(err)? {
             let entry = entry.map_err(err)?;
             let name = entry.file_name();

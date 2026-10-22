@@ -10,7 +10,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 pub struct CaptureService {
-    pub journal: Journal,
+    pub journal: Arc<Journal>,
     enabled: BTreeSet<String>,
 }
 
@@ -37,9 +37,17 @@ impl CaptureService {
             return Ok(None);
         }
         Ok(Some(Arc::new(Self {
-            journal: Journal::open(&config.state_dir, Limits::default())?,
+            journal: Arc::new(Journal::open(&config.state_dir, Limits::default())?),
             enabled,
         })))
+    }
+
+    /// Trusted node handoff only; agent checkpoint RPCs cannot prepare/claim.
+    pub fn recovery_factory(
+        &self,
+        limits: super::recovery::CopyLimits,
+    ) -> Result<super::recovery::RecoveryFactory, String> {
+        super::recovery::RecoveryFactory::new(self.journal.clone(), limits)
     }
 
     pub fn enabled(&self, workspace: &str) -> bool {

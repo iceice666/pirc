@@ -98,6 +98,8 @@ pub enum SandboxStatus {
 /// What a session's sandbox is built from (`prepare`'s input).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PrepareInput {
+    /// Trusted continuation ticket; never populated by ordinary session startup.
+    pub recovery: Option<crate::checkpoints::isolation::RecoveryIsolation>,
     pub session_id: String,
     /// `chat::session_root`: the workspace, or the chat session's directory.
     pub workspace_root: PathBuf,
@@ -205,6 +207,7 @@ impl WrapperStatus for StderrPrefixes {
 
 /// One session's sandbox: the command that runs the agent inside it.
 pub struct Prepared {
+    recovery: Mutex<Option<crate::checkpoints::isolation::RecoveryIsolation>>,
     /// The program to spawn (srt, bubblewrap).
     pub program: PathBuf,
     /// Its arguments, ending with the agent command and its arguments;
@@ -234,6 +237,7 @@ impl Prepared {
         cleanup: impl FnOnce() + Send + 'static,
     ) -> Self {
         Self {
+            recovery: Mutex::new(None),
             program,
             args,
             env,
@@ -290,6 +294,14 @@ impl Prepared {
         Ok(command)
     }
 
+    pub(crate) fn with_recovery(
+        self,
+        recovery: Option<crate::checkpoints::isolation::RecoveryIsolation>,
+    ) -> Self {
+        *self.recovery.lock().unwrap_or_else(|p| p.into_inner()) = recovery;
+        self
+    }
+
     /// Whether network approvals can be applied.
     pub fn has_control(&self) -> bool {
         self.control
@@ -316,6 +328,10 @@ impl Prepared {
         if let Some(cleanup) = cleanup {
             cleanup();
         }
+        self.recovery
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .take();
     }
 }
 

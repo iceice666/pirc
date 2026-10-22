@@ -2,12 +2,13 @@
 
 [Plans](README.md) · [Session UI](../docs/guides/session-ui.md) · [Tools](../docs/guides/tools.md)
 
-Status: phases 1–2 implemented locally, 2026-10-22: safety experiments and opt-in
-Node capture/journaling. The user authorized phases 1–2 only; recovery APIs and
-Web/native Flutter Android actions remain proposed. Multiple agents and preservation of both existing and
-later user changes are hard requirements. Keep work local; no deployment, remote
-push or Release is authorized. Integrate the independent memory update last,
-after the user requests rebasing onto its published changes.
+Status: phases 1–3 implemented locally, 2026-10-22: safety experiments, opt-in
+Node capture/journaling and the trusted-node recovery factory/isolation boundary.
+Gateway authorization/routing and Web/native Flutter Android actions remain
+phase 4. Multiple agents and preservation of both existing and later user
+changes are hard requirements. Keep work local; no deployment, remote push or
+Release is authorized. Integrate the independent memory update last, after the
+user requests rebasing onto its published changes.
 
 ## Product decision
 
@@ -479,16 +480,13 @@ provider, live agent or browser. Git-dispatch tests use the existing sandbox
 stand-in on disposable repositories; they do not establish native OS sandbox
 enforcement for a recovery workspace.
 
-**Remaining phase boundaries:** no persistent recovery jobs, whole-tree atomic
-snapshot, isolated execution, cross-node writer fence, restore/continue API or
-Web/Android recovery UI. Direct tools still mutate from the agent process;
-the preflight check is not filesystem compare-and-swap against external writers.
-Only the captured observations exist, not a trusted reversible attribution of
-all effects. Physical ENOSPC/power-loss, Linux runtime and new recovery sandbox
-roots still require later acceptance. Logical quotas exclude transient SQLite
-journals, temporary objects and filesystem overhead. No Nix validation is run
-at the user's request. Memory lifecycle/model context integration is untouched
-and stays last, after the independent memory work is published and rebased.
+**Phase-2 boundary at delivery:** capture alone supplies observations, not trusted
+reversible attribution. Direct tools still mutate from the agent process; the
+preflight check is not filesystem compare-and-swap against external writers.
+Phase 3 below adds independent recovery preparation and a native isolation
+handoff, without upgrading this coverage label. No Nix validation is run at the
+user's request. Memory lifecycle/model context integration is untouched and
+stays last, after the independent memory work is published and rebased.
 
 ```sh
 cargo test --locked -p pirc-node --test checkpoint_capture --test checkpoint_safety
@@ -496,6 +494,107 @@ cargo test --locked -p pirc-agent --lib tools::
 cargo test --locked -p pirc-node --lib panels::inspect::tests
 cargo test --locked -p pirc-node --lib runner::
 cargo test --locked -p pirc-node --lib app::tests
+cargo clippy --locked -p pirc-node -p pirc-agent --all-targets -- -D warnings
+```
+
+### Phase 3: independent recovery preparation and isolation
+
+Implemented in [`recovery.rs`](../crates/pirc-node/src/checkpoints/recovery.rs),
+[`snapshot.rs`](../crates/pirc-node/src/checkpoints/snapshot.rs),
+[`inverse.rs`](../crates/pirc-node/src/checkpoints/inverse.rs) and
+[`isolation.rs`](../crates/pirc-node/src/checkpoints/isolation.rs).
+The opt-in capture service shares its journal with this trusted-node factory.
+There is **no new agent RPC, public route or client action** yet. Preparing,
+claiming or constructing a sandbox does not start/retarget a live conversation.
+
+- **Original preservation:** read the canonical source using bounded descriptor
+  traversal. Independently create private files under
+  `$PIRC_STATE_DIR/checkpoints/workspaces/<node-issued-job-id>/root`; no hard
+  links, `.git`, Git checkout/reset/stash/index/ref writes or source mutations.
+  Reject a source containing checkpoint storage rather than creating output
+  inside the original. Previously opened independent recovery roots can be
+  checkpointed and recovered into fresh siblings after checking their persisted
+  owner and physical identity.
+  Git eligibility uses complete sandboxed `ls-files` output with no truncation
+  fallback. Deny-read, links, mount crossings, nested repositories, private and
+  build directories remain explicit exclusions. Output directories/files are
+  created relative to held descriptors; existing entries are never overwritten.
+- **Inverse and review:** a closed run's selected direct operation can be
+  reversed against current bytes with `base=after, ours=current, theirs=before`.
+  A standalone, clean-environment `git merge-file` uses only private scratch
+  files, with time/output bounds. No source hooks/filters/scripts run. Exact
+  create/delete/binary/mode handling and text conflicts preserve later changes;
+  conflicted output keeps current bytes, without conflict markers. Before,
+  after, current and candidate evidence remains private and retained.
+  Overlapping selections on one path require a future coherent-range API and
+  are refused. Observations are never relabeled as verified agent ownership.
+  Applying their inverse requires explicit observational review; continuing
+  unresolved paths additionally requires an explicit keep-current decision.
+- **Versioned jobs:** request protocol 1 and private SQLite schema 2; unsupported
+  request/schema versions fail closed. Owner/node/workspace/session/epoch/run,
+  physical root, effective policy, operation selection and observed source
+  revision bind the request. SQL-unique idempotency keys return the same job;
+  retries never rebuild or overwrite its output. States are `preparing`, `ready`,
+  `opened`, `stale`, `failed` and `interrupted`, with monotonically increasing
+  confirmation revisions. Recheck source after copy, on refresh/claim and before
+  sandbox preparation. Source changes invalidate continuation. Edited/replaced
+  unopened outputs are preserved and require review. Restart marks unfinished
+  jobs interrupted instead of exposing a partial workspace as ready.
+- **Inputs, space and cleanup:** retain captures and current/candidate objects
+  independently of the capture pin bit. Retention/GC and session deletion cannot
+  remove referenced evidence. Missing/corrupt evidence fails readback. Defaults
+  are 256 MiB/copy, 20,000 entries, 10 MiB/file, 1 GiB logical workspace
+  reservations and 64 MiB free-space headroom. Reserve the whole copy ceiling
+  before allocation and check free space; actual IO/ENOSPC failures fail the job.
+  Filesystem overhead and outside writers mean this is not a physical allocation
+  guarantee. Keep failed/interrupted outputs and their reservations/evidence;
+  no automatic workspace deletion is provided, including after user edits.
+  Phase 4 needs an explicit reviewed cleanup action, never blob-GC recursion.
+- **Isolated execution boundary:** claiming a current job takes an account-level
+  nonblocking file lock for that independently generated root and increments its
+  durable generation. The unforgeable in-process ticket owns the lock through
+  native sandbox cleanup, including preparation failures. Ordinary and nested
+  session roots inside any registered node's recovery store are refused without
+  a ticket. Rebuild current sandbox settings, carry translated source path
+  restrictions to the candidate, protect the original from writes and remove
+  global extra write roots/shared `/tmp` grants. Keep only the new session's
+  private temp directory. macOS drops srt's default host write exceptions.
+  Custom srt wrappers are refused for this isolation mode. The new workspace
+  must receive a new authorized session/id and fresh content trust in phase 4;
+  source memory/project-state handles are rejected and no context replay occurs.
+  Source files are still observations, and this does not turn legacy shared
+  workspaces into exclusive per-agent captures or provide a multi-host lock.
+
+Validation: production acceptance tests in
+[`checkpoint_recovery.rs`](../crates/pirc-node/tests/checkpoint_recovery.rs),
+plus injected-copy-failure and actual external-writer tests in the factory.
+Final local acceptance: **269 passed, 0 failed**, with two existing child/probe
+tests left ignored (21 production recovery, 2 factory fault/concurrency,
+28 capture, 25 safety experiments, 113 sandbox, 15 Git inspector, 23 runner,
+7 app and 35 agent-tool tests). All-target Clippy with warnings denied,
+Rust/Markdown formatting and diff whitespace checks pass.
+Native macOS Seatbelt runs a real local shell: candidate edits succeed, while
+source writes, checkpoint DB reads, another recovery's reads and shared-temp
+writes fail. The lock survives sandbox construction and releases on cleanup;
+source edits after claim refuse subsequent sandbox preparation. Sources and
+complete dirty/staged/unstaged Git metadata remain intact. No provider, browser,
+Android emulator or real user workspace is used.
+
+**Remaining acceptance:** actual Linux bubblewrap execution of the new root,
+real power loss/physical full disk, distributed filesystems, descendant process
+escape/quiescence, and full Node-runner/Gateway/Web/Android continuation remain
+later gates. Shared directories remain observational; no new per-agent stable
+capture promise is made. Memory integration remains last. Nix validation is
+explicitly skipped at the user's request.
+
+```sh
+cargo test --locked -p pirc-node --test checkpoint_recovery --test checkpoint_capture --test checkpoint_safety
+cargo test --locked -p pirc-node --lib checkpoints
+cargo test --locked -p pirc-node --lib sandbox::
+cargo test --locked -p pirc-node --lib panels::inspect::tests
+cargo test --locked -p pirc-node --lib runner::
+cargo test --locked -p pirc-node --lib app::tests
+cargo test --locked -p pirc-agent --lib tools::
 cargo clippy --locked -p pirc-node -p pirc-agent --all-targets -- -D warnings
 ```
 

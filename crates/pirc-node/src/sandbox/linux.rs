@@ -619,7 +619,8 @@ impl Sandbox for NativeSandbox {
                     drop(mounts);
                     Session::remove_tmp(&tmp);
                 },
-            ))
+            )
+            .with_recovery(input.recovery))
         })
     }
 

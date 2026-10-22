@@ -51,7 +51,10 @@ pub(super) fn observe(scope: &Scope, relative: &str, limit: u64) -> Result<Obser
         }
         if path.components().any(|p| {
             matches!(
-                p.as_os_str().to_str(),
+                p.as_os_str()
+                    .to_str()
+                    .map(str::to_ascii_lowercase)
+                    .as_deref(),
                 Some(
                     ".git"
                         | ".pirc"

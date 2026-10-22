@@ -811,6 +811,7 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
                 workspace_memory_file: ledger.as_ref().map(|ledger| ledger.file.clone()),
                 // Read-only and shared: uploads reach the running session.
                 project_files_dir: crate::project_files::existing_files_dir(&workspace, &mode),
+                recovery: None,
             })
             .await?;
         if node.workspace_mode(&workspace)? != mode {

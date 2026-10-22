@@ -286,6 +286,7 @@ impl Fixture {
                 protected_paths,
                 workspace_memory_file: None,
                 project_files_dir: None,
+                recovery: None,
             })
             .await
     }
@@ -932,6 +933,7 @@ async fn opens_only_its_own_workspace_memory_ledger() {
             protected_paths: Vec::new(),
             workspace_memory_file: Some(ledger.clone()),
             project_files_dir: None,
+            recovery: None,
         })
         .await
         .unwrap();

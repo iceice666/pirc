@@ -527,7 +527,7 @@ impl Sandbox for MacSandbox {
                         proxy_port: Some(port),
                         allow_pty: true,
                         log_tag: &tag,
-                        readonly: false,
+                        readonly: input.recovery.is_some(),
                         literal_roots: &literal_roots,
                         temp_parent: Some(TempParent {
                             parent: &parent,
@@ -574,7 +574,8 @@ impl Sandbox for MacSandbox {
                     proxy.abort();
                     Session::remove_tmp(&tmp);
                 },
-            ))
+            )
+            .with_recovery(input.recovery))
         })
     }
 

@@ -186,6 +186,11 @@ impl Sandbox for SrtSandbox {
 
     fn prepare(&self, input: PrepareInput) -> BoxFuture<'_, ApiResult<Prepared>> {
         Box::pin(async move {
+            if input.recovery.is_some() {
+                return Err(super::unavailable_error(
+                    "Recovery isolation requires the native Linux or macOS backend",
+                ));
+            }
             let Session {
                 tmp,
                 policy,
@@ -242,7 +247,8 @@ impl Sandbox for SrtSandbox {
                     let _ = std::fs::remove_file(&settings_file);
                     Session::remove_tmp(&tmp);
                 },
-            ))
+            )
+            .with_recovery(input.recovery))
         })
     }
 

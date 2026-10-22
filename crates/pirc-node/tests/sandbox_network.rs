@@ -153,6 +153,7 @@ impl Fixture {
                 protected_paths: Vec::new(),
                 workspace_memory_file: None,
                 project_files_dir: None,
+                recovery: None,
             })
             .await
             .unwrap()

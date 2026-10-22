@@ -444,6 +444,33 @@ pub fn session(
     let private_dirs = private_dirs(config, env, &parent);
     let mut registered_dirs = registered_private_dirs(env)?;
     registered_dirs.extend(private_dirs.iter().cloned());
+    // Recovery roots are node-owned private state. All cooperating nodes must
+    // reject ordinary/nested-root execution, which would bypass the writer lock.
+    let recovery_stores: Vec<String> = registered_dirs
+        .iter()
+        .map(|dir| real_resolve(&text(&Path::new(dir).join("checkpoints/workspaces"))))
+        // No phantom deny paths/placeholders in nodes that have never prepared
+        // a recovery. The registered private state still closes the whole tree.
+        .filter(|dir| Path::new(dir).is_dir())
+        .collect();
+    let root = real_resolve(&text(&input.workspace_root));
+    if input.recovery.is_none() && recovery_stores.iter().any(|dir| is_inside(&root, dir)) {
+        return Err(ApiError::bad_request(
+            "Recovery execution requires a fresh isolated continuation ticket",
+        ));
+    }
+    if let Some(ticket) = &input.recovery {
+        ticket
+            .check_session(&input.session_id)
+            .map_err(ApiError::bad_request)?;
+    }
+    if input.recovery.is_some()
+        && (input.workspace_memory_file.is_some() || input.project_files_dir.is_some())
+    {
+        return Err(ApiError::bad_request(
+            "Recovery must start without inherited memory or project state",
+        ));
+    }
     let workspace_memory_file =
         input
             .workspace_memory_file
@@ -469,7 +496,7 @@ pub fn session(
         protected_paths.push(text(&input.session_dir));
         protected_paths.extend(workspace_memory_file.iter().cloned());
     }
-    let policy_input = SessionPolicyInput {
+    let mut policy_input = SessionPolicyInput {
         config: agent_config.sandbox,
         config_dir: agent_config.config_dir,
         home,
@@ -489,6 +516,27 @@ pub fn session(
         uid: nix::unistd::getuid().as_raw(),
         ssh_auth_sock: env.get("SSH_AUTH_SOCK").map(str::to_owned),
     };
+    // Explicitly keep recovery stores closed even for a broadly writable
+    // workspace containing the state directory. Reopen only a ticket's root.
+    for store in recovery_stores {
+        policy_input.config.filesystem.deny_read.push(store.clone());
+        let keep = input
+            .recovery
+            .as_ref()
+            .map(|r| text(r.root()))
+            .into_iter()
+            .collect::<Vec<_>>();
+        policy_input
+            .config
+            .filesystem
+            .deny_write
+            .extend(pirc_policy::session::deny_write_around(&store, &keep));
+    }
+    if let Some(recovery) = &input.recovery {
+        recovery
+            .constrain(&mut policy_input)
+            .map_err(ApiError::bad_request)?;
+    }
     let policy = match session_policy(&policy_input) {
         Ok(policy) => policy,
         Err(error) => {
@@ -746,6 +794,7 @@ mod tests {
             protected_paths: Vec::new(),
             workspace_memory_file: None,
             project_files_dir: None,
+            recovery: None,
         };
         let a = session(&config, &env, &node_tmp, &input("pi_a")).unwrap();
         let b = session(&config, &env, &node_tmp, &input("pi_b")).unwrap();
@@ -808,6 +857,7 @@ mod tests {
             protected_paths: Vec::new(),
             workspace_memory_file: None,
             project_files_dir: None,
+            recovery: None,
         };
         let temp_warning = |node_tmp: &NodeTmp| {
             let session = session(&config, &env, node_tmp, &input).unwrap();
@@ -847,6 +897,7 @@ mod tests {
             protected_paths: Vec::new(),
             workspace_memory_file: Some(memory.join(file)),
             project_files_dir: None,
+            recovery: None,
         };
         // Another repository's ledger (one not yet made would be writable
         // where the directory lies in a write root, such as `/tmp` here

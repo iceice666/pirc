@@ -53,9 +53,34 @@ incomplete-checkpoint notification without retrying the completed write.
 Restart marks unfinished observations as interrupted/incomplete. Missing or
 corrupt objects fail manifest readback. Session deletion removes its unpinned
 references and only unreferenced objects; pinned evidence blocks deletion until
-reviewed. No workspace path is passed to blob cleanup. Recovery workspaces,
-cross-node writer coordination and persistent recovery jobs are later phases;
-see [Checkpoints](../../plans/checkpoints.md).
+reviewed. A recovery job also retains its source capture and current/candidate
+objects, independently of explicit pins. No workspace path is passed to blob
+cleanup.
+
+The trusted-node recovery factory prepares independent copies under
+`$PIRC_STATE_DIR/checkpoints/workspaces/<job-id>/root`. Original workspaces and
+Git metadata remain untouched. This internal boundary has no public route or
+Web/Android action yet. Journal schema 2 is forward-only: older schema-1 nodes
+refuse it, so retain a private backup before a deliberate downgrade. Memory
+integration remains deferred.
+
+Copy limits default to 256 MiB and 20,000 entries, with a separate 1 GiB logical
+reservation ceiling and 64 MiB free-space headroom. Retained current/candidate
+blobs also count against the existing content-object ceiling. Quota or IO errors
+fail the job; these logical reservations do not guarantee physical free space.
+Failed/interrupted copies and opened/edited recovery workspaces are **not**
+automatically deleted. Their evidence/reservations remain until a future reviewed
+cleanup action; do not manually remove referenced objects or run recursive
+cleanup against user recovery workspaces.
+
+Only a fresh, version-checked in-process continuation ticket can open an
+isolated native sandbox at a recovery root. Its file lock remains held through
+sandbox cleanup, source writes are denied, and source path restrictions carry
+over. Global extra write paths and shared `/tmp` grants are removed; only the
+session's private temporary directory stays writable. Custom srt wrappers cannot
+use this isolation mode. Legacy shared directories remain observational, and
+Linux runtime/full-disk/complete client continuation acceptance is still pending.
+See [Checkpoints](../../plans/checkpoints.md#phase-3-independent-recovery-preparation-and-isolation).
 
 ## Identity and link
 

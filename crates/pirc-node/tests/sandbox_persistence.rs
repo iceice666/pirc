@@ -137,6 +137,7 @@ async fn native_state_custody() {
             protected_paths: vec![],
             workspace_memory_file: Some(ledger.clone()),
             project_files_dir: None,
+            recovery: None,
         })
         .await
         .unwrap();
