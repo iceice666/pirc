@@ -224,6 +224,10 @@ pub struct Browsing {
 /// environment is cleared.
 fn browser_env(executable: &Path, extra: &[(&'static str, String)]) -> Vec<(&'static str, String)> {
     let mut env = vec![
+        // This fixture plays the UI without its periodic control heartbeat.
+        // A scenario spans several TURNs; lease expiry is covered separately.
+        // Keep only this test node's lease alive through the browser workflow.
+        ("PIRC_LEASE_TTL_MS", (TURN.as_millis() * 10).to_string()),
         ("PIRC_BROWSER", "true".to_owned()),
         ("PIRC_BROWSER_EXECUTABLE", executable.display().to_string()),
         // The fixture sites; `*.localhost` names stay refused.
