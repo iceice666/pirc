@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 // @vitest-environment-options {"url":"http://localhost"}
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, ApiError, normalizeEvent } from './api';
+import { api, normalizeEvent } from './api';
 import { engine } from './engine.svelte';
 import { demoSnapshot } from './mock';
 import { fromSnapshot, reduceEvent } from './state';
@@ -91,7 +91,6 @@ afterEach(() => {
   engine.sessions = [];
   engine.workspaces = [];
   engine.pageError = '';
-  engine.answeringInteractionIds = [];
   globalThis.localStorage?.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -173,24 +172,5 @@ describe('app asynchronous refreshes', () => {
     expect(engine.activeSessionId).toBe(newSession.id);
     expect(engine.sessionState?.session.id).toBe(newSession.id);
     expect(engine.sessionState?.run?.status).toBe('succeeded');
-  });
-
-  it('answers a delegated approval from "Needs you" in the chat that holds it', async () => {
-    engine.demo = undefined;
-    const approval = {
-      sessionId: 's-chat',
-      interactionId: 'relay.d1.interaction_1',
-      title: 'Allow network access?',
-    };
-    const answer = vi.spyOn(api, 'answerRelayed').mockResolvedValue();
-    vi.spyOn(api, 'sessions').mockResolvedValue([]);
-    await engine.answerApproval(approval, true);
-    expect(answer).toHaveBeenCalledWith('s-chat', 'relay.d1.interaction_1', true);
-    expect(engine.pageError).toBe('');
-
-    answer.mockRejectedValueOnce(new ApiError('Already answered', 409, 'conflict'));
-    await engine.answerApproval(approval, false);
-    expect(engine.pageError).toBe('Already answered');
-    expect(engine.answeringInteractionIds).toEqual([]);
   });
 });

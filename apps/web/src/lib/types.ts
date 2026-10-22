@@ -113,19 +113,7 @@ export type SessionOrigin = {
   threadId?: string;
   /** The delegation's status; absent from older gateways. */
   status?: DelegationStatus;
-  /** A confirm it waits on, relayed to the chat that started it (answer it there). */
-  approval?: RelayedApproval;
 };
-
-/** A delegated session's pending confirm, as the chat that started it holds it. */
-export interface RelayedApproval {
-  /** The chat that holds the relayed interaction. */
-  sessionId: string;
-  /** `relay.…`: answering needs no control lease. */
-  interactionId: string;
-  title: string;
-  message?: string;
-}
 
 /** A delegation's status once its session exists. */
 export type DelegationStatus = 'running' | 'waiting_input' | 'completed' | 'failed';

@@ -12,7 +12,7 @@ import 'package:pirc_mobile/theme.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
   testWidgets(
-    'real external distributor registers, decrypts and opens a conversation',
+    'real external distributor registers, decrypts and opens the app',
     (t) async {
       expect(const bool.fromEnvironment('PIRC_REAL_GATEWAY'), isTrue);
       expect(const bool.fromEnvironment('PIRC_EXTERNAL_PUSH'), isTrue);
@@ -21,7 +21,6 @@ void main() {
       final gateway = Gateway();
       final controller = LiveController(gateway, showing: 'engine');
       final theme = await PircTheme.load();
-      String? sessionId;
       Future<void> until(
         bool Function() check,
         String reason, {
@@ -123,64 +122,30 @@ void main() {
           () => find.byType(NativeSettingsDialog).evaluate().isEmpty,
           'settings close',
         );
-        final workspace = controller.workspaces.firstWhere(
-          (w) => w['kind'] == 'chat',
-        );
-        await controller.create('${workspace['id']}');
-        sessionId = controller.sessionId;
-        expect(sessionId, isNotNull);
-        await gateway.request(
-          sessionPath(sessionId!),
-          method: 'PATCH',
-          body: {'name': 'External push acceptance'},
-        );
-        await controller.refreshList();
-        final selected =
-            controller.selectedModel ?? controller.models.firstOrNull;
-        expect(selected, isNotNull);
-        final modelReceipt = await gateway.command(sessionId, {
-          'type': 'set_model',
-          'provider': selected!['provider'],
-          'modelId': selected['id'],
-        });
-        expect(modelReceipt['status'], 'accepted');
-        // Stop the session SSE watcher, so it cannot produce the local question
-        // notification instead of the external encrypted push under test.
-        await gateway.call('unwatch');
         debugPrint('PUSH_EXTERNAL:home-next');
         await until(
           () => !controller.active,
           'actual Android Home must background the app',
           platformWait: true,
         );
-        final receipt = await gateway.command(sessionId, {
-          'type': 'prompt',
-          'message': '/parity-question',
-        });
-        expect(receipt['status'], 'accepted');
+        // Sessions' questions push nothing any more; the test notification
+        // goes the same way as a room's: encrypted, through the distributor.
+        final sent = await gateway.request(
+          '/api/push/test',
+          method: 'POST',
+          body: {},
+        );
+        expect(sent['delivered'], 1);
         debugPrint('PUSH_EXTERNAL:notification-tap-next');
         await until(
-          () =>
-              controller.active &&
-              controller.sessionId == sessionId &&
-              controller.questions.isNotEmpty,
-          'actual encrypted notification tap must resume, route and refresh the target conversation',
+          () => controller.active,
+          'actual encrypted notification tap must resume the app',
           attempts: 450,
           platformWait: true,
         );
-        await until(
-          () =>
-              find.text('Choose the native test target').evaluate().isNotEmpty,
-          'pending question must be visible in the routed app',
-        );
         final activity = rows(await gateway.call('activity'));
         expect(
-          activity.any(
-            (item) =>
-                item['title'] ==
-                    'External push acceptance is waiting for you' &&
-                item['sessionId'] == sessionId,
-          ),
+          activity.any((item) => item['title'] == 'pirc notifications work'),
           isTrue,
           reason:
               'The encrypted remote PushNote title must appear in production notification history.',
@@ -191,7 +156,7 @@ void main() {
         expect(delivered.single['lastSuccessAt'], isA<num>());
         expect(delivered.single['lastSuccessAt'], greaterThan(0));
         expect(controller.error, isNull);
-        debugPrint('PUSH_EXTERNAL:encrypted-delivery-and-conversation-opened');
+        debugPrint('PUSH_EXTERNAL:encrypted-delivery-and-app-opened');
         // The registered phone must also stop both local and Gateway registration.
         await gateway.call('pushDisable');
         expect(obj(await gateway.call('pushStatus'))['code'], 'off');

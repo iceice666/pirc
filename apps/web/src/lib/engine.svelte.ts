@@ -21,7 +21,6 @@ import type {
   ModeInfo,
   NewWorkspace,
   NodeSummary,
-  RelayedApproval,
   SessionSummary,
   SessionUpdateInput,
   Workspace,
@@ -58,8 +57,6 @@ class EngineState {
   connection = $state<ConnectionState>(navigator.onLine ? 'reconnecting' : 'offline');
   loading = $state(true);
   pageError = $state('');
-  /** Relayed approvals being answered from "Needs you". */
-  answeringInteractionIds = $state.raw<string[]>([]);
   /** Offline demo data (dev builds without a gateway). */
   demo = $state.raw<Demo>();
   clientId = '';
@@ -112,12 +109,7 @@ class EngineState {
   /** Everything waiting for you: sessions with a question. */
   inbox = $derived<InboxItem[]>(
     this.sessions
-      .filter(
-        (session) =>
-          needsInput(session) ||
-          // Its confirm waits in the chat that delegated it.
-          (session.origin?.kind === 'delegation' && !!session.origin.approval),
-      )
+      .filter(needsInput)
       .map((session) => ({ kind: 'session' as const, id: `session:${session.id}`, session })),
   );
 
@@ -510,29 +502,6 @@ class EngineState {
     } catch (error) {
       this.pageError = errorMessage(error, 'Control could not be transferred.');
     }
-  }
-
-  /**
-   * Allow or deny a delegated session's confirm from "Needs you": it is
-   * relayed to the chat that started the delegation, so it is answered
-   * there, without that chat's control lease.
-   */
-  async answerApproval(approval: RelayedApproval, confirmed: boolean) {
-    if (this.demo || this.answeringInteractionIds.includes(approval.interactionId)) return;
-    this.answeringInteractionIds = [...this.answeringInteractionIds, approval.interactionId];
-    try {
-      await api.answerRelayed(approval.sessionId, approval.interactionId, confirmed);
-    } catch (error) {
-      this.pageError = errorMessage(
-        error,
-        confirmed ? 'The request could not be allowed.' : 'The request could not be denied.',
-      );
-    } finally {
-      this.answeringInteractionIds = this.answeringInteractionIds.filter(
-        (id) => id !== approval.interactionId,
-      );
-    }
-    void this.refreshSessions();
   }
 
   /** The catalog without a failed refresh's gap: an error keeps the last one. */

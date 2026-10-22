@@ -690,30 +690,6 @@ class LiveController extends ChangeNotifier {
     changed();
   }
 
-  Future<void> create(String workspaceId) async {
-    final workspace = workspaces
-        .where((w) => w['id'] == workspaceId)
-        .firstOrNull;
-    if (isReadOnly(workspace)) {
-      throw StateError(workspaceUnavailableNotice);
-    }
-    final account = _accountRevision, stamp = pairingStamp;
-    final data = await gateway.request(
-      '/api/sessions',
-      method: 'POST',
-      pairingStamp: stamp,
-      body: {'workspaceId': workspaceId},
-    );
-    if (_disposed || account != _accountRevision || stamp != pairingStamp) {
-      return;
-    }
-    await refreshList();
-    if (_disposed || account != _accountRevision || stamp != pairingStamp) {
-      return;
-    }
-    await open('${obj(data['session'])['id']}');
-  }
-
   // Only an actually visible conversation may clear the server-owned unread bit.
   Future<void> markVisibleRead() async {
     final id = sessionId;
@@ -1027,32 +1003,6 @@ class LiveController extends ChangeNotifier {
   /// message on 404/409 (e.g. another device controls the delegated session).
   Future<void> stopDelegation(String delegationId) =>
       gateway.call('stopDelegation', {'delegationId': delegationId});
-
-  /// Allow or deny a relayed (`relay.`) delegation approval on [chatId]
-  /// without its control lease, then refresh the session list.
-  Future<void> answerRelayedApproval(
-    String chatId,
-    String interactionId,
-    bool confirmed,
-  ) async {
-    final account = _accountRevision;
-    // A relayed (`relay.`) approval is answered without the control lease:
-    // no generation goes with it.
-    if (!interactionId.startsWith('relay.')) {
-      throw StateError('Only relayed approvals are answered from the list.');
-    }
-    await gateway.request(
-      '${sessionPath(chatId)}/interactions/${enc(interactionId)}/answer',
-      method: 'POST',
-      body: {
-        'clientId': clientId,
-        'answer': {'confirmed': confirmed},
-      },
-    );
-    if (account == _accountRevision && !_disposed) {
-      unawaited(refreshList());
-    }
-  }
 
   Future<void> refreshSession() async {
     final id = sessionId;

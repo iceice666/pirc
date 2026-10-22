@@ -72,19 +72,6 @@ function sessionOrigin(raw: any): SessionOrigin | undefined {
       ...(['running', 'waiting_input', 'completed', 'failed'].includes(raw.status)
         ? { status: raw.status }
         : {}),
-      ...(typeof raw.approval?.sessionId === 'string' &&
-      typeof raw.approval?.interactionId === 'string'
-        ? {
-            approval: {
-              sessionId: raw.approval.sessionId,
-              interactionId: raw.approval.interactionId,
-              title: String(raw.approval.title ?? ''),
-              ...(typeof raw.approval.message === 'string'
-                ? { message: raw.approval.message }
-                : {}),
-            },
-          }
-        : {}),
     };
   return undefined;
 }
@@ -272,16 +259,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ clientId: getClientId(), generation }),
     }),
-  /**
-   * Allow or deny a delegated session's confirm relayed to the chat that
-   * started it (`relay.` ids). No control lease: the gateway answers it
-   * for whoever may see the chat, even while another device controls it.
-   */
-  answerRelayed: (sessionId: string, interactionId: string, confirmed: boolean) =>
-    request<void>(
-      `/api/sessions/${encodeURIComponent(sessionId)}/interactions/${encodeURIComponent(interactionId)}/answer`,
-      { method: 'POST', body: JSON.stringify({ answer: { confirmed } }) },
-    ),
   /** Stop a delegation's run (no lease; 409 when another device controls it or nothing runs). */
   stopDelegation: (delegationId: string) =>
     request<{ status: string }>(`/api/delegations/${encodeURIComponent(delegationId)}/stop`, {

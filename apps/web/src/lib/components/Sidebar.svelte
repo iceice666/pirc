@@ -298,16 +298,11 @@
 
 {#snippet inboxRow(item: InboxItem)}
   {@const session = item.session}
-  {@const approval = session.origin?.kind === 'delegation' ? session.origin.approval : undefined}
-  {@const answering = !!approval && engine.answeringInteractionIds.includes(approval.interactionId)}
   <div class="inbox-item" data-kind={item.kind}>
     <button class="inbox-main" type="button" onclick={() => onselect(session.id)}>
       <span class="status-dot waiting"></span>
       <span class="inbox-text">
         <strong>{session.name}</strong>
-        {#if approval}<small class="inbox-approval" title={approval.message ?? approval.title}
-            >{approval.title}</small
-          >{/if}
         <small
           >{session.origin
             ? `Delegated · ${session.origin.title}`
@@ -316,21 +311,6 @@
       </span>
     </button>
     <div class="inbox-actions">
-      {#if approval}
-        <!-- Answered in the chat that delegated it, without its control lease. -->
-        <button
-          type="button"
-          class="pill-button primary"
-          disabled={answering}
-          onclick={() => engine.answerApproval(approval, true)}>Allow</button
-        >
-        <button
-          type="button"
-          class="pill-button"
-          disabled={answering}
-          onclick={() => engine.answerApproval(approval, false)}>Deny</button
-        >
-      {/if}
       <button type="button" class="pill-button" onclick={() => onselect(session.id)}>Reply</button>
     </div>
   </div>
@@ -918,8 +898,7 @@
     background: var(--bg-layer);
   }
   .inbox-item[data-kind='missed'],
-  .inbox-item[data-kind='memory'],
-  .inbox-item:has(.inbox-approval) {
+  .inbox-item[data-kind='memory'] {
     flex-wrap: wrap;
   }
   .inbox-main {
@@ -955,9 +934,6 @@
     color: var(--muted);
     font-size: 11.5px;
   }
-  .inbox-text small.inbox-approval {
-    color: var(--text-2);
-  }
   .inbox-actions {
     flex: none;
     display: flex;
@@ -978,13 +954,6 @@
   .pill-button:hover {
     color: var(--ink);
     background: var(--bg-hover-strong);
-  }
-  .pill-button.primary {
-    color: var(--on-accent);
-    background: var(--accent);
-  }
-  .pill-button.primary:hover {
-    background: var(--accent-hover);
   }
   /* ── Devices ── */
   .host-dot {

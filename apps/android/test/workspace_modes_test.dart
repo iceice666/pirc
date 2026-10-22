@@ -259,9 +259,14 @@ void main() {
     WebIconButton button(String label) => t.widget<WebIconButton>(
       find.byWidgetPredicate((w) => w is WebIconButton && w.label == label),
     );
-    expect(button('New session in Jobs').onPressed, isNotNull);
-    expect(button('New session in Old review').onPressed, isNull);
     expect(button('Add workspace on device').onPressed, isNotNull);
+    // Sessions are started by pirc from rooms, not from here.
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is WebIconButton && w.label.startsWith('New '),
+      ),
+      findsNothing,
+    );
     await _finish(t, c, g);
   });
 
@@ -286,11 +291,8 @@ void main() {
     );
     await t.pumpAndSettle();
     expect(find.text('Scratch · device'), findsOneWidget);
+    expect(find.widgetWithText(WebButton, 'New session'), findsNothing);
     expect(find.text('Sessions'), findsOneWidget);
-    final create = t.widget<WebButton>(
-      find.widgetWithText(WebButton, 'New session'),
-    );
-    expect(create.onPressed, isNotNull);
     expect(find.byTooltip('Rename Render job'), findsOneWidget);
     await _finish(t, c, g);
   });
@@ -317,15 +319,7 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text(workspaceUnavailableNotice), findsOneWidget);
     expect(find.text('Unavailable · device'), findsOneWidget);
-    expect(
-      t
-          .widget<WebButton>(find.widgetWithText(WebButton, 'New session'))
-          .onPressed,
-      isNull,
-    );
     expect(find.text('Old run'), findsOneWidget);
-    await expectLater(c.create('device:review'), throwsStateError);
-    expect(_requested(g), isNot(contains('/api/sessions')));
     await _finish(t, c, g);
   });
 

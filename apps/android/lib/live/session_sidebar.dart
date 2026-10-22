@@ -1,12 +1,10 @@
 import 'dart:math' as math;
-import 'dart:ui' show SemanticsRole;
 
 import 'package:flutter/material.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'common.dart';
 import 'gateway.dart';
 import 'work_index.dart';
-import 'modes.dart';
 import 'web_controls.dart';
 import 'session_row.dart';
 import 'workspace_dialogs.dart';
@@ -152,7 +150,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
     final all = c.sessions.where((s) => s['workspaceId'] == w['id']).toList();
     final unread = all.where((s) => s['unread'] == true).length;
     final running = all.where(isWorking).length;
-    final online = workspaceOnline(w, c.nodes);
     final list = sidebarSessions(
       c.sessions,
       '${w['id']}',
@@ -246,14 +243,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
                   ),
                 ),
               ),
-              WebIconButton(
-                LucideIcons.plus,
-                'New ${c.catalog.of(w).noun} in ${w['displayName']}',
-                size: phone ? 32 : 24,
-                onPressed: online && !isReadOnly(w)
-                    ? () => guarded(context, () => c.create('${w['id']}'))
-                    : null,
-              ),
               const SizedBox(width: 4),
             ],
           ),
@@ -267,40 +256,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
     );
   }
 
-  /// Relayed delegation approvals being answered, by interaction id.
-  final _answeringApprovals = <String>{};
-  final _approvalErrors = <String, String>{};
-
-  /// A delegated session's pending approval, answered in the chat that
-  /// delegated it without its control lease (`origin.approval`).
-  static Json? delegationApproval(Json session) {
-    final origin = obj(session['origin']);
-    if (origin['kind'] != 'delegation') return null;
-    final approval = obj(origin['approval']);
-    return approval['sessionId'] is String &&
-            '${approval['interactionId'] ?? ''}'.startsWith('relay.')
-        ? approval
-        : null;
-  }
-
-  Future<void> answerApproval(Json approval, bool confirmed) async {
-    final id = '${approval['interactionId']}';
-    if (_answeringApprovals.contains(id)) return;
-    setState(() {
-      _answeringApprovals.add(id);
-      _approvalErrors.remove(id);
-    });
-    try {
-      await c.answerRelayedApproval('${approval['sessionId']}', id, confirmed);
-    } catch (e) {
-      if (mounted) {
-        setState(() => _approvalErrors[id] = LiveController.describe(e));
-      }
-    } finally {
-      if (mounted) setState(() => _answeringApprovals.remove(id));
-    }
-  }
-
   Widget waiting(Json s) {
     final w = c.workspaces
         .where((w) => w['id'] == s['workspaceId'])
@@ -309,28 +264,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
     final sub = origin.isEmpty
         ? '${w?['displayName'] ?? ''}'
         : 'Delegated · ${origin['title']}';
-    final approval = delegationApproval(s);
-    final approvalId = '${approval?['interactionId'] ?? ''}';
-    final answering = _answeringApprovals.contains(approvalId);
-    final approvalError = approval == null ? null : _approvalErrors[approvalId];
-    Widget pill(String label, bool allow) => TextButton(
-      key: ValueKey('needs-you-${allow ? 'allow' : 'deny'}-${s['id']}'),
-      onPressed: answering ? null : () => answerApproval(approval!, allow),
-      style: TextButton.styleFrom(
-        minimumSize: const Size(0, 32),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        shape: const StadiumBorder(),
-        backgroundColor: palette(
-          context,
-        )[allow ? 'accent.default' : 'fill.hover'],
-        foregroundColor: palette(
-          context,
-        )[allow ? 'accent.on' : 'text.secondary'],
-        textStyle: webText(context, size: 12, weight: FontWeight.w500),
-      ),
-      child: Text(label),
-    );
     final reply = Material(
       color: palette(context)['fill.hover'],
       borderRadius: BorderRadius.circular(99),
@@ -363,21 +296,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
                     weight: FontWeight.w500,
                   ).copyWith(height: 1.2),
                 ),
-                if (approval != null)
-                  Tooltip(
-                    message: '${approval['message'] ?? approval['title']}',
-                    child: Text(
-                      '${approval['title'] ?? ''}',
-                      key: ValueKey('needs-you-approval-${s['id']}'),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: webText(
-                        context,
-                        size: 11.5,
-                        color: 'text.secondary',
-                      ).copyWith(height: 1.2),
-                    ),
-                  ),
                 Text(
                   '$sub · waiting for you',
                   maxLines: 1,
@@ -388,18 +306,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
                     color: 'text.muted',
                   ).copyWith(height: 1.2),
                 ),
-                if (approvalError != null)
-                  Semantics(
-                    role: SemanticsRole.alert,
-                    child: Text(
-                      approvalError,
-                      style: webText(
-                        context,
-                        size: 11.5,
-                        color: 'status.danger',
-                      ).copyWith(height: 1.2),
-                    ),
-                  ),
               ],
             ),
           ),
@@ -414,30 +320,13 @@ class _SessionSidebarState extends State<SessionSidebar> {
         border: Border.all(color: palette(context)['line.default']),
         borderRadius: BorderRadius.circular(12),
       ),
-      child: approval == null
-          ? Row(
-              children: [
-                Expanded(child: text),
-                const SizedBox(width: 6),
-                reply,
-              ],
-            )
-          // Like the web's wrapping inbox item: the actions take their own row.
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                text,
-                const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Wrap(
-                    spacing: 4,
-                    runSpacing: 4,
-                    children: [pill('Allow', true), pill('Deny', false), reply],
-                  ),
-                ),
-              ],
-            ),
+      child: Row(
+        children: [
+          Expanded(child: text),
+          const SizedBox(width: 6),
+          reply,
+        ],
+      ),
     );
   }
 
@@ -450,12 +339,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
   Widget build(BuildContext context) {
     final phone = MediaQuery.sizeOf(context).width <= 650;
     final catalog = c.catalog;
-    final page = c.workspaces
-        .where((w) => w['id'] == widget.workspaceId)
-        .firstOrNull;
     final hosts = workHosts(c.workspaces, c.nodes, catalog);
-    // The primary action creates in the open workspace page.
-    final newNoun = page == null ? 'session' : catalog.of(page).noun;
     final inbox = c.sessions.where(isWaiting).toList();
     final count = c.attentionCount;
     final result = c.sessions
@@ -520,51 +404,6 @@ class _SessionSidebarState extends State<SessionSidebar> {
                           onPressed: widget.onCollapse,
                         ),
                     ],
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-                child: Material(
-                  color: palette(context)['accent.soft'],
-                  borderRadius: BorderRadius.circular(12),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: page != null && isReadOnly(page)
-                        ? null
-                        : () {
-                            if (page != null) {
-                              guarded(context, () => c.create('${page['id']}'));
-                            } else {
-                              newSessionDialog(context, c);
-                            }
-                          },
-                    child: SizedBox(
-                      height: 40,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        child: Row(
-                          children: [
-                            Icon(
-                              LucideIcons.squarePen,
-                              size: 16,
-                              color: palette(context)['accent.default'],
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'New $newNoun',
-                                style: webText(
-                                  context,
-                                  weight: FontWeight.w500,
-                                  color: 'accent.default',
-                                ).copyWith(height: kTextHeightNone),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
                   ),
                 ),
               ),

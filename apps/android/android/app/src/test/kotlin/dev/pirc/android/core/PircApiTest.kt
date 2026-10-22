@@ -83,7 +83,8 @@ class PircApiTest {
         server.enqueue(MockResponse.Builder().body("""{"session":{"unexpected":1}}""").build())
         for (call in listOf<suspend () -> Unit>(
             { api.sessions() },
-            { api.createSession("w") },
+            // No session in the reply, then one that is not a session.
+            { api.updateSession("s", name = "x") },
             { api.updateSession("s", name = "x") },
         )) {
             try {

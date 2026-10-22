@@ -253,18 +253,6 @@ class _WorkspacePageState extends State<WorkspacePage> {
                     ],
                   ),
                 ),
-                const SizedBox(width: 10),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 180),
-                  child: WebButton(
-                    'New $noun',
-                    primary: true,
-                    icon: LucideIcons.squarePen,
-                    onPressed: online && !readOnly
-                        ? () => guarded(context, () => c.create('${w['id']}'))
-                        : null,
-                  ),
-                ),
               ],
             ),
           ),
@@ -466,7 +454,7 @@ class _WorkspacePageState extends State<WorkspacePage> {
                                           ? 'Nothing matches.'
                                           : done > 0
                                           ? 'Every $noun here is done.'
-                                          : 'No ${noun}s yet. Start one with “New $noun”.',
+                                          : 'No ${noun}s yet.',
                                       style: webText(
                                         context,
                                         size: 13,

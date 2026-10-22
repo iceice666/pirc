@@ -111,40 +111,6 @@ describe('Sidebar', () => {
     expect(handlers.onselect).toHaveBeenCalledWith('w');
   });
 
-  it('allows or denies a delegated session\'s relayed confirm from "Needs you"', () => {
-    const answerApproval = vi.spyOn(engine, 'answerApproval').mockResolvedValue();
-    const approval = {
-      sessionId: 'chat',
-      interactionId: 'relay.d1.interaction_1',
-      title: 'Allow network access?',
-      message: 'curl example.com',
-    };
-    engine.sessions = [
-      session('w', 'Worker', {
-        runStatus: 'waiting_input',
-        origin: {
-          kind: 'delegation',
-          delegationId: 'd1',
-          title: 'Fix the tests',
-          roomId: 'general',
-          status: 'waiting_input',
-          approval,
-        },
-      }),
-    ];
-    render();
-    const row = target.querySelector('[data-kind="session"]')!;
-    expect(row.textContent).toContain('Allow network access?');
-    const buttons = Array.from(row.querySelectorAll<HTMLButtonElement>('.pill-button'));
-    expect(buttons.map((b) => b.textContent)).toEqual(['Allow', 'Deny', 'Reply']);
-    buttons[0]!.click();
-    expect(answerApproval).toHaveBeenCalledWith(approval, true);
-    buttons[1]!.click();
-    expect(answerApproval).toHaveBeenCalledWith(approval, false);
-    buttons[2]!.click();
-    expect(handlers.onselect).toHaveBeenCalledWith('w');
-  });
-
   it('searches every session, whatever its workspace', () => {
     render();
     const search = target.querySelector<HTMLInputElement>('.search input')!;

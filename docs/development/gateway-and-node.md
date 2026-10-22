@@ -170,7 +170,7 @@ A worker (plans/rewrite/06-workers.md) belongs to the room it was called in. Cal
 - `POST /api/threads/:id/answer` with `{interactionId, answer}` (`{value}`, `{confirmed}` or `{cancelled: true}`) answers a worker's question (`409 stale_interaction` once it no longer waits).
 - `POST /api/delegations/:id/stop` stops a worker: a queued one ends before it starts, a running one's run is stopped.
 
-Adding to a thread, answering and Stop are for whom the worker works for (`403` for others); reading is everyone's. A running worker's own questions are pushed from its room, not as its session's.
+Adding to a thread, answering and Stop are for whom the worker works for (`403` for others); reading is everyone's. A running worker's own questions are pushed from its room. A session's own questions push nothing: the engine shows no conversation to answer them in.
 
 ### Engine
 

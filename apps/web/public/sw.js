@@ -1,15 +1,9 @@
 const CACHE_VERSION = 'relay-static-v1';
 /** The last app shell (index.html) served by the network, for starting offline. */
 const SHELL_CACHE = 'relay-shell-v1';
-/** Exact interaction revocations survive worker restarts and may arrive before creation pushes. */
-const RESOLVED_INTERACTION_CACHE = 'relay-interaction-resolved-v1';
-const RESOLVED_INTERACTION_TTL = 48 * 60 * 60 * 1000;
-const RESOLVED_INTERACTION_LIMIT = 500;
 /** Rooms muted on this device, as the pages keep them (src/lib/mute.ts). */
 const SETTINGS_CACHE = 'relay-settings-v1';
 const MUTED_ROOMS_KEY = '/__pirc_muted_rooms__';
-/** Serialize create/revoke handling for each exact question within this worker. */
-const interactionPushChains = new Map();
 const SHELL_KEY = '/';
 const VERSIONED_ASSET = /^\/assets\/[\w.-]*-[A-Za-z0-9_-]{8,}\.(?:js|css|woff2?|png|svg|webp)$/;
 
@@ -38,19 +32,19 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches
-      .keys()
-      .then((keys) =>
-        Promise.all(
-          keys
-            .filter(
-              (key) =>
-                (key.startsWith('relay-static-') && key !== CACHE_VERSION) ||
-                (key.startsWith('relay-shell-') && key !== SHELL_CACHE),
-            )
-            .map((key) => caches.delete(key)),
-        ),
+    caches.keys().then((keys) =>
+      Promise.all(
+        keys
+          .filter(
+            (key) =>
+              (key.startsWith('relay-static-') && key !== CACHE_VERSION) ||
+              (key.startsWith('relay-shell-') && key !== SHELL_CACHE) ||
+              // Answered questions, from when sessions' questions were pushed.
+              key.startsWith('relay-interaction-resolved-'),
+          )
+          .map((key) => caches.delete(key)),
       ),
+    ),
   );
 });
 
@@ -107,7 +101,7 @@ self.addEventListener('fetch', (event) => {
  * room at `/?room=`, the engine's sessions and memory under `/engine`
  * (src/lib/routes.ts).
  */
-function targetUrl(target, interaction) {
+function targetUrl(target) {
   if (target?.roomId) {
     const url = new URL('/', self.location.origin);
     url.searchParams.set('room', target.roomId);
@@ -116,10 +110,6 @@ function targetUrl(target, interaction) {
   if (target?.sessionId) {
     const url = new URL('/engine', self.location.origin);
     url.searchParams.set('session', target.sessionId);
-    if (interaction?.sessionId === target.sessionId) {
-      url.searchParams.set('interactionId', interaction.interactionId);
-      url.searchParams.set('interactionEpoch', interaction.interactionEpoch);
-    }
     return url.pathname + url.search;
   }
   if (target?.memory) return '/engine?open=memory';
@@ -132,83 +122,6 @@ const onEngine = (url) => {
   return pathname === '/engine' || pathname.startsWith('/engine/');
 };
 
-function interactionIdentity(message) {
-  if (
-    !message ||
-    typeof message.sessionId !== 'string' ||
-    !message.sessionId ||
-    message.sessionId.length > 512 ||
-    typeof message.interactionId !== 'string' ||
-    !message.interactionId ||
-    message.interactionId.length > 512
-  )
-    return undefined;
-  const epoch = message.interactionEpoch;
-  const canonicalEpoch =
-    typeof epoch === 'number' && Number.isSafeInteger(epoch) && epoch >= 0
-      ? String(epoch)
-      : typeof epoch === 'string' && /^(0|[1-9]\d{0,19})$/.test(epoch)
-        ? epoch
-        : undefined;
-  if (canonicalEpoch === undefined) return undefined;
-  return {
-    sessionId: message.sessionId,
-    interactionId: message.interactionId,
-    interactionEpoch: canonicalEpoch,
-  };
-}
-
-function hexUtf8(text) {
-  return Array.from(new TextEncoder().encode(text), (byte) =>
-    byte.toString(16).padStart(2, '0'),
-  ).join('');
-}
-
-function interactionTag(identity) {
-  return `interaction:${hexUtf8(identity.sessionId)}:${identity.interactionEpoch}:${hexUtf8(identity.interactionId)}`;
-}
-
-function interactionKey(identity) {
-  const tuple = `${hexUtf8(identity.sessionId)}:${identity.interactionEpoch}:${hexUtf8(identity.interactionId)}`;
-  return new URL(`/__pirc_interaction_resolved__/${tuple}`, self.location.origin).href;
-}
-
-async function interactionWasResolved(identity) {
-  const cache = await caches.open(RESOLVED_INTERACTION_CACHE);
-  const key = interactionKey(identity);
-  const response = await cache.match(key);
-  if (!response) return false;
-  const record = await response.json().catch(() => null);
-  if (!Number.isFinite(record?.at) || Date.now() - record.at > RESOLVED_INTERACTION_TTL) {
-    await cache.delete(key);
-    return false;
-  }
-  return true;
-}
-
-async function rememberResolvedInteraction(identity) {
-  const cache = await caches.open(RESOLVED_INTERACTION_CACHE);
-  await cache.put(
-    interactionKey(identity),
-    new Response(JSON.stringify({ at: Date.now() }), {
-      headers: { 'content-type': 'application/json' },
-    }),
-  );
-  const keys = await cache.keys();
-  const records = await Promise.all(
-    keys.map(async (key) => {
-      const response = await cache.match(key);
-      const record = await response?.json().catch(() => null);
-      return { key, at: Number.isFinite(record?.at) ? record.at : 0 };
-    }),
-  );
-  const now = Date.now();
-  const expired = records.filter((record) => now - record.at > RESOLVED_INTERACTION_TTL);
-  await Promise.all(expired.map(({ key }) => cache.delete(key)));
-  const live = records.filter((record) => !expired.includes(record)).sort((a, b) => b.at - a.at);
-  await Promise.all(live.slice(RESOLVED_INTERACTION_LIMIT).map(({ key }) => cache.delete(key)));
-}
-
 async function roomMuted(roomId) {
   try {
     const cache = await caches.open(SETTINGS_CACHE);
@@ -218,24 +131,6 @@ async function roomMuted(roomId) {
   } catch {
     return false;
   }
-}
-
-function sameInteraction(a, b) {
-  return (
-    a?.sessionId === b.sessionId &&
-    a?.interactionId === b.interactionId &&
-    a?.interactionEpoch === b.interactionEpoch
-  );
-}
-
-function serializeInteractionPush(identity, operation) {
-  const key = interactionKey(identity);
-  const previous = interactionPushChains.get(key) ?? Promise.resolve();
-  const current = previous.catch(() => undefined).then(operation);
-  interactionPushChains.set(key, current);
-  return current.finally(() => {
-    if (interactionPushChains.get(key) === current) interactionPushChains.delete(key);
-  });
 }
 
 /**
@@ -252,54 +147,6 @@ self.addEventListener('push', (event) => {
   }
   event.waitUntil(
     (async () => {
-      if (message?.kind === 'interaction_refresh') {
-        if (typeof message.sessionId !== 'string' || !message.sessionId) return;
-        const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-        for (const client of windows)
-          client.postMessage({ type: 'INTERACTION_REFRESH', sessionId: message.sessionId });
-        return;
-      }
-      if (message?.kind === 'interaction_answered') {
-        const identity = interactionIdentity(message);
-        if (!identity) return;
-        await serializeInteractionPush(identity, async () => {
-          await rememberResolvedInteraction(identity);
-          const tag = interactionTag(identity);
-          const notifications = await self.registration.getNotifications({ tag });
-          for (const notification of notifications) {
-            if (sameInteraction(notification.data?.interaction, identity)) notification.close();
-          }
-        });
-        return;
-      }
-      if (message?.kind === 'interaction_created') {
-        const identity = interactionIdentity(message);
-        if (!identity || !message.title) return;
-        await serializeInteractionPush(identity, async () => {
-          if (await interactionWasResolved(identity)) return;
-          const windows = await self.clients.matchAll({
-            type: 'window',
-            includeUncontrolled: true,
-          });
-          const watching = windows.some(
-            (client) =>
-              client.focused &&
-              client.visibilityState === 'visible' &&
-              new URL(client.url).searchParams.get('session') === identity.sessionId,
-          );
-          if (watching) return;
-          await self.registration.showNotification(message.title, {
-            body: message.body ?? '',
-            tag: interactionTag(identity),
-            renotify: true,
-            icon: '/icons/icon-192.png',
-            badge: '/icons/icon-192.png',
-            timestamp: message.at,
-            data: { target: { sessionId: identity.sessionId }, interaction: identity },
-          });
-        });
-        return;
-      }
       if (!message?.title) return;
       const sessionId = message.target?.sessionId;
       const roomId = message.target?.roomId;
@@ -333,19 +180,16 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const target = event.notification.data?.target ?? null;
-  const rawInteraction = event.notification.data?.interaction;
-  const interaction = interactionIdentity(rawInteraction);
-  const exactInteraction = interaction?.sessionId === target?.sessionId ? interaction : undefined;
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       const client = windows.find((item) => new URL(item.url).origin === self.location.origin);
-      const url = targetUrl(target, exactInteraction);
+      const url = targetUrl(target);
       if (client) {
         await client.focus();
         // Nothing in particular, or the page already open: it opens the target itself.
         if (!target || url === '/' || onEngine(client.url) === onEngine(url)) {
-          client.postMessage({ type: 'OPEN_TARGET', target, interaction: exactInteraction });
+          client.postMessage({ type: 'OPEN_TARGET', target });
         } else {
           await client.navigate(url);
         }

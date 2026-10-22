@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'gateway.dart';
 import 'common.dart';
-import 'work_index.dart';
-import 'modes.dart';
 import 'web_controls.dart';
 
 Future<String?> newWorkspaceDialog(
@@ -15,13 +13,6 @@ Future<String?> newWorkspaceDialog(
   barrierDismissible: false,
   builder: (_) => _WorkspaceDialog(c: c, nodeId: nodeId),
 );
-Future<void> newSessionDialog(BuildContext context, LiveController c) =>
-    showDialog<void>(
-      context: context,
-      useRootNavigator: false,
-      barrierDismissible: false,
-      builder: (_) => _NewSession(c),
-    );
 
 Widget formField(
   BuildContext context,
@@ -212,103 +203,4 @@ class _WorkspaceDialogState extends State<_WorkspaceDialog> {
       ],
     );
   }
-}
-
-class _NewSession extends StatefulWidget {
-  const _NewSession(this.c);
-  final LiveController c;
-  @override
-  State<_NewSession> createState() => _NewSessionState();
-}
-
-class _NewSessionState extends State<_NewSession> {
-  bool _open(Json w) => !isReadOnly(w) && workspaceOnline(w, widget.c.nodes);
-  late String? id = widget.c.workspaces.where(_open).firstOrNull?['id'];
-  bool busy = false;
-  String? error;
-  @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: widget.c,
-    builder: (context, _) {
-      final workspaces = widget.c.workspaces;
-      final selected = workspaces.where((w) => w['id'] == id).firstOrNull;
-      final available = workspaces.where(_open);
-      String workspaceLabel(Json workspace) {
-        final suffix = isReadOnly(workspace)
-            ? ' · unavailable'
-            : workspaceOnline(workspace, widget.c.nodes)
-            ? ''
-            : ' · offline';
-        return '${workspace['displayName']}$suffix';
-      }
-
-      return WebDialog(
-        title: 'Create a session',
-        eyebrow: 'New work',
-        busy: busy,
-        actions: [
-          WebButton(
-            'Cancel',
-            onPressed: busy ? null : () => Navigator.pop(context),
-          ),
-          WebButton(
-            busy ? 'Creating…' : 'Create session',
-            primary: true,
-            onPressed: busy || selected == null || !_open(selected)
-                ? null
-                : () async {
-                    setState(() {
-                      busy = true;
-                      error = null;
-                    });
-                    try {
-                      await widget.c.create(id!);
-                      if (context.mounted) Navigator.pop(context);
-                    } catch (e) {
-                      if (mounted) {
-                        setState(() {
-                          error = LiveController.describe(e);
-                          busy = false;
-                        });
-                      }
-                    }
-                  },
-          ),
-        ],
-        children: [
-          Text(
-            'Workspace',
-            style: webText(context, size: 13, weight: FontWeight.w500),
-          ),
-          DropdownButton<String>(
-            isExpanded: true,
-            value: selected == null ? null : id,
-            hint: Text(
-              available.isEmpty
-                  ? 'No workspace available'
-                  : 'Choose a workspace',
-            ),
-            items: [
-              for (final w in workspaces)
-                DropdownMenuItem(
-                  value: '${w['id']}',
-                  enabled: _open(w),
-                  child: Text(
-                    workspaceLabel(w),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-            ],
-            onChanged: busy || available.isEmpty
-                ? null
-                : (value) => setState(() => id = value),
-          ),
-          const Text(
-            'The session is named from your first message and stays active on the host when this browser disconnects.',
-          ),
-          if (error != null) WebNotice(error!, error: true),
-        ],
-      );
-    },
-  );
 }

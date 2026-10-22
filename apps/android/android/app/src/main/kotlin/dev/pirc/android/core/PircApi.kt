@@ -78,10 +78,6 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
 
     // ---- sessions and workspaces ----
 
-    /** A new session in [workspaceId]; the agent titles it from the first message. */
-    open suspend fun createSession(workspaceId: String): Session =
-        decodeSession(send("POST", "/api/sessions", buildJsonObject { put("workspaceId", workspaceId) }))
-
     /** Rename, pin or settle a session (any combination). */
     open suspend fun updateSession(sessionId: String, name: String? = null, pinned: Boolean? = null, settled: Boolean? = null): Session =
         decodeSession(

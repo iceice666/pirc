@@ -60,39 +60,7 @@ it('turns questions and run changes into a fresh snapshot, and ignores what the 
   expect(event({ type: 'something_new' })).toEqual({ type: 'reset', reason: 'epoch_changed' });
 });
 
-it('reads a delegated session’s origin and the approval it waits on', () => {
-  const origin = snapshot({
-    session: {
-      id: 'worker',
-      updatedAt: 0,
-      origin: {
-        kind: 'delegation',
-        delegationId: 'd1',
-        roomId: 'general',
-        title: 'Fix the tests',
-        status: 'waiting_input',
-        approval: {
-          sessionId: 'chat',
-          interactionId: 'relay.d1.interaction_1',
-          title: 'Allow network access?',
-          message: 'curl example.com',
-        },
-      },
-    },
-  }).session.origin;
-  expect(origin).toMatchObject({
-    roomId: 'general',
-    status: 'waiting_input',
-    approval: {
-      sessionId: 'chat',
-      interactionId: 'relay.d1.interaction_1',
-      title: 'Allow network access?',
-      message: 'curl example.com',
-    },
-  });
-});
-
-it('answers relayed confirms and stops delegations without a control lease', async () => {
+it('stops delegations without a control lease', async () => {
   const calls: Array<[string, RequestInit]> = [];
   vi.stubGlobal(
     'fetch',
@@ -101,13 +69,8 @@ it('answers relayed confirms and stops delegations without a control lease', asy
       return new Response(JSON.stringify({ status: 'stopping' }), { status: 200 });
     }),
   );
-  await api.answerRelayed('chat', 'relay.d1.i', false);
   await expect(api.stopDelegation('d1')).resolves.toEqual({ status: 'stopping' });
-  expect(calls.map(([url]) => url)).toEqual([
-    '/api/sessions/chat/interactions/relay.d1.i/answer',
-    '/api/delegations/d1/stop',
-  ]);
-  expect(JSON.parse(calls[0]![1].body as string)).toEqual({ answer: { confirmed: false } });
-  expect(calls[1]![1]).toMatchObject({ method: 'POST' });
-  expect(calls[1]![1].body).toBeUndefined();
+  expect(calls.map(([url]) => url)).toEqual(['/api/delegations/d1/stop']);
+  expect(calls[0]![1]).toMatchObject({ method: 'POST' });
+  expect(calls[0]![1].body).toBeUndefined();
 });

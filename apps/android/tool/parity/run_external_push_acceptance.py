@@ -88,7 +88,7 @@ with args.log.open('w') as log:
                 if not shade:
                     adb('shell','cmd','statusbar','expand-notifications');shade=True
                 tree=ui()
-                title='External push acceptance is waiting for you'
+                title='pirc notifications work'
                 item=next((n for n in tree.iter('node') if n.get('text')==title),None)
                 if item is not None:
                     click(item);clicked=True

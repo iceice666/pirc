@@ -31,14 +31,12 @@ use rusqlite::{OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use sha2::Sha256;
-use tokio::sync::mpsc;
 use url::Url;
 
 use crate::app::{App, AppState, ReqBody};
 use crate::auth::Identity;
-use crate::db::{Db, Store};
+use crate::db::Db;
 use crate::error::{ApiError, ApiResult, json_response};
-use crate::events::{EventHub, GatewayEvent};
 use crate::http::{no_content, ok};
 use crate::routes::Handled;
 use crate::util::{new_id, now_ms, present, random_bytes};
@@ -53,8 +51,6 @@ pub struct PushMessage {
     /// Notifications with the same tag replace each other on the device.
     pub tag: String,
     pub target: Value,
-    /// Exact question metadata for create/revoke pushes. Refresh hints omit the tuple.
-    pub interaction: Option<InteractionPush>,
 }
 
 /// The target of a notification about a room: clients open the room
@@ -66,20 +62,11 @@ pub fn room_message(room_id: &str, title: String, body: String) -> PushMessage {
         body,
         tag: format!("room:{room_id}"),
         target: room_target(room_id),
-        interaction: None,
     }
 }
 
 pub fn room_target(room_id: &str) -> Value {
     json!({ "roomId": room_id })
-}
-
-#[derive(Clone, Debug)]
-pub struct InteractionPush {
-    pub kind: &'static str,
-    pub session_id: String,
-    pub interaction_id: Option<String>,
-    pub interaction_epoch: Option<String>,
 }
 
 /// A push service's answer before giving up on it for this message.
@@ -469,32 +456,8 @@ fn js_json_string(units: &[u16]) -> String {
 /// What the subscriber decrypts: `{title, body, tag, target, at}`.
 fn payload(message: &PushMessage, at: i64) -> String {
     let tag: Vec<u16> = message.tag.encode_utf16().collect();
-    let interaction = message
-        .interaction
-        .as_ref()
-        .map(|interaction| {
-            let mut fields = format!(
-                ",\"kind\":{},\"sessionId\":{}",
-                serde_json::to_string(interaction.kind).unwrap_or_else(|_| "null".into()),
-                serde_json::to_string(&interaction.session_id).unwrap_or_else(|_| "null".into()),
-            );
-            if let Some(id) = &interaction.interaction_id {
-                fields.push_str(&format!(
-                    ",\"interactionId\":{}",
-                    serde_json::to_string(id).unwrap_or_else(|_| "null".into()),
-                ));
-            }
-            if let Some(epoch) = &interaction.interaction_epoch {
-                fields.push_str(&format!(
-                    ",\"interactionEpoch\":{}",
-                    serde_json::to_string(epoch).unwrap_or_else(|_| "null".into()),
-                ));
-            }
-            fields
-        })
-        .unwrap_or_default();
     format!(
-        r#"{{"title":{},"body":{},"tag":{},"target":{},"at":{at}{interaction}}}"#,
+        r#"{{"title":{},"body":{},"tag":{},"target":{},"at":{at}}}"#,
         js_json_string(&clip(&message.title, 120)),
         js_json_string(&clip(&message.body, 240)),
         js_json_string(&tag),
@@ -902,174 +865,6 @@ fn push_of(app: &App) -> ApiResult<Arc<Push>> {
 }
 
 // ---------------------------------------------------------------------------
-// The interaction watcher
-
-/// A session that starts waiting for its user (a dangerous command to
-/// confirm, a question) pushes to them (`watchInteractions`), unless it is
-/// a worker's: its questions go to its thread, which pushes instead
-/// (plans/rewrite/06-workers.md).
-fn waiting_message(
-    conn: &rusqlite::Connection,
-    session_id: &str,
-    data: Option<&Value>,
-) -> Option<(String, PushMessage)> {
-    let session = conn.get_session(session_id).ok()?;
-    let user = session.owner_user?;
-    if working_for_a_room(conn, session_id) {
-        return None;
-    }
-    let request = data.and_then(|data| data.get("request"));
-    let asked = request
-        .and_then(|request| request.get("title"))
-        .and_then(Value::as_str)
-        .filter(|title| !title.trim_matches(js_space).is_empty());
-    let interaction = exact_interaction_push("interaction_created", session_id, data);
-    Some((
-        user,
-        PushMessage {
-            title: format!("{} is waiting for you", session.name),
-            body: asked.unwrap_or("It needs your answer to go on.").to_owned(),
-            tag: interaction
-                .as_ref()
-                .map(interaction_tag)
-                .unwrap_or_else(|| format!("session:{}", session.id)),
-            target: json!({ "sessionId": session.id }),
-            interaction,
-        },
-    ))
-}
-
-/// The session is a worker's that has not ended: its questions are asked in
-/// its thread.
-fn working_for_a_room(conn: &rusqlite::Connection, session_id: &str) -> bool {
-    conn.query_row(
-        "SELECT 1 FROM delegations WHERE target_session_id=? AND status IN ('running','waiting_input') LIMIT 1",
-        [session_id],
-        |_| Ok(()),
-    )
-    .is_ok()
-}
-
-fn exact_interaction_push(
-    kind: &'static str,
-    session_id: &str,
-    data: Option<&Value>,
-) -> Option<InteractionPush> {
-    let data = data?;
-    let id_key = if kind == "interaction_created" {
-        "id"
-    } else {
-        "interactionId"
-    };
-    let id = data.get(id_key)?.as_str()?.to_owned();
-    if id.is_empty() {
-        return None;
-    }
-    // `interactionEpoch` is copied from the row's `runnerEpoch`. The hub
-    // envelope epoch is deliberately never used as a fallback.
-    let epoch = data
-        .get("interactionEpoch")
-        .or_else(|| data.get("runnerEpoch"))?;
-    let epoch = match epoch {
-        Value::Number(number) => number.as_u64()?.to_string(),
-        Value::String(text) => text.parse::<u64>().ok()?.to_string(),
-        _ => return None,
-    };
-    Some(InteractionPush {
-        kind,
-        session_id: session_id.to_owned(),
-        interaction_id: Some(id),
-        interaction_epoch: Some(epoch),
-    })
-}
-
-fn hex_utf8(text: &str) -> String {
-    text.as_bytes()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
-}
-
-fn interaction_tag(interaction: &InteractionPush) -> String {
-    format!(
-        "interaction:{}:{}:{}",
-        hex_utf8(&interaction.session_id),
-        interaction.interaction_epoch.as_deref().unwrap_or_default(),
-        hex_utf8(interaction.interaction_id.as_deref().unwrap_or_default()),
-    )
-}
-
-fn answered_message(
-    conn: &rusqlite::Connection,
-    session_id: &str,
-    data: Option<&Value>,
-) -> Option<(String, PushMessage)> {
-    let session = conn.get_session(session_id).ok()?;
-    let user = session.owner_user?;
-    let interaction =
-        exact_interaction_push("interaction_answered", session_id, data).or_else(|| {
-            Some(InteractionPush {
-                kind: "interaction_refresh",
-                session_id: session_id.to_owned(),
-                interaction_id: None,
-                interaction_epoch: None,
-            })
-        });
-    let exact = interaction
-        .as_ref()
-        .is_some_and(|interaction| interaction.kind == "interaction_answered");
-    Some((
-        user,
-        PushMessage {
-            title: String::new(),
-            body: String::new(),
-            tag: if exact {
-                interaction
-                    .as_ref()
-                    .map(interaction_tag)
-                    .unwrap_or_default()
-            } else {
-                format!("session:{}", session.id)
-            },
-            target: json!({ "sessionId": session.id }),
-            interaction,
-        },
-    ))
-}
-
-/// Hand `interaction_created` events from the hub (whose listeners run
-/// under its lock) to a task that pushes them, for as long as the hub lives.
-fn watch_interactions(events: &Arc<EventHub>, db: Arc<Db>, push: Arc<Push>) {
-    let (sender, mut receiver) = mpsc::unbounded_channel();
-    let subscription = events.subscribe_all(Arc::new(move |event: &GatewayEvent| {
-        if matches!(
-            event.kind.as_str(),
-            "interaction_created" | "interaction_answered"
-        ) {
-            let _ = sender.send((
-                event.session_id.clone(),
-                event.kind.clone(),
-                event.data.clone(),
-            ));
-        }
-    }));
-    tokio::spawn(async move {
-        let _subscription = subscription;
-        while let Some((session_id, kind, data)) = receiver.recv().await {
-            let message = match kind.as_str() {
-                "interaction_created" => waiting_message(&db.lock(), &session_id, data.as_ref()),
-                "interaction_answered" => answered_message(&db.lock(), &session_id, data.as_ref()),
-                _ => None,
-            };
-            if let Some((user, message)) = message {
-                let push = push.clone();
-                tokio::spawn(async move { push.notify(&user, &message).await });
-            }
-        }
-    });
-}
-
-// ---------------------------------------------------------------------------
 // The gateway's interface
 
 /// `/api/push*`.
@@ -1083,14 +878,13 @@ pub fn routes() -> Router<AppState> {
         .route("/api/push/test", post(test_push))
 }
 
-/// Load the VAPID keys and start watching for interactions that need the
-/// user (`watchInteractions`). Keys that cannot be loaded stop the gateway,
-/// as they stopped `createApp`.
+/// Load the VAPID keys. Keys that cannot be loaded stop the gateway, as
+/// they stopped `createApp`. A session's own questions push nothing: the
+/// engine cannot answer them, and a worker's go to its thread, which
+/// pushes instead (`delegations.rs`).
 /// Fails, before the gateway listens, on unusable VAPID keys.
 pub fn start(app: &AppState) -> Result<(), String> {
-    let push = state(app)?;
-    watch_interactions(&app.events, app.db.clone(), push);
-    Ok(())
+    state(app).map(drop)
 }
 
 /// Send `message` to every subscription of `user`, in the background.
@@ -1171,7 +965,6 @@ async fn test_push(
                 body: "Anything waiting for you will show up here.".into(),
                 tag: "test".into(),
                 target: json!({}),
-                interaction: None,
             },
         )
         .await;
@@ -1388,7 +1181,6 @@ mod tests {
             body: "b".into(),
             tag: "a\u{1}\"\\\n".into(),
             target: json!({ "sessionId": "s" }),
-            interaction: None,
         };
         assert_eq!(
             payload(&message, 5),
@@ -1405,24 +1197,6 @@ mod tests {
         .unwrap();
         assert_eq!(room["target"], json!({ "roomId": "general" }));
         assert_eq!(room["tag"], "room:general");
-        let revoke = PushMessage {
-            title: String::new(),
-            body: String::new(),
-            tag: "interaction:7331:0:6d656d6f72793a703a30".into(),
-            target: json!({ "sessionId": "s1" }),
-            interaction: Some(InteractionPush {
-                kind: "interaction_answered",
-                session_id: "s1".into(),
-                interaction_id: Some("memory:p:0".into()),
-                interaction_epoch: Some("0".into()),
-            }),
-        };
-        let revoke: Value = serde_json::from_str(&payload(&revoke, 6)).unwrap();
-        assert_eq!(revoke["kind"], "interaction_answered");
-        assert_eq!(revoke["sessionId"], "s1");
-        assert_eq!(revoke["interactionId"], "memory:p:0");
-        assert_eq!(revoke["interactionEpoch"], "0");
-        assert_eq!(revoke["tag"], "interaction:7331:0:6d656d6f72793a703a30");
         // Half a surrogate pair, as `JSON.stringify` writes it.
         assert_eq!(js_json_string(&clip("a😀bc", 3)), r#""a\ud83d…""#);
         assert!(key_shaped(&"a".repeat(80), 80, 100));
@@ -1517,7 +1291,6 @@ mod tests {
             body: "b".into(),
             tag: tag.into(),
             target: json!({ "memory": true }),
-            interaction: None,
         }
     }
 
@@ -1540,7 +1313,6 @@ mod tests {
                     body: "Finished: open it to read the result.".into(),
                     tag: "session:s1".into(),
                     target: json!({ "sessionId": "s1" }),
-                    interaction: None,
                 },
             )
             .await;
@@ -1734,102 +1506,5 @@ mod tests {
         ] {
             assert!(parse(body.clone()).is_err(), "{body}");
         }
-    }
-
-    #[tokio::test]
-    async fn pushes_when_a_session_starts_waiting_for_its_user() {
-        let push = setup();
-        let (url, service) = push_service().await;
-        let browser = Subscriber::new();
-        push.subscribe(
-            "me",
-            &input(&format!("{url}/me"), browser.keys(), "web", None),
-            None,
-        )
-        .unwrap();
-        let session = {
-            let conn = push.db.lock();
-            conn.sync_remote_workspaces(
-                "work",
-                &[(
-                    "pirc".into(),
-                    "pirc".into(),
-                    crate::db::ModeId::new("directory").unwrap(),
-                )],
-            )
-            .unwrap();
-            conn.create_session("work:pirc", "node://work/r1", "work", "r1", "me")
-                .unwrap()
-        };
-        let events = EventHub::new(100);
-        watch_interactions(&events, push.db.clone(), push.clone());
-        events.publish(
-            &session.id,
-            17,
-            "interaction_created",
-            json!({ "id": "i1", "runnerEpoch": 0, "request": { "title": "Allow rm -rf build?" } }),
-        );
-        events.publish(
-            &session.id,
-            17,
-            "interaction_answered",
-            json!({ "interactionId": "i1", "interactionEpoch": 0 }),
-        );
-        events.publish("unknown", 0, "interaction_created", json!({}));
-        for _ in 0..100 {
-            if service.lock().unwrap().received.len() >= 2 {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        let received = service.lock().unwrap().received.clone();
-        assert_eq!(received.len(), 2);
-        let payloads: Vec<Value> = received.iter().map(|item| browser.read(&item.2)).collect();
-        let created = payloads
-            .iter()
-            .find(|payload| payload["kind"] == "interaction_created")
-            .unwrap();
-        assert_eq!(
-            created["title"],
-            format!("{} is waiting for you", session.name)
-        );
-        assert_eq!(created["body"], "Allow rm -rf build?");
-        assert_eq!(created["interactionId"], "i1");
-        assert_eq!(created["interactionEpoch"], "0");
-        assert_eq!(
-            created["tag"],
-            format!("interaction:{}:0:6931", hex_utf8(&session.id))
-        );
-        assert_eq!(created["target"], json!({ "sessionId": session.id }));
-        let answered = payloads
-            .iter()
-            .find(|payload| payload["kind"] == "interaction_answered")
-            .unwrap();
-        assert_eq!(answered["title"], "");
-        assert_eq!(answered["interactionId"], "i1");
-        assert_eq!(answered["interactionEpoch"], "0");
-        assert_eq!(answered["tag"], created["tag"]);
-        assert_eq!(answered["target"], json!({ "sessionId": session.id }));
-
-        let conn = push.db.lock();
-        let (_, refresh) =
-            answered_message(&conn, &session.id, Some(&json!({ "interactionId": "i1" }))).unwrap();
-        assert_eq!(
-            refresh.interaction.as_ref().unwrap().kind,
-            "interaction_refresh"
-        );
-        assert_eq!(refresh.tag, format!("session:{}", session.id));
-        assert_eq!(refresh.interaction.as_ref().unwrap().interaction_id, None);
-
-        let (_, untitled) = waiting_message(
-            &conn,
-            &session.id,
-            Some(&json!({ "request": { "title": "  " } })),
-        )
-        .unwrap();
-        assert_eq!(untitled.body, "It needs your answer to go on.");
-        let (_, no_data) = waiting_message(&conn, &session.id, None).unwrap();
-        assert_eq!(no_data.body, "It needs your answer to go on.");
     }
 }
