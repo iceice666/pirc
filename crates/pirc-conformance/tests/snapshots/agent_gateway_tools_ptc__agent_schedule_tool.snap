@@ -1,6 +1,6 @@
 ---
 source: crates/pirc-conformance/tests/agent_gateway_tools_ptc.rs
-expression: r.into_value()
+expression: "feature_support::without_ptc_progress(r.into_value())"
 ---
 [
   {
@@ -123,22 +123,6 @@ expression: r.into_value()
         "toolCallId": "c0",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"schedule\", {\"action\":\"create\",\"prompt\":\" Check CI. \",\"cron\":\"0 9 * * 1-5\",\"title\":\"CI\",\"model\":\"gw/a\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "c0",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -540,22 +524,6 @@ expression: r.into_value()
         "toolCallId": "c1",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const out = [];\nout.push(await tools.call(\"schedule\", {\"action\":\"create\",\"prompt\":\" Check CI. \",\"cron\":\" 0 9 * * 1-5 \",\"title\":\"CI\",\"timezone\":\"\",\"notify\":\"problems\"}));\nout.push(await tools.call(\"schedule\", {\"action\":\"create\",\"title\":\"No prompt\"}));\nout.push(await tools.call(\"schedule\", {\"action\":\"pause\"}));\nout.push(await tools.call(\"schedule\", {\"action\":\"update\",\"id\":\" s1 \",\"cron\":\"bad\"}));\nout.push(await tools.call(\"schedule\", {\"action\":\"list\"}));\nout.push(await tools.call(\"schedule\", {\"action\":\"pause\",\"id\":\"s1\"}));\nout.push(await tools.call(\"schedule\", {\"action\":\"resume\",\"id\":\"s1\"}));\nout.push(await tools.call(\"schedule\", {\"action\":\"delete\",\"id\":\"s1\"}));\nout.push(await tools.call(\"schedule\", {\"action\":\"result\",\"id\":\"r1\",\"offset\":3}));\nout.push(await tools.call(\"schedule\", {\"action\":\"result\"}));\nreturn JSON.stringify(out);"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "c1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {
@@ -3186,22 +3154,6 @@ expression: r.into_value()
         "toolCallId": "w1",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const r = await tools.call(\"web_search\", {\"query\":\"bun\"});\nif (!r.ok) throw new PtcError(r.error);\nreturn r.data.text;"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "w1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {

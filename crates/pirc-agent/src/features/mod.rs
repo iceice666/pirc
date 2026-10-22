@@ -22,6 +22,7 @@ pub mod team;
 pub mod title;
 pub mod todo;
 pub mod web_search;
+pub mod workspace_memory;
 
 /// Map hook names to their stable node-config / mode keys. Non-selectable
 /// infrastructure (especially approval policy) is deliberately not included.
@@ -31,6 +32,7 @@ pub(crate) fn config_key(name: &str) -> Option<&'static str> {
         "session-title" => Some("sessionTitle"),
         "todo" => Some("todo"),
         "observational-memory" => Some("observationalMemory"),
+        "workspace-memory" => Some("workspaceMemory"),
         "skills" => Some("skills"),
         "browser" => Some("browser"),
         "web-search" => Some("webSearch"),
@@ -54,6 +56,7 @@ pub fn builtin_features() -> Vec<Rc<dyn Feature>> {
         // Agents started in a role: the role's instructions.
         role::feature(),
         memory::feature(),
+        workspace_memory::feature(),
         // Chat sessions only: the user's memory, held by the gateway.
         assistant::feature(),
         skills::feature(),
@@ -145,6 +148,7 @@ mod tests {
                 "project-instructions",
                 "role",
                 "observational-memory",
+                "workspace-memory",
                 "assistant",
                 "skills",
                 "recap",

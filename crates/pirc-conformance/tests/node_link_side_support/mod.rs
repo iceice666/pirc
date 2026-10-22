@@ -165,7 +165,31 @@ impl Gateway {
     /// would otherwise keep a wait alive.
     pub async fn wait(&mut self, wanted: impl Fn(&Value) -> bool) -> Value {
         let before = self.link.skipped.len();
-        match tokio::time::timeout(DEADLINE, self.link.recv_where(wanted)).await {
+        let waiting = async {
+            loop {
+                let frame = if let Some(i) = self.link.skipped.iter().position(|f| {
+                    f["type"] == "agent_request"
+                        && ["workspace.mirrorState", "history.authority"]
+                            .contains(&f["op"].as_str().unwrap_or(""))
+                }) {
+                    self.link.skipped.remove(i)
+                } else {
+                    self.link.recv().await
+                };
+                if frame["type"] == "agent_request"
+                    && ["workspace.mirrorState", "history.authority"]
+                        .contains(&frame["op"].as_str().unwrap_or(""))
+                {
+                    self.link.send(&json!({"type":"agent_response","requestId":frame["requestId"],"status":200,"body":{"result":{"owner":USER,"version":2,"watermark":0,"digest":null,"legacyProjection":""}}})).await;
+                    continue;
+                }
+                if wanted(&frame) {
+                    return frame;
+                }
+                self.link.skipped.push(frame);
+            }
+        };
+        match tokio::time::timeout(DEADLINE, waiting).await {
             Ok(frame) => frame,
             Err(_) => {
                 let got: Vec<String> = self.link.skipped[before..]

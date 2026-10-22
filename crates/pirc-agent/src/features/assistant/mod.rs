@@ -32,7 +32,7 @@ use crate::feature::{BeforeStart, Feature, PromptAddition};
 use crate::redact::redact_secrets;
 use crate::roles::{RoleBrief, describe_roles};
 use crate::session_store::{EntryData, SessionEntry};
-use crate::signal::AbortController;
+use crate::signal::{AbortController, AbortSignal};
 use crate::tools::js::{self, js_regex, locale_string_en_us};
 use crate::tools::prompts::{PromptVar, tool_prompt};
 use crate::tools::result_schema::{arr, bool_, fields, int, nullable, obj, str_};
@@ -92,7 +92,7 @@ pub fn render_memory(context: &Value) -> String {
     let mut lines: Vec<String> = vec![
         "## Memory".to_owned(),
         String::new(),
-        "What you remember from earlier chats with this user. It was loaded when this chat started; changes reach new chats only.".to_owned(),
+        "What you remember from earlier chats with this user. It is refreshed at model-turn boundaries; verify anything that may be stale.".to_owned(),
         String::new(),
         "- USER is what the user told you about themselves, their preferences and standing rules. They approved every entry: follow it unless they say otherwise now. To change it, call memory_propose_user with their exact words; they approve it in this chat or Settings → Memory.".to_owned(),
         "- MEMORY holds your own notes from earlier chats. They may be stale: check what can change, and prefer what the user says now. Keep them current with memory_note.".to_owned(),
@@ -357,7 +357,7 @@ pub fn render_user(entries: &[Value]) -> String {
     let mut lines = vec![
         "## User".to_owned(),
         String::new(),
-        "What the user told their assistant about themselves, their preferences and standing rules. They approved every entry, and it applies to all their sessions: follow it unless they say otherwise now. This repository's own instructions decide how to work in it. It was loaded when this session started; you cannot change it here, the user does that from an assistant chat or Settings → Memory.".to_owned(),
+        "What the user told their assistant about themselves, their preferences and standing rules. They approved every entry, and it applies to all their sessions: follow it unless they say otherwise now. This repository's own instructions decide how to work in it. It is refreshed at model-turn boundaries; you cannot change it here, the user does that from an assistant chat or Settings → Memory.".to_owned(),
         String::new(),
     ];
     for entry in entries {
@@ -493,7 +493,6 @@ pub fn current_origins(branch: &[SessionEntry], running: &[String]) -> Vec<Strin
 
 #[derive(Default)]
 struct State {
-    frozen: RefCell<Option<String>>,
     /// Revision of each entry as this chat last saw it, sent with replace
     /// and remove.
     revisions: RefCell<HashMap<String, Value>>,
@@ -521,8 +520,12 @@ fn user_gateway_of(agent: &Agent) -> Option<Rc<NodeChannels>> {
 }
 
 /// `assistant.context`, given up after `timeout_ms`.
-async fn request_context(gateway: &NodeChannels, timeout_ms: u64) -> Result<Value, ChannelError> {
-    let timeout = AbortController::new();
+async fn request_context(
+    gateway: &NodeChannels,
+    timeout_ms: u64,
+    signal: Option<&AbortSignal>,
+) -> Result<Value, ChannelError> {
+    let timeout = signal.map(AbortController::child_of).unwrap_or_default();
     let timer = {
         let timeout = timeout.clone();
         tokio::task::spawn_local(async move {
@@ -538,82 +541,13 @@ async fn request_context(gateway: &NodeChannels, timeout_ms: u64) -> Result<Valu
     answer
 }
 
-/// The frozen snapshot's text in this branch, if one was written.
-fn frozen_snapshot(agent: &Agent) -> Option<String> {
-    agent
-        .branch()
-        .iter()
-        .rev()
-        .find_map(|entry| match &entry.data {
-            EntryData::Custom { custom_type, data } if custom_type == ASSISTANT_SNAPSHOT => {
-                Some(match data.get("text") {
-                    None | Some(Value::Null) => String::new(),
-                    Some(text) => js::string_of(text),
-                })
-            }
-            _ => None,
-        })
-}
-
-/// Why USER could not be loaded, as the user is told: only a request that
-/// got no answer (aborted, timed out, gateway offline) is "unreachable"; an
-/// answer refusing the session (403, 404, a database error) says so.
+/// Refresh errors never authorize cached notes or an old snapshot.
 fn user_load_warning(error: &ChannelError) -> String {
-    let unreachable = match error {
-        ChannelError::Plain(_) => true,
-        ChannelError::Coded { status, .. } => {
-            status.is_none_or(|status| matches!(status as u16, 502..=504))
-        }
-    };
-    if unreachable {
-        "Your USER preferences could not be loaded (the gateway is unreachable); this session runs without them for now.".to_owned()
-    } else {
-        format!(
-            "Your USER preferences could not be loaded (the gateway answered: {}); this session runs without them for now.",
-            error.message()
-        )
-    }
-}
-
-/// The `## User` section of a coding session, frozen once loaded. An
-/// unreachable gateway costs the session its USER for this run only: the
-/// user is told once, and the next run tries again.
-async fn user_section(state: &State, agent: &Agent, gateway: &NodeChannels) -> String {
-    if let Some(frozen) = state.frozen.borrow().clone() {
-        return frozen;
-    }
-    if let Some(text) = frozen_snapshot(agent) {
-        *state.frozen.borrow_mut() = Some(text.clone());
-        return text;
-    }
-    let context = match request_context(gateway, USER_TIMEOUT_MS).await {
-        Ok(context) => context,
-        Err(error) => {
-            if !state.warned.replace(true) {
-                agent
-                    .ui()
-                    .notify(&user_load_warning(&error), NotifyLevel::Warning);
-            }
-            return String::new();
-        }
-    };
-    // An older gateway gives coding sessions nothing: ask again next run.
-    if !js::truthy(context.get("enabled")) {
-        return String::new();
-    }
-    let section = render_user(array(context.get("user")));
-    if append_custom(
-        agent,
-        ASSISTANT_SNAPSHOT,
-        json!({ "text": section, "revisions": {} }),
+    format!(
+        "Your USER preferences could not be refreshed: {}; old cached preferences are withheld.",
+        error.message()
     )
-    .is_ok()
-    {
-        *state.frozen.borrow_mut() = Some(section.clone());
-    }
-    section
 }
-
 /// `learn`: after a restart, the snapshot's revisions, then every write
 /// this chat made.
 fn learn(state: &State, agent: &Agent) {
@@ -664,64 +598,81 @@ fn append_custom(agent: &Agent, custom_type: &str, data: Value) -> Result<(), St
         .map(|_| ())
 }
 
-/// `memorySection`: the memory section of this chat's system prompt,
-/// frozen once loaded.
-async fn memory_section(
+async fn fresh_sections(
     state: &State,
-    agent: &Agent,
-    gateway: &NodeChannels,
-) -> Result<String, String> {
-    let context = match request_context(gateway, CONTEXT_TIMEOUT_MS).await {
-        Ok(Value::Null) => json!({}),
-        Ok(context) => context,
-        // Preserve the last known policy when offline; the gateway still enforces every operation.
-        Err(_) => {
-            return Ok(state.frozen.borrow().clone().unwrap_or_else(unavailable));
-        }
+    agent: &Rc<Agent>,
+    signal: &AbortSignal,
+) -> Result<Vec<PromptSection>, String> {
+    let full = gateway_of(agent);
+    let gateway = full.clone().or_else(|| user_gateway_of(agent));
+    let Some(gateway) = gateway else {
+        return Ok(Vec::new());
     };
-    agent.set_capabilities(Capabilities::from_value(
-        context.get("capabilities").unwrap_or(&Value::Null),
-    ));
-    let decisions = array(context.get("proposalDecisions"));
-    let with_decisions = |text: String| {
-        if decisions.is_empty() {
-            text
+    let context = match request_context(
+        &gateway,
+        if full.is_some() {
+            CONTEXT_TIMEOUT_MS
         } else {
-            format!(
-                "{text}\n\n## Memory proposal decisions (current)\n{}\nThese decisions are already applied; do not repeat rejected proposals.",
-                js::stringify(&Value::Array(decisions.to_vec()))
-            )
+            USER_TIMEOUT_MS
+        },
+        Some(signal),
+    )
+    .await
+    {
+        Ok(context) => context,
+        Err(error) => {
+            if signal.aborted() || agent.prompt_invalidated("assistant") {
+                return Ok(Vec::new());
+            }
+            if !state.warned.replace(true) {
+                agent
+                    .ui()
+                    .notify(&user_load_warning(&error), NotifyLevel::Warning)
+            }
+            return Ok(vec![PromptSection::new(
+                "assistant",
+                "Memory",
+                "gateway",
+                if full.is_some() {
+                    unavailable()
+                } else {
+                    "## User\n\nUnavailable; cached USER preferences are withheld.".into()
+                },
+            )]);
         }
     };
-    if let Some(frozen) = state.frozen.borrow().clone() {
-        return Ok(with_decisions(frozen));
+    if signal.aborted() || agent.prompt_invalidated("assistant") {
+        return Ok(Vec::new());
     }
-    if let Some(text) = frozen_snapshot(agent) {
-        *state.frozen.borrow_mut() = Some(text.clone());
-        return Ok(with_decisions(text));
+    state.warned.set(false);
+    if full.is_some()
+        && let Some(policy) = context.get("capabilities").filter(|v| v.is_object())
+    {
+        agent.set_capabilities(Capabilities::from_value(policy));
     }
     let enabled = js::truthy(context.get("enabled"));
-    let shown: Vec<&Value> = if enabled {
-        array(context.get("user"))
-            .iter()
-            .chain(array(context.get("notes")))
-            .collect()
-    } else {
-        Vec::new()
-    };
-    let mut seen = Map::new();
-    {
+    if full.is_some() {
         let mut revisions = state.revisions.borrow_mut();
-        for entry in &shown {
-            let id = string(entry.get("id"));
-            let revision = entry.get("revision").cloned().unwrap_or(Value::Null);
-            if !revision.is_null() {
-                seen.insert(id.clone(), revision.clone());
+        revisions.clear();
+        if enabled {
+            for entry in array(context.get("user"))
+                .iter()
+                .chain(array(context.get("notes")))
+            {
+                if let Some(id) = entry.get("id").and_then(Value::as_str) {
+                    revisions.insert(
+                        id.into(),
+                        entry.get("revision").cloned().unwrap_or(Value::Null),
+                    );
+                }
             }
-            revisions.insert(id, revision);
         }
     }
-    let section = if enabled {
+    let mut text = if !enabled {
+        String::new()
+    } else if full.is_none() {
+        render_user(array(context.get("user")))
+    } else {
         [
             render_memory(&context),
             render_workspaces_with_delegation(
@@ -730,19 +681,31 @@ async fn memory_section(
             ),
         ]
         .into_iter()
-        .filter(|part| !part.is_empty())
+        .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join("\n\n")
-    } else {
-        String::new()
     };
-    append_custom(
-        agent,
-        ASSISTANT_SNAPSHOT,
-        json!({ "text": section, "revisions": seen }),
-    )?;
-    *state.frozen.borrow_mut() = Some(section.clone());
-    Ok(with_decisions(section))
+    if full.is_some() {
+        let decisions = array(context.get("proposalDecisions"));
+        if !decisions.is_empty() {
+            text.push_str(&format!("\n\n## Memory proposal decisions (current)\n{}\nThese decisions are already applied; do not repeat rejected proposals.",js::stringify(&Value::Array(decisions.to_vec()))));
+        }
+        text = present_section(&text, &agent.capabilities());
+    }
+    Ok(if text.is_empty() {
+        Vec::new()
+    } else {
+        vec![PromptSection::new(
+            "assistant",
+            if full.is_some() {
+                "Assistant memory and workspaces"
+            } else {
+                "User"
+            },
+            "gateway",
+            text,
+        )]
+    })
 }
 
 /// `text(value, details, isError)`.
@@ -1685,40 +1648,38 @@ impl Feature for AssistantFeature {
         agent: &'a Rc<Agent>,
     ) -> LocalBoxFuture<'a, Result<Option<BeforeStart>, String>> {
         Box::pin(async move {
-            let Some(gateway) = gateway_of(agent) else {
-                let Some(gateway) = user_gateway_of(agent) else {
-                    return Ok(None);
-                };
-                let section = user_section(&self.state, agent, &gateway).await;
-                if section.is_empty() {
-                    return Ok(None);
-                }
-                return Ok(Some(BeforeStart {
-                    system_prompt: Some(PromptAddition::Sections(vec![PromptSection {
-                        frozen: Some(true),
-                        ..PromptSection::new("assistant", "User", "gateway", section)
-                    }])),
-                    messages: Vec::new(),
-                }));
-            };
-            let section = memory_section(&self.state, agent, &gateway).await?;
-            let section = present_section(&section, &agent.capabilities());
-            if section.is_empty() {
-                return Ok(None);
-            }
+            let signal = AbortSignal::never();
+            self.before_model_start(agent, &signal).await
+        })
+    }
+    fn before_model_start<'a>(
+        &'a self,
+        agent: &'a Rc<Agent>,
+        signal: &'a AbortSignal,
+    ) -> LocalBoxFuture<'a, Result<Option<BeforeStart>, String>> {
+        Box::pin(async move {
             Ok(Some(BeforeStart {
-                system_prompt: Some(PromptAddition::Sections(vec![PromptSection {
-                    frozen: Some(true),
-                    ..PromptSection::new(
-                        "assistant",
-                        "Assistant memory and workspaces",
-                        "gateway",
-                        section,
-                    )
-                }])),
+                system_prompt: Some(PromptAddition::Sections(
+                    fresh_sections(&self.state, agent, signal).await?,
+                )),
                 messages: Vec::new(),
             }))
         })
+    }
+    fn before_turn<'a>(
+        &'a self,
+        agent: &'a Rc<Agent>,
+        signal: &'a AbortSignal,
+    ) -> LocalBoxFuture<'a, Result<Option<Vec<PromptSection>>, String>> {
+        Box::pin(async move { Ok(Some(fresh_sections(&self.state, agent, signal).await?)) })
+    }
+    fn turn_end<'a>(
+        &'a self,
+        agent: &'a Rc<Agent>,
+        _: &'a pirc_protocol::AssistantMessage,
+    ) -> LocalBoxFuture<'a, Result<(), String>> {
+        agent.invalidate_prompt("assistant");
+        Box::pin(async { Ok(()) })
     }
 }
 

@@ -817,11 +817,27 @@ expression: r.into_value()
         "type": "write_lease_request"
       },
       {
+        "args": {
+          "command": "python3 -c 1 || true"
+        },
+        "partialResult": {
+          "content": [
+            {
+              "text": "/bin/bash: line 1: python3: command not found\n",
+              "type": "text"
+            }
+          ]
+        },
+        "toolCallId": "a7",
+        "toolName": "bash",
+        "type": "tool_execution_update"
+      },
+      {
         "isError": false,
         "result": {
           "content": [
             {
-              "text": "[exit 0]",
+              "text": "/bin/bash: line 1: python3: command not found\n[exit 0]",
               "type": "text"
             }
           ],
@@ -838,7 +854,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "[exit 0]",
+              "text": "/bin/bash: line 1: python3: command not found\n[exit 0]",
               "type": "text"
             }
           ],
@@ -858,7 +874,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "[exit 0]",
+              "text": "/bin/bash: line 1: python3: command not found\n[exit 0]",
               "type": "text"
             }
           ],
@@ -1373,7 +1389,7 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "[exit 0]",
+                "text": "/bin/bash: line 1: python3: command not found\n[exit 0]",
                 "type": "text"
               }
             ],
@@ -1631,7 +1647,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "[exit 0]",
+              "text": "/bin/bash: line 1: python3: command not found\n[exit 0]",
               "type": "text"
             }
           ],

@@ -376,29 +376,18 @@ expression: log.into_value()
         "version": 1
       },
       {
-        "customType": "assistant.snapshot",
-        "data": {
-          "revisions": {},
-          "text": ""
-        },
         "id": "<entry:2>",
-        "parentId": "<entry:1>",
-        "timestamp": "<epoch-ms>",
-        "type": "custom"
-      },
-      {
-        "id": "<entry:3>",
         "message": {
           "content": "hello",
           "role": "user",
           "timestamp": "<epoch-ms>"
         },
-        "parentId": "<entry:2>",
+        "parentId": "<entry:1>",
         "timestamp": "<epoch-ms>",
         "type": "message"
       },
       {
-        "id": "<entry:4>",
+        "id": "<entry:3>",
         "message": {
           "api": "openai-completions",
           "completedAt": "<epoch-ms>",
@@ -421,7 +410,7 @@ expression: log.into_value()
             "totalTokens": 150
           }
         },
-        "parentId": "<entry:3>",
+        "parentId": "<entry:2>",
         "timestamp": "<epoch-ms>",
         "type": "message"
       }

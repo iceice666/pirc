@@ -410,11 +410,11 @@ fn says_unreachable_only_when_the_gateway_did_not_answer() {
         coded(Some(504.0), "timed out"),
     ] {
         assert!(
-            user_load_warning(&error).contains("unreachable"),
+            user_load_warning(&error).contains("could not be refreshed"),
             "{error:?}"
         );
     }
     let refused = user_load_warning(&coded(Some(403.0), "This session may not use the gateway"));
     assert!(!refused.contains("unreachable"));
-    assert!(refused.contains("the gateway answered: This session may not use the gateway"));
+    assert!(refused.contains("old cached preferences are withheld"));
 }

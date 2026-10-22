@@ -113,3 +113,5 @@ pub fn run_role(role: NodeRole) -> ExitCode {
         }
     }
 }
+
+pub mod workspace_memory;

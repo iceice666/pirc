@@ -130,7 +130,6 @@ fn old_session() -> String {
         json!({ "type": "message", "message": assistant("Old answer", 1002),
             "id": "a0000003", "parentId": "a0000002", "timestamp": 1002 })
         .to_string(),
-        "{\"type\":\"message\",\"message\":{\"role\":\"us".to_owned(),
         json!({ "type": "compaction", "summary": "The user asked an old question.",
             "firstKeptEntryId": "a0000003", "tokensBefore": 1234,
             "id": "a0000004", "parentId": "a0000003", "timestamp": 1004 })
@@ -160,7 +159,10 @@ fn old_session() -> String {
             "id": "a000000b", "parentId": "a000000a", "timestamp": 1011 })
         .to_string(),
     ];
-    format!("{}\n\n", lines.join("\n"))
+    format!(
+        "{}\n{{\"type\":\"message\",\"message\":{{\"role\":\"us",
+        lines.join("\n")
+    )
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -186,7 +188,7 @@ async fn agent_resume_session() {
     turn(&mut agent, &mut r, "prompt", "Continue").await;
     let context = agent.call(json!({ "type": "get_context" })).await;
     r.note("context", context);
-    // The damaged line stays; every other line is an entry.
+    // The interrupted tail is recovered at writer open; complete legacy entries survive.
     let lines: Vec<Value> = std::fs::read_to_string(agent.session_dir.join("session.jsonl"))
         .unwrap()
         .split('\n')

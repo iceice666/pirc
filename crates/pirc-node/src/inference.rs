@@ -679,18 +679,33 @@ async fn serve(relay: &Arc<Relay>, stream: &mut UnixStream) {
             return error(stream, 400, InferenceErrorCode::InvalidRequest).await;
         };
         let writes = relay.persistence.clone();
-        let ok = tokio::task::spawn_blocking(move || writes.apply(&token, value))
-            .await
-            .is_ok_and(|r| r.is_ok());
+        let result =
+            tokio::task::spawn_blocking(move || writes.apply_response(&token, value)).await;
+        let (status, body) = match result {
+            Ok(Ok(value)) => (200, value),
+            failure => {
+                let text = match failure {
+                    Ok(Err(e)) => e.to_string(),
+                    _ => String::new(),
+                };
+                let code = text.split(':').next().unwrap_or("");
+                let safe = if code.starts_with("writer_")
+                    || code.starts_with("journal_")
+                    || code.starts_with("invalid_")
+                    || code == "commit_outcome_unknown_reopen"
+                {
+                    code
+                } else {
+                    "persistence_refused"
+                };
+                (400, serde_json::json!({"ok":false,"error":safe}))
+            }
+        };
         return respond(
             stream,
-            if ok { 200 } else { 400 },
+            status,
             Some("application/json"),
-            if ok {
-                b"{\"ok\":true}"
-            } else {
-                b"{\"ok\":false}"
-            },
+            &serde_json::to_vec(&body).unwrap(),
         )
         .await;
     }

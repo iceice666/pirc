@@ -276,6 +276,60 @@ fn long_cache_compat(compat: &Map<String, Value>) -> Map<String, Value> {
     out
 }
 
+fn route_fingerprint(provider: &Provider, model: Option<&Model>) -> String {
+    use sha2::{Digest, Sha256};
+    fn clean(v: &Value) -> Value {
+        match v {
+            Value::Object(o) => {
+                let sorted: std::collections::BTreeMap<_, _> = o
+                    .iter()
+                    .filter(|(k, _)| {
+                        let k = k.to_ascii_lowercase();
+                        !([
+                            "key",
+                            "token",
+                            "secret",
+                            "auth",
+                            "cookie",
+                            "credential",
+                            "password",
+                            "fingerprint",
+                        ]
+                        .iter()
+                        .any(|part| k.contains(part)))
+                    })
+                    .map(|(k, v)| (k.clone(), clean(v)))
+                    .collect();
+                json!(sorted)
+            }
+            Value::Array(a) => json!(a.iter().map(clean).collect::<Vec<_>>()),
+            _ => v.clone(),
+        }
+    }
+    let url = model
+        .and_then(|m| m.base_url.as_deref())
+        .unwrap_or(&provider.base_url);
+    let url = if let Ok(mut url) = reqwest::Url::parse(url) {
+        let _ = url.set_username("");
+        let _ = url.set_password(None);
+        url.set_query(None);
+        url.set_fragment(None);
+        url.to_string()
+    } else {
+        "invalid-url".into()
+    };
+    let config = json!({"api":model.and_then(|m|m.api).unwrap_or(provider.api),"baseUrl":url,"piProvider":provider.pi_provider,"opencodeGo":provider.opencode_go,"providerCompat":clean(&json!(provider.compat)),"providerHeaders":clean(&json!(provider.headers)),"model":model.map(|m|json!({"id":m.id,"canonicalProvider":m.canonical_provider,"compat":clean(&json!(m.compat)),"headers":clean(&json!(m.headers)),"thinkingLevelMap":m.thinking_level_map}))});
+    format!("{:x}", Sha256::digest(config.to_string().as_bytes()))
+}
+fn public_compat(provider: &Provider, model: Option<&Model>) -> Map<String, Value> {
+    let mut compat = long_cache_compat(model.map_or(&provider.compat, |m| &m.compat));
+    compat.insert(
+        "pircRouteFingerprint".into(),
+        json!(route_fingerprint(provider, model)),
+    );
+    compat
+}
+
 /// `publicModels`: an explicit allowlist; never endpoint URLs, headers,
 /// compat flags (but one) or credentials.
 pub fn public_models(models: &Models) -> Models {
@@ -298,7 +352,7 @@ pub fn public_models(models: &Models) -> Models {
                     max_tokens: model.max_tokens,
                     reasoning: model.reasoning,
                     input: model.input.clone(),
-                    compat: long_cache_compat(&model.compat),
+                    compat: public_compat(provider, Some(model)),
                 })
                 .collect();
             let provider = Provider {
@@ -307,7 +361,7 @@ pub fn public_models(models: &Models) -> Models {
                 opencode_go: None,
                 base_url: "https://gateway.invalid".to_owned(),
                 headers: IndexMap::new(),
-                compat: long_cache_compat(&provider.compat),
+                compat: public_compat(provider, None),
                 models,
                 api_key: None,
             };
@@ -363,6 +417,25 @@ mod tests {
             .unwrap()
             .extend(extra.as_object().unwrap().clone());
         base
+    }
+
+    #[test]
+    fn route_fingerprint_tracks_routing_but_excludes_rotating_credentials() {
+        let mut p: Provider = serde_json::from_value(provider(
+            json!({"headers":{"Authorization":"Bearer first","x-region":"east"},"apiKey":"first"}),
+        ))
+        .unwrap();
+        let first = route_fingerprint(&p, Some(&p.models[0]));
+        p.api_key = Some("second".into());
+        p.headers
+            .insert("Authorization".into(), "Bearer second".into());
+        p.base_url = "https://user:pass@api.example.com/v1?api_key=secret#token".into();
+        assert_eq!(route_fingerprint(&p, Some(&p.models[0])), first);
+        p.headers.insert("x-region".into(), "west".into());
+        assert_ne!(route_fingerprint(&p, Some(&p.models[0])), first);
+        let changed = route_fingerprint(&p, Some(&p.models[0]));
+        p.models[0].base_url = Some("https://other.example.com/v1".into());
+        assert_ne!(route_fingerprint(&p, Some(&p.models[0])), changed);
     }
 
     #[test]
@@ -507,7 +580,22 @@ mod tests {
                 { "id": "n" }] } },
             "defaultModel": { "provider": "p", "id": "m" } }))
         .unwrap();
-        let public = serde_json::to_value(public_models(&models)).unwrap();
+        let mut public = serde_json::to_value(public_models(&models)).unwrap();
+        let p = public["providers"]["p"].as_object_mut().unwrap();
+        assert_eq!(
+            p["compat"]["pircRouteFingerprint"].as_str().unwrap().len(),
+            64
+        );
+        p["compat"]
+            .as_object_mut()
+            .unwrap()
+            .remove("pircRouteFingerprint");
+        for m in p["models"].as_array_mut().unwrap() {
+            m["compat"]
+                .as_object_mut()
+                .unwrap()
+                .remove("pircRouteFingerprint");
+        }
         assert_eq!(
             public,
             json!({ "providers": { "p": { "api": "openai-completions",

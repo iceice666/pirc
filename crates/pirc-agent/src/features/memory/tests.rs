@@ -4,19 +4,10 @@
 use pirc_protocol::{Message, UserBlock};
 use serde_json::json;
 
-use super::agents::{ObserverTool, ReflectorTool, pool_metrics, select_drops};
+use super::ledger::hash_id;
 use super::ledger::tests::{custom, entry, msg, obs};
-use super::ledger::{Observation, Reflection, hash_id};
 use super::serialize::{RECALL_OMITTED, neutralize_headers, serialize_chunk};
-use super::worker::WorkerTool;
 use super::*;
-
-fn args(value: Value) -> Map<String, Value> {
-    match value {
-        Value::Object(map) => map,
-        _ => unreachable!(),
-    }
-}
 
 fn tool_result(name: &str, text: &str) -> SessionEntry {
     entry(EntryData::Message(Message::ToolResult {
@@ -45,21 +36,6 @@ fn does_not_promote_recap_recommendations_into_observational_memory() {
     let chunk = serialize_chunk(&[entry(EntryData::Message(message.clone()))], 1000);
     assert!(chunk.source_entry_ids.is_empty());
     assert!(render_message(&message, Style::Recall).contains("Derived recommendation"));
-}
-
-#[test]
-fn sizes_and_orders_drops() {
-    let items: Vec<Observation> = [("a", "high"), ("b", "low"), ("c", "low")]
-        .iter()
-        .map(|(content, relevance)| Observation::parse(&obs(content, "x", relevance)).unwrap())
-        .collect();
-    assert!(pool_metrics(&items, 10).ready);
-    let reflections = vec![Reflection::new("r".to_owned(), vec![items[2].id.clone()])];
-    let proposed: Vec<String> = items.iter().map(|o| o.id.clone()).collect();
-    assert_eq!(
-        select_drops(&proposed, &items, &reflections, 2),
-        [items[2].id.clone(), items[1].id.clone()]
-    );
 }
 
 #[test]
@@ -166,39 +142,6 @@ fn hides_recall_output_from_the_observer_and_records_origins() {
             (recalled.id.as_str(), "tool:recall")
         ]
     );
-    let mut observer = ObserverTool::new(&chunk);
-    let receipt = observer.execute(&args(json!({ "observations": [{
-        "timestamp": "2026-09-28 10:00",
-        "content": format!("User shared the deploy key {key}"),
-        "relevance": "high",
-        "sourceEntryIds": [reply.id, user.id],
-    }, {
-        "timestamp": "2026-09-28 10:00", "content": "Invented", "relevance": "high",
-        "sourceEntryIds": ["nope"],
-    }] })));
-    assert_eq!(
-        receipt,
-        "Recorded 1 new observation(s). 1 observation(s) rejected for missing or invalid sourceEntryIds. Total so far this run: 1. Continue if the chunk still has uncovered content; otherwise stop calling the tool and emit a short plain-text confirmation."
-    );
-    let observation = &observer.out[0];
-    assert_eq!(
-        observation.content,
-        "User shared the deploy key sk-[REDACTED]"
-    );
-    assert_eq!(
-        observation.source_entry_ids,
-        [user.id.clone(), reply.id.clone()]
-    );
-    assert_eq!(
-        observation.origins.as_deref(),
-        Some(&["assistant".to_owned(), "user".to_owned()][..])
-    );
-    let mut reflector = ReflectorTool::new(&[], &observer.out);
-    reflector.execute(&args(json!({ "reflections": [{
-        "content": format!("The deploy key is {key}"),
-        "supportingObservationIds": [observation.id],
-    }] })));
-    assert_eq!(reflector.out[0].content, "The deploy key is sk-[REDACTED]");
 }
 
 #[test]
@@ -213,6 +156,4 @@ fn computes_thresholds() {
     config.compact_after_ratio_mode = true;
     assert_eq!(compact_threshold(&config, Some(100_000)), 68_000);
     assert_eq!(compact_threshold(&config, None), 81_000);
-    assert_eq!(bar(7.0, 5.0), "7/5 (100%)");
-    assert_eq!(bar(150.0, 20_000.0), "150/20,000 (1%)");
 }

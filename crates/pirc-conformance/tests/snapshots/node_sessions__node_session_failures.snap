@@ -50,7 +50,6 @@ expression: t.into_value()
       "pi_event:message_end:assistant",
       "pi_event:panel_changed",
       "pi_event:turn_end",
-      "pi_event:panel_changed",
       "pi_event:agent_end",
       "pi_event:agent_settled"
     ],
@@ -186,7 +185,6 @@ expression: t.into_value()
       "pi_event:message_end:assistant",
       "pi_event:panel_changed",
       "pi_event:turn_end",
-      "pi_event:panel_changed",
       "pi_event:agent_end",
       "pi_event:agent_settled"
     ],

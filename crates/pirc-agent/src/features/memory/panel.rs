@@ -5,7 +5,6 @@
 
 use serde_json::{Map, Value, json};
 
-use super::agents::pool_metrics;
 use super::config::MemoryConfig;
 use super::ledger::{
     LedgerType, fold_ledger, pool_tokens, raw_tokens_since_last_compaction, tokens_since_coverage,
@@ -37,7 +36,9 @@ pub fn memory_panel(
     let target = pool_target(config);
     let threshold = |value: f64, max: f64| json!({ "value": value as u64, "max": max as u64 });
     let mut out = json!({
-        "enabled": config.enabled,
+        "architecture":"handoff",
+        "handoff":{"snapshots":crate::handoff::valid_snapshots(branch).len(),"latest":crate::handoff::valid_snapshots(branch).last().map(|e|e.id.clone()),"legacyAncestry":crate::handoff::valid_snapshots(branch).last().and_then(|e|crate::handoff::details(e).and_then(|h|h.legacy_base_id)),"textOnly":true},
+        "enabled": true,
         "passive": config.passive,
         "thresholds": {
             "observation": threshold(
@@ -57,7 +58,7 @@ pub fn memory_panel(
                 "max": config.observations_pool_max_tokens,
             },
             "activePool": threshold(
-                pool_metrics(&folded.active_observations, target).tokens as f64,
+                pool_tokens(&folded.active_observations),
                 target as f64,
             ),
         },

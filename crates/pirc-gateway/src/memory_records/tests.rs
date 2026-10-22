@@ -202,7 +202,7 @@ fn lines_are_applied_like_the_fold_only_in_order() {
     );
     assert_eq!(watermarks(&app, "n1"), json!({ KEY: 250 }));
 
-    // A ledger that shrank starts over.
+    // A ledger that shrank cannot erase previously mirrored revocations.
     assert_eq!(
         feed(
             0,
@@ -210,9 +210,9 @@ fn lines_are_applied_like_the_fold_only_in_order() {
             true,
             json!([{ "type": "recorded", "items": [item("G note", json!({}))] }])
         ),
-        40
+        250
     );
-    assert_eq!(all(&app), [format!("G note:active:{ME}")]);
+    assert!(all(&app).iter().any(|row| row.starts_with("F note:active")));
 }
 
 #[test]
@@ -669,4 +669,41 @@ fn a_node_keeps_at_most_its_quota() {
     feed(30, lines, (3, 1000));
     let kept = all(&app);
     assert!(kept.contains(&format!("after:active:{ME}")), "{kept:?}");
+}
+
+#[test]
+fn versioned_mirror_rejects_invalid_and_over_quota_batches_atomically() {
+    let (app, _dir) = setup();
+    ingest_within(
+        &app,
+        "n1",
+        KEY,
+        (0, 10, false),
+        &[json!({"type":"recorded","items":[item("old",json!({}))]})],
+        (2, 1000),
+    )
+    .unwrap();
+    let marker = json!({"type":"integrity","version":2,"end":20,"digest":"b".repeat(64),"previousDigest":null,"legacyProjection":projection(&app.db.lock(),"n1",KEY).unwrap()});
+    let retirement = json!({"type":"retired","ids":[hash_id("old")],"reason":"superseded"});
+    let invalid = vec![
+        retirement.clone(),
+        json!({"type":"recorded","items":[{"content":"malformed"}]}),
+        marker.clone(),
+    ];
+    assert!(ingest_within(&app, "n1", KEY, (10, 20, false), &invalid, (2, 1000)).is_err());
+    assert!(all(&app).iter().any(|s| s.starts_with("old:active:")));
+    let quota = vec![
+        retirement,
+        json!({"type":"recorded","items":[item("new",json!({})),item("extra",json!({}))]}),
+        marker,
+    ];
+    assert_eq!(
+        ingest_within(&app, "n1", KEY, (10, 20, false), &quota, (2, 1000))
+            .unwrap_err()
+            .code,
+        "memory_mirror_quota_exceeded"
+    );
+    assert_eq!(all(&app).len(), 1);
+    assert!(all(&app)[0].starts_with("old:active:"));
+    assert_eq!(watermarks(&app, "n1")[KEY], 10);
 }

@@ -941,6 +941,13 @@ impl Recorder {
 
     fn mask(&mut self, value: &mut Value) {
         match value {
+            Value::String(text) => {
+                if let Some(mut packet) = crate::normalize::handoff_packet(text) {
+                    self.mask(&mut packet);
+                    *text = serde_json::to_string(&packet).unwrap();
+                }
+            }
+
             Value::Array(items) => items.iter_mut().for_each(|item| self.mask(item)),
             Value::Object(object) => {
                 for (key, item) in object.iter_mut() {

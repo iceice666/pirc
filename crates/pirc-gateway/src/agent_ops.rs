@@ -38,10 +38,34 @@ enum Parsed {
     Delegation(delegations::Op),
     Schedule(schedules::Op),
     Web(web_search::Op),
+    WorkspaceMirror(String),
+    HistoryAuthority,
 }
 
 /// `None`: no such operation; `Some(Err)`: invalid arguments.
 fn parse(op: &str, args: &Value) -> Option<Result<Parsed, ()>> {
+    if op == "history.authority" {
+        return Some(
+            args.as_object()
+                .filter(|a| a.is_empty())
+                .map(|_| Parsed::HistoryAuthority)
+                .ok_or(()),
+        );
+    }
+    if op == "workspace.mirrorState" {
+        return Some(
+            args.as_object()
+                .filter(|m| m.len() == 1)
+                .and_then(|_| args["ledgerKey"].as_str())
+                .filter(|k| {
+                    k.len() == 16
+                        && k.bytes()
+                            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+                })
+                .map(|k| Parsed::WorkspaceMirror(k.into()))
+                .ok_or(()),
+        );
+    }
     if let Some(parsed) = memory::parse_op(op, args) {
         return Some(parsed.map(Parsed::Memory));
     }
@@ -123,6 +147,17 @@ pub async fn run(
             user,
         };
         match parsed {
+            Parsed::HistoryAuthority => Ok(json!({"owner":context.user})),
+            Parsed::WorkspaceMirror(key) => {
+                if !context.mode.workspace_memory || !context.mode.repository {
+                    return Err(ApiError::new(
+                        403,
+                        "forbidden",
+                        "Repository memory is not available in this mode",
+                    ));
+                }
+                crate::memory_records::mirror_state(app, node_id, &key, &context.user)
+            }
             Parsed::Memory(op) => memory::run_op(app, &context, op).await,
             Parsed::Delegation(op) => delegations::run_op(app, &context, op).await,
             Parsed::Schedule(op) => schedules::run_op(app, &context, op).await,

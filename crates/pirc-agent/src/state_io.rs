@@ -25,6 +25,14 @@ pub fn configure(config: Option<InferenceConfig>) -> Result<(), String> {
     Ok(())
 }
 fn request(op: &str, path: &Path, to: Option<&Path>, data: &[u8]) -> io::Result<()> {
+    exchange(op, path, to, data).map(|_| ())
+}
+fn exchange(
+    op: &str,
+    path: &Path,
+    to: Option<&Path>,
+    data: &[u8],
+) -> io::Result<serde_json::Value> {
     let config = CONFIG
         .get()
         .ok_or_else(|| io::Error::other("Persistence unavailable"))?;
@@ -45,10 +53,22 @@ fn request(op: &str, path: &Path, to: Option<&Path>, data: &[u8]) -> io::Result<
     stream.write_all(&body)?;
     let mut response = Vec::new();
     stream.take(64 * 1024).read_to_end(&mut response)?;
+    let body = response
+        .windows(4)
+        .position(|p| p == b"\r\n\r\n")
+        .map(|i| &response[i + 4..])
+        .ok_or_else(|| io::Error::other("persistence_response_unknown"))?;
+    let value: serde_json::Value = serde_json::from_slice(body)
+        .map_err(|_| io::Error::other("persistence_response_unknown"))?;
     if !response.starts_with(b"HTTP/1.1 200 ") {
-        return Err(io::Error::other("Node persistence request refused"));
+        return Err(io::Error::other(
+            value
+                .get("error")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("persistence_refused"),
+        ));
     }
-    Ok(())
+    Ok(value)
 }
 pub fn create_dir_all(path: &Path) -> io::Result<()> {
     if CONFIG.get().is_some() {
@@ -154,4 +174,41 @@ impl Write for Writer {
             Self::Remote(_) => Ok(()),
         }
     }
+}
+
+/// Atomic session operations are validated and synchronized by the node, never by a tool.
+pub fn session_open(path: &Path) -> io::Result<Vec<u8>> {
+    for attempt in 0..3 {
+        let reply = exchange(
+            if attempt == 0 {
+                "session_open"
+            } else {
+                "session_snapshot"
+            },
+            path,
+            None,
+            &[],
+        )?;
+        let raw = fs::read(path).or_else(|e| {
+            if e.kind() == io::ErrorKind::NotFound {
+                Ok(Vec::new())
+            } else {
+                Err(e)
+            }
+        })?;
+        if reply.get("hash").and_then(serde_json::Value::as_str)
+            == Some(&crate::journal::digest(&raw))
+        {
+            return Ok(raw);
+        }
+    }
+    Err(io::Error::other("writer_busy"))
+}
+pub fn session_append(path: &Path, expected: &str, entry: &serde_json::Value) -> io::Result<()> {
+    request(
+        "session_append",
+        path,
+        None,
+        &serde_json::to_vec(&json!({"expected":expected,"entry":entry}))?,
+    )
 }

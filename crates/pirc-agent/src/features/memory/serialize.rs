@@ -182,15 +182,7 @@ pub fn render_message(message: &Message, style: Style) -> String {
                 .iter()
                 .map(|part| match part {
                     AssistantContent::Text { text, .. } => neutralize_headers(text),
-                    AssistantContent::Thinking {
-                        thinking, redacted, ..
-                    } => {
-                        if *redacted == Some(true) {
-                            String::new()
-                        } else {
-                            format!("[thinking: {}]", neutralize_headers(thinking))
-                        }
-                    }
+                    AssistantContent::Thinking { .. } => String::new(),
                     AssistantContent::ToolCall {
                         name, arguments, ..
                     } => format!(

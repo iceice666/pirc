@@ -60,9 +60,12 @@ fn persistence_worker() {
         .try_lock()
         .unwrap()
         .expect("read-only ledger can still be locked");
-    ledger
-        .append(&json!({"type":"test-memory","source":"synthetic"}))
-        .unwrap();
+    assert!(
+        ledger
+            .append(&json!({"type":"test-memory","source":"synthetic"}))
+            .is_err(),
+        "repository commits require host source and authority validation"
+    );
     assert!(
         state_io::write(&memory.join("key.jsonl"), b"forged").is_err(),
         "ledger is append only"
@@ -180,7 +183,7 @@ async fn native_state_custody() {
             .unwrap()
             .contains("background-state")
     );
-    assert!(fs::read_to_string(ledger).unwrap().contains("synthetic"));
+    assert!(fs::read_to_string(ledger).unwrap().is_empty());
     assert_eq!(
         fs::read_to_string(dir.join("team/worker/metadata.json")).unwrap(),
         "{\"ok\":true}"

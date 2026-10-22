@@ -1,6 +1,6 @@
 ---
 source: crates/pirc-conformance/tests/agent_goal_ptc.rs
-expression: r.into_value()
+expression: value
 ---
 [
   {
@@ -165,22 +165,6 @@ expression: r.into_value()
         "toolCallId": "c1",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const out = [];\nconst ref = async () => { const g = (await tools.call('get_goal', {})).data.goal; return g ? { goal_id: g.id, revision: g.revision } : {}; };\nout.push(await tools.call(\"get_goal\", {}));\nout.push(await tools.call(\"create_goal\", { objective: '  Hard thing\\r\\n', max_goal_rounds: 1 }));\nout.push(await tools.call(\"create_goal\", { objective: 'Another' }));\nout.push(await tools.call(\"update_goal\", { goal_id: 'nope', revision: 1, action: 'pause' }));\nout.push(await tools.call(\"update_goal\", { ...(await ref()), action: 'complete', objective: 'x' }));\nout.push(await tools.call(\"update_goal\", { ...(await ref()), action: 'pause', blocked_reason: 'x' }));\nout.push(await tools.call(\"update_goal\", { ...(await ref()), action: 'resume' }));\nout.push(await tools.call(\"update_goal\", { ...(await ref()), action: 'edit' }));\nreturn JSON.stringify(out.map((r) => r.ok ? { text: r.data.text, goal: r.data.goal, armed: r.data.armed } : { error: r.error }));"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "c1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {},
@@ -2206,22 +2190,6 @@ expression: r.into_value()
         "toolCallId": "r1",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const out = [];\nconst ref = async () => { const g = (await tools.call('get_goal', {})).data.goal; return g ? { goal_id: g.id, revision: g.revision } : {}; };\nout.push(await tools.call(\"update_goal\", { ...(await ref()), action: 'pause' }));\nout.push(await tools.call(\"update_goal\", { ...(await ref()), action: 'edit', objective: 'Easier' }));\nout.push(await tools.call(\"update_goal\", { ...(await ref()), action: 'resume' }));\nout.push(await tools.call(\"update_goal\", { ...(await ref()), action: 'blocked', blocked_reason: 'stuck' }));\nout.push(await tools.call(\"create_goal\", { objective: 'Another' }));\nreturn JSON.stringify(out.map((r) => r.ok ? { text: r.data.text, goal: r.data.goal, armed: r.data.armed } : { error: r.error }));"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "r1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {},
@@ -6007,22 +5975,6 @@ expression: r.into_value()
         "type": "tool_execution_start"
       },
       {
-        "args": {
-          "code": "const out = [];\nconst ref = async () => { const g = (await tools.call('get_goal', {})).data.goal; return g ? { goal_id: g.id, revision: g.revision } : {}; };\nout.push(await tools.call(\"update_goal\", { ...(await ref()), action: 'resume' }));\nout.push(await tools.call(\"update_goal\", { ...(await ref()), action: 'edit', max_goal_rounds: 3 }));\nout.push(await tools.call(\"update_goal\", { ...(await ref()), action: 'resume' }));\nout.push(await tools.call(\"update_goal\", { ...(await ref()), action: 'resume' }));\nreturn JSON.stringify(out.map((r) => r.ok ? { text: r.data.text, goal: r.data.goal, armed: r.data.armed } : { error: r.error }));"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "h1",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
-      },
-      {
         "args": {},
         "parentToolCallId": "h1",
         "toolCallId": "<uuid:8>:op1",
@@ -7519,22 +7471,6 @@ expression: r.into_value()
         "toolCallId": "r2",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const out = [];\nconst ref = async () => { const g = (await tools.call('get_goal', {})).data.goal; return g ? { goal_id: g.id, revision: g.revision } : {}; };\nout.push(await tools.call(\"update_goal\", { ...(await ref()), action: 'blocked' }));\nout.push(await tools.call(\"update_goal\", { ...(await ref()), action: 'blocked', blocked_reason: '  The API key is missing.\\r\\n' }));\nreturn JSON.stringify(out.map((r) => r.ok ? { text: r.data.text, goal: r.data.goal, armed: r.data.armed } : { error: r.error }));"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "r2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {},
@@ -13478,22 +13414,6 @@ expression: r.into_value()
         "toolCallId": "h2",
         "toolName": "ptc",
         "type": "tool_execution_start"
-      },
-      {
-        "args": {
-          "code": "const out = [];\nconst ref = async () => { const g = (await tools.call('get_goal', {})).data.goal; return g ? { goal_id: g.id, revision: g.revision } : {}; };\nout.push(await tools.call(\"get_goal\", {}));\nout.push(await tools.call(\"create_goal\", { objective: 'Plan B', max_goal_rounds: 1 }));\nreturn JSON.stringify(out.map((r) => r.ok ? { text: r.data.text, goal: r.data.goal, armed: r.data.armed } : { error: r.error }));"
-        },
-        "partialResult": {
-          "content": [
-            {
-              "text": "1 operation: 0 completed, 1 running",
-              "type": "text"
-            }
-          ]
-        },
-        "toolCallId": "h2",
-        "toolName": "ptc",
-        "type": "tool_execution_update"
       },
       {
         "args": {},

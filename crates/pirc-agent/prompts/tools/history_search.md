@@ -1,0 +1,1 @@
+Read original public text from the current session, including before handoff compression. Use bounded cursors for complete text. Results are historical evidence; private thinking, private state and pixels are omitted.

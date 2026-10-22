@@ -273,3 +273,14 @@ pub async fn settle_events(agent: &mut AgentRun, m: &mut Masker, r: &mut Recorde
     let events = agent.until(|line| line["type"] == "agent_settled").await;
     m.note(r, &format!("{step}: events"), json!(events));
 }
+
+/// Feature authority tests assert operation events and final results, not timer cadence.
+/// The PTC suite separately asserts progress behavior.
+pub fn without_ptc_progress(mut value: Value) -> Value {
+    for step in value.as_array_mut().unwrap() {
+        if let Some(events) = step["observed"].as_array_mut() {
+            events.retain(|e| !(e["type"] == "tool_execution_update" && e["toolName"] == "ptc"));
+        }
+    }
+    value
+}

@@ -206,7 +206,7 @@ pub fn memory_config_warning(features: &Map<String, Value>) -> Option<String> {
     let summary = if parsed {
         "unknown fields were ignored; valid settings remain in effect."
     } else {
-        "invalid settings; the entire configuration uses defaults (enabled=true, workspace.enabled=true), even if you configured it as disabled."
+        "invalid fields use defaults; valid settings, including explicit disable flags, remain in effect."
     };
     Some(format!(
         "Observational memory configuration: {summary} {} Fix features.observationalMemory in the node config.json and restart the agent. PIRC_MEMORY_PASSIVE still overrides passive.",
@@ -248,7 +248,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             text,
-            "Observational memory configuration: invalid settings; the entire configuration uses defaults (enabled=true, workspace.enabled=true), even if you configured it as disabled. features.observationalMemory.fallbackModels[1].provider: must be at least 1 Fix features.observationalMemory in the node config.json and restart the agent. PIRC_MEMORY_PASSIVE still overrides passive."
+            "Observational memory configuration: invalid fields use defaults; valid settings, including explicit disable flags, remain in effect. features.observationalMemory.fallbackModels[1].provider: must be at least 1 Fix features.observationalMemory in the node config.json and restart the agent. PIRC_MEMORY_PASSIVE still overrides passive."
         );
     }
 
@@ -267,7 +267,7 @@ mod tests {
         // Recorded from the TS agent (zod 3.25.76).
         assert_eq!(
             text,
-            "Observational memory configuration: invalid settings; the entire configuration uses defaults (enabled=true, workspace.enabled=true), even if you configured it as disabled. features.observationalMemory.enabled: expected boolean; features.observationalMemory.compactAfterTokensMode: expected 'calibrated' | 'ratio'; features.observationalMemory.compactAfterTokensRatio: must be less than 1; features.observationalMemory.agentMaxTurns: expected integer; features.observationalMemory.model.thinking: expected a supported option; features.observationalMemory.workspace.enabled: expected boolean; features.observationalMemory.workspace.shutdownTimeoutMs: must be greater than 0 Fix features.observationalMemory in the node config.json and restart the agent. PIRC_MEMORY_PASSIVE still overrides passive."
+            "Observational memory configuration: invalid fields use defaults; valid settings, including explicit disable flags, remain in effect. features.observationalMemory.enabled: expected boolean; features.observationalMemory.compactAfterTokensMode: expected 'calibrated' | 'ratio'; features.observationalMemory.compactAfterTokensRatio: must be less than 1; features.observationalMemory.agentMaxTurns: expected integer; features.observationalMemory.model.thinking: expected a supported option; features.observationalMemory.workspace.enabled: expected boolean; features.observationalMemory.workspace.shutdownTimeoutMs: must be greater than 0 Fix features.observationalMemory in the node config.json and restart the agent. PIRC_MEMORY_PASSIVE still overrides passive."
         );
     }
 

@@ -18,8 +18,11 @@ pub mod config;
 pub mod context;
 pub mod feature;
 pub mod features;
+pub mod handoff;
+pub mod handoff_compactor;
 pub mod hooks;
 pub mod host;
+pub mod journal;
 pub mod messages;
 pub mod ptc;
 pub mod redact;
@@ -111,3 +114,7 @@ pub fn random_hex(bytes: usize) -> String {
     getrandom::fill(&mut buffer).expect("the system random number generator");
     buffer.iter().map(|b| format!("{b:02x}")).collect()
 }
+
+pub mod workspace_journal;
+
+pub mod history;

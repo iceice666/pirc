@@ -30,6 +30,7 @@ fn offset_at(unix: i64) -> i64 {
 }
 
 /// Days since 1970-01-01 of a proleptic Gregorian date.
+#[cfg(test)]
 fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     let year = if month <= 2 { year - 1 } else { year };
     let era = year.div_euclid(400);
@@ -82,6 +83,7 @@ pub fn local_stamp_now() -> String {
 
 /// `Date.parse("YYYY-MM-DDTHH:MM")` (a stamp with `T`): local time in ms,
 /// or `None` (NaN). Other forms Bun's parser accepts are not read.
+#[cfg(test)]
 pub fn parse_local_minute(text: &str) -> Option<i64> {
     let bytes = text.as_bytes();
     let shape = bytes.len() == 16

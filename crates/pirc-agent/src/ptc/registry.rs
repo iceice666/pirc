@@ -153,7 +153,7 @@ pub fn capability_meta(name: &str) -> Meta {
         "todo" => with_reads(write("planning", &["write"]), &["list"]),
         "get_goal" => read("planning", &["read"]),
         "create_goal" | "update_goal" => write("planning", &["write"]),
-        "recall" => read("memory", &["read"]),
+        "recall" | "history_search" | "history_read" => agent_data(read("memory", &["read"])),
         "memory_search" => agent_data(read("memory", &["read", "external"])),
         "memory_note" => write("memory", &["write"]),
         "memory_propose_user" => meta(

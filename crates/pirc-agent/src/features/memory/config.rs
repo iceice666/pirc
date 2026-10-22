@@ -6,7 +6,7 @@
 use pirc_protocol::ThinkingLevel;
 use serde_json::{Map, Value};
 
-use crate::config::{memory_settings_valid, thinking_level};
+use crate::config::thinking_level;
 
 /// `ModelChoice`.
 #[derive(Clone, Debug, PartialEq)]
@@ -109,15 +109,17 @@ pub fn parse_memory_config(features: &Map<String, Value>) -> MemoryConfig {
         .filter(|value| !value.is_null())
         .unwrap_or(&empty);
     let mut config = MemoryConfig::default();
-    if !memory_settings_valid(raw) {
-        return config;
-    }
     let boolean = |value: &Value, key: &str, out: &mut bool| {
         if let Some(value) = value.get(key).and_then(Value::as_bool) {
             *out = value;
         }
     };
-    let number = |value: &Value, key: &str| value.get(key).and_then(Value::as_f64);
+    let number = |value: &Value, key: &str| {
+        value
+            .get(key)
+            .and_then(Value::as_f64)
+            .filter(|v| v.is_finite() && *v > 0.0 && v.fract() == 0.0 && *v <= u64::MAX as f64)
+    };
     let positive = |value: &Value, key: &str, out: &mut u64| {
         if let Some(value) = number(value, key) {
             *out = value as u64;
@@ -135,7 +137,10 @@ pub fn parse_memory_config(features: &Map<String, Value>) -> MemoryConfig {
     config.observer_chunk_max_tokens = number(raw, "observerChunkMaxTokens").map(|n| n as u64);
     positive(raw, "compactAfterTokens", &mut config.compact_after_tokens);
     config.compact_after_ratio_mode = raw["compactAfterTokensMode"] == "ratio";
-    if let Some(ratio) = number(raw, "compactAfterTokensRatio") {
+    if let Some(ratio) = raw["compactAfterTokensRatio"]
+        .as_f64()
+        .filter(|n| *n > 0.0 && *n < 1.0)
+    {
         config.compact_after_tokens_ratio = ratio;
     }
     positive(
@@ -147,9 +152,17 @@ pub fn parse_memory_config(features: &Map<String, Value>) -> MemoryConfig {
         number(raw, "observationsPoolTargetTokens").map(|n| n as u64);
     positive(raw, "agentMaxTurns", &mut config.agent_max_turns);
     positive(raw, "agentMaxTokens", &mut config.agent_max_tokens);
-    config.model = raw.get("model").map(model_choice);
+    let valid_model = |v: &&Value| {
+        v["provider"].as_str().is_some_and(|s| !s.is_empty())
+            && v["id"].as_str().is_some_and(|s| !s.is_empty())
+    };
+    config.model = raw.get("model").filter(valid_model).map(model_choice);
     if let Some(models) = raw.get("fallbackModels").and_then(Value::as_array) {
-        config.fallback_models = models.iter().map(model_choice).collect();
+        config.fallback_models = models
+            .iter()
+            .filter(valid_model)
+            .map(model_choice)
+            .collect();
     }
     config.strict_models = raw["missingModelPolicy"] == "error";
     positive(
@@ -158,6 +171,16 @@ pub fn parse_memory_config(features: &Map<String, Value>) -> MemoryConfig {
         &mut config.rate_limit_cooldown_ms,
     );
     if let Some(workspace) = raw.get("workspace") {
+        boolean(workspace, "enabled", &mut config.workspace.enabled);
+        positive(workspace, "maxTokens", &mut config.workspace.max_tokens);
+        positive(
+            workspace,
+            "shutdownTimeoutMs",
+            &mut config.workspace.shutdown_timeout_ms,
+        );
+    }
+    // Explicit canonical fields override legacy workspace fields individually.
+    if let Some(workspace) = features.get("workspaceMemory").filter(|v| v.is_object()) {
         boolean(workspace, "enabled", &mut config.workspace.enabled);
         positive(workspace, "maxTokens", &mut config.workspace.max_tokens);
         positive(
@@ -179,6 +202,46 @@ pub fn memory_config_from(features: &Map<String, Value>) -> MemoryConfig {
     {
         let value = crate::tools::js::trim(&passive).to_ascii_lowercase();
         config.passive = matches!(value.as_str(), "1" | "true" | "yes" | "on");
+    }
+    config
+}
+
+/// Work settings remain independently selectable, with fieldwise legacy aliases.
+pub fn workspace_config_from(features: &Map<String, Value>) -> MemoryConfig {
+    let mut config = memory_config_from(features);
+    let canonical = features.get("workspaceMemory").filter(|v| v.is_object());
+    config.workspace.enabled &= canonical.is_some_and(|c| c["enabled"] == true) || config.enabled;
+    let legacy = features
+        .get("observationalMemory")
+        .and_then(|v| v.get("workspace"));
+    let field = |key: &str| {
+        canonical
+            .and_then(|v| v.get(key))
+            .or_else(|| legacy.and_then(|v| v.get(key)))
+    };
+    if let Some(passive) = field("passive").and_then(Value::as_bool) {
+        config.passive = passive;
+    }
+    if std::env::var("PIRC_MEMORY_PASSIVE").ok().is_some_and(|s| {
+        ["1", "true", "yes", "on"].contains(&s.trim().to_ascii_lowercase().as_str())
+    }) {
+        config.passive = true;
+    }
+    if let Some(model) = field("model").filter(|v| {
+        v["provider"].as_str().is_some_and(|s| !s.is_empty())
+            && v["id"].as_str().is_some_and(|s| !s.is_empty())
+    }) {
+        config.model = Some(model_choice(model));
+    }
+    if let Some(models) = field("fallbackModels").and_then(Value::as_array) {
+        config.fallback_models = models
+            .iter()
+            .filter(|v| {
+                v["provider"].as_str().is_some_and(|s| !s.is_empty())
+                    && v["id"].as_str().is_some_and(|s| !s.is_empty())
+            })
+            .map(model_choice)
+            .collect();
     }
     config
 }
@@ -205,7 +268,9 @@ mod tests {
             "fallbackModels": [{ "provider": "fake", "id": "model" },
                 { "provider": "", "id": "private-model-value" }],
         }));
-        assert_eq!(reset, MemoryConfig::default());
+        assert!(!reset.enabled && !reset.workspace.enabled);
+        assert_eq!(reset.observe_after_tokens, 42);
+        assert_eq!(reset.fallback_models.len(), 1);
         let unknown = parse(json!({
             "enabled": false, "observeAfterTokens": 123, "legacy": "secret-value",
             "model": { "provider": "p", "id": "m", "thinking": "max", "extra": "secret-value" },
@@ -242,6 +307,6 @@ mod tests {
         assert!(parse(json!({ "missingModelPolicy": "error", "enabled": false })).strict_models);
         // Anything else is invalid: the whole object is the defaults.
         let invalid = parse(json!({ "missingModelPolicy": "strict", "enabled": false }));
-        assert_eq!(invalid, MemoryConfig::default());
+        assert!(!invalid.enabled);
     }
 }

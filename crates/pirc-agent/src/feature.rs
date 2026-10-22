@@ -138,6 +138,23 @@ pub trait Feature {
         Box::pin(async { Ok(None) })
     }
 
+    /// First-turn refresh can observe cancellation without changing older feature hooks.
+    fn before_model_start<'a>(
+        &'a self,
+        agent: &'a Rc<Agent>,
+        _signal: &'a AbortSignal,
+    ) -> LocalBoxFuture<'a, Result<Option<BeforeStart>, String>> {
+        self.before_agent_start(agent)
+    }
+    /// Replace an invalidated feature's complete owned block. None leaves it absent.
+    fn before_turn<'a>(
+        &'a self,
+        _agent: &'a Rc<Agent>,
+        _signal: &'a AbortSignal,
+    ) -> LocalBoxFuture<'a, Result<Option<Vec<PromptSection>>, String>> {
+        Box::pin(async { Ok(None) })
+    }
+
     /// After each turn's `turn_end`. `Err` crashes the run.
     fn turn_end<'a>(
         &'a self,
@@ -194,6 +211,15 @@ pub trait Feature {
         _agent: &'a Rc<Agent>,
     ) -> LocalBoxFuture<'a, Result<(), String>> {
         Box::pin(async { Ok(()) })
+    }
+
+    /// Settled work remains bound to the run that scheduled it, including an explicit stop.
+    fn settled_with_signal<'a>(
+        &'a self,
+        agent: &'a Rc<Agent>,
+        _signal: &'a AbortSignal,
+    ) -> LocalBoxFuture<'a, Result<(), String>> {
+        self.agent_settled(agent)
     }
 
     /// A custom compaction, or `None` for the default summarizer. `Err`

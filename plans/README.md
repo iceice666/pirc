@@ -164,3 +164,7 @@ Synthetic/emulator coverage does not close physical-device or real-account gaps.
 - **A second chat node:** needs its own `chats` workspace and a New chat rule.
 - **`workspace.read`:** reading a linked repository without delegating, only if
   chats keep delegating just to look at a file.
+
+## Memory integration
+
+The authorized [memory handoff redesign](memory-handoff.md) has been ported to the Rust mainline. Its final validation record and separate repository activation constraints are maintained there; this does not authorize deployment or existing-ledger activation.

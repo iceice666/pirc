@@ -15,13 +15,8 @@ use indexmap::IndexMap;
 use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 
-use super::ledger::{
-    RELEVANCES, Relevance, custom_data, estimate_string_tokens, fold_ledger, hash_id,
-    local_stamp_now, merge_origins, truncate_content,
-};
-use super::worker::WorkerTool;
+use super::ledger::Relevance;
 use crate::messages::js as mjs;
-use crate::redact::redact_secrets;
 use crate::session_store::{SessionEntry, read_session_branch};
 use crate::tools::js;
 
@@ -114,17 +109,6 @@ pub enum WorkspaceLine {
     Recorded { items: Vec<WorkspaceItem> },
     Retired { ids: Vec<String>, forgotten: bool },
     Cleared,
-}
-
-/// A candidate for promotion (`Candidate`).
-#[derive(Clone, Debug, PartialEq)]
-pub struct Candidate {
-    pub id: String,
-    pub reflection: bool,
-    pub content: String,
-    pub timestamp: Option<String>,
-    pub relevance: Option<Relevance>,
-    pub origins: Vec<String>,
 }
 
 // ---------- location ----------
@@ -600,6 +584,14 @@ impl WorkspaceLedger {
 
     /// Append one line (`JSON.stringify(line)`).
     pub fn append(&self, line: &Value) -> Result<(), String> {
+        if self.file.with_extension("lock").is_dir()
+            || (self.file.exists()
+                && crate::workspace_journal::read(&self.file)?
+                    .control
+                    .is_some())
+        {
+            return Err("legacy_workspace_writer_after_cutover".into());
+        }
         let bytes = format!("{}\n", js::stringify(line));
         if crate::state_io::config().is_some() {
             crate::state_io::append(&self.file, bytes.as_bytes())
@@ -630,57 +622,6 @@ impl WorkspaceLedger {
     }
 }
 
-// ---------- promotion ----------
-
-/// `promotionCandidates`: session reflections and high/critical
-/// observations not yet considered for promotion.
-pub fn promotion_candidates(branch: &[SessionEntry]) -> Vec<Candidate> {
-    let mut done: HashSet<String> = HashSet::new();
-    for entry in branch {
-        if let Some(ids) = custom_data(entry, WS_PROMOTED)
-            .and_then(|data| data.get("memoryIds"))
-            .and_then(Value::as_array)
-        {
-            done.extend(ids.iter().map(js::string_of));
-        }
-    }
-    let folded = fold_ledger(branch);
-    let mut out = Vec::new();
-    for r in &folded.reflections {
-        if done.contains(&r.id) {
-            continue;
-        }
-        out.push(Candidate {
-            id: r.id.clone(),
-            reflection: true,
-            content: r.content.clone(),
-            timestamp: None,
-            relevance: None,
-            origins: merge_origins(r.supporting_observation_ids.iter().map(|id| {
-                folded
-                    .observations_by_id
-                    .get(id)
-                    .and_then(|o| o.origins.as_deref())
-            })),
-        });
-    }
-    for o in &folded.active_observations {
-        if done.contains(&o.id) || o.relevance < Relevance::High {
-            continue;
-        }
-        out.push(Candidate {
-            id: o.id.clone(),
-            reflection: false,
-            content: o.content.clone(),
-            timestamp: Some(o.timestamp.clone()),
-            relevance: Some(o.relevance),
-            origins: merge_origins([o.origins.as_deref()]),
-        });
-    }
-    out
-}
-
-/// `workspaceItemLine`.
 pub fn workspace_item_line(item: &WorkspaceItem) -> String {
     format!(
         "[{}] {}{} [{}] {}",
@@ -693,261 +634,6 @@ pub fn workspace_item_line(item: &WorkspaceItem) -> String {
         item.relevance.as_str(),
         item.content
     )
-}
-
-fn candidate_line(c: &Candidate) -> String {
-    if c.reflection {
-        format!("[{}] reflection: {}", c.id, c.content)
-    } else {
-        format!(
-            "[{}] {} [{}] observation: {}",
-            c.id,
-            c.timestamp.as_deref().unwrap_or_default(),
-            c.relevance.map_or("", Relevance::as_str),
-            c.content
-        )
-    }
-}
-
-/// The sum of the items' token counts.
-pub fn items_tokens(items: &[WorkspaceItem]) -> f64 {
-    items
-        .iter()
-        .map(|item| item.token_count)
-        .fold(0.0, |sum, n| sum + n)
-}
-
-/// `promoterPrompt`.
-pub fn promoter_prompt(
-    fold: &WorkspaceFold,
-    candidates: &[Candidate],
-    git: Option<&GitState>,
-    target: u64,
-) -> String {
-    let list = |items: Vec<String>| {
-        if items.is_empty() {
-            "(none)".to_owned()
-        } else {
-            items.join("\n")
-        }
-    };
-    let forgotten: Vec<&String> = fold.forgotten.values().flatten().collect();
-    let forgotten = if forgotten.is_empty() {
-        String::new()
-    } else {
-        format!(
-            "\nFORGOTTEN (the user asked to forget these; never record them again):\n{}\n",
-            forgotten
-                .iter()
-                .map(|content| format!("- {content}"))
-                .collect::<Vec<_>>()
-                .join("\n")
-        )
-    };
-    let label = git_label(git);
-    format!(
-        "Current local time: {}
-Current git state: {}
-
-CURRENT WORKSPACE MEMORY (~{} tokens; target ~{}):
-{}
-{forgotten}
-NEW SESSION MEMORY:
-{}",
-        local_stamp_now(),
-        if label.is_empty() {
-            "not a git repository"
-        } else {
-            &label
-        },
-        js_locale(items_tokens(&fold.active)),
-        js_locale(target as f64),
-        list(fold.active.iter().map(workspace_item_line).collect()),
-        list(candidates.iter().map(candidate_line).collect())
-    )
-}
-
-fn js_locale(n: f64) -> String {
-    js::locale_string_en_us(n)
-}
-
-/// What a promotion run decided (`PromotionOutput`).
-#[derive(Clone, Debug, Default)]
-pub struct PromotionOutput {
-    /// New items, as stored.
-    pub add: Vec<Value>,
-    pub retire: Vec<String>,
-}
-
-/// Where promoted items come from.
-pub struct PromotionContext {
-    pub session_id: String,
-    pub session_dir: String,
-    pub git: Option<GitState>,
-}
-
-/// `promoterTool`: `record_workspace_memory`.
-pub struct PromoterTool {
-    fold: WorkspaceFold,
-    candidate_origins: IndexMap<String, Vec<String>>,
-    active_ids: HashSet<String>,
-    context: PromotionContext,
-    pub out: PromotionOutput,
-    added_ids: Vec<String>,
-}
-
-impl PromoterTool {
-    pub fn new(fold: WorkspaceFold, candidates: &[Candidate], context: PromotionContext) -> Self {
-        Self {
-            candidate_origins: candidates
-                .iter()
-                .map(|c| (c.id.clone(), c.origins.clone()))
-                .collect(),
-            active_ids: fold.active.iter().map(|item| item.id.clone()).collect(),
-            fold,
-            context,
-            out: PromotionOutput::default(),
-            added_ids: Vec::new(),
-        }
-    }
-}
-
-impl WorkerTool for PromoterTool {
-    fn name(&self) -> &'static str {
-        "record_workspace_memory"
-    }
-
-    fn description(&self) -> &'static str {
-        "Add workspace memory items distilled from the new session memory and/or retire existing workspace items that are superseded, completed, or stale."
-    }
-
-    fn parameters(&self) -> Value {
-        json!({
-            "type": "object",
-            "properties": {
-                "add": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "content": { "type": "string" },
-                            "relevance": { "type": "string", "enum": RELEVANCES },
-                            "sourceMemoryIds": {
-                                "type": "array",
-                                "minItems": 1,
-                                "items": { "type": "string" },
-                                "description": "Bracketed ids from NEW SESSION MEMORY supporting this item.",
-                            },
-                        },
-                        "required": ["content", "relevance", "sourceMemoryIds"],
-                    },
-                },
-                "retire": {
-                    "type": "array",
-                    "items": { "type": "string" },
-                    "description": "Ids of CURRENT WORKSPACE MEMORY items to retire.",
-                },
-            },
-        })
-    }
-
-    fn execute(&mut self, args: &Map<String, Value>) -> String {
-        let (mut added, mut rejected, mut retired) = (0, 0, 0);
-        let (mut present, mut superseded, mut forgotten) = (0, 0, 0);
-        let empty = Vec::new();
-        for raw in args.get("add").and_then(Value::as_array).unwrap_or(&empty) {
-            let content = raw
-                .get("content")
-                .and_then(Value::as_str)
-                .map(|content| truncate_content(&redact_secrets(js::trim(content))))
-                .unwrap_or_default();
-            let mut ids: Vec<String> = Vec::new();
-            if let Some(items) = raw.get("sourceMemoryIds").and_then(Value::as_array) {
-                for id in items.iter().map(js::string_of) {
-                    if self.candidate_origins.contains_key(&id) && !ids.contains(&id) {
-                        ids.push(id);
-                    }
-                }
-            }
-            if content.is_empty() || ids.is_empty() {
-                rejected += 1;
-                continue;
-            }
-            // Ids are content hashes, and the fold ignores ids it already
-            // knows: report such an item as skipped instead of claiming it
-            // was added.
-            let id = hash_id(&content);
-            if self.fold.forgotten.contains_key(&id) {
-                forgotten += 1;
-                continue;
-            }
-            if self.active_ids.contains(&id) || self.added_ids.contains(&id) {
-                present += 1;
-                continue;
-            }
-            if self.fold.items.contains_key(&id) {
-                superseded += 1;
-                continue;
-            }
-            let relevance = Relevance::parse(raw.get("relevance")).unwrap_or(Relevance::Medium);
-            let origins = merge_origins(
-                ids.iter()
-                    .map(|source| self.candidate_origins.get(source).map(Vec::as_slice)),
-            );
-            let mut item = Map::new();
-            item.insert("id".to_owned(), json!(id));
-            item.insert("content".to_owned(), json!(content));
-            item.insert("relevance".to_owned(), json!(relevance.as_str()));
-            item.insert("timestamp".to_owned(), json!(local_stamp_now()));
-            item.insert("sessionId".to_owned(), json!(self.context.session_id));
-            item.insert("sessionDir".to_owned(), json!(self.context.session_dir));
-            item.insert("sourceMemoryIds".to_owned(), json!(ids));
-            item.insert("origins".to_owned(), json!(origins));
-            if let Some(git) = &self.context.git {
-                item.insert("git".to_owned(), git.to_value());
-            }
-            item.insert("tokenCount".to_owned(), json!(0));
-            let mut value = Value::Object(item);
-            let parsed = WorkspaceItem::parse(&value).expect("a new item is valid");
-            value["tokenCount"] = json!(estimate_string_tokens(&workspace_item_line(&parsed)));
-            self.out.add.push(value);
-            self.added_ids.push(id);
-            added += 1;
-        }
-        for id in args
-            .get("retire")
-            .and_then(Value::as_array)
-            .unwrap_or(&empty)
-        {
-            let id = js::string_of(id);
-            if self.active_ids.contains(&id) && !self.out.retire.contains(&id) {
-                self.out.retire.push(id);
-                retired += 1;
-            }
-        }
-        let mut notes = Vec::new();
-        if present > 0 {
-            notes.push(format!("{present} already in workspace memory"));
-        }
-        if superseded > 0 {
-            notes.push(format!(
-                "{superseded} recorded before and retired (describe the current state instead)"
-            ));
-        }
-        if forgotten > 0 {
-            notes.push(format!(
-                "{forgotten} forgotten by the user (never record it)"
-            ));
-        }
-        format!(
-            "Added {added}, retired {retired}, rejected {rejected} (missing content or valid sourceMemoryIds){}. Call again if more remains; otherwise reply briefly to finish.",
-            if notes.is_empty() {
-                String::new()
-            } else {
-                format!("; skipped {}", notes.join(", "))
-            }
-        )
-    }
 }
 
 // ---------- rendering ----------

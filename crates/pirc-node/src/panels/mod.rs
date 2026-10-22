@@ -391,6 +391,7 @@ async fn panel_state(node: &Node, local: &Local) -> ApiResult<Value> {
         "agentRunning": runner.is_some_and(|runner| runner.alive()),
         "memory": memory,
         "memoryRuntime": or("memoryRuntime", Value::Null),
+        "workspaceMemory":or("workspaceMemory",Value::Null),
         "backgroundTasks": or("backgroundTasks", json!([])),
         "team": or("team", json!({ "agents": [] })),
     }))

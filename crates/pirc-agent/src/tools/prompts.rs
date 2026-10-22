@@ -52,6 +52,8 @@ prompts!(
     find,
     get_goal,
     grep,
+    history_read,
+    history_search,
     ls,
     memory_note,
     memory_propose_user,

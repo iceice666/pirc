@@ -184,6 +184,21 @@ impl Runner {
         }
         let runner = self.clone();
         tokio::spawn(async move {
+            if op.starts_with("workspace.") || op.starts_with("history.") {
+                let result = runner.memory_operation(&op, &args).await;
+                match result {
+                    Ok(value) => runner.gateway_reply(&id, json!({"ok":true,"result":value})),
+                    Err(error) => runner.gateway_fail(
+                        &id,
+                        error.status,
+                        &error.code,
+                        &error.message,
+                        error.details.map(|d| *d),
+                    ),
+                }
+                runner.lock().gateway_requests -= 1;
+                return;
+            }
             // Local-only: historical evidence never passes through the
             // gateway transport. The runner binds identity; the caller
             // cannot supply a workspace or source path.
@@ -254,6 +269,162 @@ impl Runner {
             let details = error.and_then(|error| error.get("details")).cloned();
             runner.gateway_fail(&id, answer.status, code, &text, details);
         });
+    }
+
+    async fn memory_operation(
+        self: &Arc<Self>,
+        op: &str,
+        args: &Value,
+    ) -> crate::error::ApiResult<Value> {
+        use crate::workspace_memory as memory;
+        let node = self
+            .node()
+            .ok_or_else(|| crate::error::ApiError::runner_unavailable("Runner ended"))?;
+        let work = op.starts_with("workspace.");
+        let initial = memory::scope(&node, &self.session_id, &self.mode, self.epoch, work)?;
+        let remote = if work {
+            let answer = node
+                .agent_gateway
+                .request(
+                    &self.session_id,
+                    "workspace.mirrorState",
+                    json!({"ledgerKey":initial.key}),
+                )
+                .await;
+            if answer.status != 200 {
+                return Err(crate::error::ApiError::new(
+                    503,
+                    "workspace_authority_unavailable",
+                    "Repository memory authority is unavailable",
+                ));
+            }
+            if answer.body["result"]["owner"] != initial.owner {
+                return Err(crate::error::ApiError::forbidden("Memory owner changed"));
+            }
+            answer.body["result"].clone()
+        } else {
+            let answer = node
+                .agent_gateway
+                .request(&self.session_id, "history.authority", json!({}))
+                .await;
+            if answer.status != 200 || answer.body["result"]["owner"] != initial.owner {
+                return Err(crate::error::ApiError::forbidden(
+                    "History authority is unavailable",
+                ));
+            }
+            Value::Null
+        };
+        let runner = self.clone();
+        let read_op = op.to_owned();
+        let read_args = args.clone();
+        let op = op.to_owned();
+        let args = args.clone();
+        let expected = initial.clone();
+        let (result, mut view) = tokio::task::spawn_blocking(move || {
+            // The existing runner lifecycle mutex serializes writes with teardown/replacement.
+            let guard = runner.lock();
+            if guard.closed {
+                return Err(crate::error::ApiError::runner_unavailable("Runner ended"));
+            }
+            let current =
+                memory::scope(&node, &runner.session_id, &runner.mode, runner.epoch, work)?;
+            if current != expected {
+                return Err(crate::error::ApiError::forbidden(
+                    "Memory authority changed",
+                ));
+            }
+            if work {
+                if [
+                    "workspace.cold",
+                    "workspace.clear",
+                    "workspace.forget",
+                    "workspace.commit",
+                    "workspace.open",
+                ]
+                .contains(&op.as_str())
+                {
+                    memory::open_writer(&node, &current, &args, op == "workspace.open")?;
+                }
+                let snapshot = memory::snapshot(&node, &current)?;
+                memory::mirror_check(&snapshot, &remote, &memory::path(&node, &current))?;
+            }
+            let view = memory::View::new(&node, &current, work)?;
+            let value = memory::execute(&view, &op, &args)?;
+            if memory::scope(&node, &runner.session_id, &runner.mode, runner.epoch, work)?
+                != expected
+            {
+                return Err(crate::error::ApiError::forbidden(
+                    "Memory authority changed",
+                ));
+            }
+            Ok((value, view))
+        })
+        .await
+        .map_err(|_| crate::error::ApiError::internal())??;
+        // Permission changes during a host read or a durable commit are checked before delivery.
+        let node = self
+            .node()
+            .ok_or_else(|| crate::error::ApiError::runner_unavailable("Runner ended"))?;
+        if work {
+            let answer = node
+                .agent_gateway
+                .request(
+                    &self.session_id,
+                    "workspace.mirrorState",
+                    json!({"ledgerKey":initial.key}),
+                )
+                .await;
+            if answer.status != 200 {
+                return Err(crate::error::ApiError::new(
+                    503,
+                    "workspace_authority_unavailable",
+                    "Memory authority changed before delivery",
+                ));
+            }
+            if answer.body["result"]["owner"] != initial.owner {
+                return Err(crate::error::ApiError::forbidden("Memory owner changed"));
+            }
+            let state = memory::snapshot(&node, &initial)?;
+            memory::mirror_check(
+                &state,
+                &answer.body["result"],
+                &memory::path(&node, &initial),
+            )?;
+            node.mirror.scan();
+        }
+        if !work {
+            let answer = node
+                .agent_gateway
+                .request(&self.session_id, "history.authority", json!({}))
+                .await;
+            if answer.status != 200 || answer.body["result"]["owner"] != initial.owner {
+                return Err(crate::error::ApiError::forbidden(
+                    "History authority changed before delivery",
+                ));
+            }
+        }
+        let guard = self.lock();
+        if guard.closed
+            || memory::scope(&node, &self.session_id, &self.mode, self.epoch, work)? != initial
+        {
+            return Err(crate::error::ApiError::forbidden(
+                "Memory authority changed before delivery",
+            ));
+        }
+        // Mutation acknowledgements also contain source-bound control metadata.
+        view.revalidate(work)?;
+        if [
+            "workspace.context",
+            "workspace.next",
+            "workspace.recall",
+            "history.read",
+            "history.search",
+        ]
+        .contains(&read_op.as_str())
+        {
+            return memory::execute(&view, &read_op, &read_args);
+        }
+        Ok(result)
     }
 
     fn browser_fail(&self, id: &str, status: u16, code: &str, message: &str) {

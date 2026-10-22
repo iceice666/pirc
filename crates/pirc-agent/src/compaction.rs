@@ -4,15 +4,12 @@
 
 use std::rc::Rc;
 
-use pirc_protocol::{
-    AssistantContent, AssistantMessage, Message, StopReason, ToolChoice, UserContent,
-};
+use pirc_protocol::{AssistantMessage, Message, StopReason, ToolChoice};
 use serde_json::{Map, Value, json};
 
 use crate::agent::{Agent, StreamOptions};
-use crate::feature::{CompactContext, CompactDecision, CompactionPlan};
+
 use crate::messages::estimate_tokens;
-use crate::now_ms;
 use crate::signal::{AbortController, AbortSignal};
 use crate::ui::NotifyLevel;
 
@@ -27,6 +24,8 @@ pub struct CompactionSettings {
     pub keep_recent_tokens: f64,
     /// Warm the provider prompt cache after compaction.
     pub warm_cache: bool,
+    pub timeout_ms: u64,
+    pub max_chunks: usize,
 }
 
 impl Default for CompactionSettings {
@@ -36,6 +35,8 @@ impl Default for CompactionSettings {
             reserve_tokens: 16_384.0,
             keep_recent_tokens: 20_000.0,
             warm_cache: true,
+            timeout_ms: 60_000,
+            max_chunks: 16,
         }
     }
 }
@@ -140,6 +141,20 @@ impl CompactionSettings {
         if let Some(value) = raw.get("keepRecentTokens") {
             settings.keep_recent_tokens = to_number(value);
         }
+        if let Some(value) = raw
+            .get("timeoutMs")
+            .and_then(Value::as_u64)
+            .filter(|v| *v > 0)
+        {
+            settings.timeout_ms = value;
+        }
+        if let Some(value) = raw
+            .get("maxChunks")
+            .and_then(Value::as_u64)
+            .filter(|v| *v > 0)
+        {
+            settings.max_chunks = value as usize;
+        }
         settings
     }
 }
@@ -153,7 +168,7 @@ pub enum CompactionReason {
 }
 
 impl CompactionReason {
-    fn as_str(self) -> &'static str {
+    pub(crate) fn as_str(self) -> &'static str {
         match self {
             Self::Threshold => "threshold",
             Self::Overflow => "overflow",
@@ -217,8 +232,7 @@ pub fn context_tokens(entries: &[(String, Message)]) -> u64 {
 /// `findCutPoint`: the first entry kept verbatim, at the start of a user
 /// turn; the latest user turn is always kept.
 pub fn find_cut_point(entries: &[(String, Message)], keep_recent_tokens: f64) -> Option<String> {
-    let is_turn_start =
-        |message: &Message| matches!(message, Message::User { .. } | Message::Custom { .. });
+    let is_turn_start = |message: &Message| matches!(message, Message::User { .. });
     let mut kept = 0;
     let mut cut = entries.len();
     for index in (0..entries.len()).rev() {
@@ -257,14 +271,6 @@ pub struct CompactionResult {
 }
 
 impl CompactionResult {
-    fn failed(error: impl Into<String>) -> Self {
-        Self {
-            ok: false,
-            error: Some(error.into()),
-            ..Self::default()
-        }
-    }
-
     /// `{ ok, tokensBefore, summary }` (the `compact` response).
     pub fn to_json(&self) -> Value {
         let mut out = json!({ "ok": self.ok });
@@ -290,158 +296,7 @@ pub async fn run_compaction(
     instructions: Option<String>,
     settings: &CompactionSettings,
 ) -> Result<CompactionResult, String> {
-    let entries = agent.context_entries();
-    let tokens_before = context_tokens(&entries);
-    let keep = if reason == CompactionReason::Overflow {
-        0.0
-    } else {
-        settings.keep_recent_tokens
-    };
-    let Some(first_kept_entry_id) = find_cut_point(&entries, keep) else {
-        return Ok(CompactionResult::failed("Nothing to compact"));
-    };
-    agent.emit(json!({ "type": "compaction_start", "reason": reason.as_str() }));
-    // A feature may replace or cancel the summary.
-    let mut plan = None;
-    for feature in agent.features().to_vec() {
-        let decision = feature
-            .before_compact(
-                agent,
-                CompactContext {
-                    first_kept_entry_id: &first_kept_entry_id,
-                    tokens_before,
-                    signal,
-                },
-            )
-            .await;
-        // `await feature.beforeCompact?.(…)` takes a microtask even when the
-        // feature has no such hook: whatever was queued meanwhile (the
-        // response to the command that started a `/compact`) goes first,
-        // but no I/O.
-        crate::tick().await;
-        match decision {
-            Ok(None) => continue,
-            Ok(Some(CompactDecision::Cancel)) => {
-                agent.emit(json!({ "type": "compaction_end", "reason": reason.as_str(),
-                    "aborted": true }));
-                return Ok(CompactionResult::failed(
-                    "Compaction cancelled by extension",
-                ));
-            }
-            Ok(Some(CompactDecision::Plan(found))) => {
-                plan = Some(found);
-                break;
-            }
-            Err(error) => {
-                agent.emit(json!({ "type": "compaction_end", "reason": reason.as_str(),
-                    "aborted": signal.aborted(), "errorMessage": error }));
-                return Ok(CompactionResult::failed(error));
-            }
-        }
-    }
-    let plan = match plan {
-        Some(plan) => plan,
-        None => match summarize(agent, signal, instructions, &first_kept_entry_id).await {
-            Ok(summary) => CompactionPlan {
-                summary,
-                first_kept_entry_id: first_kept_entry_id.clone(),
-                tokens_before,
-                details: None,
-            },
-            Err(error) => {
-                agent.emit(json!({ "type": "compaction_end", "reason": reason.as_str(),
-                    "aborted": signal.aborted(), "errorMessage": error }));
-                return Ok(CompactionResult::failed(error));
-            }
-        },
-    };
-    let entry_id = agent.append_compaction(
-        &plan.summary,
-        &plan.first_kept_entry_id,
-        plan.tokens_before,
-        plan.details.clone(),
-    )?;
-    agent.emit(json!({ "type": "compaction_end", "reason": reason.as_str(),
-        "result": { "summary": plan.summary, "tokensBefore": plan.tokens_before,
-            "entryId": entry_id } }));
-    for feature in agent.features().to_vec() {
-        if let Err(error) = feature.after_compact(agent).await {
-            agent.ui().notify(
-                &format!("{}: {error}", feature.name()),
-                NotifyLevel::Warning,
-            );
-        }
-    }
-    if settings.warm_cache && reason != CompactionReason::Overflow {
-        warm_cache(agent);
-    }
-    Ok(CompactionResult {
-        ok: true,
-        error: None,
-        tokens_before: Some(plan.tokens_before),
-        summary: Some(plan.summary),
-    })
-}
-
-/// The default summary: the same system prompt, tools and history prefix as
-/// normal turns (so the provider's prompt cache is reused), then the
-/// summary instruction. `Err` with what failed.
-async fn summarize(
-    agent: &Rc<Agent>,
-    signal: &AbortSignal,
-    instructions: Option<String>,
-    first_kept_entry_id: &str,
-) -> Result<String, String> {
-    let text = match instructions.filter(|text| !text.is_empty()) {
-        Some(extra) => format!("{SUMMARY_PROMPT}\n\nAdditional focus from the user: {extra}"),
-        None => SUMMARY_PROMPT.to_owned(),
-    };
-    let prompt = agent.system_prompt();
-    let response = agent
-        .stream(
-            &prompt,
-            signal,
-            StreamOptions {
-                quiet: true,
-                tool_choice: Some(ToolChoice::None),
-                extra_messages: vec![Message::User {
-                    content: UserContent::Text(text),
-                    timestamp: now_ms(),
-                }],
-                up_to: Some(first_kept_entry_id.to_owned()),
-                ..StreamOptions::default()
-            },
-        )
-        .await;
-    response.and_then(|response| {
-        let summary: String = response
-            .content
-            .iter()
-            .filter_map(|part| match part {
-                AssistantContent::Text { text, .. } => Some(text.as_str()),
-                _ => None,
-            })
-            .collect();
-        let summary = summary
-            .trim_matches(|c: char| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}')
-            .to_owned();
-        if matches!(
-            response.stop_reason,
-            StopReason::Error | StopReason::Aborted
-        ) || summary.is_empty()
-        {
-            return Err(response.error_message.unwrap_or_else(|| {
-                format!(
-                    "Summarizer stopped: {}",
-                    serde_json::to_value(response.stop_reason)
-                        .ok()
-                        .and_then(|v| v.as_str().map(str::to_owned))
-                        .unwrap_or_default()
-                )
-            }));
-        }
-        Ok(summary)
-    })
+    crate::handoff_compactor::run(agent, reason, signal, instructions, settings).await
 }
 
 /// `warmCache`: prime the provider cache with the compacted prefix, only
@@ -546,5 +401,141 @@ mod tests {
         ] {
             assert!(to_number(&value).is_nan(), "{value}");
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+pub struct Budget {
+    pub window: u64,
+    pub output: u64,
+    pub reserve: u64,
+    pub input: u64,
+    pub handoff_output: u64,
+    pub handoff_input: u64,
+    pub prefix: u64,
+}
+pub fn main_budget(
+    agent: &Agent,
+    resolved: &crate::agent::ResolvedModel,
+    settings: &CompactionSettings,
+) -> Budget {
+    let window = resolved.model.context_window;
+    let output = resolved.model.max_tokens;
+    let reserve = (settings.reserve_tokens.max(0.0) as u64).max(output);
+    let handoff_output = 8192.min(output).min(window / 4);
+    Budget {
+        window,
+        output,
+        reserve,
+        input: window.saturating_sub(reserve),
+        handoff_output,
+        handoff_input: window.saturating_sub(handoff_output + 512),
+        prefix: request_input(agent, &[]),
+    }
+}
+/// Credentials never enter a persisted attempt identity.
+pub fn route_identity(resolved: &crate::agent::ResolvedModel) -> String {
+    let url = resolved
+        .model
+        .base_url
+        .as_deref()
+        .unwrap_or(&resolved.provider.base_url);
+    let safe = url
+        .split('?')
+        .next()
+        .unwrap_or(url)
+        .split('#')
+        .next()
+        .unwrap_or(url);
+    let safe = if let Some((scheme, rest)) = safe.split_once("://") {
+        format!(
+            "{scheme}://{}",
+            rest.rsplit_once('@').map_or(rest, |(_, host)| host)
+        )
+    } else {
+        safe.to_owned()
+    };
+    serde_json::json!([
+        resolved.provider_name,
+        resolved.model.id,
+        resolved.model.api.unwrap_or(resolved.provider.api),
+        safe,
+        resolved.model.canonical_provider,
+        resolved.provider.pi_provider,
+        resolved.provider.opencode_go,
+        resolved.provider.compat,
+        resolved.model.compat
+    ])
+    .to_string()
+}
+pub fn request_identity(resolved: &crate::agent::ResolvedModel, budget: &Budget) -> String {
+    serde_json::json!([route_identity(resolved), budget]).to_string()
+}
+pub fn request_input(agent: &Agent, messages: &[Message]) -> u64 {
+    let prefix = Message::User {
+        content: pirc_protocol::UserContent::Text(format!(
+            "{}{}",
+            agent.system_prompt(),
+            serde_json::to_string(&agent.tool_specs()).unwrap_or_default()
+        )),
+        timestamp: 0,
+    };
+    estimate_tokens(&prefix)
+        + crate::agent::sanitize_history(messages)
+            .iter()
+            .map(estimate_tokens)
+            .sum::<u64>()
+}
+#[derive(Clone)]
+pub struct UsageContext {
+    pub message: AssistantMessage,
+    pub prefix: String,
+    pub identity: String,
+    pub estimated_input: u64,
+}
+pub fn input_tokens(agent: &Agent) -> u64 {
+    let entries = agent.context_entries();
+    let messages: Vec<_> = entries.iter().map(|(_, m)| m.clone()).collect();
+    let estimate = request_input(agent, &messages);
+    let Some((id,Message::Assistant(latest)))=entries.iter().rev().find(|(_,m)|matches!(m,Message::Assistant(a)if a.usage.total_tokens>0&&a.stop_reason!=StopReason::Error))else{return estimate};
+    let Ok(resolved) = agent.resolve_model(None) else {
+        return estimate;
+    };
+    if (!latest.provider.is_empty() && latest.provider != resolved.provider_name)
+        || (!latest.model.is_empty() && latest.model != resolved.model.id)
+    {
+        return estimate;
+    }
+    let branch = agent.branch();
+    let snapshots = crate::handoff::valid_snapshots(&branch);
+    let changed = snapshots
+        .last()
+        .and_then(|s| branch.iter().position(|e| e.id == s.id))
+        .zip(branch.iter().position(|e| e.id == *id))
+        .is_some_and(|(a, b)| a > b);
+    if let Some(anchor) = agent
+        .usage_context
+        .borrow()
+        .as_ref()
+        .filter(|a| a.message == *latest)
+    {
+        if anchor.identity != route_identity(&resolved) {
+            return estimate;
+        }
+        let prefix = serde_json::json!([agent.system_prompt(), agent.tool_specs()]).to_string();
+        if changed || prefix != anchor.prefix {
+            let observed = latest.usage.input + latest.usage.cache_read + latest.usage.cache_write;
+            let scale = if anchor.estimated_input > 0 {
+                (observed as f64 / anchor.estimated_input as f64).max(1.0)
+            } else {
+                1.0
+            };
+            return (estimate as f64 * scale).ceil() as u64;
+        }
+    }
+    if changed {
+        estimate
+    } else {
+        estimate.max(context_tokens(&entries))
     }
 }

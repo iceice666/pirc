@@ -209,7 +209,8 @@ async fn agent_goal_ptc_authority() {
     })
     .await;
     m.session(&mut r, &agent);
-    insta::assert_json_snapshot!("agent_goal_ptc_authority", r.into_value());
+    let value = feature_support::without_ptc_progress(r.into_value());
+    insta::assert_json_snapshot!("agent_goal_ptc_authority", value);
 }
 
 #[tokio::test(flavor = "multi_thread")]

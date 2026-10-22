@@ -24,7 +24,7 @@ use crate::auto_mode::{
 use crate::capabilities::{Capabilities, capability_for_tool};
 use crate::compaction::{self, CompactionReason, CompactionSettings};
 use crate::config::{AgentConfig, session_settings};
-use crate::context::{self, ContextInput, PromptSection, join_prompt, trim_sections};
+use crate::context::{self, ContextInput, PromptSection, join_prompt};
 use crate::feature::{BeforeStart, Feature, PromptAddition};
 use crate::hooks::{HookName, HookRunner};
 use crate::host::AgentHost;
@@ -136,6 +136,7 @@ pub struct StreamOptions {
     pub thinking: Option<ThinkingLevel>,
     /// `retries: false`.
     pub no_retries: bool,
+    pub refresh_prompt: bool,
     /// Persist the reply just before its `message_end`, so an event is never
     /// ahead of the session file.
     pub before_end: Option<BeforeEnd>,
@@ -190,9 +191,11 @@ pub struct Agent {
     interrupt_pending: Cell<bool>,
     extra_system_prompt: RefCell<String>,
     /// What features added to the system prompt for the latest run.
-    run_prompt: RefCell<Vec<PromptSection>>,
+    feature_prompts: RefCell<IndexMap<String, Vec<PromptSection>>>,
+    dirty_prompts: RefCell<HashSet<String>>,
     last_context: RefCell<Option<Value>>,
     compacting: RefCell<Option<AbortController>>,
+    pub(crate) usage_context: RefCell<Option<compaction::UsageContext>>,
     closed: Cell<bool>,
     model_ref: RefCell<Option<(String, String)>>,
     thinking: Cell<ThinkingLevel>,
@@ -250,13 +253,16 @@ pub type ScriptCapabilities = Rc<RefCell<Vec<String>>>;
 pub fn sanitize_history(messages: &[Message]) -> Vec<Message> {
     let mut out = Vec::with_capacity(messages.len());
     let mut open: IndexMap<String, String> = IndexMap::new();
-    let flush = |out: &mut Vec<Message>, open: &mut IndexMap<String, String>| {
+    let mut deferred = Vec::new();
+    let flush = |out: &mut Vec<Message>,
+                 open: &mut IndexMap<String, String>,
+                 deferred: &mut Vec<Message>| {
         for (id, name) in open.drain(..) {
             out.push(Message::ToolResult {
                 tool_call_id: id,
                 tool_name: name,
                 content: vec![UserBlock::Text {
-                    text: "Tool call was interrupted before producing a result.".to_owned(),
+                    text: "Tool call was interrupted before producing a result.".into(),
                     text_signature: None,
                 }],
                 details: None,
@@ -264,31 +270,43 @@ pub fn sanitize_history(messages: &[Message]) -> Vec<Message> {
                 timestamp: now_ms(),
             });
         }
+        out.append(deferred);
     };
     for message in messages {
         if let Message::ToolResult { tool_call_id, .. } = message {
-            if open.shift_remove(tool_call_id).is_none() {
-                continue;
+            if open.shift_remove(tool_call_id).is_some() {
+                out.push(message.clone());
             }
-            out.push(message.clone());
+            if open.is_empty() {
+                out.append(&mut deferred);
+            }
             continue;
         }
-        flush(&mut out, &mut open);
-        out.push(message.clone());
-        if let Message::Assistant(assistant) = message
-            && !matches!(
-                assistant.stop_reason,
-                StopReason::Error | StopReason::Aborted
-            )
-        {
-            for part in &assistant.content {
-                if let AssistantContent::ToolCall { id, name, .. } = part {
-                    open.insert(id.clone(), name.clone());
-                }
+        if matches!(message, Message::Custom { .. }) && !open.is_empty() {
+            deferred.push(message.clone());
+            continue;
+        }
+        flush(&mut out, &mut open, &mut deferred);
+        let mut projected = message.clone();
+        if let Message::Assistant(assistant) = &mut projected {
+            if assistant.stop_reason == StopReason::ToolUse {
+                assistant.content.retain(|part| match part {
+                    AssistantContent::ToolCall { id, name, .. } if !open.contains_key(id) => {
+                        open.insert(id.clone(), name.clone());
+                        true
+                    }
+                    AssistantContent::ToolCall { .. } => false,
+                    _ => true,
+                });
+            } else {
+                assistant
+                    .content
+                    .retain(|part| !matches!(part, AssistantContent::ToolCall { .. }));
             }
         }
+        out.push(projected);
     }
-    flush(&mut out, &mut open);
+    flush(&mut out, &mut open, &mut deferred);
     out
 }
 
@@ -729,9 +747,11 @@ impl Agent {
                 turn: RefCell::new(None),
                 interrupt_pending: Cell::new(false),
                 extra_system_prompt: RefCell::new(String::new()),
-                run_prompt: RefCell::new(Vec::new()),
+                feature_prompts: RefCell::new(IndexMap::new()),
+                dirty_prompts: RefCell::new(HashSet::new()),
                 last_context: RefCell::new(None),
                 compacting: RefCell::new(None),
+                usage_context: RefCell::new(None),
                 closed: Cell::new(false),
                 model_ref: RefCell::new(None),
                 thinking: Cell::new(ThinkingLevel::Medium),
@@ -1889,7 +1909,7 @@ impl Agent {
             *agent.controller.borrow_mut() = None;
             agent.run_active.set(false);
             agent.run_done.notify_waiters();
-            agent.settle().await;
+            agent.settle(&controller.signal()).await;
         });
     }
 
@@ -1903,28 +1923,41 @@ impl Agent {
         extra_prompt: &mut Vec<PromptSection>,
     ) -> Result<(), String> {
         let mut hidden = Vec::new();
+        let signal = self
+            .controller
+            .borrow()
+            .as_ref()
+            .map(|c| c.signal())
+            .unwrap_or_else(AbortSignal::never);
         for feature in self.features.clone() {
-            let Some(BeforeStart {
+            self.dirty_prompts.borrow_mut().remove(feature.name());
+            let result = feature.before_model_start(self, &signal).await?;
+            let mut sections = Vec::new();
+            if let Some(BeforeStart {
                 system_prompt,
                 messages,
-            }) = feature.before_agent_start(self).await?
-            else {
-                continue;
-            };
-            match system_prompt {
-                Some(PromptAddition::Text(text)) if !text.is_empty() => {
-                    let name = feature.name();
-                    extra_prompt.push(PromptSection::new(
-                        name,
-                        name,
-                        &format!("feature:{name}"),
-                        text,
-                    ));
+            }) = result
+            {
+                match system_prompt {
+                    Some(PromptAddition::Text(text)) if !text.is_empty() => {
+                        sections.push(PromptSection::new(
+                            feature.name(),
+                            feature.name(),
+                            &format!("feature:{}", feature.name()),
+                            text,
+                        ))
+                    }
+                    Some(PromptAddition::Sections(found)) => sections = found,
+                    _ => {}
                 }
-                Some(PromptAddition::Sections(sections)) => extra_prompt.extend(sections),
-                _ => {}
+                hidden.extend(messages);
             }
-            hidden.extend(messages);
+            if !signal.aborted() && !self.dirty_prompts.borrow().contains(feature.name()) {
+                extra_prompt.extend(sections.clone());
+                self.feature_prompts
+                    .borrow_mut()
+                    .insert(feature.name().into(), sections);
+            }
         }
         let rest = if items.is_empty() {
             Vec::new()
@@ -1946,7 +1979,7 @@ impl Agent {
             .notify(&format!("Failed to start run: {error}"), NotifyLevel::Error);
     }
 
-    async fn settle(self: &Rc<Self>) {
+    async fn settle(self: &Rc<Self>, signal: &AbortSignal) {
         self.emit(json!({ "type": "agent_settled" }));
         if self.hooks.has(HookName::AgentSettled) {
             let agent = self.clone();
@@ -1958,7 +1991,7 @@ impl Agent {
             });
         }
         for feature in self.features.clone() {
-            if let Err(error) = feature.agent_settled(self).await {
+            if let Err(error) = feature.settled_with_signal(self, signal).await {
                 self.ui.notify(
                     &format!("{}: {error}", feature.name()),
                     NotifyLevel::Warning,
@@ -2074,7 +2107,11 @@ impl Agent {
                 crate::hooks::fence_output(HookName::SessionStart, &extra),
             ));
         }
-        sections.extend(self.run_prompt.borrow().iter().cloned());
+        for feature in &self.features {
+            if let Some(block) = self.feature_prompts.borrow().get(feature.name()) {
+                sections.extend(block.iter().cloned());
+            }
+        }
         if let Some(index) = ptc::capability_index_prompt(self) {
             sections.push(PromptSection::new(
                 "capabilities",
@@ -2108,7 +2145,7 @@ impl Agent {
         self.last_context.borrow().clone()
     }
 
-    fn tool_specs(&self) -> Vec<ToolSpec> {
+    pub(crate) fn tool_specs(&self) -> Vec<ToolSpec> {
         self.model_tool_list()
             .iter()
             .map(|tool| ToolSpec {
@@ -2119,9 +2156,88 @@ impl Agent {
             .collect()
     }
 
+    pub fn prompt_invalidated(&self, name: &str) -> bool {
+        self.dirty_prompts.borrow().contains(name)
+    }
+    pub fn invalidate_prompt(&self, name: &str) {
+        self.feature_prompts.borrow_mut().shift_remove(name);
+        if self.features.iter().any(|f| f.name() == name) {
+            self.dirty_prompts.borrow_mut().insert(name.into());
+        }
+    }
+    async fn refresh_dirty(self: &Rc<Self>, signal: &AbortSignal) -> Result<(), String> {
+        while !signal.aborted() && !self.dirty_prompts.borrow().is_empty() {
+            for f in self.features.clone() {
+                if !self.dirty_prompts.borrow_mut().remove(f.name()) {
+                    continue;
+                }
+                let block = f.before_turn(self, signal).await?;
+                if !signal.aborted()
+                    && !self.dirty_prompts.borrow().contains(f.name())
+                    && let Some(block) = block
+                {
+                    self.feature_prompts
+                        .borrow_mut()
+                        .insert(f.name().into(), block);
+                }
+            }
+        }
+        Ok(())
+    }
+    fn main_identity(&self) -> String {
+        let resolved = self.resolve_model(None).ok();
+        serde_json::json!([
+            resolved.as_ref().map(|r| compaction::request_identity(
+                r,
+                &compaction::main_budget(self, r, &self.compaction_settings())
+            )),
+            self.system_prompt(),
+            self.tool_specs(),
+            self.branch().last().map(|e| &e.id),
+            self.config.features.get("compaction"),
+            self.config.features.get("observationalMemory")
+        ])
+        .to_string()
+    }
+    async fn prepare_main(
+        self: &Rc<Self>,
+        signal: &AbortSignal,
+        prepared: Option<&str>,
+    ) -> Result<String, String> {
+        loop {
+            self.refresh_route().await?;
+            self.refresh_dirty(signal).await?;
+            if signal.aborted() {
+                return Err("Aborted".into());
+            }
+            let identity = self.main_identity();
+            if prepared == Some(&identity) {
+                return Ok(identity);
+            }
+            self.maybe_compact(signal).await?;
+            if self.dirty_prompts.borrow().is_empty() && self.main_identity() == identity {
+                return Ok(identity);
+            }
+        }
+    }
+
     /// `compactionSettings`.
     pub fn compaction_settings(&self) -> CompactionSettings {
-        CompactionSettings::from_features(&self.config.features)
+        let mut settings = CompactionSettings::from_features(&self.config.features);
+        if self
+            .config
+            .features
+            .get("compaction")
+            .and_then(|v| v.get("reserveTokens"))
+            .is_none()
+            && let Ok(r) = self.resolve_model(None)
+        {
+            settings.reserve_tokens = settings
+                .reserve_tokens
+                .min((r.model.context_window / 4) as f64)
+                .max(r.model.max_tokens as f64);
+        }
+        settings
     }
 
     /// Manual compaction (`compact`), only while idle.
@@ -2159,11 +2275,42 @@ impl Agent {
         let Ok(resolved) = self.resolve_model(None) else {
             return Ok(());
         };
-        let window = resolved.model.context_window;
-        let used = compaction::context_tokens(&self.store.borrow().context_entries());
-        // JavaScript arithmetic: signed, and a reserve that is not a number
-        // (NaN) always compacts.
-        if (used as f64) <= window as f64 - settings.reserve_tokens {
+        let budget = compaction::main_budget(self, &resolved, &settings);
+        let basis = compaction::request_identity(&resolved, &budget);
+        let used = compaction::input_tokens(self);
+        let memory = crate::features::memory::memory_config(self);
+        let explicit = self
+            .config
+            .features
+            .get("observationalMemory")
+            .and_then(Value::as_object)
+            .is_some_and(|m| {
+                [
+                    "compactAfterTokens",
+                    "compactAfterTokensMode",
+                    "compactAfterTokensRatio",
+                ]
+                .iter()
+                .any(|k| m.contains_key(*k))
+            });
+        let threshold = if explicit
+            && memory.enabled
+            && !memory.passive
+            && self
+                .config
+                .features
+                .get("compaction")
+                .and_then(|v| v.get("reserveTokens"))
+                .is_none()
+        {
+            budget.input.min(crate::features::memory::compact_threshold(
+                &memory,
+                Some(budget.window),
+            ))
+        } else {
+            budget.input
+        };
+        if used <= threshold {
             return Ok(());
         }
         let result = self
@@ -2178,14 +2325,28 @@ impl Agent {
                 .await
             })
             .await?;
-        if !result.ok && !signal.aborted() {
-            self.ui.notify(
-                &format!(
-                    "Automatic compaction failed: {}",
-                    result.error.unwrap_or_default()
-                ),
-                NotifyLevel::Warning,
-            );
+        if !result.ok {
+            let error = result.error.unwrap_or_default();
+            if error == "handoff_model_changed" {
+                if !self.dirty_prompts.borrow().is_empty() {
+                    return Ok(());
+                }
+                if let Ok(current) = self.resolve_model(None) {
+                    if compaction::request_identity(
+                        &current,
+                        &compaction::main_budget(self, &current, &self.compaction_settings()),
+                    ) != basis
+                    {
+                        return Ok(());
+                    }
+                } else {
+                    return Ok(());
+                }
+            }
+            if error == "Nothing to compact" && used <= budget.input {
+                return Ok(());
+            }
+            return Err(format!("Automatic compaction stopped: {error}"));
         }
         Ok(())
     }
@@ -2211,12 +2372,15 @@ impl Agent {
 
     /// `refreshModels`: the node's current public catalog.
     pub async fn refresh_models(&self) {
+        let _ = self.refresh_route().await;
+    }
+    pub async fn refresh_route(&self) -> Result<(), String> {
         let Some(inference) = self.config.models.inference.clone() else {
-            return;
+            return Ok(());
         };
-        let Ok(latest) = crate::remote::fetch_remote_models(&inference).await else {
-            return;
-        };
+        let latest = crate::remote::fetch_remote_models(&inference)
+            .await
+            .map_err(|_| "Model route unavailable")?;
         {
             let mut models = self.models.borrow_mut();
             models.providers = latest.providers.clone();
@@ -2236,6 +2400,7 @@ impl Agent {
             });
             *self.model_ref.borrow_mut() = fallback.map(|f| (f.provider, f.id)).or(first);
         }
+        Ok(())
     }
 
     /// `streamFunction`: the gateway's inference (tests may override it).
@@ -2302,6 +2467,8 @@ impl Agent {
         signal: &AbortSignal,
         mut options: StreamOptions,
     ) -> Result<AssistantMessage, String> {
+        let mut request_prompt = system_prompt.to_owned();
+        let mut prepared: Option<String> = None;
         let mut resolved = match self.resolve_model(None) {
             Ok(resolved) => resolved,
             Err(error) => {
@@ -2315,6 +2482,21 @@ impl Agent {
         let emit = !options.quiet;
         let mut attempt: usize = 0;
         loop {
+            if options.refresh_prompt {
+                let agent = self.weak.upgrade().ok_or("Agent stopped")?;
+                match agent.prepare_main(signal, prepared.as_deref()).await {
+                    Ok(value) => prepared = Some(value),
+                    Err(_) if signal.aborted() => {
+                        let mut message = agent.empty_assistant();
+                        message.stop_reason = StopReason::Aborted;
+                        return Ok(message);
+                    }
+                    Err(error) => return Err(error),
+                }
+                resolved = self.resolve_model(None)?;
+                stream_fn = self.stream_function();
+                request_prompt = self.system_prompt();
+            }
             let timestamp = now_ms();
             if emit {
                 self.emit(
@@ -2327,14 +2509,14 @@ impl Agent {
             messages.extend(options.extra_messages.iter().cloned());
             let tools = self.tool_specs();
             let sections = self.prompt_sections();
-            let shown = if join_prompt(&sections) == system_prompt {
+            let shown = if join_prompt(&sections) == request_prompt {
                 sections
             } else {
                 vec![PromptSection::new(
                     "request",
                     "Request system prompt",
                     "built-in",
-                    system_prompt,
+                    &request_prompt,
                 )]
             };
             let memory_tokens = self.memory_tokens(&messages);
@@ -2361,7 +2543,7 @@ impl Agent {
                 provider_name: resolved.provider_name.clone(),
                 provider: resolved.provider.clone(),
                 model: resolved.model.clone(),
-                system_prompt: system_prompt.to_owned(),
+                system_prompt: request_prompt.clone(),
                 messages,
                 tools,
                 thinking,
@@ -2376,6 +2558,13 @@ impl Agent {
                         "assistantMessageEvent": delta }));
                 }
             };
+            let estimate = compaction::request_input(self, &request.messages);
+            if options.refresh_prompt
+                && estimate.max(compaction::input_tokens(self))
+                    > compaction::main_budget(self, &resolved, &self.compaction_settings()).input
+            {
+                return Err("Main request exceeds the effective context budget".into());
+            }
             let mut message = stream_fn.stream(request, &mut on_delta).await;
             if self
                 .last_context
@@ -2406,6 +2595,17 @@ impl Agent {
             }
             let retry = retryable && attempt < RETRY_DELAYS.len();
             if !retry {
+                if options.refresh_prompt
+                    && message.stop_reason != StopReason::Error
+                    && message.usage.total_tokens > 0
+                {
+                    *self.usage_context.borrow_mut() = Some(compaction::UsageContext {
+                        message: message.clone(),
+                        prefix: serde_json::json!([request_prompt, self.tool_specs()]).to_string(),
+                        identity: compaction::route_identity(&resolved),
+                        estimated_input: estimate,
+                    });
+                }
                 if let Some(before_end) = options.before_end.as_mut()
                     && let Err(error) = before_end(&message)
                 {
@@ -2474,7 +2674,7 @@ impl Agent {
                 self.start_failed(&error);
             }
         }
-        *self.run_prompt.borrow_mut() = trim_sections(&extra_prompt);
+        drop(extra_prompt);
         let max_turns = self.config.limits.max_turns;
         let mut turns: u64 = 0;
         let mut overflow_retried = false;
@@ -2499,7 +2699,6 @@ impl Agent {
                 self.admit(items).await?;
             }
             *self.turn.borrow_mut() = None;
-            self.maybe_compact(&signal).await?;
             if signal.aborted() {
                 break;
             }
@@ -2537,6 +2736,7 @@ impl Agent {
                     &turn_signal,
                     StreamOptions {
                         before_end: Some(before_end),
+                        refresh_prompt: true,
                         ..StreamOptions::default()
                     },
                 )
@@ -2847,7 +3047,20 @@ impl Agent {
         result: ToolResult,
     ) {
         self.active_operations.borrow_mut().remove(operation_id);
-        let result = result.observed();
+        let mut result = result.observed();
+        if crate::handoff::replay_tool(name)
+            || self
+                .running_script_capabilities()
+                .iter()
+                .any(|n| crate::handoff::replay_tool(n))
+        {
+            let mut details = result
+                .details
+                .and_then(|v| v.as_object().cloned())
+                .unwrap_or_default();
+            details.insert("memoryReplay".into(), json!(true));
+            result.details = Some(Value::Object(details));
+        }
         let content = if result.content.is_empty() {
             vec![text_block("(no output)")]
         } else {
@@ -3161,6 +3374,16 @@ impl Agent {
     }
 
     /// The session's context entries (compaction).
+    pub fn session_id(&self) -> String {
+        self.store.borrow().session_id()
+    }
+    pub(crate) fn reopen_session(&self) -> Result<(), String> {
+        let dir = self.session_dir();
+        let next = SessionStore::open(dir, &self.config.workspace)?;
+        *self.store.borrow_mut() = next;
+        Ok(())
+    }
+
     pub fn context_entries(&self) -> Vec<(String, Message)> {
         self.store.borrow().context_entries()
     }
@@ -3422,7 +3645,7 @@ mod tests {
             };
             let (agent, ui) = mode_agent_with_ui(dir.path(), mode, features, None);
             agent.init().await.unwrap();
-            assert!(agent.get_tool("recall").is_none());
+            assert!(agent.get_tool("recall").is_some());
             let memory = agent
                 .features
                 .iter()
@@ -3442,18 +3665,7 @@ mod tests {
                 ui.notes
                     .borrow()
                     .iter()
-                    .any(|note| note.starts_with("Memory:"))
-            );
-            memory
-                .run_command(&agent, "om:workspace", String::new())
-                .await
-                .unwrap();
-            assert!(
-                ui.notes
-                    .borrow()
-                    .iter()
-                    .any(|note| note
-                        == "Workspace memory is disabled (or this is not a main session)")
+                    .any(|note| note.starts_with("Session handoffs:"))
             );
         }
     }
@@ -3480,16 +3692,16 @@ mod tests {
                 }
                 let (agent, ui) = mode_agent_with_ui(dir.path(), mode, features, None);
                 agent.init().await.unwrap();
-                let enabled = !mode_disabled || explicit == Some(true);
+                let enabled = explicit != Some(false) && (!mode_disabled || explicit == Some(true));
                 assert_eq!(
                     crate::features::memory::memory_config(&agent).enabled,
                     enabled
                 );
                 assert_eq!(
                     crate::features::title::title_settings(&agent).enabled,
-                    enabled
+                    !mode_disabled || explicit == Some(true)
                 );
-                assert_eq!(agent.get_tool("recall").is_some(), enabled);
+                assert!(agent.get_tool("recall").is_some());
                 let memory = agent
                     .features
                     .iter()
@@ -3503,7 +3715,7 @@ mod tests {
                     ui.notes
                         .borrow()
                         .iter()
-                        .any(|note| note.starts_with("Memory:"))
+                        .any(|note| note.starts_with("Session handoffs:"))
                 );
             }
         }

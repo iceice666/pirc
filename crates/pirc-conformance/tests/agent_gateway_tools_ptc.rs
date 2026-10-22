@@ -145,7 +145,10 @@ async fn agent_schedule_tool() {
         ModelReply::Text("Found.".to_owned()),
     ]);
     turn(&mut agent, &mut m, &mut r, "search from a script", "Search").await;
-    insta::assert_json_snapshot!("agent_schedule_tool", r.into_value());
+    insta::assert_json_snapshot!(
+        "agent_schedule_tool",
+        feature_support::without_ptc_progress(r.into_value())
+    );
 }
 
 #[tokio::test(flavor = "multi_thread")]

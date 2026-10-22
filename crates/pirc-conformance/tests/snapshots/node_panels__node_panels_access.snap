@@ -100,7 +100,7 @@ expression: p.into_value()
     "body": {
       "error": {
         "code": "invalid_input",
-        "message": "                          select files by diff type\n    --max-depth <depth>   maximum tree depth to recurse\n    --output <file>       output to a specific file"
+        "message": "    --diff-filter [(A|C|D|M|R|T|U|X|B)...[*]]\n                          select files by diff type\n    --output <file>       output to a specific file"
       }
     },
     "headers": {
@@ -386,6 +386,7 @@ expression: p.into_value()
       "agentRunning": false,
       "backgroundTasks": [],
       "memory": {
+        "architecture": "handoff",
         "counts": {
           "active": 0,
           "compactions": 0,
@@ -396,6 +397,12 @@ expression: p.into_value()
           "visibleReflections": 0
         },
         "enabled": true,
+        "handoff": {
+          "latest": null,
+          "legacyAncestry": null,
+          "snapshots": 0,
+          "textOnly": true
+        },
         "observations": [],
         "passive": false,
         "reflections": [],
@@ -425,7 +432,8 @@ expression: p.into_value()
       "memoryRuntime": null,
       "team": {
         "agents": []
-      }
+      },
+      "workspaceMemory": null
     },
     "headers": {
       "content-type": "application/json"

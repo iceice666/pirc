@@ -136,6 +136,18 @@ fn ingest_within(
     lines: &[Value],
     (max_rows, max_bytes): (u64, u64),
 ) -> ApiResult<u64> {
+    let integrity = lines.last().is_some_and(|v| v["type"] == "integrity");
+    if integrity
+        && lines[..lines.len() - 1]
+            .iter()
+            .any(|v| match Line::parse(v) {
+                Some(Line::Recorded(items)) => items.iter().any(|v| Item::parse(v).is_none()),
+                Some(_) => false,
+                None => true,
+            })
+    {
+        return Err(ApiError::invalid_input());
+    }
     let conn = app.db.lock();
     let refused = std::cell::Cell::new(0);
     let stored = atomic(&conn, |conn| {
@@ -147,6 +159,39 @@ fn ingest_within(
             )
             .optional()?
             .map_or(0, |watermark| watermark.max(0) as u64);
+        let old_hash: Option<String> = conn
+            .query_row(
+                "SELECT digest FROM memory_mirrors WHERE node_id=? AND ledger_key=?",
+                [node_id, ledger_key],
+                |row| row.get(0),
+            )
+            .optional()?
+            .flatten();
+        let marker = lines.last().filter(|v| v["type"] == "integrity");
+        if old_hash.is_some() && marker.is_none() {
+            return Ok(current);
+        }
+        if let Some(marker) = marker {
+            if marker["version"] != 2
+                || marker["end"].as_u64() != Some(end)
+                || marker["digest"].as_str().is_none_or(|s| s.len() != 64)
+            {
+                return Ok(current);
+            }
+            if let Some(hash) = &old_hash {
+                if marker["previousDigest"].as_str() != Some(hash) {
+                    return Ok(current);
+                }
+            } else if marker["legacyProjection"].as_str()
+                != Some(&projection(conn, node_id, ledger_key)?)
+            {
+                return Ok(current);
+            }
+        }
+        // Replaying an old prefix must never erase a revocation, including legacy mirrors.
+        if reset && current > 0 {
+            return Ok(current);
+        }
         if reset {
             if offset != 0 {
                 return Ok(current);
@@ -167,11 +212,24 @@ fn ingest_within(
                 apply(conn, node_id, ledger_key, line, &mut quota)?;
             }
         }
+        if integrity && quota.refused > 0 {
+            return Err(ApiError::new(
+                413,
+                "memory_mirror_quota_exceeded",
+                "Atomic memory frame exceeds mirror capacity",
+            ));
+        }
         refused.set(quota.refused);
         conn.execute(
             "INSERT INTO memory_mirrors (node_id,ledger_key,watermark,updated_at) VALUES (?,?,?,?) ON CONFLICT(node_id,ledger_key) DO UPDATE SET watermark=excluded.watermark, updated_at=excluded.updated_at",
             params![node_id, ledger_key, end as i64, now_ms()],
         )?;
+        if let Some(marker) = marker {
+            conn.execute(
+                "UPDATE memory_mirrors SET digest=? WHERE node_id=? AND ledger_key=?",
+                params![marker["digest"].as_str(), node_id, ledger_key],
+            )?;
+        }
         Ok(end)
     })?;
     if refused.get() > 0 {
@@ -745,3 +803,37 @@ pub fn find(app: &App, user: &str, id: &str) -> ApiResult<Vec<Found>> {
 
 #[cfg(test)]
 mod tests;
+
+fn projection(conn: &Connection, node: &str, key: &str) -> ApiResult<String> {
+    use sha2::{Digest, Sha256};
+    let mut statement = conn.prepare(
+        "SELECT id,status,content FROM memory_records WHERE node_id=? AND ledger_key=? ORDER BY id",
+    )?;
+    let rows = statement
+        .query_map([node, key], |row| {
+            Ok(json!([
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?
+            ]))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(format!(
+        "{:x}",
+        Sha256::digest(serde_json::to_string(&rows).unwrap().as_bytes())
+    ))
+}
+pub fn mirror_state(app: &App, node: &str, key: &str, user: &str) -> ApiResult<Value> {
+    let conn = app.db.lock();
+    let row: Option<(u64, Option<String>)> = conn
+        .query_row(
+            "SELECT watermark,digest FROM memory_mirrors WHERE node_id=? AND ledger_key=?",
+            [node, key],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?;
+    let (watermark, digest) = row.unwrap_or((0, None));
+    Ok(
+        json!({"version":2,"watermark":watermark,"digest":digest,"legacyProjection":projection(&conn,node,key)?,"owner":user}),
+    )
+}

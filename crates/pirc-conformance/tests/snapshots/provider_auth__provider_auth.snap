@@ -450,7 +450,9 @@ expression: t.into_value()
           "id": "fake",
           "models": [
             {
-              "compat": {},
+              "compat": {
+                "pircRouteFingerprint": "<route-fingerprint>"
+              },
               "contextWindow": 100000,
               "id": "fake-model",
               "input": [
@@ -659,7 +661,9 @@ expression: t.into_value()
           "id": "fake",
           "models": [
             {
-              "compat": {},
+              "compat": {
+                "pircRouteFingerprint": "<route-fingerprint>"
+              },
               "contextWindow": 100000,
               "id": "fake-model",
               "input": [

@@ -104,27 +104,14 @@ impl Setup {
     }
 }
 
-fn item(content: &str, session_dir: &str) -> Value {
-    json!({
-        "id": format!("id-{content}"),
-        "content": content,
-        "relevance": "high",
-        "timestamp": "2026-09-27 10:00",
-        "sessionId": "agent-internal-id",
-        "sessionDir": session_dir,
-        "sourceMemoryIds": ["aaaaaaaaaaaa"],
-        "git": { "head": "abcdef123456", "branch": "main", "dirty": false,
-            "worktree": "/secret/worktree" },
-        "tokenCount": 10,
-    })
+fn item(content: &str, dir: &str) -> Value {
+    json!({"id":pirc_agent::features::memory::ledger::hash_id(content),"content":content,"relevance":"high","timestamp":"2026-10-22 10:00","sessionId":"agent-internal-id","sessionDir":dir,"sourceMemoryIds":[],"tokenCount":10})
 }
-
 fn line(value: Value) -> String {
     format!("{value}\n")
 }
-
 fn append(file: &Path, text: &str) {
-    use std::io::Write as _;
+    use std::io::Write;
     std::fs::OpenOptions::new()
         .append(true)
         .open(file)
@@ -132,152 +119,89 @@ fn append(file: &Path, text: &str) {
         .write_all(text.as_bytes())
         .unwrap();
 }
-
 #[test]
-fn sends_complete_ledger_lines_after_the_acknowledged_offset_without_paths() {
+fn mirrors_public_projection_and_integrity_in_one_frame() {
     let s = setup();
-    let first = line(json!({ "type": "recorded", "at": 1,
-        "items": [item("Staging first", &s.session_dir)] }));
-    let second = line(
-        json!({ "type": "retired", "at": 2, "ids": ["id-Staging first"],
-        "reason": "superseded" }),
-    );
-    let partial = json!({ "type": "recorded", "at": 3, "items": [item("Later", &s.session_dir)] })
-        .to_string();
-    std::fs::write(&s.file, format!("{first}{second}{partial}")).unwrap();
+    let first = line(json!({"type":"recorded","at":1,"items":[item("Knowledge",&s.session_dir)]}));
+    std::fs::write(&s.file, &first).unwrap();
     s.connect(&[]);
     let frames = s.frames();
     assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0]["lines"][0]["items"][0]["sessionId"], s.session_id);
     assert_eq!(
-        frames[0],
-        json!({
-            "type": "memory_mirror",
-            "ledgerKey": KEY,
-            "offset": 0,
-            "end": first.len() + second.len(),
-            "lines": [
-                {
-                    "type": "recorded",
-                    "items": [{
-                        "id": "id-Staging first",
-                        "content": "Staging first",
-                        "relevance": "high",
-                        "timestamp": "2026-09-27 10:00",
-                        // The node session, not the agent's own id nor its directory.
-                        "sessionId": s.session_id,
-                        "git": { "head": "abcdef123456", "branch": "main", "dirty": false },
-                        "sourceMemoryIds": ["aaaaaaaaaaaa"],
-                    }],
-                },
-                { "type": "retired", "ids": ["id-Staging first"], "reason": "superseded" },
-            ],
-        })
+        frames[0]["lines"][1]["digest"],
+        pirc_agent::journal::digest(first.as_bytes())
     );
-    let text = serde_json::to_string(&frames).unwrap();
-    assert!(!text.contains("/secret"));
+    let text = frames[0].to_string();
     assert!(!text.contains(&s.session_dir));
-
-    // One frame at a time: nothing more until it is acknowledged.
+    s.receive(first.len() as u64);
+    assert_eq!(s.frames().len(), 1);
+    append(&s.file, "{\"type\":");
     s.scan();
     assert_eq!(s.frames().len(), 1);
-    // The half-written line waits until it is complete.
-    s.receive(frames[0]["end"].as_u64().unwrap());
-    assert_eq!(s.frames().len(), 1);
-    append(&s.file, "\n");
-    s.scan();
-    let next = &s.frames()[1];
-    assert_eq!(next["offset"], frames[0]["end"]);
-    assert_eq!(
-        next["end"],
-        json!(first.len() + second.len() + partial.len() + 1)
-    );
-    assert_eq!(next["lines"][0]["type"], "recorded");
-    assert_eq!(next["lines"][0]["items"][0]["content"], "Later");
-    assert_eq!(next["lines"].as_array().unwrap().len(), 1);
 }
-
 #[test]
-fn resumes_where_the_gateway_is_starts_over_when_the_ledger_shrank_and_retries() {
+fn resumes_with_checkpoint_and_never_resets_a_shrunken_ledger() {
     let s = setup();
-    let content = line(json!({ "type": "recorded", "at": 1,
-        "items": [item("Kept", &s.session_dir)] }));
-    std::fs::write(&s.file, &content).unwrap();
-    s.connect(&[(KEY, content.len() as u64)]);
-    assert!(s.frames().is_empty());
-
-    std::fs::write(&s.file, line(json!({ "type": "cleared", "at": 2 }))).unwrap();
+    let raw = line(json!({"type":"recorded","at":1,"items":[item("Before",&s.session_dir)]}));
+    std::fs::write(&s.file, &raw).unwrap();
+    s.connect(&[(KEY, raw.len() as u64)]);
+    let frame = s.frames()[0].clone();
+    assert_eq!(frame["offset"], raw.len());
+    assert_eq!(frame["end"], raw.len());
+    assert_eq!(frame["lines"][0]["type"], "integrity");
+    s.receive(raw.len() as u64);
+    std::fs::write(&s.file, "").unwrap();
     s.scan();
-    let frames = s.frames();
-    assert_eq!(frames[0]["offset"], 0);
-    assert_eq!(frames[0]["reset"], true);
-    assert_eq!(frames[0]["lines"], json!([{ "type": "cleared" }]));
-
-    // A frame that could not be sent is tried again on the next scan.
-    s.receive(frames[0]["end"].as_u64().unwrap());
-    append(&s.file, &line(json!({ "type": "cleared", "at": 3 })));
+    assert_eq!(s.frames().len(), 1);
+    std::fs::write(&s.file, &raw).unwrap();
+    append(&s.file, &line(json!({"type":"cleared","at":2})));
     s.refuse.set(true);
     s.scan();
     s.refuse.set(false);
     s.scan();
-    let frames = s.frames();
-    assert_eq!(frames.len(), 2);
-    assert_eq!(frames[1]["offset"], frames[0]["end"]);
-    assert_eq!(frames[1]["lines"], json!([{ "type": "cleared" }]));
-    assert!(frames[1].get("reset").is_none());
+    assert_eq!(s.frames().len(), 2);
+    assert_eq!(s.frames()[1]["lines"][0]["type"], "cleared");
+    assert!(s.frames()[1].get("reset").is_none());
 }
-
 #[test]
-fn does_not_mirror_context_snapshots_or_recurse_into_session_directories() {
+fn a_complete_v2_clear_and_its_checkpoint_share_one_frame() {
     let s = setup();
-    std::fs::create_dir_all(&s.session_dir).unwrap();
-    std::fs::write(
-        Path::new(&s.session_dir).join("context.json"),
-        r#"{"text":"private context"}"#,
-    )
-    .unwrap();
-    std::fs::write(s.dir.join("context.json"), r#"{"text":"private context"}"#).unwrap();
-    std::fs::create_dir(s.dir.join("pi_session")).unwrap();
-    std::fs::write(s.dir.join("pi_session/context.json"), "{}").unwrap();
-    s.connect(&[]);
-    assert!(s.frames().is_empty());
-}
-
-#[test]
-fn a_line_longer_than_a_chunk_goes_alone_and_a_shrunk_empty_ledger_resets() {
-    let s = setup();
-    let long = line(json!({ "type": "cleared", "pad": "x".repeat(MIRROR_CHUNK_BYTES) }));
-    let short = line(json!({ "type": "cleared", "at": 2 }));
-    std::fs::write(&s.file, format!("{long}{short}")).unwrap();
-    s.connect(&[]);
-    let frames = s.frames();
-    assert_eq!(frames[0]["end"], json!(long.len()));
-    assert_eq!(frames[0]["lines"], json!([{ "type": "cleared" }]));
-    // Torn and unknown lines count towards `end` but are not sent.
-    s.receive(frames[0]["end"].as_u64().unwrap());
-    let frames = s.frames();
-    assert_eq!(frames[1]["offset"], json!(long.len()));
-    assert_eq!(frames[1]["end"], json!(long.len() + short.len()));
-
-    // Shrunk to a partial line: a reset with nothing in it.
-    s.receive(frames[1]["end"].as_u64().unwrap());
-    std::fs::write(&s.file, "{\"type\":").unwrap();
-    s.scan();
-    let frames = s.frames();
-    assert_eq!(
-        frames[2],
-        json!({ "type": "memory_mirror", "ledgerKey": KEY, "offset": 0, "end": 0,
-            "reset": true, "lines": [] })
-    );
-    // An unknown session directory has no `sessionId`, and stays unknown.
-    s.receive(0);
+    let mut cold = pirc_agent::workspace_journal::frame(&Default::default(), "cold");
+    cold.cutover = Some(vec![]);
+    let first = line(serde_json::to_value(&cold).unwrap());
+    let initial = pirc_agent::workspace_journal::parse(first.as_bytes()).unwrap();
+    let mut clear = pirc_agent::workspace_journal::frame(&initial, "clear");
+    clear.clear = true;
+    clear.generation = "new".into();
+    clear.clear_cutoffs = Some(vec![]);
     std::fs::write(
         &s.file,
-        line(json!({ "type": "recorded", "items": [item("x", "/elsewhere"), { "id": 1 }] })),
+        format!("{}{}", first, line(serde_json::to_value(clear).unwrap())),
     )
     .unwrap();
-    s.receive(0);
+    s.connect(&[]);
     let frames = s.frames();
-    let items = frames.last().unwrap()["lines"][0]["items"].clone();
-    assert_eq!(items.as_array().unwrap().len(), 1);
-    assert!(items[0].get("sessionId").is_none());
+    assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0]["lines"][0]["type"], "cleared");
+    assert_eq!(frames[0]["lines"][1]["type"], "integrity");
+}
+#[test]
+fn refuses_corruption_and_malformed_additions_instead_of_mirroring_retirements() {
+    let s = setup();
+    std::fs::write(&s.file, line(json!({"type":"recorded","items":[{"id":1}]}))).unwrap();
+    s.connect(&[]);
+    assert!(s.frames().is_empty());
+    std::fs::write(&s.file, "{}\ninvalid\n{\"type\":\"cleared\"}\n").unwrap();
+    s.scan();
+    assert!(s.frames().is_empty());
+}
+#[test]
+fn does_not_mirror_private_files_or_recurse() {
+    let s = setup();
+    std::fs::write(s.dir.join("context.json"), "private").unwrap();
+    std::fs::create_dir(s.dir.join("nested")).unwrap();
+    std::fs::write(s.dir.join("nested/cccccccccccccccc.jsonl"), "private").unwrap();
+    s.connect(&[]);
+    assert!(s.frames().is_empty());
 }

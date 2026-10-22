@@ -337,7 +337,6 @@ expression: t.into_value()
       "pi_event message_end",
       "pi_event panel_changed",
       "pi_event turn_end",
-      "pi_event panel_changed",
       "pi_event agent_end"
     ],
     "step": "model_error: the run's events"

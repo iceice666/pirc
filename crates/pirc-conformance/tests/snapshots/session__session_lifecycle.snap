@@ -314,7 +314,7 @@ expression: t.into_value()
       "statuses": {},
       "watermark": {
         "epoch": 0,
-        "sequence": 24
+        "sequence": 23
       },
       "widgets": {}
     },
@@ -335,7 +335,7 @@ expression: t.into_value()
       "type": "reset",
       "watermark": {
         "epoch": 0,
-        "sequence": 24
+        "sequence": 23
       }
     },
     "step": "cursor from another epoch"
@@ -346,7 +346,7 @@ expression: t.into_value()
       "type": "reset",
       "watermark": {
         "epoch": 0,
-        "sequence": 24
+        "sequence": 23
       }
     },
     "step": "cursor ahead of the stream"

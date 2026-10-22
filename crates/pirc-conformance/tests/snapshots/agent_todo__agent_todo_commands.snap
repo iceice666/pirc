@@ -1895,22 +1895,6 @@ expression: r.into_value()
         "type": "turn_start"
       },
       {
-        "message": {
-          "content": [],
-          "model": "fake-model",
-          "provider": "fake",
-          "role": "assistant",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_start"
-      },
-      {
-        "sections": [
-          "context"
-        ],
-        "type": "panel_changed"
-      },
-      {
         "id": "<uuid:32>",
         "message": "The agent is working; wait before editing todos manually.",
         "method": "notify",
@@ -1928,6 +1912,22 @@ expression: r.into_value()
   },
   {
     "observed": [
+      {
+        "message": {
+          "content": [],
+          "model": "fake-model",
+          "provider": "fake",
+          "role": "assistant",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "sections": [
+          "context"
+        ],
+        "type": "panel_changed"
+      },
       {
         "id": "<uuid:33>",
         "message": "#2 [Pending] Write the tests",

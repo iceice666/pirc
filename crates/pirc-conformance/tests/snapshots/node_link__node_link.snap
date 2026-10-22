@@ -44,11 +44,15 @@ expression: t.into_value()
           "fake": {
             "api": "openai-completions",
             "baseUrl": "https://gateway.invalid",
-            "compat": {},
+            "compat": {
+              "pircRouteFingerprint": "<route-fingerprint>"
+            },
             "headers": {},
             "models": [
               {
-                "compat": {},
+                "compat": {
+                  "pircRouteFingerprint": "<route-fingerprint>"
+                },
                 "contextWindow": 100000,
                 "id": "fake-model",
                 "input": [
@@ -196,11 +200,15 @@ expression: t.into_value()
           "fake": {
             "api": "openai-completions",
             "baseUrl": "https://gateway.invalid",
-            "compat": {},
+            "compat": {
+              "pircRouteFingerprint": "<route-fingerprint>"
+            },
             "headers": {},
             "models": [
               {
-                "compat": {},
+                "compat": {
+                  "pircRouteFingerprint": "<route-fingerprint>"
+                },
                 "contextWindow": 100000,
                 "id": "fake-model",
                 "input": [

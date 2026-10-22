@@ -307,10 +307,8 @@ expression: agent_events
   },
   {
     "data": {
-      "sections": [
-        "memory"
-      ],
-      "type": "panel_changed"
+      "type": "agent_end",
+      "willRetry": false
     },
     "epoch": 0,
     "sequence": 22,
@@ -320,21 +318,10 @@ expression: agent_events
   },
   {
     "data": {
-      "type": "agent_end",
-      "willRetry": false
-    },
-    "epoch": 0,
-    "sequence": 23,
-    "sessionId": "session_<uuid:1>",
-    "timestamp": "<epoch-ms>",
-    "type": "pi_event"
-  },
-  {
-    "data": {
       "type": "agent_settled"
     },
     "epoch": 0,
-    "sequence": 24,
+    "sequence": 23,
     "sessionId": "session_<uuid:1>",
     "timestamp": "<epoch-ms>",
     "type": "pi_event"

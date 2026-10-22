@@ -12,7 +12,6 @@ use pirc_protocol::{AssistantContent, Message, StopReason, ThinkingLevel, UserBl
 use super::rules::Verdict;
 use super::{ActionKind, ShellAction};
 use crate::agent::ResolvedModel;
-use crate::features::memory::ledger::{Observation, Relevance, folded_details};
 use crate::host::AgentHost;
 use crate::session_store::{EntryData, SessionEntry};
 use crate::signal::{AbortController, AbortSignal};
@@ -239,63 +238,84 @@ pub struct MemoryNote {
     pub text: String,
 }
 
-/// `noteSource`: which human-derived note an observation is, from the
-/// origins code recorded for its source entries (never from its text):
-/// `None` when any source is tool output, a custom message, or unknown
-/// (records older than origins), or when no source is the human. Tool
-/// output could otherwise plant a forged "the user approved …" note.
-fn note_source(origins: Option<&[String]>) -> Option<&'static str> {
-    let origins = origins?;
-    if !origins.iter().any(|origin| origin == "user") {
-        return None;
-    }
-    if origins.iter().all(|origin| origin == "user") {
-        return Some("user");
-    }
-    origins
-        .iter()
-        .all(|origin| origin == "user" || origin == "assistant")
-        .then_some("user+agent")
-}
-
-/// `memoryNotes`: critical observations from the observational-memory
-/// projection the session model currently sees (the latest compaction).
-/// The observer reserves "critical" for user assertions, corrections and
-/// constraints; only observations drawn from the human's own messages
-/// (optionally with the agent's) are kept, so the classifier trusts the
-/// human's words without replaying tool output. Newest first within the
-/// budget, returned oldest first.
+/// Snapshot references locate original human evidence; generated summaries never grant approval.
 pub fn memory_notes(branch: &[SessionEntry]) -> Vec<MemoryNote> {
-    let Some(details) = branch.iter().rev().find_map(|entry| match &entry.data {
-        EntryData::Compaction { details, .. } => Some(details),
-        _ => None,
-    }) else {
-        return Vec::new();
+    let Some(snapshot) = crate::handoff::valid_snapshots(branch).last().copied() else {
+        return vec![];
     };
-    let Some(folded) = folded_details(details.as_ref()) else {
-        return Vec::new();
+    let ids: HashSet<String> = if let Some(h) = crate::handoff::details(snapshot) {
+        h.state
+            .facts()
+            .flat_map(|f| f.sources.iter().map(|s| s.entry_id.clone()))
+            .collect()
+    } else if let EntryData::Compaction {
+        details: Some(details),
+        ..
+    } = &snapshot.data
+    {
+        details["observations"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|o| {
+                o["sourceEntryIds"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|id| id.as_str().map(str::to_owned))
+            })
+            .collect()
+    } else {
+        HashSet::new()
     };
-    let critical: Vec<&Observation> = folded
-        .observations
-        .iter()
-        .filter(|o| o.relevance == Relevance::Critical)
-        .collect();
     let mut out = Vec::new();
     let mut chars = 0;
-    for o in critical.iter().rev() {
-        if out.len() >= MEMORY_NOTES {
-            break;
+    for entry in branch.iter().rev() {
+        if !ids.contains(&entry.id) {
+            continue;
         }
-        let Some(from) = note_source(o.origins.as_deref()) else {
+        let EntryData::Message(Message::User { content, .. }) = &entry.data else {
             continue;
         };
-        let text = format!("{} {}", o.timestamp, js::trim(&collapse_spaces(&o.content)));
-        let length = js::len16(&text);
-        if chars + length > MAX_MEMORY_CHARS {
+        let text = match content {
+            UserContent::Text(s) => s.clone(),
+            UserContent::Blocks(parts) => parts
+                .iter()
+                .filter_map(|p| {
+                    if let UserBlock::Text { text, .. } = p {
+                        Some(text.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        };
+        if text.trim().is_empty() {
+            continue;
+        }
+        let safe = crate::redact::redact_secrets(text.trim());
+        let room = MAX_USER_CHARS.min(MAX_MEMORY_CHARS - chars);
+        let marker = " [partial original message; cannot establish authorization]";
+        if room <= marker.len() {
             break;
         }
-        chars += length;
-        out.insert(0, MemoryNote { from, text });
+        let excerpt = if js::len16(&safe) > room {
+            format!("{}{}", js::head16(&safe, room - marker.len()), marker)
+        } else {
+            safe
+        };
+        chars += js::len16(&excerpt);
+        out.insert(
+            0,
+            MemoryNote {
+                from: "user",
+                text: excerpt,
+            },
+        );
+        if out.len() >= MEMORY_NOTES || chars >= MAX_MEMORY_CHARS {
+            break;
+        }
     }
     out
 }

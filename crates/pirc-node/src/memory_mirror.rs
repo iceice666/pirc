@@ -49,12 +49,13 @@ struct State {
     connected: bool,
     acked: HashMap<String, u64>,
     /// Ledgers with a frame on its way, and when it was sent.
-    sent: HashMap<String, Instant>,
+    sent: HashMap<String, (Instant, u64)>,
     timer: Option<tokio::task::JoinHandle<()>>,
     /// Session directory → node session id, or `None` when no session of
     /// this node wrote it. Never invalidated (TS), so a session created
     /// later keeps `None` for its directory until the node restarts.
     sessions: HashMap<String, Option<String>>,
+    verified: HashMap<String, (u64, String)>,
 }
 
 /// What a pass reads and sends with: the node's in production, stand-ins
@@ -116,6 +117,7 @@ impl MemoryMirror {
             state.connected = true;
             state.acked = mirrors.into_iter().collect();
             state.sent.clear();
+            state.verified.clear();
             if state.timer.is_none()
                 && let Some(node) = self.node.upgrade()
             {
@@ -162,7 +164,19 @@ impl MemoryMirror {
 
 impl State {
     fn receive(&mut self, io: &Io<'_>, key: &str, watermark: u64) {
+        let previous = self.acked.get(key).copied().unwrap_or(0);
+        if watermark < previous {
+            return;
+        }
         self.acked.insert(key.to_owned(), watermark);
+        // A non-advancing/rejected frame waits for the existing retry timer; no immediate loop.
+        if self
+            .sent
+            .get(key)
+            .is_some_and(|(_, expected)| watermark < *expected)
+        {
+            return;
+        }
         self.sent.remove(key);
         self.mirror(io, key);
     }
@@ -191,7 +205,7 @@ impl State {
             || self
                 .sent
                 .get(key)
-                .is_some_and(|sent| sent.elapsed() < ACK_TIMEOUT)
+                .is_some_and(|sent| sent.0.elapsed() < ACK_TIMEOUT)
         {
             return;
         }
@@ -205,9 +219,27 @@ impl State {
         if reset {
             from = 0;
         }
-        if size == from && !reset {
+        // Reject shrink rather than replacing gateway revocations with an older ledger.
+        if reset {
             return;
         }
+        let Ok(raw) = std::fs::read(&file) else {
+            return;
+        };
+        if raw.len() as u64 != size {
+            return;
+        }
+        let Ok(snapshot) = pirc_agent::workspace_journal::parse(&raw) else {
+            return;
+        };
+        if snapshot.control.is_none() && file.with_extension("lock").is_dir() {
+            return;
+        }
+        let hash = pirc_agent::journal::digest(&raw);
+        if size == from && self.verified.get(key) == Some(&(size, hash.clone())) {
+            return;
+        }
+
         let Ok(bytes) = read(&file, from, (size - from).min(MIRROR_CHUNK_BYTES as u64)) else {
             return;
         };
@@ -227,14 +259,24 @@ impl State {
                 .map_or(0, |at| at + 1);
             text = String::from_utf8_lossy(&whole[..end]).into_owned();
         }
-        if end == 0 && !reset {
+        if end == 0 && size != from && !reset {
             return;
         }
-        let lines: Vec<Value> = parse_lines(&text)
+        let mut lines: Vec<Value> = parse_lines(&text)
             .iter()
             .map(|line| self.convert(io, line))
             .collect();
-        self.sent.insert(key.to_owned(), Instant::now());
+        let end_offset = from + end as u64;
+        if raw.len() < end_offset as usize || raw.len() < from as usize {
+            return;
+        }
+        let Ok(legacy) = pirc_agent::workspace_journal::projection(&raw[..from as usize]) else {
+            return;
+        };
+        let marker = json!({"type":"integrity","version":2,"end":end_offset,"digest":pirc_agent::journal::digest(&raw[..end_offset as usize]),"previousDigest":pirc_agent::journal::digest(&raw[..from as usize]),"legacyProjection":legacy});
+        lines.push(marker);
+        self.sent
+            .insert(key.to_owned(), (Instant::now(), end_offset));
         let delivered = (io.send)(&NodeMessage::MemoryMirror {
             ledger_key: key.to_owned(),
             offset: from,
@@ -244,6 +286,8 @@ impl State {
         });
         if !delivered {
             self.sent.remove(key);
+        } else {
+            self.verified.insert(key.into(), (size, hash));
         }
     }
 
@@ -324,6 +368,25 @@ fn parse_lines(text: &str) -> Vec<Line> {
         let Ok(value) = serde_json::from_str::<Value>(line) else {
             continue;
         };
+        if value["type"] == "workspace.commit" {
+            if value["clear"] == true {
+                out.push(Line::Cleared);
+            }
+            for (field, forgotten) in [("retire", false), ("forget", true)] {
+                if value[field].as_array().is_some_and(|a| !a.is_empty()) {
+                    out.push(Line::Retired {
+                        ids: value[field].clone(),
+                        forgotten,
+                    });
+                }
+            }
+            if let Some(items) = value["add"].as_array().filter(|a| !a.is_empty()) {
+                out.push(Line::Recorded(
+                    items.iter().filter_map(WorkspaceItem::parse).collect(),
+                ));
+            }
+            continue;
+        }
         match value.get("type").and_then(Value::as_str) {
             Some("recorded") => {
                 if let Some(items) = value.get("items").and_then(Value::as_array) {

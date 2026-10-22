@@ -7,7 +7,7 @@ expression: t.into_value()
     "observed": {
       "frames": [
         {
-          "end": 491,
+          "end": 418,
           "ledgerKey": "<hex16:1>",
           "lines": [
             {
@@ -35,25 +35,33 @@ expression: t.into_value()
               ],
               "reason": "superseded",
               "type": "retired"
+            },
+            {
+              "digest": "<sha256:1>",
+              "end": 418,
+              "legacyProjection": "<sha256:2>",
+              "previousDigest": "<sha256:3>",
+              "type": "integrity",
+              "version": 2
             }
           ],
           "offset": 0,
           "type": "memory_mirror"
         },
         {
-          "end": 70,
+          "end": 338,
           "ledgerKey": "<hex16:2>",
           "lines": [
             {
-              "ids": [
-                "c00000000001"
-              ],
-              "reason": "forgotten",
-              "type": "retired"
+              "digest": "<sha256:4>",
+              "end": 338,
+              "legacyProjection": "<sha256:5>",
+              "previousDigest": "<sha256:4>",
+              "type": "integrity",
+              "version": 2
             }
           ],
-          "offset": 0,
-          "reset": true,
+          "offset": 338,
           "type": "memory_mirror"
         }
       ],
@@ -70,7 +78,7 @@ expression: t.into_value()
   },
   {
     "observed": {
-      "end": 830,
+      "end": 757,
       "ledgerKey": "<hex16:1>",
       "lines": [
         {
@@ -91,9 +99,17 @@ expression: t.into_value()
             }
           ],
           "type": "recorded"
+        },
+        {
+          "digest": "<sha256:6>",
+          "end": 757,
+          "legacyProjection": "<sha256:7>",
+          "previousDigest": "<sha256:1>",
+          "type": "integrity",
+          "version": 2
         }
       ],
-      "offset": 491,
+      "offset": 418,
       "type": "memory_mirror"
     },
     "step": "acknowledged: the rest of the ledger, now complete"
@@ -104,62 +120,33 @@ expression: t.into_value()
   },
   {
     "observed": {
-      "end": 856,
+      "end": 783,
       "ledgerKey": "<hex16:1>",
       "lines": [
         {
           "type": "cleared"
+        },
+        {
+          "digest": "<sha256:8>",
+          "end": 783,
+          "legacyProjection": "<sha256:9>",
+          "previousDigest": "<sha256:6>",
+          "type": "integrity",
+          "version": 2
         }
       ],
-      "offset": 830,
+      "offset": 757,
       "type": "memory_mirror"
     },
     "step": "its newline written: sent on the next scan"
   },
   {
-    "observed": {
-      "end": 26,
-      "ledgerKey": "<hex16:1>",
-      "lines": [
-        {
-          "type": "cleared"
-        }
-      ],
-      "offset": 0,
-      "reset": true,
-      "type": "memory_mirror"
-    },
-    "step": "a shrunk ledger: sent again from 0 with reset"
+    "observed": true,
+    "step": "a shrunk ledger is withheld; prior gateway revocations are retained"
   },
   {
-    "observed": {
-      "end": 338,
-      "ledgerKey": "<hex16:3>",
-      "lines": [
-        {
-          "items": [
-            {
-              "content": "Kept",
-              "git": {
-                "branch": "main",
-                "dirty": false,
-                "head": "abcdef123456"
-              },
-              "id": "b00000000001",
-              "relevance": "high",
-              "sourceMemoryIds": [
-                "aaaaaaaaaaaa"
-              ],
-              "timestamp": "2026-09-27 10:00"
-            }
-          ],
-          "type": "recorded"
-        }
-      ],
-      "offset": 0,
-      "type": "memory_mirror"
-    },
-    "step": "acknowledged at 0: the ledger is sent from the start"
+    "observed": true,
+    "step": "a stale lower acknowledgement cannot regress the in-flight checkpoint"
   },
   {
     "observed": 0,
@@ -168,11 +155,51 @@ expression: t.into_value()
   {
     "observed": [
       {
+        "end": 70,
+        "ledgerKey": "<hex16:3>",
+        "lines": [
+          {
+            "digest": "<sha256:10>",
+            "end": 70,
+            "legacyProjection": "<sha256:11>",
+            "previousDigest": "<sha256:10>",
+            "type": "integrity",
+            "version": 2
+          }
+        ],
+        "offset": 70,
+        "type": "memory_mirror"
+      },
+      {
+        "end": 338,
+        "ledgerKey": "<hex16:2>",
+        "lines": [
+          {
+            "digest": "<sha256:4>",
+            "end": 338,
+            "legacyProjection": "<sha256:5>",
+            "previousDigest": "<sha256:4>",
+            "type": "integrity",
+            "version": 2
+          }
+        ],
+        "offset": 338,
+        "type": "memory_mirror"
+      },
+      {
         "end": 26,
         "ledgerKey": "<hex16:1>",
         "lines": [
           {
             "type": "cleared"
+          },
+          {
+            "digest": "<sha256:12>",
+            "end": 26,
+            "legacyProjection": "<sha256:2>",
+            "previousDigest": "<sha256:3>",
+            "type": "integrity",
+            "version": 2
           }
         ],
         "offset": 0,

@@ -326,9 +326,16 @@ async fn agent_assistant_coding_session_context_timeout() {
     log.session(&agent);
     let value = log.into_value();
     let text = value.to_string();
-    assert!(!text.contains("## User"), "a USER section: {value:#}");
+    assert!(
+        text.contains("Unavailable; cached USER preferences are withheld."),
+        "missing explicit unavailable state: {value:#}"
+    );
+    assert!(
+        !text.contains("Prefers short answers."),
+        "stale USER content was injected: {value:#}"
+    );
     assert_eq!(
-        text.matches("Your USER preferences could not be loaded")
+        text.matches("Your USER preferences could not be refreshed")
             .count(),
         1,
         "{value:#}"

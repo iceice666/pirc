@@ -42,6 +42,18 @@ pub struct Normalizer {
     counts: HashMap<&'static str, usize>,
 }
 
+/// Handoff source packets are JSON inside a model message's text. Normalize
+/// their metadata structurally while retaining every source's content.
+pub(crate) fn handoff_packet(text: &str) -> Option<Value> {
+    let packet: Value = serde_json::from_str(text).ok()?;
+    (packet.get("base").is_some()
+        && packet["sources"].is_array()
+        && packet["limitations"]
+            .as_str()
+            .is_some_and(|s| s.starts_with("Text and tool metadata only.")))
+    .then_some(packet)
+}
+
 impl Normalizer {
     pub fn new(literals: impl IntoIterator<Item = (String, &'static str)>) -> Self {
         let mut normalizer = Self::default();
@@ -64,7 +76,10 @@ impl Normalizer {
 
     pub fn value(&mut self, value: &Value) -> Value {
         match value {
-            Value::String(text) => Value::String(self.text(text)),
+            Value::String(text) => match handoff_packet(text) {
+                Some(packet) => Value::String(serde_json::to_string(&self.value(&packet)).unwrap()),
+                None => Value::String(self.text(text)),
+            },
             Value::Number(number) => match number.as_u64() {
                 Some(ms) if EPOCH_MS.contains(&ms) => json!("<epoch-ms>"),
                 _ => value.clone(),
@@ -78,10 +93,13 @@ impl Normalizer {
                 entries.sort_by(|a, b| a.0.cmp(b.0));
                 let mut out = Map::new();
                 for (key, item) in entries {
-                    let item = if key == "entryId"
+                    let item = if key == "pircRouteFingerprint" {
+                        json!("<route-fingerprint>")
+                    } else if key == "entryId"
                         && item.as_str().is_some_and(|id| {
                             id.len() == 8 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
-                        }) {
+                        })
+                    {
                         Value::String(self.placeholder("entry", item.as_str().unwrap()))
                     } else {
                         self.value(item)
@@ -243,6 +261,17 @@ pub fn sorted(value: Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn encoded_handoff_sources_keep_text_and_normalize_identity_and_time() {
+        let packet = json!({"base":null,"sources":[{"entryId":"a1234567","sessionId":"1234567890abcdef","timestamp":1792657301922u64,"text":"Keep this exact source"}],"limitations":"Text and tool metadata only."});
+        let mut n = Normalizer::default();
+        let shown = n.value(&json!(packet.to_string()));
+        let packet: Value = serde_json::from_str(shown.as_str().unwrap()).unwrap();
+        assert_eq!(packet["sources"][0]["entryId"], "<entry:1>");
+        assert_eq!(packet["sources"][0]["timestamp"], "<epoch-ms>");
+        assert_eq!(packet["sources"][0]["text"], "Keep this exact source");
+    }
 
     #[test]
     fn keeps_equal_ids_equal_and_distinct_ids_distinct() {

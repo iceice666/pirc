@@ -18,7 +18,7 @@ struct Scope {
     spelled: PathBuf,
     root: File,
     ledger: Option<(PathBuf, File)>,
-    serial: Mutex<()>,
+    serial: Mutex<HashMap<String, pirc_agent::journal::Journal>>,
 }
 pub struct Lease {
     pub config: InferenceConfig,
@@ -27,9 +27,14 @@ pub struct Lease {
 impl Lease {
     pub fn close(&self) {
         if let Some(w) = self.writes.upgrade() {
-            w.0.lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .remove(&self.config.token);
+            let scope =
+                w.0.lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .remove(&self.config.token);
+            // Drain writes admitted before revocation; replacement cannot overtake them.
+            if let Some(scope) = scope {
+                drop(scope.serial.lock().unwrap_or_else(|e| e.into_inner()));
+            }
         }
     }
 }
@@ -103,7 +108,7 @@ impl Writes {
                 spelled: root.to_path_buf(),
                 root: fd,
                 ledger,
-                serial: Mutex::new(()),
+                serial: Mutex::new(HashMap::new()),
             }),
         );
         Ok(Lease {
@@ -121,6 +126,9 @@ impl Writes {
             .contains_key(token)
     }
     pub fn apply(&self, token: &str, body: Value) -> io::Result<()> {
+        self.apply_response(token, body).map(|_| ())
+    }
+    pub fn apply_response(&self, token: &str, body: Value) -> io::Result<Value> {
         let scope = self
             .0
             .lock()
@@ -129,8 +137,23 @@ impl Writes {
             .cloned()
             .ok_or_else(refused)?;
         let request: Request = serde_json::from_value(body).map_err(|_| refused())?;
-        let _serial = scope.serial.lock().unwrap_or_else(|e| e.into_inner());
-        scope.apply(request)
+        let mut serial = scope.serial.lock().unwrap_or_else(|e| e.into_inner());
+        if !self.authorized(token) {
+            return Err(refused());
+        }
+        let snapshot = matches!(request.op.as_str(), "session_open" | "session_snapshot");
+        let path = request.path.clone();
+        scope.apply(request, &mut serial)?;
+        if snapshot {
+            let bytes = serial
+                .get(&path)
+                .ok_or_else(refused)?
+                .snapshot()
+                .map_err(io::Error::other)?;
+            Ok(serde_json::json!({"ok":true,"hash":pirc_agent::journal::digest(&bytes)}))
+        } else {
+            Ok(serde_json::json!({"ok":true}))
+        }
     }
 }
 impl Scope {
@@ -156,11 +179,76 @@ impl Scope {
         }
         Ok((parent, leaf))
     }
-    fn apply(&self, r: Request) -> io::Result<()> {
+    fn apply(
+        &self,
+        r: Request,
+        journals: &mut HashMap<String, pirc_agent::journal::Journal>,
+    ) -> io::Result<()> {
         let path = Path::new(&r.path);
         let ledger = self.ledger.as_ref().is_some_and(|(p, _)| p == path);
-        if ledger && r.op != "append" {
+        if ledger {
             return Err(refused());
+        }
+        if matches!(
+            r.op.as_str(),
+            "session_open" | "session_append" | "session_snapshot"
+        ) {
+            if ledger
+                || path
+                    .file_name()
+                    .and_then(|s| s.to_str())
+                    .is_none_or(|name| !name.ends_with(".jsonl") && !name.ends_with(".tmp"))
+            {
+                return Err(refused());
+            }
+            if r.op == "session_snapshot" {
+                return if journals.contains_key(&r.path) {
+                    Ok(())
+                } else {
+                    Err(refused())
+                };
+            }
+            if r.op == "session_open" {
+                let (parent, name) = self.parent(path)?;
+                let writer = pirc_agent::journal::Journal::open(
+                    parent,
+                    &name,
+                    pirc_agent::session_store::validate_values,
+                )
+                .map_err(io::Error::other)?;
+                journals.insert(r.path, writer);
+                return Ok(());
+            }
+            let writer = journals.get(&r.path).ok_or_else(refused)?;
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(r.data)
+                .map_err(|_| refused())?;
+            if bytes.len() > 6 * 1024 * 1024 {
+                return Err(refused());
+            }
+            #[derive(Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct Append {
+                expected: String,
+                entry: Value,
+            }
+            let append: Append = serde_json::from_slice(&bytes).map_err(|_| refused())?;
+            return writer
+                .transaction(|raw| {
+                    if pirc_agent::journal::digest(raw) != append.expected {
+                        return Err("writer_stale_reopen".into());
+                    }
+                    let mut line =
+                        serde_json::to_vec(&append.entry).map_err(|_| "invalid_session_entry")?;
+                    line.push(b'\n');
+                    let mut next = raw.to_vec();
+                    next.extend_from_slice(&line);
+                    pirc_agent::session_store::validate_values(
+                        &pirc_agent::journal::parse(&next)?.values,
+                    )?;
+                    Ok(((), line))
+                })
+                .map_err(io::Error::other);
         }
         if r.op == "mkdir" {
             let rel = path.strip_prefix(&self.spelled).map_err(|_| refused())?;
@@ -289,9 +377,11 @@ mod tests {
             std::fs::read_to_string(&journal).unwrap(),
             "first\nsecond\n"
         );
-        writes
-            .apply(token, body("append", &ledger, "memory\n"))
-            .unwrap();
+        assert!(
+            writes
+                .apply(token, body("append", &ledger, "memory\n"))
+                .is_err()
+        );
         assert!(
             writes
                 .apply(token, body("write", &ledger, "poison"))

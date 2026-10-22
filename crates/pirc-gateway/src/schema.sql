@@ -115,7 +115,7 @@ CREATE INDEX delegations_target ON delegations(target_session_id, status);
 -- Workspace memory mirrored from the nodes (daemon/memory-records.ts).
 CREATE TABLE memory_mirrors (
   node_id TEXT NOT NULL, ledger_key TEXT NOT NULL, watermark INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL, PRIMARY KEY (node_id, ledger_key)
+  updated_at INTEGER NOT NULL, digest TEXT, PRIMARY KEY (node_id, ledger_key)
 );
 CREATE TABLE memory_records (
   node_id TEXT NOT NULL, ledger_key TEXT NOT NULL, id TEXT NOT NULL,

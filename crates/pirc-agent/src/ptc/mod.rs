@@ -748,6 +748,9 @@ impl PtcTool {
             ctx.config.limits.tool_output_bytes as usize,
         );
         let mut details = Map::new();
+        if fence.iter().any(|name| crate::handoff::replay_tool(name)) {
+            details.insert("memoryReplay".into(), json!(true));
+        }
         details.insert("executionId".to_owned(), json!(execution_id));
         details.insert("status".to_owned(), json!(report.status));
         details.insert("manifest".to_owned(), json!(compiled.manifest));

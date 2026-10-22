@@ -33,6 +33,7 @@ expression: p.into_value()
       "agentRunning": false,
       "backgroundTasks": [],
       "memory": {
+        "architecture": "handoff",
         "counts": {
           "active": 0,
           "compactions": 0,
@@ -43,6 +44,12 @@ expression: p.into_value()
           "visibleReflections": 0
         },
         "enabled": true,
+        "handoff": {
+          "latest": null,
+          "legacyAncestry": null,
+          "snapshots": 0,
+          "textOnly": true
+        },
         "observations": [],
         "passive": false,
         "reflections": [],
@@ -72,7 +79,8 @@ expression: p.into_value()
       "memoryRuntime": null,
       "team": {
         "agents": []
-      }
+      },
+      "workspaceMemory": null
     },
     "headers": {
       "content-type": "application/json"
@@ -433,6 +441,7 @@ expression: p.into_value()
       "agentRunning": true,
       "backgroundTasks": [],
       "memory": {
+        "architecture": "handoff",
         "counts": {
           "active": 0,
           "compactions": 0,
@@ -443,6 +452,12 @@ expression: p.into_value()
           "visibleReflections": 0
         },
         "enabled": true,
+        "handoff": {
+          "latest": null,
+          "legacyAncestry": null,
+          "snapshots": 0,
+          "textOnly": true
+        },
         "observations": [],
         "passive": false,
         "reflections": [],
@@ -469,15 +484,15 @@ expression: p.into_value()
           }
         }
       },
-      "memoryRuntime": {
-        "autoCompacting": false,
-        "lastErrors": {},
-        "phase": null,
-        "rateLimited": []
-      },
+      "memoryRuntime": null,
       "team": {
         "agents": [],
         "tasks": []
+      },
+      "workspaceMemory": {
+        "errors": {},
+        "extracting": false,
+        "pendingMutations": 0
       }
     },
     "headers": {
@@ -490,7 +505,7 @@ expression: p.into_value()
   {
     "observed": {
       "agentRunning": true,
-      "capabilities": "<33 items>",
+      "capabilities": "<35 items>",
       "keys": [
         "agentRunning",
         "snapshot",
@@ -519,6 +534,13 @@ expression: p.into_value()
           "title": "AGENTS.md (workspace)"
         },
         {
+          "estimatedTokens": 67,
+          "id": "workspace-memory",
+          "source": "feature:workspace-memory",
+          "text": "<264 chars>",
+          "title": "workspace-memory"
+        },
+        {
           "estimatedTokens": 225,
           "id": "sandbox",
           "source": "feature:sandbox",
@@ -526,10 +548,10 @@ expression: p.into_value()
           "title": "sandbox"
         },
         {
-          "estimatedTokens": 2382,
+          "estimatedTokens": 2507,
           "id": "capabilities",
           "source": "built-in",
-          "text": "<9523 chars>",
+          "text": "<10024 chars>",
           "title": "Capabilities"
         },
         {
@@ -728,6 +750,7 @@ expression: p.into_value()
         }
       ],
       "memory": {
+        "architecture": "handoff",
         "counts": {
           "active": 0,
           "compactions": 0,
@@ -738,6 +761,12 @@ expression: p.into_value()
           "visibleReflections": 0
         },
         "enabled": true,
+        "handoff": {
+          "latest": null,
+          "legacyAncestry": null,
+          "snapshots": 0,
+          "textOnly": true
+        },
         "observations": [],
         "passive": false,
         "reflections": [],
@@ -764,15 +793,15 @@ expression: p.into_value()
           }
         }
       },
-      "memoryRuntime": {
-        "autoCompacting": false,
-        "lastErrors": {},
-        "phase": null,
-        "rateLimited": []
-      },
+      "memoryRuntime": null,
       "team": {
         "agents": [],
         "tasks": []
+      },
+      "workspaceMemory": {
+        "errors": {},
+        "extracting": false,
+        "pendingMutations": 0
       }
     },
     "headers": {
@@ -908,6 +937,7 @@ expression: p.into_value()
         }
       ],
       "memory": {
+        "architecture": "handoff",
         "counts": {
           "active": 0,
           "compactions": 0,
@@ -918,6 +948,12 @@ expression: p.into_value()
           "visibleReflections": 0
         },
         "enabled": true,
+        "handoff": {
+          "latest": null,
+          "legacyAncestry": null,
+          "snapshots": 0,
+          "textOnly": true
+        },
         "observations": [],
         "passive": false,
         "reflections": [],
@@ -944,15 +980,15 @@ expression: p.into_value()
           }
         }
       },
-      "memoryRuntime": {
-        "autoCompacting": false,
-        "lastErrors": {},
-        "phase": null,
-        "rateLimited": []
-      },
+      "memoryRuntime": null,
       "team": {
         "agents": [],
         "tasks": []
+      },
+      "workspaceMemory": {
+        "errors": {},
+        "extracting": false,
+        "pendingMutations": 0
       }
     },
     "headers": {

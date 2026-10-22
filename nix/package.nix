@@ -71,6 +71,28 @@ rustPlatform.buildRustPackage {
   installCheckPhase = ''
     test "$($out/bin/pirc-${role} --version)" = "${version}"
     $out/bin/pirc-${role} --help
+  ''
+  + lib.optionalString (role == "node") ''
+    # Exercise the installed wrapper and real JSONL session lifecycle, offline.
+    export HOME="$TMPDIR/session-home"
+    export PIRC_CONFIG_DIR="$TMPDIR/session-config"
+    export PIRC_AGENT_FEATURES=none
+    export PIRC_MODE='{"id":"smoke","label":"Smoke","ui":{"noun":"session"},"workdir":"per-session","prompt":["base"],"tools":[],"assistant":"user","schedule_scope":"own"}'
+    mkdir -p "$HOME" "$PIRC_CONFIG_DIR" "$TMPDIR/session-work"
+    pirc_session_dir="$TMPDIR/session-store"
+    for pirc_session_pass in 1 2; do
+      (
+        cd "$TMPDIR/session-work"
+        printf '%s\n' '{"type":"configure","models":{}}' '{"id":"session-check","type":"get_state"}' \
+          | $out/bin/pirc-node agent --session-dir "$pirc_session_dir" > "$TMPDIR/session-response"
+      )
+      grep -q '"id":"session-check"' "$TMPDIR/session-response"
+      grep -q '"success":true' "$TMPDIR/session-response"
+      test -s "$pirc_session_dir/session.jsonl"
+      test -d "$pirc_session_dir/session.jsonl.writer-lock"
+      head -n 1 "$pirc_session_dir/session.jsonl" > "$TMPDIR/session-header-$pirc_session_pass"
+    done
+    cmp "$TMPDIR/session-header-1" "$TMPDIR/session-header-2"
   '';
   passthru = {
     inherit role;

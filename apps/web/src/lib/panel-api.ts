@@ -116,6 +116,13 @@ export interface Meter {
 }
 export type Relevance = 'low' | 'medium' | 'high' | 'critical';
 export interface MemoryPanel {
+  architecture?: 'handoff';
+  handoff?: {
+    snapshots: number;
+    latest: string | null;
+    legacyAncestry: string | null;
+    textOnly: boolean;
+  };
   enabled: boolean;
   passive: boolean;
   thresholds: {
@@ -205,6 +212,11 @@ export interface PanelState {
   agentRunning: boolean;
   memory: MemoryPanel | null;
   memoryRuntime: MemoryRuntime | null;
+  workspaceMemory?: {
+    errors: Record<string, string>;
+    pendingMutations: number;
+    extracting: boolean;
+  } | null;
   backgroundTasks: BackgroundTask[];
   team: {
     agents: TeamMember[];

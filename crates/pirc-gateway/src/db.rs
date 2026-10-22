@@ -21,7 +21,7 @@ use crate::util::{new_id, now_ms, safe_json};
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1005;
+pub const SCHEMA_VERSION: i64 = 1006;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = include_str!("schema.sql");
@@ -79,6 +79,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
          ALTER TABLE delegations ADD COLUMN quote_entry_ids TEXT;
          UPDATE delegations SET dispatch='approved' WHERE dispatched_at IS NOT NULL OR status IN ('running','waiting_input','completed','failed');",
     ),
+    (1006, "ALTER TABLE memory_mirrors ADD COLUMN digest TEXT;"),
 ];
 
 /// Placeholder name of a new session until the agent's title replaces it.
@@ -1620,6 +1621,7 @@ mod tests {
                 "",
             );
         // And schema 1005's delegation columns.
+        let first = first.replace(", digest TEXT", "");
         let first = first.replace(
             ",\n  -- How it started: 'approved' (the user's card), 'auto' (the chat's delegation\n  -- approval policy), NULL before it started. The origins of the chat's context\n  -- the agent reported (JSON array), and the user's own words it verified\n  -- (quote, JSON array of their message entry ids).\n  dispatch TEXT, origins_json TEXT, quote TEXT, quote_entry_ids TEXT\n",
             "\n",

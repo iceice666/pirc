@@ -905,9 +905,6 @@ expression: r.into_value()
         "type": "message"
       },
       {
-        "<line>": "{\"type\":\"message\",\"message\":{\"role\":\"us"
-      },
-      {
         "firstKeptEntryId": "<entry:3>",
         "id": "<entry:4>",
         "parentId": "<entry:3>",
@@ -1006,9 +1003,6 @@ expression: r.into_value()
         "parentId": "<entry:10>",
         "timestamp": 1011,
         "type": "message"
-      },
-      {
-        "<line>": ""
       },
       {
         "id": "<entry:12>",

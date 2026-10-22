@@ -35,22 +35,29 @@ pub fn serve(
                     .lines()
                     .find_map(|l| l.strip_prefix("Authorization: Bearer "))
                     .unwrap();
-                let ok = writes
-                    .apply(
-                        token,
-                        serde_json::from_slice(&bytes[end..end + length]).unwrap(),
-                    )
-                    .is_ok();
-                let status = if ok { "200 OK" } else { "400 Bad Request" };
+                let result = writes.apply_response(
+                    token,
+                    serde_json::from_slice(&bytes[end..end + length]).unwrap(),
+                );
+                let (status, body) = match result {
+                    Ok(v) => ("200 OK", v),
+                    Err(e) => (
+                        "400 Bad Request",
+                        serde_json::json!({"error":e.to_string()}),
+                    ),
+                };
+                let body = serde_json::to_vec(&body).unwrap();
                 stream
                     .write_all(
                         format!(
-                            "HTTP/1.1 {status}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                            "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                            body.len()
                         )
                         .as_bytes(),
                     )
                     .await
                     .unwrap();
+                stream.write_all(&body).await.unwrap();
                 stream.shutdown().await.unwrap();
             });
         }

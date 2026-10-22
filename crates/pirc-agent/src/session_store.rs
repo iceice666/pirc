@@ -265,19 +265,57 @@ impl<'de> Deserialize<'de> for SessionEntry {
     }
 }
 
-/// `parseEntries(text)`: one entry per JSON line; lines that do not parse
-/// (a torn final line after a crash) are skipped.
-pub fn parse_entries(text: &str) -> Result<Vec<SessionEntry>, String> {
-    let mut entries = Vec::new();
-    for line in text.split('\n') {
-        if js::trim(line).is_empty() {
-            continue;
+/// Validate complete records before exposing any source or coverage boundary.
+/// Unknown extension types remain readable; malformed known records fail closed.
+pub fn validate_values(values: &[Value]) -> Result<(), String> {
+    let mut ids = HashSet::new();
+    for (index, value) in values.iter().enumerate() {
+        let entry = SessionEntry::from_value(value.clone())?;
+        if matches!(&entry.data, EntryData::Other(_))
+            && matches!(
+                value["type"].as_str(),
+                Some(
+                    "session"
+                        | "message"
+                        | "custom"
+                        | "compaction"
+                        | "model_change"
+                        | "thinking_level_change"
+                        | "session_info"
+                )
+            )
+        {
+            return Err("invalid_session_record".into());
         }
-        if let Ok(value) = serde_json::from_str::<Value>(line) {
-            entries.push(SessionEntry::from_value(value)?);
+        if entry.id.is_empty() || !ids.insert(entry.id.clone()) {
+            return Err("invalid_session_id".into());
+        }
+        if index == 0 {
+            if !matches!(entry.data,EntryData::Session{ref session_id,..} if !session_id.is_empty())
+                || entry.parent_id.is_some()
+                || value.get("version").and_then(Value::as_u64) != Some(1)
+            {
+                return Err("invalid_session_header".into());
+            }
+        } else if matches!(entry.data, EntryData::Session { .. })
+            || entry
+                .parent_id
+                .as_ref()
+                .is_none_or(|id| !ids.contains(id) || *id == entry.id)
+        {
+            return Err("invalid_session_parent".into());
         }
     }
-    Ok(entries)
+    Ok(())
+}
+pub fn parse_entries(text: &str) -> Result<Vec<SessionEntry>, String> {
+    let parsed = crate::journal::parse(text.as_bytes())?;
+    validate_values(&parsed.values)?;
+    parsed
+        .values
+        .into_iter()
+        .map(SessionEntry::from_value)
+        .collect()
 }
 
 /// `chainOf(byId, leafId)`: entries on the chain ending at `leaf`, root
@@ -427,6 +465,9 @@ pub fn read_session_history(dir: &Path) -> Result<Vec<Value>, String> {
         by_id: index_of(&entries),
         leaf_id: entries.last().map(|entry| entry.id.clone()),
         entries,
+        writer: None,
+        disk_hash: String::new(),
+        write_failed: false,
     };
     let mut siblings: HashMap<Option<String>, Vec<Value>> = HashMap::new();
     for entry in &store.entries {
@@ -627,61 +668,76 @@ fn atomic_branch_mutation<T>(
     store: &mut SessionStore,
     mutate: impl FnOnce(&mut SessionStore) -> Result<T, String>,
 ) -> Result<T, String> {
+    if crate::state_io::config().is_some() {
+        return Err("branch_mutation_requires_host".into());
+    }
     let original = store.file.clone();
     let temporary = store
         .dir
         .join(format!(".session-{}.tmp", crate::random_uuid()));
-    let result = (|| {
-        let bytes = std::fs::read(&original).map_err(|error| error.to_string())?;
-        let mut file =
-            crate::state_io::create_new(&temporary).map_err(|error| error.to_string())?;
-        file.write_all(&bytes).map_err(|error| error.to_string())?;
-        if !bytes.is_empty() && !bytes.ends_with(b"\n") {
-            file.write_all(b"\n").map_err(|error| error.to_string())?;
+    let writer = store.writer.take().ok_or("writer_not_open")?;
+    let expected = store.disk_hash.clone();
+    let result = writer.transaction(|bytes| {
+        if crate::journal::digest(bytes) != expected {
+            return Err("session_stale_reopen".into());
         }
+        let mut file = crate::state_io::create_new(&temporary).map_err(|e| e.to_string())?;
+        file.write_all(bytes).map_err(|e| e.to_string())?;
+        file.sync_all().map_err(|e| e.to_string())?;
         store.file = temporary.clone();
+        store.writer = Some(crate::journal::Journal::at_path(
+            &temporary,
+            validate_values,
+        )?);
+        store.disk_hash = expected;
         let value = mutate(store)?;
-        file.sync_all().map_err(|error| error.to_string())?;
-        crate::state_io::rename(&temporary, &original).map_err(|error| error.to_string())?;
-        Ok(value)
-    })();
+        file.sync_all().map_err(|e| e.to_string())?;
+        crate::state_io::rename(&temporary, &original).map_err(|e| e.to_string())?;
+        std::fs::File::open(&store.dir)
+            .and_then(|f| f.sync_all())
+            .map_err(|_| "commit_outcome_unknown_reopen")?;
+        Ok((value, Vec::new()))
+    });
+    store.writer = None;
     store.file = original;
-    if result.is_err() {
-        let _ = crate::state_io::remove_file(&temporary);
-    }
+    let _ = std::fs::remove_file(&temporary);
+    let _ = std::fs::remove_file(format!("{}.writer-mutex", temporary.display()));
+    let _ = std::fs::remove_dir(format!("{}.writer-lock", temporary.display()));
+    // Reload on either path: failed tentative branch entries must never remain in memory.
+    let restored = SessionStore::open(store.dir.clone(), "")?;
+    *store = restored;
     result
 }
 
 /// `contextEntriesOf(branch)`: what the model sees, the latest compaction
 /// summary, then messages from its `firstKeptEntryId` on, with entry ids.
 pub fn context_entries_of(branch: &[SessionEntry]) -> Vec<(String, Message)> {
-    let mut start = 0;
+    let snapshots = crate::handoff::valid_snapshots(branch);
+    let latest = snapshots.last();
     let mut out = Vec::new();
-    for (index, entry) in branch.iter().enumerate().rev() {
-        let EntryData::Compaction {
+    let mut start = 0;
+    if let Some(entry) = latest
+        && let EntryData::Compaction {
             summary,
             first_kept_entry_id,
             tokens_before,
             ..
         } = &entry.data
-        else {
-            continue;
-        };
+    {
         start = branch
             .iter()
-            .position(|item| item.id == *first_kept_entry_id)
-            .unwrap_or(index + 1);
+            .position(|e| e.id == *first_kept_entry_id)
+            .unwrap_or_else(|| branch.iter().position(|e| e.id == entry.id).unwrap() + 1);
         out.push((
             entry.id.clone(),
             summary_message(summary, *tokens_before, entry.timestamp),
         ));
-        break;
     }
-    for entry in &branch[start.min(branch.len())..] {
-        if let EntryData::Message(message) = &entry.data {
-            out.push((entry.id.clone(), message.clone()));
-        }
-    }
+    out.extend(
+        branch[start.min(branch.len())..]
+            .iter()
+            .filter_map(|e| e.message().map(|m| (e.id.clone(), m.clone()))),
+    );
     out
 }
 
@@ -692,6 +748,9 @@ pub struct SessionStore {
     entries: Vec<SessionEntry>,
     by_id: HashMap<String, usize>,
     leaf_id: Option<String>,
+    writer: Option<crate::journal::Journal>,
+    disk_hash: String,
+    write_failed: bool,
 }
 
 impl SessionStore {
@@ -706,13 +765,23 @@ impl SessionStore {
             entries: Vec::new(),
             by_id: HashMap::new(),
             leaf_id: None,
+            writer: None,
+            disk_hash: String::new(),
+            write_failed: false,
         };
-        if store.file.exists() {
-            for entry in parse_entries(&js::read_text(&store.file)?)? {
-                store.leaf_id = Some(entry.id.clone());
-                store.by_id.insert(entry.id.clone(), store.entries.len());
-                store.entries.push(entry);
-            }
+        let raw = if crate::state_io::config().is_some() {
+            crate::state_io::session_open(&store.file).map_err(|e| e.to_string())?
+        } else {
+            let writer = crate::journal::Journal::at_path(&store.file, validate_values)?;
+            let raw = writer.snapshot()?;
+            store.writer = Some(writer);
+            raw
+        };
+        store.disk_hash = crate::journal::digest(&raw);
+        for entry in parse_entries(std::str::from_utf8(&raw).map_err(|_| "invalid_utf8")?)? {
+            store.leaf_id = Some(entry.id.clone());
+            store.by_id.insert(entry.id.clone(), store.entries.len());
+            store.entries.push(entry);
         }
         if store.entries.is_empty() {
             store.append(EntryData::Session {
@@ -751,8 +820,46 @@ impl SessionStore {
             data,
         };
         let line = format!("{}\n", js::stringify(&entry.to_value()));
-        crate::state_io::append(&self.file, line.as_bytes())
-            .map_err(|error| js::node_error(&error, "open", Some(&self.file)))?;
+        if self.write_failed {
+            return Err("commit_outcome_unknown_reopen".into());
+        }
+        let result = if let Some(writer) = &self.writer {
+            writer.transaction(|raw| {
+                if crate::journal::digest(raw) != self.disk_hash {
+                    return Err("writer_stale_reopen".into());
+                }
+                let mut next = raw.to_vec();
+                next.extend_from_slice(line.as_bytes());
+                let parsed = crate::journal::parse(&next)?;
+                validate_values(&parsed.values)?;
+                Ok((crate::journal::digest(&next), line.as_bytes().to_vec()))
+            })
+        } else {
+            let raw = std::fs::read(&self.file)
+                .or_else(|e| {
+                    if e.kind() == std::io::ErrorKind::NotFound {
+                        Ok(Vec::new())
+                    } else {
+                        Err(e)
+                    }
+                })
+                .map_err(|_| "journal_read")?;
+            if crate::journal::digest(&raw) != self.disk_hash {
+                return Err("writer_stale_reopen".into());
+            }
+            let mut next = raw;
+            next.extend_from_slice(line.as_bytes());
+            crate::state_io::session_append(&self.file, &self.disk_hash, &entry.to_value())
+                .map(|()| crate::journal::digest(&next))
+                .map_err(|e| e.to_string())
+        };
+        match result {
+            Ok(hash) => self.disk_hash = hash,
+            Err(error) => {
+                self.write_failed = true;
+                return Err(error);
+            }
+        }
         self.by_id.insert(id.clone(), self.entries.len());
         self.entries.push(entry.clone());
         self.leaf_id = Some(id);
@@ -894,7 +1001,7 @@ mod tests {
         });
         assert!(result.is_err());
         assert_eq!(std::fs::read(&store.file).unwrap(), original);
-        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 1);
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 3);
     }
 
     #[test]
@@ -1028,6 +1135,27 @@ mod tests {
     }
 
     #[test]
+    fn malformed_known_sources_cannot_be_silently_covered() {
+        let header = json!({"type":"session","version":1,"sessionId":"s","cwd":"/","id":"h","parentId":null});
+        for invalid in [
+            json!({"type":"message","message":{"role":"user","content":42}}),
+            json!({"type":"compaction","summary":"lost source"}),
+            json!({"type":"custom"}),
+        ] {
+            let mut invalid = invalid;
+            invalid["id"] = json!("bad");
+            invalid["parentId"] = json!("h");
+            assert_eq!(
+                validate_values(&[header.clone(), invalid]).unwrap_err(),
+                "invalid_session_record"
+            );
+        }
+        let future =
+            json!({"type":"future.extension","payload":{"opaque":true},"id":"f","parentId":"h"});
+        assert!(validate_values(&[header, future]).is_ok());
+    }
+
+    #[test]
     fn reads_every_shape_ts_wrote_and_skips_torn_lines() {
         let root = tempfile::tempdir().unwrap();
         let dir = root.path().join("session");
@@ -1076,16 +1204,16 @@ mod tests {
         // As in TS, the entry appended after a torn line without its newline
         // joins that line, so a reopened store no longer sees it.
         let reopened = SessionStore::open(dir.clone(), "/elsewhere").unwrap();
-        assert_eq!(reopened.branch().len(), 4);
-        assert!(reopened.get(&next.id).is_none());
+        assert_eq!(reopened.branch().len(), 5);
+        assert!(reopened.get(&next.id).is_some());
         drop(reopened);
         let mut store = SessionStore::open(dir.clone(), "/elsewhere").unwrap();
         let last = store.append(user("third")).unwrap();
         let reopened = SessionStore::open(dir, "/elsewhere").unwrap();
-        assert_eq!(reopened.branch().len(), 5);
+        assert_eq!(reopened.branch().len(), 6);
         assert_eq!(
             reopened.get(&last.id).unwrap().parent_id.as_deref(),
-            Some("e4")
+            Some(next.id.as_str())
         );
     }
 
@@ -1099,8 +1227,7 @@ mod tests {
             "{\"type\":\"session\",\"version\":1,\"sessionId\":\"a\",\"cwd\":\"/\",\"id\":\"e1\",\"parentId\":null,\"timestamp\":1}\n5\n",
         )
         .unwrap();
-        let store = SessionStore::open(dir.clone(), "/").unwrap();
-        assert!(store.branch().is_empty());
+        assert!(SessionStore::open(dir.clone(), "/").is_err());
         std::fs::write(dir.join(SESSION_FILE), "null\n").unwrap();
         assert!(SessionStore::open(dir, "/").is_err());
     }
@@ -1123,7 +1250,15 @@ mod tests {
             details: None,
         };
         let branch = vec![
-            entry("a", None, user("one")),
+            entry(
+                "header",
+                None,
+                EntryData::Session {
+                    session_id: "session".into(),
+                    cwd: "/work".into(),
+                },
+            ),
+            entry("a", Some("header"), user("one")),
             entry("b", Some("a"), user("two")),
             entry("c", Some("b"), compaction("b")),
             entry("d", Some("c"), user("three")),
@@ -1151,7 +1286,7 @@ mod tests {
             .into_iter()
             .map(|(id, _)| id)
             .collect();
-        assert_eq!(ids, ["b", "c"]);
+        assert_eq!(ids, ["a", "c"]);
         // UI history keeps everything, with the summaries in place.
         let history = history_of(&branch);
         assert_eq!(history.len(), 6);

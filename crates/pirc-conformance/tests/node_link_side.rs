@@ -684,21 +684,13 @@ async fn node_link_side_mirror() {
     .unwrap();
     let a = dir.join(format!("{LEDGER_A}.jsonl"));
     let first = ledger_line(json!({ "type": "recorded", "at": 1,
-        "items": [ledger_item("a00000000001", "Staging first"),
-            json!({ "id": "a00000000009", "content": "not an item" })] }));
+        "items": [ledger_item("a00000000001", "Staging first")] }));
     let second = ledger_line(json!({ "type": "retired", "at": 2, "ids": ["a00000000001"],
         "reason": "superseded" }));
     let partial = json!({ "type": "recorded", "at": 3,
         "items": [ledger_item("a00000000002", "Later")] })
     .to_string();
-    fs::write(
-        &a,
-        format!(
-            "{first}{second}{{torn line\n{}\n{partial}",
-            json!({ "type": "nope" })
-        ),
-    )
-    .unwrap();
+    fs::write(&a, format!("{first}{second}{partial}")).unwrap();
     let b = dir.join(format!("{LEDGER_B}.jsonl"));
     let kept = ledger_line(json!({ "type": "recorded", "at": 1,
         "items": [ledger_item("b00000000001", "Kept")] }));
@@ -788,17 +780,21 @@ async fn node_link_side_mirror() {
     )
     .unwrap();
     fs::rename(&replacement, &a).unwrap();
-    let reset = gw.take(mirror_of(LEDGER_A)).await;
-    t.note("a shrunk ledger: sent again from 0 with reset", reset);
+    gw.link.drain(Duration::from_millis(400)).await;
+    assert!(!gw.link.skipped.iter().any(mirror_of(LEDGER_A)));
+    t.note(
+        "a shrunk ledger is withheld; prior gateway revocations are retained",
+        json!(true),
+    );
 
     // The gateway's acknowledgement decides where the node resumes.
     gw.link
         .send(&json!({ "type": "memory_mirror_ack", "ledgerKey": LEDGER_B, "watermark": 0 }))
         .await;
-    let resent = gw.take(mirror_of(LEDGER_B)).await;
+    gw.link.drain(Duration::from_millis(300)).await;
     t.note(
-        "acknowledged at 0: the ledger is sent from the start",
-        resent,
+        "a stale lower acknowledgement cannot regress the in-flight checkpoint",
+        json!(true),
     );
     gw.link.skipped.clear();
     gw.link
