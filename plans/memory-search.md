@@ -2,7 +2,7 @@
 
 [Plans](README.md) · [Memory](../docs/architecture/memory.md)
 
-Goal: the brain's `memory_search` and its automatic recall before each turn find the facts, repository notes and worker reports it is looking for, including Chinese queries without spaces and paraphrases, without changing who can see what. Since the rewrite, facts stay out of the prompt and are found only by search, so search quality decides what pirc remembers ([rewrite §3](rewrite/existing-plans.md)). The gateway stays on SQLite.
+Goal: the brain's `memory_search` and its automatic recall before each turn find the facts, repository notes and worker reports it is looking for, including Chinese queries without spaces and paraphrases, without changing who can see what. Since the rewrite, facts stay out of the prompt and are found only by search, so search quality decides what pirc remembers (`git show 6111f04:plans/rewrite/existing-plans.md` §3). The gateway stays on SQLite.
 
 This file is the work queue for the change, not authorization: each phase needs the user's go-ahead. Phase 2 also needs a choice of embeddings endpoint, because it sends note and fact text there.
 

@@ -10,19 +10,18 @@ rerunning the `#[ignore]`d real-host-root tests.
 
 [The rewrite](rewrite/README.md) turned pirc into an assistant that lives in the
 gateway ([direction](../docs/architecture/direction.md)). Plans 00–13 are done
-(2026-10-20 to 2026-10-22); each plan file records its items, how they were
-verified and where the result differs from the design. The current behavior is in
-the [guides](../docs/guides/README.md) and the
-[memory reference](../docs/architecture/memory.md). Where each item of the
-previous queue went is recorded in [existing plans](rewrite/existing-plans.md).
+(2026-10-20 to 2026-10-22); [its README](rewrite/README.md) keeps one line per
+plan and how to read the full plan files (items, verification, differences from
+the design, where each item of the previous queue went) from git. The current
+behavior is in the [guides](../docs/guides/README.md) and the
+[memory reference](../docs/architecture/memory.md).
 
 Second steps the rewrite left for later, each needing its own go-ahead:
 
-- **Research-mode browser** for the brain ([09](rewrite/09-sources.md), decision
-  #8): a gateway → node browser context not bound to a session, with the browser
-  action rule of [07](rewrite/07-red-lines.md). Node protocol 16. It brings the one
-  planned exception to "credentials only in the gateway" (cookies in a node's
-  browser profile); its security note goes into
+- **Research-mode browser** for the brain (plan 09, decision #8): a gateway → node
+  browser context not bound to a session, with the browser action rule of plan 07.
+  Node protocol 16. It brings the one planned exception to "credentials only in
+  the gateway" (cookies in a node's browser profile); its security note goes into
   [security decisions](../docs/architecture/security-decisions.md) with it.
 - **Gmail through its API** with a read-only OAuth scope and the user's own client,
   replacing app passwords. Open question from 09: whether the school's Google
@@ -31,6 +30,8 @@ Second steps the rewrite left for later, each needing its own go-ahead:
   `recall.remote` stay refused (`crates/pirc-gateway/src/memory/ops.rs`) because no
   worker tool hands them out; searching repository notes is theirs to have
   (decided 2026-10-20). Decide the tool before building it.
+- **Room attachment retention.** Room uploads stay in the gateway's state with
+  no automatic cleanup, archived rooms included (plan 01 left the period open).
 - **Engine Modes page** (low priority): a read-only list of modes, their source
   files and validation warnings, which are only logged today. Then retire the
   `kind` the gateway still derives in workspace JSON, once no client reads it.

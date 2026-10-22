@@ -1,6 +1,6 @@
 # Workspace modes
 
-[Guides](README.md) · [Nodes as capabilities](../../plans/rewrite/08-nodes.md)
+[Guides](README.md) · [Nodes](../deploy/node.md)
 
 Workspace modes are gateway-managed combinations of capabilities, prompt
 sections, features and tools. Work (`directory`) and Scratch (`scratch`) are
@@ -12,7 +12,7 @@ tools), never what it may do without asking: approvals are auto mode's, and
 read-only is a task's, not a mode's. A wake's research worker is read-only
 because the gateway delivers its task with `approvalMode: "read-only"`, which
 the node enforces in the agent and its sandbox (decided 2026-10-21,
-[plans/rewrite/08-nodes.md](../../plans/rewrite/08-nodes.md)); no mode file can
+[plans/rewrite/08-nodes.md](../../plans/rewrite/README.md)); no mode file can
 widen that.
 
 The engine (web and Android) lists workspaces grouped by device; a workspace

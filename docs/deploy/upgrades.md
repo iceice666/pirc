@@ -9,7 +9,7 @@ and leaves the old database where it is. To move from 0.9.x:
    the gateway closes a link of any other version (4426). The node
    database migrates to schema 2002 on first start (an older node refuses it).
 2. The gateway starts a new database, `$PIRC_STATE_DIR/pirc.sqlite`
-   (plans/rewrite/decisions.md #14). An existing `gateway.sqlite` is left
+   (decision #14, [direction §6](../architecture/direction.md#6-開放的決定)). An existing `gateway.sqlite` is left
    exactly as it is, never read or changed, and the gateway logs one line saying
    so; back it up or delete it when you choose. A `PIRC_DATABASE_PATH` that
    points at the old file is refused; unset it or point it at a new path.

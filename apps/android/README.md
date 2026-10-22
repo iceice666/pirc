@@ -212,7 +212,7 @@ node --test tool/parity/*_test.mjs
 
 Whoever changes the app runs `flutter analyze`, `flutter test` and the JVM
 tests below; integration tests, emulator and physical-device acceptance are
-run by the maintainer ([plan 12](../../plans/rewrite/12-android.md), decision 6).
+run by the maintainer ([plan 12](../../plans/rewrite/README.md), decision 6).
 Some widget tests compare against macOS Arial and Menlo and fail without them.
 
 Install the root Bun dependencies for the JavaScript tooling. Android JVM tests

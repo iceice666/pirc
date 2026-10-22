@@ -18,7 +18,7 @@ Vite proxies `/api` and WebSocket upgrades to `http://localhost:8787` in develop
 
 ## Pages
 
-Two pages, room-first ([plans/rewrite/11-web.md](../../plans/rewrite/11-web.md)):
+Two pages, room-first ([plans/rewrite/11-web.md](../../plans/rewrite/README.md)):
 
 - **Rooms** (`/`, `?room=<id>`): the room list (archived ones folded under it), the open room's messages and composer, and a right column with the members, a face's page or a worker's thread (the thread wins; on a phone each is a full page). Bottom tabs on a phone: Rooms, Members, Engine, Settings. State: `src/lib/rooms.svelte.ts`, which applies the room stream through the pure reducer `src/lib/room-events.ts`.
 - **Engine** (`/engine`): a front page (`?open=nodes|brain|loops|wakes|memory|sources`), the workspace/session tree, a workspace's details (`?workspace=`) and a session (`?session=`), read-only with its side panel. Sessions can only be renamed. State: `src/lib/engine.svelte.ts`.

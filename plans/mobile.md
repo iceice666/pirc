@@ -36,7 +36,7 @@ are available from Git through Historical records, not repeated here.
       nested-container alignment, remaining focus state, late-loaded targets and
       nodes discarded from rendered markup. Target lookup, initial URLs and
       repeated activation have a bounded gate below.
-- [ ] **Physical phone/tablet acceptance of the rooms** ([plan 12](rewrite/12-android.md)):
+- [ ] **Physical phone/tablet acceptance of the rooms** ([plan 12](rewrite/README.md)):
       use a real account for pairing; a room's streaming replies, reconnect and
       typing; a notification opening its room; inline Reply (the message waits
       the usual 3 s before the brain answers); mute on this phone; a worker's
@@ -66,11 +66,11 @@ are available from Git through Historical records, not repeated here.
 
 Renderer fixtures keep their web revision `bd3d909` as provenance; the retired
 screens' fixtures and the settings/notification matrices were removed and are
-not re-captured ([plan 12](rewrite/12-android.md), decision 5). Rooms and threads
+not re-captured ([plan 12](rewrite/README.md), decision 5). Rooms and threads
 are held to the shared golden cases in `fixtures/timeline/rooms`. Small visual
 differences, uncommon syntax and the legacy audit's fine-grained layout/style
 findings remain deferred, not verified pixel parity. Renderer work from origin/main
-through `0ee934e` is cherry-picked onto this branch ([plan 13](rewrite/13-docs.md),
+through `0ee934e` is cherry-picked onto this branch ([plan 13](rewrite/README.md),
 decision 3). Original audit IDs and file references
 are at `git show 7677d24:plans/mobile-audit.md`.
 
