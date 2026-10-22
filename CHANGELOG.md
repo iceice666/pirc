@@ -8,6 +8,33 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 - **Breaking: the rewrite toward an assistant that lives in the gateway has started, and the retired pieces are removed first.** The chat node (`pirc-node chat`, `services.pirc.chat`) and the Chat tab, chat projects (project instructions, project files, capability settings and delegation approval policy, project and chat deletion), schedules (user-managed schedules, schedule runs and proposals, `/cron`), memory proposals (USER proposal approval and rejection), delegation approval cards, the assistant-node binding and the SOUL/CHAT prompt relay are gone, along with their routes (`/api/assistant/node`, `/api/assistant/prompts`, `/api/schedules`, `/api/memory/proposals/:id/approve|reject`, and `/api/workspaces/:id/{capabilities,instructions,files,deletion}`), push notifications and mode capabilities (`assistant`, `delegate`, `schedule_scope`, `project_instructions`, `project_files`, `projects`, `delete_sessions`, and the default `chat` mode). Chat and assistant features are unavailable until the rewrite brings them back. Work workspaces, sessions and their panels, devices, model backends, push, memory view/history/forget/restore, delegation Stop and relayed interactions stay. Data they stored in existing gateway and node databases is not deleted. `PIRC_CHAT` is refused, `PIRC_DELEGATION_TTL_MS` and the NixOS options `services.pirc.chat`, `soulPrompt` and `chatPrompt` are gone, and delegations start without a card (at most 4 running per user). **Node protocol 14: upgrade the gateway and all nodes together.**
 
+### Fixed
+
+- Android scripted dialog forms close locally and preserve return values, validation and input state across view replacement.
+- Android interactive pages keep images and script-updated form values consistent when switching views.
+- Android script file selection survives document view replacement and updates the active file controls.
+- Android static documents retain form inputs and selected files when reopening the same live document view.
+- Android HTML disclosures keep script state, named accordions and keyboard activation synchronized.
+- Android links reveal collapsed content and preserve disclosure state and eligible text drafts across view rebuilds.
+- Android interactive content keeps relative positioning and link hits aligned with font and viewport units.
+- Android Back/Forward no longer waits for a layout timeout on ready static pages.
+- Android initial page routing preserves document targets and history reading positions.
+- Android initial document links wait for generated targets and retain the selected node through loading and remounts.
+- Android document targets update native styles and preserve target identity through History API changes.
+- Android document links focus native controls and keep their nested scroll position consistent; CSS-sized toggles retain label and keyboard interaction.
+- Android document links use native nested scrolling with CSS scroll margins/padding and retain hidden anchor priority.
+- Android document links correctly repeat fragment jumps and resolve encoded or duplicate anchors while preserving history and form controls.
+- Android interactive pages can scroll native elements into view through nested panels, including CSS scroll margins/padding and measured form controls.
+- Android scrolling APIs honor CSS smooth-scrolling defaults and keep immediate position reads consistent.
+- Android keeps positioned interactive content inside its native scrolling and clipping container.
+- Android interactive pages report native offset parents and layout positions through common CSS transforms, absolute positioning and fixed positioning.
+- Android improves positioning and whole-element opacity inside transformed HTML containers.
+- Android interactive pages keep element rectangles current after scripted scrolling and support common native CSS 2D transforms with matching touch targets and computed-style reads.
+- Android interactive pages support `document.scrollingElement`, with parser-based document mode and viewport/body scroll ownership.
+- Android interactive documents report updated scroll positions immediately after scripted changes, including repeated increments and range clamping.
+- Android preserves the order of consecutive scroll commands and correctly stops smooth scrolling with same-position or zero-distance calls.
+- Android preserves interactive document scroll positions when views are rebuilt and keeps positions isolated between pages.
+
 ## [0.9.0] - 2026-10-19
 
 ### Changed
@@ -32,42 +59,6 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 - Release CI builds macOS, Web and signed Android beta assets into a reviewed draft, with a separate signing setup check.
 
 ### Fixed
-
-- Android interactive content keeps relative positioning and link hits aligned with font and viewport units.
-
-- Android Back/Forward no longer waits for a layout timeout on ready static pages.
-
-- Android initial page routing preserves document targets and history reading positions.
-
-- Android initial document links wait for generated targets and retain the selected node through loading and remounts.
-
-- Android document targets update native styles and preserve target identity through History API changes.
-
-- Android document links focus native controls and keep their nested scroll position consistent; CSS-sized toggles retain label and keyboard interaction.
-
-- Android document links use native nested scrolling with CSS scroll margins/padding and retain hidden anchor priority.
-
-- Android document links correctly repeat fragment jumps and resolve encoded or duplicate anchors while preserving history and form controls.
-
-- Android interactive pages can scroll native elements into view through nested panels, including CSS scroll margins/padding and measured form controls.
-
-- Android scrolling APIs honor CSS smooth-scrolling defaults and keep immediate position reads consistent.
-
-- Android keeps positioned interactive content inside its native scrolling and clipping container.
-
-- Android interactive pages report native offset parents and layout positions through common CSS transforms, absolute positioning and fixed positioning.
-
-- Android improves positioning and whole-element opacity inside transformed HTML containers.
-
-- Android interactive pages keep element rectangles current after scripted scrolling and support common native CSS 2D transforms with matching touch targets and computed-style reads.
-
-- Android interactive pages support `document.scrollingElement`, with parser-based document mode and viewport/body scroll ownership.
-
-- Android interactive documents report updated scroll positions immediately after scripted changes, including repeated increments and range clamping.
-
-- Android preserves the order of consecutive scroll commands and correctly stops smooth scrolling with same-position or zero-distance calls.
-
-- Android preserves interactive document scroll positions when views are rebuilt and keeps positions isolated between pages.
 
 - Android full-page HTML improves layout, image/canvas sizing and computed-style reads, keeps text selection stable during image loading, notifies interactive content when native element sizes change, and supports native Canvas text measurement, intrinsic/pixel/percentage-sized chart initialization and container resizing, DOM mutation observation, Promise updates between animation callbacks, bar-chart touch tooltips, outside-tap dismissal, legend toggles, updates and resizing.
 - Android fixes native pie-chart initialization when Canvas path arguments are nonfinite.
