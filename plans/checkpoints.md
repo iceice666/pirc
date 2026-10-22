@@ -2,11 +2,12 @@
 
 [Plans](README.md) · [Session UI](../docs/guides/session-ui.md) · [Tools](../docs/guides/tools.md)
 
-Status: planning proposal, 2026-10-21. The user requested a plan for Web and
-native Flutter Android, with multiple agents and preservation of both existing
-and later user changes as hard requirements. This document authorizes no
-implementation, deployment, remote push or Release. Keep subsequent work local
-unless the user explicitly requests publication.
+Status: phase 1 safety spike implemented locally, 2026-10-22. The user authorized
+phase 1 only; production capture, recovery APIs and Web/native Flutter Android
+actions remain proposed. Multiple agents and preservation of both existing and
+later user changes are hard requirements. Keep work local; no deployment, remote
+push or Release is authorized. Integrate the independent memory update last,
+after the user requests rebasing onto its published changes.
 
 ## Product decision
 
@@ -341,6 +342,89 @@ first release never undoes files merely because a conversation branch changes.
    process crashes/restart, node disconnect/reconnect, two clients confirming,
    and real Android review/continuation when a device is available. Document any
    unverified platform behavior rather than marking it covered by unit tests.
+
+### Phase 1 results and implementation gates
+
+The executable experiment is
+[`checkpoint_safety.rs`](../crates/pirc-node/tests/checkpoint_safety.rs), with a
+test-only [helper](../crates/pirc-node/tests/checkpoint_support/mod.rs).
+Neither file is linked into the node executable. There is no new API, database
+schema, automatic checkpoint, sandbox permission, background capture worker or
+memory/session-history integration. Runtime behavior remains unchanged.
+
+**Code audit, reconfirmed against the current Rust implementation:**
+
+| Boundary                      | Finding                                                                                                                                                                                                                 | Required before product capture                                                                                                                                                                                        |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Direct writes                 | `tools/files.rs::EditTool::run` reads and transforms before `acquire_write`; `write_checked` checks paths and uses `O_NOFOLLOW`, but does not compare an expected file revision.                                        | Put preimage capture, stale-base rejection, final authorized mutation and postimage evidence at the trusted node boundary. Existing hooks or leases alone are insufficient.                                            |
+| Child ownership               | `features/team/broker.rs` forwards child `write_lease` through the parent's acquire callback.                                                                                                                           | Node-issued run/group/operation identity; do not infer the child writer from the parent session lease.                                                                                                                 |
+| Run completion                | `runner/process.rs` releases leases on `agent_settled`. `features/background/mod.rs` explicitly allows background tasks to survive run abort; session closure stops them. Panel terminals have a separate PTY lifetime. | Account for descendants, PTC, background tasks and terminals. Require quiescence or report observational/incomplete coverage. A model response is not the boundary.                                                    |
+| Process cleanup               | Agent bash uses `GroupGuard`; node host commands use their own process session; runner exit kills its process group.                                                                                                    | These contain ordinary descendants but are not proof that detached processes or external editors have stopped. Test their lifetimes separately from run settlement.                                                    |
+| Cross-node writes             | Each `Node` constructs a separate in-memory `WriteBroker`. Two broker instances grant the same canonical physical root concurrently in the experiment.                                                                  | Account-level coordination and fencing for cooperating nodes, including alias/nested-root handling. Until then, no cross-node exclusive-capture claim. Multi-host shared storage remains outside exclusive guarantees. |
+| Private storage and new roots | The daemon registry includes the node state directory in private paths. Linux/macOS policy-generation tests deny a prospective `state/checkpoints/blob`; the original session cannot write the new recovery root.       | Keep blobs under private registered state. Reauthorize a new workspace and translate effective deny rules before continuation. A copied file is not automatically safe to reopen.                                      |
+
+**Safety experiments: 25 passed on macOS arm64.** They exercise:
+
+- Actual disposable Git repositories with distinct committed, staged, unstaged
+  and untracked user bytes. Preparing the inverse preserves the source's bytes
+  and the complete observed Git metadata tree, including index, refs and HEAD.
+- A/B edits in different hunks and both orders; later user edits remain. Same-hunk
+  edits and B modifying A-introduced lines keep current bytes and report conflict.
+  Unattributed shell/shared-child effects are retained for review.
+- Exact create/delete postimages, occupied deleted paths, directory/type changes,
+  binary differences, CRLF, missing final newline and executable bits. No conflict
+  markers are written to either source or conflicted candidate files.
+- Sensitive paths, newly added deny rules, ignored-fixture directories, symlinks,
+  hard links and oversized files remain explicit exclusions. No traversal into
+  linked external data, copying of `.git`, hooks/filters, source hard links or
+  privileged permission bits occurs in the fixture preparation.
+- A deterministic external write at the old check/rename race point and an
+  independent shell process writing during preparation. The source retains the
+  writer's result and the candidate is stale. Replacing the source root with
+  identical bytes is detected using device/inode identity as well as its path.
+- Capture byte/entry limits, copy budget rejection before destination allocation,
+  non-quiescent group refusal, and injected failure cleanup of only the temporary
+  candidate. Source observation errors fail the preparation rather than imply an
+  empty or successful snapshot.
+
+The existing host-command process-group cleanup test and nine background-task
+lifecycle tests also pass (35 tests total for this round). Focused Clippy with
+warnings denied, Rust formatting, plan formatting and diff whitespace checks
+pass. These results cover the test-only experiment and the stated existing
+lifecycle contracts, not a complete checkpoint product.
+
+**Capacity experiment:** three 4 KiB files need a 12 KiB independent recovery
+copy. Across baseline/A/current/candidate there are 12 KiB of unique content in
+this fixture: prospective blob deduplication does not remove the additional
+12 KiB copy cost. These are logical content sizes, not filesystem allocation,
+compression, journal or metadata estimates. The helper implements no durable
+blob store. Its 1 MiB/file, 4 MiB/capture and 1,000-entry bounds are test limits,
+not the product defaults below; physical space reservation/ENOSPC still needs
+implementation and acceptance.
+
+**Limits:** the helper only walks test-owned trees with explicit fixture
+exclusions; it does not implement production Git-ignore resolution, a hostile
+filesystem descriptor walker, mount/nested-repository detection or a coherent
+multi-file snapshot. The fixture supplies verified attribution and group
+quiescence; no live node currently produces that evidence. The standalone
+`git merge-file` experiment uses `base=after, ours=current, theirs=before`; a clean
+text merge is not semantic dependency analysis. Rename attribution, persistent
+journals, crash/power-loss recovery, actual Seatbelt/bubblewrap execution for
+these candidates, continuation, client UI and Linux runtime acceptance remain
+later-phase work. No Nix build is required for this phase at the user's request.
+
+Reproduce from the repository root (requires the existing host Git executable):
+
+```sh
+cargo test --locked -p pirc-node --test checkpoint_safety
+cargo test --locked -p pirc-node --lib runner::host::tests::an_aborted_command_leaves_nothing_running
+cargo test --locked -p pirc-agent --lib features::background::tests
+```
+
+Phase 2 can build the trusted capture/journal and operation identity from these
+contracts; it must not expose recovery as ready merely because these fixture
+experiments pass. Keep memory lifecycle changes until the independent memory
+work is published and explicitly integrated.
 
 Required tests include:
 

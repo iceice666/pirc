@@ -63,12 +63,15 @@ deletion are not open work.
    verification and remaining device acceptance. Remote publication requires a
    later explicit request.
 9. **Agent checkpoints and safe recovery.** [Checkpoints](checkpoints.md):
-   planning proposal for Web and native Android. Preserve dirty baselines and
+   phase 1 safety spike implemented locally; Web and native Android actions
+   remain proposed. Preserve dirty baselines and
    later user/agent changes, distinguish shared writer groups from independently
    attributed agents, and prepare inverse merges in new recovery workspaces.
    The original workspace is retained; no automatic in-place overwrite. Includes
    concurrency, attribution, sandbox/storage, disk quotas and crash acceptance.
-   Implementation needs separate authorization.
+   Phase 1 has executable inverse/copy/concurrency fixtures and recorded
+   implementation gates. Later phases need separate authorization; memory
+   integration is deferred until the independent memory update is ready.
 
 ## Shelved: project-only memory (B)
 
