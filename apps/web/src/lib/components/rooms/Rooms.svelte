@@ -7,6 +7,7 @@
     ChevronDown,
     ChevronRight,
     Hash,
+    Menu,
     MessageSquare,
     MoreHorizontal,
     Pin,
@@ -118,6 +119,23 @@
   function openFace(id: string) {
     faceId = id;
     side = 'face';
+  }
+
+  /**
+   * "Mention in room" on a face's page (the person's decision): open the room
+   * it answers in with `@name ` already in the composer, and send nothing.
+   */
+  async function mentionFace(face: Face) {
+    side = null;
+    listOpen = false;
+    const target = face.territory.rooms[0];
+    if (target && target !== rooms.currentId) await open(target);
+    // After the room switch the composer holds that room's own draft.
+    await tick();
+    draft = `@${face.name} `;
+    await tick();
+    textarea?.focus();
+    textarea?.setSelectionRange(draft.length, draft.length);
   }
 
   /** A worker's question still waiting here: the newest, shown above the composer. */
@@ -252,6 +270,9 @@
     return list;
   });
 
+  /** The room menu (details) closes when one of its entries opens a column. */
+  let roomMenuOpen = $state(false);
+
   /** Settings, the same dialog as the engine's. */
   let settingsOpen = $state(false);
   let settingsTab = $state<SettingsTab>('models');
@@ -270,7 +291,11 @@
 
   /** Phone: the bottom tabs. A room is inside the Rooms tab. */
   const mobileTab = $derived<MobileTabId>(
-    settingsOpen ? 'settings' : !listOpen && sideOpen ? 'members' : 'rooms',
+    settingsOpen
+      ? 'settings'
+      : !listOpen && (side === 'members' || side === 'face')
+        ? 'members'
+        : 'rooms',
   );
   const mobileTabs = $derived<MobileTab[]>([
     { id: 'rooms', badge: rooms.rooms.filter((room) => room.waiting).length },
@@ -591,6 +616,7 @@
   class="rooms"
   class:list-open={listOpen}
   class:side-open={sideOpen}
+  class:face-open={!!shownFace && !rooms.threadId}
   class:thread-open={!!rooms.threadId}
 >
   <nav class="list" aria-label={t('common.tab.rooms')}>
@@ -657,6 +683,14 @@
 
   <main class="room-view" aria-label={current ? `#${current.name}` : t('rooms.header.room')}>
     <header class="room-head">
+      <!-- The phone's menu button: the room list, as the design draws it. -->
+      <button
+        type="button"
+        class="icon list-btn"
+        aria-label={t('rooms.header.openList')}
+        title={t('rooms.header.openList')}
+        onclick={() => (listOpen = true)}><Menu size={22} /></button
+      >
       <span class="head-hash" aria-hidden="true"><Hash size={22} /></span>
       <h1>{current?.name ?? rooms.currentId}</h1>
       <span class="rule" aria-hidden="true"></span>
@@ -681,7 +715,7 @@
       <div class="head-actions">
         <button
           type="button"
-          class="icon"
+          class="icon threads"
           aria-label={t('rooms.header.threads')}
           title={t('rooms.header.threads')}
           aria-pressed={side === 'threads'}
@@ -690,7 +724,7 @@
         >
         <button
           type="button"
-          class="icon"
+          class="icon pinned"
           aria-label={t('rooms.header.pinned')}
           title={t('rooms.header.pinned')}
           aria-pressed={side === 'pinned'}
@@ -707,7 +741,7 @@
         >
         <button
           type="button"
-          class="icon"
+          class="icon members-btn"
           aria-label={t('rooms.members.title')}
           title={t('rooms.members.title')}
           aria-pressed={side === 'members'}
@@ -732,11 +766,43 @@
             <Search size={16} aria-hidden="true" />
           {/if}
         </label>
-        <details class="head-menu">
+        <details class="head-menu" bind:open={roomMenuOpen}>
           <summary aria-label={t('rooms.header.menu')} title={t('rooms.header.menu')}
             ><MoreHorizontal size={20} /></summary
           >
           <div class="pop">
+            <!-- On a phone the header keeps only the design's menu and mute, so
+                 the room's threads, pins and search live here. -->
+            <div class="phone-only">
+              <button
+                type="button"
+                class="pop-row"
+                onclick={() => {
+                  side = 'threads';
+                  roomMenuOpen = false;
+                }}><MessageSquare size={16} aria-hidden="true" />{t('rooms.header.threads')}</button
+              >
+              <button
+                type="button"
+                class="pop-row"
+                onclick={() => {
+                  side = 'pinned';
+                  roomMenuOpen = false;
+                }}><Pin size={16} aria-hidden="true" />{t('rooms.header.pinned')}</button
+              >
+              <label class="move">
+                <span class="section-label"
+                  >{t('rooms.header.search', { room: current?.name ?? '' })}</span
+                >
+                <input
+                  class="menu-search"
+                  type="search"
+                  placeholder={t('rooms.header.search', { room: current?.name ?? '' })}
+                  bind:value={search}
+                  onkeydown={onSearchKeydown}
+                />
+              </label>
+            </div>
             {#if current && !current.archivedAt}
               <RoomSources
                 roomName={current.name}
@@ -821,6 +887,7 @@
           faces={rooms.faces}
           onopenface={openFace}
           activity={rooms.threadActivity}
+          selected={!!rooms.threadId && rooms.threadId === row.message.body.worker?.threadId}
         />
       {/each}
     </div>
@@ -969,6 +1036,7 @@
       presence={rooms.facePresence[shownFace.id]}
       rooms={rooms.rooms}
       onsave={(input) => rooms.updateFace(shownFace.id, input)}
+      onmention={() => void mentionFace(shownFace)}
       onback={() => (side = 'members')}
       onclose={() => (side = null)}
     />
@@ -1004,6 +1072,8 @@
       messages={rooms.threadMessages}
       workers={rooms.threadWorkers}
       error={rooms.threadError}
+      loading={rooms.threadLoading}
+      faces={rooms.faces}
       user={rooms.user}
       onclose={() => rooms.closeThread()}
     />
@@ -1024,9 +1094,24 @@
   .rooms.side-open {
     grid-template-columns: 240px 1fr 248px;
   }
-  /* A worker's thread beside the room; plan 11 settles where it lives. */
+  /* A face's page is the design's 360px profile column. */
+  .rooms.face-open {
+    grid-template-columns: 240px 1fr 360px;
+  }
+  /* A worker's thread beside the room: the design's 420px column. */
   .rooms.thread-open {
-    grid-template-columns: 240px 1fr minmax(320px, 420px);
+    grid-template-columns: 240px 1fr 420px;
+  }
+  /* Narrower desktops let the column give way rather than the log. */
+  @media (max-width: 1100px) {
+    .rooms.thread-open {
+      grid-template-columns: 240px 1fr minmax(300px, 420px);
+    }
+  }
+  /* With the thread open the log's rows use 32px on the right, as drawn. */
+  .rooms.thread-open .messages :global(.message),
+  .rooms.thread-open .messages :global(.line) {
+    padding-right: 32px;
   }
   .list {
     position: relative;
@@ -1068,6 +1153,21 @@
   .server-menu,
   .head-menu {
     position: relative;
+  }
+  /* The phone's menu button and the room menu's phone-only entries. */
+  .list-btn,
+  .phone-only {
+    display: none;
+  }
+  .menu-search {
+    width: 100%;
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--line-dark);
+    border-radius: var(--radius-sm);
+    background: var(--input);
+    color: var(--text-2);
+    font-size: 13px;
   }
   .server-menu summary,
   .head-menu summary {
@@ -1706,20 +1806,28 @@
     color: var(--ink);
     font: inherit;
   }
+  /*
+   * The phone (design screen 4): a 56px header with the room-list menu, the
+   * log bottom-aligned with 36px avatars, a 48px pill composer with a 36px
+   * accent send, and a 64px bottom navigation. Every column stays inside
+   * 390px; the side columns open full screen above the tabs.
+   */
   @media (max-width: 650px) {
     .rooms,
     .rooms.side-open,
+    .rooms.face-open,
     .rooms.thread-open {
       grid-template-columns: 1fr;
-      /* Room for the bottom tabs. */
-      padding-bottom: calc(56px + env(safe-area-inset-bottom));
+      /* Room for the bottom tabs, clear of the home indicator. */
+      padding-bottom: calc(64px + env(safe-area-inset-bottom));
     }
-    .thread-open :global(.thread),
-    .thread-open :global(.members),
-    .thread-open :global(.panel),
-    .thread-open :global(.face-page) {
+    /* Members, a face's page, threads, pins and a thread open full screen. */
+    .side-open :global(.members),
+    .side-open :global(.panel),
+    .side-open :global(.face-page),
+    .thread-open :global(.thread) {
       position: fixed;
-      inset: 0 0 calc(56px + env(safe-area-inset-bottom));
+      inset: 0 0 calc(64px + env(safe-area-inset-bottom));
       z-index: 25;
     }
     .list {
@@ -1727,7 +1835,7 @@
     }
     .list-open .list {
       position: fixed;
-      inset: 0 0 calc(56px + env(safe-area-inset-bottom));
+      inset: 0 0 calc(64px + env(safe-area-inset-bottom));
       z-index: 30;
       display: flex;
     }
@@ -1735,18 +1843,122 @@
     .list-foot {
       display: none;
     }
-    /* The room's controls wrap under its name; the search stays reachable. */
+    /* The header: menu, hash, name and mute; the room's other controls live in
+       the room menu, and members moved to the bottom navigation. */
+    .room-head {
+      flex-wrap: nowrap;
+      gap: 4px;
+      min-height: 56px;
+      padding: 0 4px;
+    }
     .room-head .subtitle,
     .room-head .rule {
       display: none;
     }
-    .head-actions {
-      flex: 1 1 100%;
-      flex-wrap: wrap;
+    .room-head h1 {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      font-size: 17px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
-    .search {
-      flex: 1 1 140px;
-      width: auto;
+    .list-btn {
+      display: grid;
+      width: 44px;
+      height: 44px;
+    }
+    .head-actions {
+      flex: none;
+      flex-wrap: nowrap;
+    }
+    .head-actions .icon {
+      width: 44px;
+      height: 44px;
+    }
+    .head-actions .threads,
+    .head-actions .pinned,
+    .head-actions .members-btn,
+    .head-actions .search {
+      display: none;
+    }
+    .phone-only {
+      display: block;
+    }
+    /* 36px avatars, 12px gap, 10px between messages, bottom-aligned. */
+    .messages {
+      display: flex;
+      flex-direction: column;
+      padding: 8px 0;
+    }
+    .messages > :first-child {
+      margin-top: auto;
+    }
+    .messages :global(.message) {
+      grid-template-columns: 36px 1fr;
+      gap: 12px;
+      margin-top: 10px;
+      padding: 4px 16px 4px 12px;
+    }
+    .messages :global(.message .avatar) {
+      width: 36px;
+      height: 36px;
+    }
+    .messages :global(.message.question) {
+      margin: 6px 8px 0;
+      padding: 12px 12px 14px 4px;
+      border-radius: var(--radius-lg);
+    }
+    .messages :global(.line) {
+      padding: 2px 16px 2px 60px;
+    }
+    /* The question's answers are full-width rows, safe to hit with a thumb. */
+    .messages :global(.message.question .choices) {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .messages :global(.message.question .choices .button) {
+      width: 100%;
+      min-height: 44px;
+      height: auto;
+      padding: 0 12px;
+      border-radius: var(--radius-md);
+      white-space: normal;
+    }
+    /* The 48px pill composer with its 24px radius and 36px send. */
+    .compose-area {
+      margin: 0 12px 10px;
+    }
+    .composer {
+      border-radius: 24px;
+    }
+    .compose-row {
+      min-height: 48px;
+      gap: 10px;
+      padding: 0 6px 0 10px;
+    }
+    .attach {
+      width: 32px;
+      height: 32px;
+      background: var(--bg-subtle);
+      color: var(--text-2);
+    }
+    .send {
+      width: 36px;
+      height: 36px;
+    }
+    /* One line in the pill: the placeholder would otherwise size the box. */
+    .compose-row textarea {
+      field-sizing: fixed;
+      height: 32px;
+    }
+    .asking {
+      border-radius: 24px 24px 0 0;
+    }
+    .files,
+    .mentions {
+      border-radius: 12px 12px 0 0;
     }
   }
 </style>

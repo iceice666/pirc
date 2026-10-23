@@ -11,6 +11,7 @@ import {
   statusLabel,
   stoppable,
   threadWorkers,
+  workerTree,
   type ThreadMessage,
   type Worker,
 } from './workers';
@@ -95,6 +96,48 @@ describe('worker words', () => {
     expect(threadWorkers(thread)).toEqual([
       { speaker: 'worker:session_1', depth: 0 },
       { speaker: 'worker:session_1/checker', depth: 1 },
+    ]);
+  });
+
+  it('lists a thread’s workers as a tree, with what each last did', () => {
+    // The worker's state is the gateway's; its line is its last message.
+    const rows = workerTree(thread, [worker()]);
+    expect(rows.map((row) => [row.name, row.depth, row.parent, row.line])).toEqual([
+      ['worker', 0, undefined, ''],
+      ['checker', 1, 'worker', 'joined'],
+    ]);
+    // It is asking something: that is its state, whatever the gateway says.
+    expect(rows[0]!.status).toBe('waiting_input');
+    // A teammate that only talked is left without a state (shown idle).
+    expect(rows[1]!.status).toBeUndefined();
+  });
+
+  it('gives a teammate its state only when the team record says so', () => {
+    const rows = workerTree(
+      [
+        said(1, { kind: 'tool', body: { tool: 'bash', summary: 'bash cargo test' } }),
+        said(2, {
+          speaker: 'worker:session_1/reviewer',
+          depth: 1,
+          body: { text: 'fine', team: 'result' },
+        }),
+        said(3, {
+          speaker: 'worker:session_1/tester',
+          depth: 1,
+          body: { text: 'broke', team: 'error' },
+        }),
+        said(4, { speaker: 'worker:session_2', body: { text: 'other worker' } }),
+      ],
+      [
+        worker({ status: 'completed' }),
+        worker({ id: 'd2', targetSessionId: 'session_2', status: 'failed' }),
+      ],
+    );
+    expect(rows.map((row) => [row.name, row.depth, row.status, row.line])).toEqual([
+      ['worker', 0, 'completed', 'bash cargo test'],
+      ['reviewer', 1, 'completed', 'fine'],
+      ['tester', 1, 'failed', 'broke'],
+      ['worker', 0, 'failed', 'other worker'],
     ]);
   });
 });
@@ -286,9 +329,8 @@ describe('workers in the web app', () => {
       method: 'POST',
       body: { text: 'also run clippy' },
     });
-    button('Stop').click();
-    await flush();
-    expect(calls[calls.length - 1]?.url).toBe('/api/delegations/d1/stop');
+    // Stopping stays on the worker's card in the room, where the design draws it.
+    expect(button('Stop')).toBeUndefined();
   });
 
   it('renders what a worker writes as Markdown, and its paths as text', async () => {
@@ -318,6 +360,46 @@ describe('workers in the web app', () => {
     expect(fromYou!.textContent).toContain('thanks, keep *at it*');
   });
 
+  it('says when a thread is loading, empty, or could not open', async () => {
+    component = mount(ThreadPanel, {
+      target,
+      props: {
+        threadId: 'thread_1',
+        messages: [],
+        workers: [],
+        loading: true,
+        user: ME,
+        onclose: () => {},
+      },
+    });
+    await flush();
+    expect(target.querySelector('.skeleton')).not.toBeNull();
+    expect(target.textContent).toContain('Loading the thread…');
+    unmount(component);
+
+    component = mount(ThreadPanel, {
+      target,
+      props: {
+        threadId: 'thread_1',
+        messages: [],
+        workers: [],
+        error: 'Unable to open the thread.',
+        user: ME,
+        onclose: () => {},
+      },
+    });
+    await flush();
+    expect(target.querySelector('[role="alert"]')!.textContent).toBe('Unable to open the thread.');
+    unmount(component);
+
+    component = mount(ThreadPanel, {
+      target,
+      props: { threadId: 'thread_1', messages: [], workers: [], user: ME, onclose: () => {} },
+    });
+    await flush();
+    expect(target.textContent).toContain('Nothing in this thread yet.');
+  });
+
   it('leaves acting on a worker to whom it works for', async () => {
     component = mount(ThreadPanel, {
       target,
@@ -332,6 +414,12 @@ describe('workers in the web app', () => {
     await flush();
     expect(target.textContent).toContain('Waiting for ann@example.com.');
     expect(button('Stop')).toBeUndefined();
-    expect(target.querySelector('form.composer')).toBeNull();
+    // The reply box is the design's always-present one, and says whose it is.
+    const reply = target.querySelector<HTMLInputElement>('form.composer input')!;
+    expect(reply.disabled).toBe(true);
+    expect(reply.placeholder).toBe('Waiting for ann@example.com.');
+    reply.form!.requestSubmit();
+    await flush();
+    expect(calls.some((call) => call.url.endsWith('/messages'))).toBe(false);
   });
 });

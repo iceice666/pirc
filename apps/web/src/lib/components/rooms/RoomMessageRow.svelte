@@ -44,6 +44,8 @@
     onopenface?: (faceId: string) => void;
     /** What each thread's workers did last: a working anchor's progress. */
     activity?: Record<string, ThreadActivity>;
+    /** This message's thread is the one open beside the room. */
+    selected?: boolean;
   }
 
   let {
@@ -55,6 +57,7 @@
     faces = [],
     onopenface,
     activity = {},
+    selected = false,
   }: Props = $props();
 
   const face = $derived(speakerFace(faces, message.speaker));
@@ -313,6 +316,7 @@
     class="message"
     class:continued={sameRun}
     class:question={message.kind === 'question'}
+    class:selected
     aria-label="{message.kind === 'question'
       ? t('rooms.message.asks', { name })
       : name}, {fullTime}"
@@ -419,7 +423,11 @@
         {#if answerError}<p class="worker-error" role="alert">{answerError}</p>{/if}
       {/if}
       {#if anchor}
-        <div class="thread-card">
+        <div
+          class="thread-card"
+          class:current={selected}
+          aria-current={selected ? 'true' : undefined}
+        >
           <div class="thread-top">
             <MessageSquare size={16} aria-hidden="true" />
             <strong class="thread-title">{anchor.title}</strong>
@@ -614,6 +622,10 @@
   .message:hover {
     background: var(--bg-hover);
   }
+  /* The thread open beside the room: its row tinted, its card ringed. */
+  .message.selected {
+    background: color-mix(in srgb, var(--ink) 3%, transparent);
+  }
   .message.question:hover {
     background: var(--warning-soft);
   }
@@ -704,6 +716,10 @@
     border: 1px solid var(--line);
     border-radius: var(--radius-md);
     background: var(--bg-sidebar);
+  }
+  .thread-card.current {
+    border-color: transparent;
+    box-shadow: inset 0 0 0 2px var(--accent);
   }
   .thread-top {
     display: flex;

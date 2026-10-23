@@ -78,6 +78,7 @@ export class RoomsState {
   threadMessages = $state.raw<ThreadMessage[]>([]);
   threadWorkers = $state.raw<Worker[]>([]);
   threadError = $state('');
+  threadLoading = $state(false);
   /** What each thread's workers did last (plan 11: the anchor's progress). */
   threadActivity = $state.raw<Record<string, ThreadActivity>>({});
   #threadToken = 0;
@@ -414,9 +415,11 @@ export class RoomsState {
     const token = ++this.#threadToken;
     this.threadId = threadId;
     this.threadError = '';
+    this.threadLoading = true;
     if (this.demo) {
       this.threadMessages = this.demo.demoThread.messages;
       this.threadWorkers = this.demo.demoThread.workers;
+      this.threadLoading = false;
       return;
     }
     try {
@@ -434,6 +437,8 @@ export class RoomsState {
       this.threadMessages = [];
       this.threadWorkers = [];
       this.threadError = message(error, t('thread.error.open'));
+    } finally {
+      if (token === this.#threadToken) this.threadLoading = false;
     }
   }
 
@@ -443,6 +448,7 @@ export class RoomsState {
     this.threadMessages = [];
     this.threadWorkers = [];
     this.threadError = '';
+    this.threadLoading = false;
   }
 
   async #refreshThreadWorkers() {

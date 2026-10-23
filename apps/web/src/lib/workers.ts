@@ -217,3 +217,85 @@ export function threadWorkers(messages: ThreadMessage[]): { speaker: string; dep
   }
   return [...seen].map(([speaker, depth]) => ({ speaker, depth }));
 }
+
+/** One row of a thread's worker strip: the worker and what it last did. */
+export interface ThreadWorkerRow {
+  /** `worker:<session>` or `worker:<session>/<name>`. */
+  speaker: string;
+  /** The worker's name in the thread: `lint`, or a teammate's. */
+  name: string;
+  /** 1: a teammate or subagent of the worker. */
+  depth: 0 | 1;
+  /** Whom a teammate works under, for the `↳ lint` marker. */
+  parent?: string;
+  /** Known only when the gateway says it, or the team record settles it. */
+  status?: WorkerStatus;
+  /** The last thing it said or did, on one line. */
+  line: string;
+}
+
+/** The session a worker speaker belongs to (`worker:<session>[/<name>]`). */
+function sessionOf(speaker: string): string {
+  return speaker.replace(/^worker:/, '').split('/')[0] ?? speaker;
+}
+
+/** The last thing a worker said or did, in one line. */
+function lastLineOf(message: ThreadMessage | undefined): string {
+  if (!message) return '';
+  const raw =
+    message.kind === 'tool'
+      ? (message.body.summary ?? message.body.tool ?? '')
+      : (message.body.text ?? '');
+  return (
+    raw
+      .split('\n')
+      .find((line) => line.trim())
+      ?.trim() ?? ''
+  );
+}
+
+/**
+ * A thread's workers as the thread lists them (the design's worker strip): the
+ * worker first, then each teammate under it. The worker's own state is the
+ * gateway's; a teammate's is only known when it asked something, or when the
+ * team record says it finished — a teammate that merely talked is left idle
+ * rather than guessed at.
+ */
+export function workerTree(messages: ThreadMessage[], workers: Worker[] = []): ThreadWorkerRow[] {
+  const rows = new Map<string, ThreadWorkerRow>();
+  const last = new Map<string, ThreadMessage>();
+  const pending = new Set<string>();
+  for (const message of messages) {
+    if (!message.speaker.startsWith('worker:')) continue;
+    last.set(message.speaker, message);
+    if (message.kind === 'question' && message.body.status === 'pending')
+      pending.add(message.speaker);
+    if (!rows.has(message.speaker))
+      rows.set(message.speaker, {
+        speaker: message.speaker,
+        name: message.speaker.split('/')[1] ?? 'worker',
+        depth: message.depth === 1 ? 1 : 0,
+        line: '',
+      });
+  }
+  const all = [...rows.values()];
+  const tops = all.filter((row) => row.depth === 0);
+  const children = all.filter((row) => row.depth === 1);
+  const parentOf = (row: ThreadWorkerRow) =>
+    tops.find((top) => sessionOf(top.speaker) === sessionOf(row.speaker));
+  const ordered = [
+    ...tops.flatMap((top) => [top, ...children.filter((child) => parentOf(child) === top)]),
+    ...children.filter((child) => !parentOf(child)),
+  ];
+  for (const row of ordered) {
+    const said = last.get(row.speaker);
+    row.line = lastLineOf(said);
+    row.parent = row.depth === 1 ? parentOf(row)?.name : undefined;
+    const own = workers.find((worker) => worker.targetSessionId === sessionOf(row.speaker));
+    if (pending.has(row.speaker)) row.status = 'waiting_input';
+    else if (row.depth === 0 && own) row.status = own.status;
+    else if (said?.body.team === 'result') row.status = 'completed';
+    else if (said?.body.team === 'error') row.status = 'failed';
+  }
+  return ordered;
+}

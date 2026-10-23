@@ -39,7 +39,7 @@
     {@const Icon = ICONS[tab.id]}
     {#snippet inner()}
       <span class="icon-wrap"
-        ><Icon size={20} />{#if tab.badge}<span
+        ><Icon size={22} />{#if tab.badge}<span
             class="tab-badge"
             aria-label={t('common.waitingCount', { count: tab.badge })}>{tab.badge}</span
           >{/if}</span
@@ -70,13 +70,14 @@
       right: 0;
       bottom: 0;
       left: 0;
-      height: calc(56px + env(safe-area-inset-bottom));
+      height: calc(64px + env(safe-area-inset-bottom));
       display: flex;
       padding-bottom: env(safe-area-inset-bottom);
       border-top: 1px solid var(--line);
-      background: var(--bg);
+      background: var(--bg-sidebar);
     }
     .mobile-tabs .tab {
+      position: relative;
       flex: 1;
       display: flex;
       flex-direction: column;
@@ -98,18 +99,20 @@
       position: relative;
       display: grid;
     }
+    /* The count sits at the tab's top right, over the icon, as drawn. */
     .tab-badge {
       position: absolute;
-      top: -5px;
-      right: -9px;
+      top: -6px;
+      left: calc(50% + 4px);
+      box-sizing: border-box;
       min-width: 16px;
       height: 16px;
       padding: 0 4px;
-      border-radius: 999px;
-      color: #fff;
+      border-radius: 8px;
+      color: var(--bg);
       background: var(--warning);
       font-size: 10px;
-      font-weight: 600;
+      font-weight: 700;
       line-height: 16px;
       text-align: center;
     }

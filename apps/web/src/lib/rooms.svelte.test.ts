@@ -6,6 +6,7 @@ import Rooms from './components/rooms/Rooms.svelte';
 import type { Face } from './faces';
 import type { RoomEvent, RoomMessage, RoomView } from './rooms';
 import { RoomsState, TYPING_THROTTLE_MS, roomFromUrl } from './rooms.svelte';
+import type { ThreadMessage, Worker } from './workers';
 
 class FakeSocket extends EventTarget {
   static CONNECTING = 0;
@@ -67,6 +68,45 @@ const event = (
   timestamp: 0,
 });
 
+const threadMessage = (
+  seq: number,
+  speaker: string,
+  body: Record<string, unknown>,
+  extra: Partial<ThreadMessage> = {},
+): ThreadMessage => ({
+  id: `tm_${seq}`,
+  threadId: 'thr_1',
+  seq,
+  speaker,
+  user: speaker === 'user' ? ME : null,
+  kind: 'text',
+  body,
+  depth: 0,
+  createdAt: 1_700_000_100_000 + seq * 1000,
+  updatedAt: null,
+  ...extra,
+});
+
+const workerRecord = (extra: Partial<Worker> = {}): Worker => ({
+  id: 'dlg_1',
+  roomId: 'general',
+  faceId: 'face_pm',
+  threadId: 'thr_1',
+  anchorMessageId: 'anchor',
+  title: 'Fix the lint job',
+  workspace: 'slimeos',
+  workspaceId: 'ws:slimeos',
+  status: 'running',
+  note: null,
+  readOnly: false,
+  follows: null,
+  for: ME,
+  targetSessionId: 'session_1',
+  createdAt: 1,
+  updatedAt: 2,
+  ...extra,
+});
+
 const face = (id: string, name: string, extra: Partial<Face> = {}): Face => ({
   id,
   name,
@@ -87,6 +127,9 @@ let calls: Array<{ method: string; url: string; body: any }>;
 let listed: RoomView[];
 let faces: Face[];
 let pages: Record<string, RoomMessage[]>;
+/** A thread's messages and workers, by id, for the column beside the room. */
+let threads: Record<string, ThreadMessage[]>;
+let workersOf: Record<string, Worker[]>;
 /** A room that looks writable but refuses a message (the archived 409). */
 let refuseSend: boolean;
 
@@ -100,6 +143,8 @@ beforeEach(() => {
   refuseSend = false;
   listed = [room('general', { lastSeq: 1, readSeq: 1 }), room('topic')];
   pages = { general: [message('general', 1)], topic: [] };
+  threads = {};
+  workersOf = {};
   faces = [face('host', 'pirc'), face('face_pm', 'PM', { color: '#3366cc', bio: 'Runs SlimeOS' })];
   vi.stubGlobal('WebSocket', FakeSocket);
   vi.stubGlobal(
@@ -134,6 +179,18 @@ beforeEach(() => {
         return reply({ face: faces[at] });
       }
       if (url.pathname.endsWith('/activity')) return reply({ loops: [], workers: [], wakes: [] });
+      if (url.pathname.startsWith('/api/threads/')) {
+        const [threadId, , , again] = url.pathname.split('/').slice(3);
+        if (again === 'messages' && method === 'POST')
+          return reply({ message: {}, handed: { delegation: 'd1', as: 'user' } }, 201);
+        if (again === 'answer')
+          return reply({ interactionId: body.interactionId, status: 'answered' });
+        return reply({
+          thread: { id: threadId },
+          messages: threads[threadId!] ?? [],
+          workers: workersOf[threadId!] ?? [],
+        });
+      }
       const found = listed.find((item) => item.id === id);
       if (!found) return reply({ error: { code: 'not_found', message: 'Room not found' } }, 404);
       if (!rest && method === 'GET')
@@ -781,7 +838,7 @@ describe('rooms page', () => {
     expect(target.querySelector('.progress-line')?.textContent).toContain('Read 12 mails');
   });
 
-  it('names the face that spoke, and opens its page', async () => {
+  it('names the face that spoke, and opens its profile page', async () => {
     pages.general = [
       message('general', 1),
       { ...message('general', 2, ME, 'Two reviews left.'), speaker: 'face:face_pm', user: null },
@@ -794,6 +851,22 @@ describe('rooms page', () => {
     await vi.waitFor(() =>
       expect(target.querySelector('[aria-label="PM\'s page"]')).not.toBeNull(),
     );
+    const page = target.querySelector('.face-page')!;
+    // The profile the design draws: hero, avatar, name, badge, bio and actions.
+    // The avatar is the name's first letter, as everywhere in the rooms.
+    expect(page.querySelector('.hero .portrait')?.textContent).toBe('P');
+    expect(page.querySelector('.hero .presence')).not.toBeNull();
+    expect(page.querySelector('h2')?.textContent).toBe('PM');
+    expect(page.querySelector('.badge')?.textContent).toBe('Project');
+    expect(page.querySelector('.bio')?.textContent).toBe('Runs SlimeOS');
+    expect(page.querySelector('.actions .mention')?.textContent).toBe('Mention in room');
+    expect(page.querySelector('.actions .edit')?.textContent).toBe('Edit');
+    // Read-only cards, no always-on fields (the person's decision).
+    expect(page.querySelector('.face-page form')).toBeNull();
+    expect(page.querySelector('.card .territory')).not.toBeNull();
+    // Everything editable is behind Edit.
+    page.querySelector<HTMLButtonElement>('.actions .edit')!.click();
+    await tick();
     const bio = target.querySelector<HTMLTextAreaElement>('.face-page textarea')!;
     expect(bio.value).toBe('Runs SlimeOS');
     bio.value = 'Runs SlimeOS and its releases';
@@ -1098,6 +1171,134 @@ describe('rooms page', () => {
     expect(pins.textContent).toContain('kept one');
     // An empty panel says so rather than showing nothing.
     expect(target.querySelector('aside.panel[aria-label="Threads"]')).toBeNull();
+  });
+
+  it('opens a worker’s thread beside the room, with its tree and its tool calls', async () => {
+    const anchor: RoomMessage = {
+      ...message('general', 2, ME, 'Fix lint'),
+      id: 'anchor',
+      speaker: 'face:face_pm',
+      user: null,
+      threadId: 'thr_1',
+      body: {
+        text: 'Fix lint',
+        worker: {
+          delegationId: 'dlg_1',
+          threadId: 'thr_1',
+          status: 'running',
+          title: 'Fix the lint job',
+          workspace: 'slimeos',
+          workers: 2,
+          readOnly: false,
+          note: null,
+        },
+      },
+    };
+    threads.thr_1 = [
+      threadMessage(
+        1,
+        'worker:session_1',
+        { tool: 'bash', summary: 'cargo clippy --all-targets' },
+        { kind: 'tool' },
+      ),
+      threadMessage(
+        2,
+        'worker:session_1/reviewer',
+        { text: 'Looks fine.', team: 'result' },
+        {
+          depth: 1,
+        },
+      ),
+    ];
+    workersOf.thr_1 = [workerRecord()];
+    const store = await show();
+    store.apply(event('room_message', 'general', { message: anchor }));
+    await tick();
+    target.querySelector<HTMLButtonElement>('#message-anchor .thread-card .open')!.click();
+    await vi.waitFor(() =>
+      expect(target.querySelectorAll('aside.thread .worker-row')).toHaveLength(2),
+    );
+    const panel = target.querySelector('aside.thread')!;
+    expect(panel.getAttribute('aria-label')).toBe('Thread: Fix the lint job');
+    expect(panel.querySelector('h2')!.textContent).toBe('Fix the lint job');
+    // Where it came from, and what it is doing, in the header.
+    expect(panel.querySelector('.from')!.textContent).toContain('from PM');
+    expect(panel.querySelector('.from')!.textContent).toContain('slimeos');
+    expect(panel.querySelector('.from .state')!.textContent).toContain('Working');
+    // The worker strip: the worker, then its teammate indented under it.
+    const rows = [...panel.querySelectorAll('.worker-row')].map((row) => ({
+      name: row.querySelector('.worker-name')!.textContent,
+      state: row.querySelector('.worker-state')!.textContent,
+      child: row.classList.contains('child'),
+    }));
+    expect(rows).toEqual([
+      { name: 'worker', state: 'Working · cargo clippy --all-targets', child: false },
+      { name: 'reviewer', state: 'Done · Looks fine.', child: true },
+    ]);
+    // A tool call is a chip: the tool in words, its line in mono.
+    const chip = panel.querySelector('.tool-chip')!;
+    expect(chip.querySelector('.tool-name')!.textContent).toBe('bash');
+    expect(chip.querySelector('code')!.textContent).toBe('cargo clippy --all-targets');
+    // A teammate's reply says whom it answers.
+    expect(panel.querySelector('li.item.child .parent')!.textContent).toBe('↳ worker');
+    // The card in the log is the one open: ringed, and its row tinted.
+    expect(target.querySelector('#message-anchor .thread-card.current')).not.toBeNull();
+    expect(target.querySelector('#message-anchor')!.classList.contains('selected')).toBe(true);
+    // The reply box is always there, in the design's words.
+    expect(panel.querySelector<HTMLInputElement>('form.composer input')!.placeholder).toBe(
+      'Jump in — the workers will see it',
+    );
+    // Escape closes it, and the card is no longer the open one.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    flushSync();
+    expect(store.threadId).toBeUndefined();
+    expect(target.querySelector('#message-anchor .thread-card.current')).toBeNull();
+  });
+
+  it('mentions a face from its page: the room opens with @name and nothing is sent', async () => {
+    faces[1] = face('face_pm', 'PM', {
+      territory: { rooms: ['topic'], workspaces: [], sources: [] },
+    });
+    pages.topic = [message('topic', 1, 'other', 'in topic')];
+    const store = await show();
+    target.querySelector<HTMLButtonElement>('button[aria-label="Members"]')!.click();
+    await tick();
+    const pm = [...target.querySelectorAll<HTMLButtonElement>('.members li button.face')].find(
+      (row) => row.textContent?.includes('PM'),
+    )!;
+    pm.click();
+    await vi.waitFor(() =>
+      expect(target.querySelector('.face-page .actions .mention')).not.toBeNull(),
+    );
+    target.querySelector<HTMLButtonElement>('.face-page .actions .mention')!.click();
+    // The room it answers in opens, with its name ready in the composer.
+    await vi.waitFor(() => expect(store.currentId).toBe('topic'));
+    const box = target.querySelector<HTMLTextAreaElement>('.composer textarea')!;
+    await vi.waitFor(() => expect(box.value).toBe('@PM '));
+    expect(target.querySelector('.face-page')).toBeNull();
+    expect(calls.some((call) => call.method === 'POST' && call.url.endsWith('/messages'))).toBe(
+      false,
+    );
+  });
+
+  it('reaches the room list from the phone’s header, and threads and pins from its room menu', async () => {
+    await show();
+    const menu = target.querySelector<HTMLButtonElement>('button.list-btn')!;
+    expect(menu.getAttribute('aria-label')).toBe('Open the room list');
+    menu.click();
+    flushSync();
+    expect(target.querySelector('.rooms')!.classList.contains('list-open')).toBe(true);
+    // The other controls the design drops from the phone header live here.
+    const head = target.querySelector<HTMLElement>('.head-menu')!;
+    const entries = [...head.querySelectorAll<HTMLButtonElement>('.phone-only .pop-row')].map(
+      (row) => row.textContent?.trim(),
+    );
+    expect(entries).toEqual(['Threads', 'Pinned']);
+    expect(head.querySelector('input.menu-search')).not.toBeNull();
+    head.querySelector<HTMLButtonElement>('.phone-only .pop-row')!.click();
+    flushSync();
+    expect(target.querySelector('aside.panel[aria-label="Threads"]')).not.toBeNull();
+    expect(head.hasAttribute('open')).toBe(false);
   });
 
   it('takes files dropped on the composer, and highlights where they land', async () => {

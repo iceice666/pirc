@@ -49,6 +49,8 @@
   --bg-footer: #121214;
   --bubble: #26262b;
   --input: #26262b;
+  /* A translucent black over a face's color, for controls on the hero. */
+  --scrim: rgb(0 0 0 / 35%);
   /* Ink: primary, body, secondary, muted. */
   --ink: #f2f3f5;
   --text-2: #dbdee1;
