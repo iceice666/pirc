@@ -10,6 +10,7 @@
  * Output is always passed through DOMPurify: model output and tool results are untrusted.
  */
 import DOMPurify from 'dompurify';
+import { isDarkTheme } from './theme';
 import { Marked, type Token, type Tokens, type TokenizerAndRendererExtension } from 'marked';
 import { writable } from 'svelte/store';
 import {
@@ -383,9 +384,9 @@ function loadMermaid(): Promise<MermaidApi> {
     mermaid.initialize({
       startOnLoad: false,
       securityLevel: 'strict',
-      theme: matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'base',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      themeVariables: matchMedia('(prefers-color-scheme: dark)').matches
+      theme: isDarkTheme() ? 'dark' : 'base',
+      fontFamily: '"IBM Plex Sans Variable", "Noto Sans TC Variable", sans-serif',
+      themeVariables: isDarkTheme()
         ? { fontSize: '13px' }
         : {
             background: '#ffffff',

@@ -274,8 +274,20 @@
   margin-bottom: 0.55em;
 }
 
-/* highlight.js theme — GitHub-like light palette, with a dark counterpart. */
+/* highlight.js theme — the dark palette the app ships, with a light counterpart. */
 :root {
+  --hl-comment: #8b949e;
+  --hl-keyword: #ff7b72;
+  --hl-string: #a5d6ff;
+  --hl-number: #79c0ff;
+  --hl-title: #d2a8ff;
+  --hl-type: #ffa657;
+  --hl-attr: #79c0ff;
+  --hl-tag: #7ee787;
+  --hl-del: #ffa198;
+  --hl-meta: #8b949e;
+}
+:root[data-theme='light'] {
   --hl-comment: #6e7781;
   --hl-keyword: #cf222e;
   --hl-string: #0a3069;
@@ -286,20 +298,6 @@
   --hl-tag: #116329;
   --hl-del: #82071e;
   --hl-meta: #6e7781;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --hl-comment: #8b949e;
-    --hl-keyword: #ff7b72;
-    --hl-string: #a5d6ff;
-    --hl-number: #79c0ff;
-    --hl-title: #d2a8ff;
-    --hl-type: #ffa657;
-    --hl-attr: #79c0ff;
-    --hl-tag: #7ee787;
-    --hl-del: #ffa198;
-    --hl-meta: #8b949e;
-  }
 }
 .hljs-comment,
 .hljs-quote {
