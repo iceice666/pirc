@@ -69,7 +69,10 @@ The first Linux CI run passed the sandbox security tests, Nix evaluation and
 hashes, and executable-size checks. Its checkpoint restart assertion compared
 user files with Linux's temporary deny-path mount points. The test now captures
 its expected source before sandbox startup, preserves an original empty protected
-file, and still compares the whole original tree after recovery/restart.
+file, and still compares the whole original tree after recovery/restart. The three
+checkpoint API tests also require a native runtime: Linux runs them in the
+mandatory sandbox job with PATH and the real Node bridge supplied explicitly.
+The test-only helper selection is compiled out of product builds.
 
 ## Remaining release gates and known limits
 

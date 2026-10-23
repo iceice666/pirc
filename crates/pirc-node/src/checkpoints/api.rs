@@ -638,7 +638,30 @@ mod tests {
         generation: i64,
     }
     impl Fixture {
-        async fn new() -> Self {
+        async fn new() -> Option<Self> {
+            // These route tests inspect a real native policy, including recovery
+            // restrictions. Linux CI runs them in its mandatory sandbox job.
+            let helper = if cfg!(target_os = "linux") {
+                let helper = std::env::var_os("PIRC_CONFORMANCE_BIN_DIR")
+                    .map(PathBuf::from)
+                    .map(|dir| dir.join("pirc-node"))
+                    .and_then(|path| path.canonicalize().ok())
+                    .filter(|path| path.is_file());
+                let available = helper.is_some()
+                    && crate::sandbox::linux::find_bwrap(&Env::from_process()).is_some();
+                assert!(
+                    available || std::env::var_os("PIRC_CHECKPOINT_NATIVE_REQUIRED").is_none(),
+                    "checkpoint API acceptance requires bubblewrap and PIRC_CONFORMANCE_BIN_DIR/pirc-node"
+                );
+                if !available {
+                    eprintln!("checkpoint API acceptance skipped: native test runtime unavailable");
+                    return None;
+                }
+                helper.unwrap().display().to_string()
+            } else {
+                String::new()
+            };
+            let path = std::env::var("PATH").unwrap_or_default();
             let dir = tempfile::Builder::new()
                 .prefix("p4-")
                 .tempdir_in("/tmp")
@@ -652,6 +675,8 @@ mod tests {
             let env = Env::new(
                 [
                     ("HOME", root.to_str().unwrap()),
+                    ("PATH", path.as_str()),
+                    ("PIRC_TEST_NODE_HELPER", helper.as_str()),
                     ("TMPDIR", temp.to_str().unwrap()),
                     ("PIRC_STATE_DIR", state.to_str().unwrap()),
                     ("PIRC_CONFIG_DIR", root.join("config").to_str().unwrap()),
@@ -716,7 +741,7 @@ mod tests {
             journal.finish(&scope, &operation, true).unwrap();
             journal.seal(&s.id, 1, Some("run"), false).unwrap();
             let capture = journal.info(&scope).unwrap().unwrap().id;
-            Self {
+            Some(Self {
                 dir,
                 node,
                 config,
@@ -726,7 +751,7 @@ mod tests {
                 operation,
                 capture,
                 generation,
-            }
+            })
         }
         fn base(&self) -> String {
             format!(
@@ -778,7 +803,9 @@ mod tests {
     }
     #[tokio::test]
     async fn routes_own_lease_revision_and_idempotent_adoption_preserve_source_and_user_edits() {
-        let f = Fixture::new().await;
+        let Some(f) = Fixture::new().await else {
+            return;
+        };
         let job = f.prepare("one").await;
         assert_eq!(
             job["manifest"]["paths"][0]["status"],
@@ -937,7 +964,9 @@ mod tests {
     }
     #[tokio::test]
     async fn owner_scoped_files_and_missing_or_superseded_control_fail_without_mutation() {
-        let f = Fixture::new().await;
+        let Some(f) = Fixture::new().await else {
+            return;
+        };
         let listed = f
             .request(
                 HttpMethod::Get,
@@ -1007,7 +1036,9 @@ mod tests {
     }
     #[tokio::test]
     async fn durable_mapping_and_source_local_policy_survive_node_restart() {
-        let f = Fixture::new().await;
+        let Some(f) = Fixture::new().await else {
+            return;
+        };
         let job = f.prepare("one").await;
         let response = f
             .continue_job(&job, job["revision"].as_i64().unwrap())

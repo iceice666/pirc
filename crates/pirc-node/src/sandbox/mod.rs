@@ -374,7 +374,14 @@ pub fn create(config: &NodeConfig, env: &Env) -> Arc<dyn Sandbox> {
     }
     if cfg!(target_os = "linux") {
         // The bridge runs this very executable inside the sandbox.
-        return match std::env::current_exe() {
+        let helper = std::env::current_exe();
+        // libtest has no sandbox-bridge subcommand. Native API tests provide
+        // the real node binary; this override does not exist in product builds.
+        #[cfg(test)]
+        let helper = env
+            .get("PIRC_TEST_NODE_HELPER")
+            .map_or(helper, |path| Ok(PathBuf::from(path)));
+        return match helper {
             Ok(helper) => Arc::new(linux::NativeSandbox::new(
                 config.clone(),
                 env.clone(),

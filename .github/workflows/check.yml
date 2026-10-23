@@ -142,6 +142,7 @@ jobs:
       - name: Native checkpoint end-to-end acceptance
         run: |
           cargo build --locked -p pirc-gateway -p pirc-node
+          cargo test --locked -p pirc-node --lib checkpoints::api::tests -- --test-threads=1
           cargo test --locked -p pirc-conformance --test checkpoints -- --test-threads=1
         env:
           PIRC_CONFORMANCE_BIN_DIR: target/debug
