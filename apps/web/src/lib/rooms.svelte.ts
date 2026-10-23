@@ -50,6 +50,12 @@ export class RoomsState {
   /** The open room when it is not in the list (archived, opened by URL). */
   #detached = $state.raw<RoomView | undefined>();
   messages = $state.raw<RoomMessage[]>([]);
+  /**
+   * Where the unread messages began when the room was opened (its readSeq
+   * then): the log draws its "new" divider there, even though opening it
+   * marks the room read.
+   */
+  unreadMark = $state(0);
   pinned = $state.raw<RoomMessage[]>([]);
   hasMore = $state(false);
   loading = $state(true);
@@ -147,6 +153,7 @@ export class RoomsState {
     if (demo) {
       const room = demo.demoRooms.find((item) => item.id === roomId);
       this.#detached = room && this.rooms.some((item) => item.id === room.id) ? undefined : room;
+      this.unreadMark = room?.readSeq ?? 0;
       this.messages = demo.demoMessages[roomId] ?? [];
       this.pinned = [];
       this.hasMore = false;
@@ -161,6 +168,8 @@ export class RoomsState {
       if (token !== this.#loadToken) return;
       this.#detached = this.rooms.some((item) => item.id === room.id) ? undefined : room;
       this.#merge(room);
+      // Read just after this: the log keeps where "new" began.
+      this.unreadMark = room.readSeq;
       this.pinned = pinned;
       this.messages = page.messages;
       this.hasMore = page.hasMore;
@@ -169,6 +178,7 @@ export class RoomsState {
     } catch (error) {
       if (token !== this.#loadToken) return;
       this.messages = [];
+      this.unreadMark = 0;
       this.error =
         error instanceof ApiError && error.status === 404
           ? t('rooms.error.missing')

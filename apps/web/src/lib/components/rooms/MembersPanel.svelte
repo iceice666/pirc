@@ -1,34 +1,79 @@
 <script lang="ts">
   /**
-   * The faces beside a room (plans/rewrite/10-faces.md): who is here and what
-   * each is doing. The host first; an archived face greyed out until someone
-   * hides it (decision #18). Clicking one opens its page; "Add" makes one.
+   * The faces beside a room (plans/rewrite/10-faces.md), grouped by what they
+   * are doing: waiting for you, here, or somewhere else. Clicking one opens
+   * its page (the person's choice); making and hiding one stays in this
+   * column's menu, where it was before.
    */
-  import { Plus, X } from '@lucide/svelte';
+  import { MoreHorizontal, X } from '@lucide/svelte';
   import StatusGlyph, { glyphOf } from '../StatusGlyph.svelte';
   import { presenceText, t } from '../../i18n';
-  import { hueOf, initialOf, listed, roomFace, type Face, type FacePresence } from '../../faces';
+  import { hueOf, initialOf, listed, type Face, type FacePresence } from '../../faces';
 
   interface Props {
     faces: Face[];
     presence: Record<string, FacePresence>;
     roomId: string;
+    /** The rooms' names, so a face elsewhere says where. */
+    roomNames?: Record<string, string>;
     onopen: (faceId: string) => void;
     onadd: (name: string) => Promise<unknown>;
     onhide: (faceId: string, hidden: boolean) => Promise<unknown>;
     onclose: () => void;
   }
 
-  let { faces, presence, roomId, onopen, onadd, onhide, onclose }: Props = $props();
+  let { faces, presence, roomId, roomNames = {}, onopen, onadd, onhide, onclose }: Props = $props();
 
   let showHidden = $state(false);
   let adding = $state(false);
   let name = $state('');
   let error = $state('');
 
-  const own = $derived(roomFace(faces, roomId));
   const shown = $derived(listed(faces, showHidden));
   const hiddenCount = $derived(faces.filter((face) => face.hiddenAt).length);
+
+  function stateOf(face: Face): 'waiting' | 'other' | 'here' {
+    const now = presence[face.id];
+    if (now?.state === 'waiting') return 'waiting';
+    if (now?.roomId && now.roomId !== roomId) return 'other';
+    return 'here';
+  }
+
+  /** Whole groups only: an empty heading says nothing. */
+  const groups = $derived.by(() => {
+    const active = shown.filter((face) => !face.archivedAt);
+    const waiting = active.filter((face) => stateOf(face) === 'waiting');
+    const other = active.filter((face) => stateOf(face) === 'other');
+    const here = active.filter((face) => stateOf(face) === 'here');
+    const archived = shown.filter((face) => face.archivedAt);
+    return [
+      { id: 'waiting', label: t('rooms.members.waitingForYou'), faces: waiting },
+      { id: 'here', label: t('rooms.members.idle'), faces: here },
+      { id: 'other', label: t('rooms.members.otherRooms'), faces: other },
+      { id: 'archived', label: t('common.archived'), faces: archived },
+    ].filter((group) => group.faces.length);
+  });
+
+  /** The second line: what it is doing, or where. */
+  function detail(face: Face): string {
+    if (face.archivedAt) return t('common.archived');
+    const now = presence[face.id];
+    if (!now) return t('common.status.idle');
+    if (now.state === 'waiting')
+      return now.line
+        ? t('rooms.members.waitingLine', { line: now.line })
+        : t('common.status.waiting');
+    if (now.roomId && now.roomId !== roomId)
+      return t('rooms.members.elsewhere', {
+        room: roomNames[now.roomId] ?? now.roomId,
+        state: presenceText(now),
+      });
+    return presenceText(now);
+  }
+
+  function glyphFor(face: Face) {
+    return face.archivedAt ? 'idle' : glyphOf(presence[face.id]?.state ?? 'idle');
+  }
 
   async function add(event: SubmitEvent) {
     event.preventDefault();
@@ -55,14 +100,24 @@
 
 <aside class="members" aria-label={t('rooms.members.title')}>
   <header>
-    <h2>{t('rooms.members.title')}</h2>
-    <button
-      type="button"
-      class="icon"
-      aria-label={t('rooms.members.add')}
-      title={t('rooms.members.add')}
-      onclick={() => (adding = !adding)}><Plus size={16} /></button
-    >
+    <h2 class="section-label">{t('rooms.members.title')}</h2>
+    <details class="menu">
+      <summary aria-label={t('rooms.members.menu')} title={t('rooms.members.menu')}
+        ><MoreHorizontal size={16} /></summary
+      >
+      <div class="pop">
+        <button type="button" class="row" onclick={() => (adding = !adding)}
+          >{t('rooms.members.add')}</button
+        >
+        {#if hiddenCount}
+          <button type="button" class="row" onclick={() => (showHidden = !showHidden)}
+            >{showHidden
+              ? t('rooms.members.leaveOutHidden')
+              : t('rooms.members.showHidden', { count: hiddenCount })}</button
+          >
+        {/if}
+      </div>
+    </details>
     <button type="button" class="icon" aria-label={t('rooms.members.close')} onclick={onclose}
       ><X size={16} /></button
     >
@@ -80,45 +135,38 @@
     </form>
   {/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
-  <ul>
-    {#each shown as face (face.id)}
-      {@const state = presence[face.id]}
-      <li class:archived={!!face.archivedAt}>
-        <button type="button" class="face" onclick={() => onopen(face.id)}>
-          <span
-            class="avatar"
-            style:--hue={hueOf(face.name)}
-            style:background={face.color ?? undefined}
-            aria-hidden="true">{initialOf(face.name, face.avatar)}</span
-          >
-          <span class="who">
-            <span class="name"
-              >{face.name}{#if face.isHost}<span class="tag">{t('common.host')}</span
-                >{/if}{#if own?.id === face.id}<span class="tag">{t('common.thisRoom')}</span
-                >{/if}</span
-            >
-            <span class="state {face.archivedAt ? 'idle' : (state?.state ?? 'idle')}">
-              <StatusGlyph
-                state={face.archivedAt ? 'idle' : glyphOf(state?.state ?? 'idle')}
-              />{face.archivedAt ? t('common.archived') : presenceText(state)}
-            </span>
-          </span>
-        </button>
-        {#if face.archivedAt}
-          <button type="button" class="small" onclick={() => hide(face)}
-            >{face.hiddenAt ? t('common.show') : t('common.hide')}</button
-          >
-        {/if}
-      </li>
+  <div class="groups">
+    {#each groups as group (group.id)}
+      <section aria-label={group.label}>
+        <h3 class="section-label">{group.label} — {group.faces.length}</h3>
+        <ul>
+          {#each group.faces as face (face.id)}
+            <li class:archived={!!face.archivedAt} class:elsewhere={group.id === 'other'}>
+              <button type="button" class="face" onclick={() => onopen(face.id)}>
+                <span
+                  class="avatar"
+                  style:--hue={hueOf(face.name)}
+                  style:background={face.color ?? undefined}
+                  aria-hidden="true">{initialOf(face.name, face.avatar)}</span
+                >
+                <span class="who">
+                  <span class="name" style:color={face.color ?? undefined}>{face.name}</span>
+                  <span class="detail">
+                    <StatusGlyph state={glyphFor(face)} />{detail(face)}
+                  </span>
+                </span>
+              </button>
+              {#if face.archivedAt}
+                <button type="button" class="small" onclick={() => hide(face)}
+                  >{face.hiddenAt ? t('common.show') : t('common.hide')}</button
+                >
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      </section>
     {/each}
-  </ul>
-  {#if hiddenCount}
-    <button type="button" class="link" onclick={() => (showHidden = !showHidden)}
-      >{showHidden
-        ? t('rooms.members.leaveOutHidden')
-        : t('rooms.members.showHidden', { count: hiddenCount })}</button
-    >
-  {/if}
+  </div>
 </aside>
 
 <style>
@@ -133,22 +181,29 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    padding: 12px 8px 8px 16px;
+    padding: 12px 8px 4px 16px;
   }
   h2 {
     flex: 1;
     margin: 0;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--muted);
+  }
+  .groups {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 0 8px 16px;
+  }
+  section {
+    margin-top: 8px;
+  }
+  h3 {
+    margin: 0;
+    padding: 4px 8px;
   }
   ul {
     margin: 0;
-    padding: 0 8px;
+    padding: 0;
     list-style: none;
-    overflow-y: auto;
   }
   li {
     display: flex;
@@ -158,17 +213,22 @@
   li.archived {
     opacity: 0.55;
   }
+  li.elsewhere .face {
+    opacity: 0.72;
+  }
+  /* 44px rows: a 32px avatar and two lines, as the design draws members. */
   .face {
     flex: 1;
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 6px 8px;
+    gap: 12px;
+    min-height: 44px;
+    padding: 4px 8px;
     border: 0;
     border-radius: var(--radius-sm);
     background: none;
-    color: var(--ink);
+    color: var(--text-2);
     font: inherit;
     text-align: left;
     cursor: pointer;
@@ -184,6 +244,7 @@
     display: grid;
     place-items: center;
     font-weight: 600;
+    font-size: 13px;
     color: white;
     background: hsl(var(--hue) 45% 48%);
   }
@@ -191,22 +252,13 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+    line-height: 1.25;
   }
   .name {
-    display: flex;
-    align-items: center;
-    gap: 6px;
     font-weight: 600;
+    color: var(--text-2);
   }
-  .tag {
-    padding: 0 6px;
-    border-radius: 999px;
-    background: var(--bg-subtle);
-    color: var(--muted);
-    font-size: 11px;
-    font-weight: 500;
-  }
-  .state {
+  .detail {
     display: inline-flex;
     align-items: center;
     gap: 6px;
@@ -228,6 +280,52 @@
     color: var(--ink);
     font: inherit;
   }
+  .menu {
+    position: relative;
+  }
+  summary {
+    display: grid;
+    place-items: center;
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    color: var(--muted);
+    cursor: pointer;
+    list-style: none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  summary:hover {
+    background: var(--bg-hover);
+    color: var(--ink);
+  }
+  .pop {
+    position: absolute;
+    right: 0;
+    z-index: 6;
+    width: 200px;
+    margin-top: 4px;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--bg-layer);
+    box-shadow: var(--shadow-pop);
+  }
+  .row {
+    width: 100%;
+    padding: 6px 8px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .row:hover {
+    background: var(--bg-hover);
+  }
   .icon {
     display: grid;
     place-items: center;
@@ -242,8 +340,7 @@
     background: var(--bg-hover);
     color: var(--ink);
   }
-  .small,
-  .link {
+  .small {
     padding: 2px 8px;
     border: 0;
     background: none;
@@ -252,13 +349,8 @@
     font-size: 12px;
     cursor: pointer;
   }
-  .small:hover,
-  .link:hover {
+  .small:hover {
     color: var(--ink);
-  }
-  .link {
-    margin: 8px 16px;
-    text-align: left;
   }
   .error {
     margin: 4px 16px;

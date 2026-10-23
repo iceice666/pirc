@@ -179,6 +179,44 @@ export function mentionMatches(faces: Face[], query: string, limit = 6): Face[] 
     .slice(0, limit);
 }
 
+/** A stretch of text, and the face whose `@name` it mentions. */
+export interface MentionPart {
+  text: string;
+  face?: Face;
+}
+
+/**
+ * A message's text split around the `@name` of the faces it mentions, so a
+ * mention can be shown as a chip in that face's color. Longest name first, so
+ * `@SlimeOS PM` wins over a face called `Slime`. Only names that exist.
+ */
+export function mentionParts(text: string, faces: Face[]): MentionPart[] {
+  const names = faces
+    .filter((face) => face.name)
+    .map((face) => ({ face, at: `@${face.name}` }))
+    .sort((a, b) => b.at.length - a.at.length);
+  if (!names.length) return [{ text }];
+  const parts: MentionPart[] = [];
+  let plain = '';
+  let index = 0;
+  while (index < text.length) {
+    const hit =
+      text[index] === '@' ? names.find((item) => text.startsWith(item.at, index)) : undefined;
+    if (!hit) {
+      plain += text[index++];
+      continue;
+    }
+    if (plain) {
+      parts.push({ text: plain });
+      plain = '';
+    }
+    parts.push({ text: hit.at, face: hit.face });
+    index += hit.at.length;
+  }
+  if (plain) parts.push({ text: plain });
+  return parts.length ? parts : [{ text }];
+}
+
 /** The text with the mention at `start` replaced by `@name `, and where the caret goes. */
 export function completeMention(
   text: string,

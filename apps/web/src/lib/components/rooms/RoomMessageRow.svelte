@@ -1,6 +1,16 @@
 <script lang="ts">
-  import { Paperclip, Pin } from '@lucide/svelte';
-  import { hueOf, initialOf, speakerFace, type Face } from '../../faces';
+  import {
+    AlarmClock,
+    ArrowRightLeft,
+    Bookmark,
+    FileText,
+    MessageSquare,
+    Pin,
+    Repeat,
+    ShieldCheck,
+    Wrench,
+  } from '@lucide/svelte';
+  import { hueOf, initialOf, mentionParts, speakerFace, type Face } from '../../faces';
   import { ApiError } from '../../http';
   import { locale, t } from '../../i18n';
   import { lineAction } from '../../loops';
@@ -72,6 +82,11 @@
   /** A stable hue per speaker; a face may have its own color and avatar. */
   const hue = $derived(hueOf(name));
   const initial = $derived(initialOf(name, face?.avatar));
+
+  /** Its name in its own color, or the hue its avatar would have. */
+  function faceColor(who: Face | undefined, fallbackName: string): string {
+    return who?.color ?? `hsl(${hueOf(who?.name ?? fallbackName)} 55% 62%)`;
+  }
 
   /** What the line remembered: shown on expanding it, undone by "Don't keep". */
   const remembered = $derived(message.body.memory?.forgotten ? undefined : message.body.memory);
@@ -151,6 +166,8 @@
       ? activity[anchor.threadId]
       : undefined,
   );
+  /** What its thread last did, whatever its status (the preview card's second line). */
+  const lastWord = $derived(anchor ? activity[anchor.threadId] : undefined);
   /** A line or report about a worker: it opens the thread. */
   const workerThread = $derived(message.threadId ?? message.body.worker?.threadId ?? undefined);
 
@@ -202,6 +219,29 @@
   }
 </script>
 
+{#snippet said(text: string)}
+  {#each mentionParts(text, faces) as part, index (index)}
+    {#if part.face}<span
+        class="mention"
+        style:color={faceColor(part.face, part.face.name)}
+        style:background="color-mix(in srgb, {faceColor(part.face, part.face.name)} 18%, transparent)"
+        >{part.text}</span
+      >{:else}{part.text}{/if}
+  {/each}
+{/snippet}
+
+{#snippet badge(who: Face | undefined)}
+  {#if who}
+    {@const color = faceColor(who, who.name)}
+    <span
+      class="face-badge"
+      style:color
+      style:background="color-mix(in srgb, {color} 15%, transparent)"
+      >{who.isHost ? t('common.host') : t('rooms.message.project')}</span
+    >
+  {/if}
+{/snippet}
+
 {#if message.kind === 'progress'}
   <div class="line progress-line" role="status" aria-busy="true" data-row tabindex="-1">
     <span class="spinner" aria-hidden="true"></span>
@@ -210,44 +250,52 @@
   </div>
 {:else if message.kind === 'line'}
   <div class="line" role="note" data-row tabindex="-1">
+    <span class="line-icon" aria-hidden="true">
+      {#if message.body.move}<ArrowRightLeft size={14} />
+      {:else if message.body.memory}<Bookmark size={14} />
+      {:else if message.body.wake}<AlarmClock size={14} />
+      {:else if message.body.worker}<Wrench size={14} />
+      {:else if message.body.loop}<Repeat size={14} />
+      {:else}<MessageSquare size={14} />{/if}
+    </span>
     {#if message.body.move}
-      <button type="button" class="link" onclick={() => onopenroom?.(message.body.move!.roomId)}
+      <button type="button" class="action" onclick={() => onopenroom?.(message.body.move!.roomId)}
         >{message.body.text ?? ''}</button
       >
     {:else if remembered}
       <button
         type="button"
-        class="link quiet"
+        class="action quiet"
         aria-expanded={expanded}
         onclick={() => (expanded = !expanded)}>{message.body.text ?? ''}</button
       >
-      <button type="button" class="link" disabled={forgetting} onclick={dontKeep}
+      <button type="button" class="action" disabled={forgetting} onclick={dontKeep}
         >{t('rooms.memory.dontKeep')}</button
       >
     {:else if wakeLine}
       <span>{message.body.text ?? ''}</span>
       {#if !wakeDone}
-        <button type="button" class="link" disabled={forgetting} onclick={cancelWake}
+        <button type="button" class="action" disabled={forgetting} onclick={cancelWake}
           >{t('common.cancel')}</button
         >
       {/if}
     {:else if message.body.worker && workerThread}
       <span>{message.body.text ?? ''}</span>
-      <button type="button" class="link" onclick={() => onopenthread?.(workerThread)}
+      <button type="button" class="action" onclick={() => onopenthread?.(workerThread)}
         >{t('rooms.worker.openThread')}</button
       >
     {:else if loopAction}
       <span>{message.body.text ?? ''}</span>
       {#if !loopDone}
-        <button type="button" class="link" disabled={forgetting} onclick={undoLoop}
+        <button type="button" class="action" disabled={forgetting} onclick={undoLoop}
           >{loopAction.label}</button
         >
       {/if}
     {:else}
-      <span>{message.body.text ?? ''}</span>
+      <span>{@render said(message.body.text ?? '')}</span>
     {/if}
     {#if details}
-      <a class="link quiet" href={engineLink(details)} title={t('rooms.details.title')}
+      <a class="action quiet" href={engineLink(details)} title={t('rooms.details.title')}
         >{t('rooms.details.label')}</a
       >
     {/if}
@@ -294,15 +342,19 @@
             <button
               type="button"
               class="name face-name"
-              style:color={face.color ?? undefined}
+              style:color={faceColor(face, name)}
               onclick={() => onopenface(face.id)}>{name}</button
             >
           {:else}
             <span class="name">{name}</span>
           {/if}
+          {@render badge(isFace ? face : undefined)}
           <time datetime={new Date(message.createdAt).toISOString()} title={fullTime}>{time}</time>
-          {#if message.kind === 'question'}<span class="asks">{t('rooms.message.asksYou')}</span
-            >{/if}
+          {#if message.kind === 'question'}
+            <span class="asks"
+              ><ShieldCheck size={12} aria-hidden="true" />{t('rooms.message.asksYou')}</span
+            >
+          {/if}
           {#if message.pinnedAt}<Pin size={12} aria-label={t('common.pinned')} />{/if}
         </header>
       {/if}
@@ -319,7 +371,7 @@
         {:else}
           <!-- Your own words stay as typed, as in the old transcript. -->
           <p class="text">
-            {message.body.text ?? ''}{#if message.body.streaming}<span
+            {@render said(message.body.text ?? '')}{#if message.body.streaming}<span
                 class="caret"
                 aria-hidden="true">▍</span
               >{/if}
@@ -327,18 +379,21 @@
         {/if}
       {/if}
       {#if question}
+        {#if question.request.title}
+          <code class="request mono">{question.request.title}</code>
+        {/if}
         {#if question.status === 'pending'}
           <div class="choices">
             <button
               type="button"
-              class="button dark small"
+              class="button primary small"
               disabled={answering}
               onclick={() => answerQuestion({ confirmed: true })}>{t('common.yes')}</button
             >
             {#if question.request.allowAgain}
               <button
                 type="button"
-                class="button ghost small"
+                class="button small"
                 disabled={answering}
                 title={t('rooms.question.allowAgainTitle')}
                 onclick={() => answerQuestion({ confirmed: true, again: true })}
@@ -347,15 +402,16 @@
             {/if}
             <button
               type="button"
-              class="button ghost small"
+              class="button small"
               disabled={answering}
               onclick={() => answerQuestion({ confirmed: false })}>{t('common.no')}</button
             >
             {#if workerThread}
-              <button type="button" class="link" onclick={() => onopenthread?.(workerThread)}
+              <button type="button" class="action" onclick={() => onopenthread?.(workerThread)}
                 >{t('rooms.worker.thread')}</button
               >
             {/if}
+            <span class="reply-note">{t('rooms.question.reply')}</span>
           </div>
         {:else}
           <p class="muted small">{questionOutcome(question)}</p>
@@ -363,33 +419,58 @@
         {#if answerError}<p class="worker-error" role="alert">{answerError}</p>{/if}
       {/if}
       {#if anchor}
-        <div class="worker {anchor.status}">
-          <StatusGlyph state={glyphOf(anchor.status)} />
-          <span>{statusLabel(anchor.status, anchor.workers)}</span>
-          {#if anchor.note}<span class="muted"
-              >· {t('rooms.worker.waitsFor', { note: anchor.note })}</span
-            >{/if}
-          <button type="button" class="link" onclick={() => onopenthread?.(anchor.threadId)}
+        <div class="thread-card">
+          <div class="thread-top">
+            <MessageSquare size={16} aria-hidden="true" />
+            <strong class="thread-title">{anchor.title}</strong>
+            <span class="thread-status"
+              ><StatusGlyph state={glyphOf(anchor.status)} />{statusLabel(
+                anchor.status,
+                anchor.workers,
+              )}</span
+            >
+          </div>
+          <div class="thread-bottom">
+            <span
+              class="cluster"
+              aria-label={t('rooms.threads.workers', { count: anchor.workers })}
+              title={t('rooms.threads.workers', { count: anchor.workers })}
+              ><span class="initial" aria-hidden="true">{anchor.workers}</span></span
+            >
+            <span class="last" title={lastWord?.text}
+              >{lastWord?.text ?? t('rooms.threads.quiet')}</span
+            >
+            <button type="button" class="open" onclick={() => onopenthread?.(anchor.threadId)}
+              >{t('rooms.worker.openThread')}</button
+            >
+          </div>
+        </div>
+        {#if progress}
+          <p class="progress mono" title={progress.text}>{progress.text}</p>
+        {/if}
+        <div class="worker-actions">
+          <button type="button" class="action" onclick={() => onopenthread?.(anchor.threadId)}
             >{t('rooms.worker.thread')}</button
           >
           {#if stoppable(anchor.status)}
-            <button type="button" class="link" disabled={forgetting} onclick={stopWorker}
+            <button type="button" class="action" disabled={forgetting} onclick={stopWorker}
               >{t('rooms.worker.stop')}</button
             >
           {/if}
+          {#if anchor.note}<span class="muted small"
+              >· {t('rooms.worker.waitsFor', { note: anchor.note })}</span
+            >{/if}
         </div>
-        {#if progress}
-          <p class="progress" title={progress.text}>{progress.text}</p>
-        {/if}
         {#if forgetError}<p class="worker-error" role="alert">{forgetError}</p>{/if}
       {:else if message.body.worker && 'report' in message.body.worker && workerThread}
-        <button type="button" class="link small" onclick={() => onopenthread?.(workerThread)}
+        <button type="button" class="action small" onclick={() => onopenthread?.(workerThread)}
           >{t('rooms.worker.openThread')}</button
         >
       {/if}
       {#each message.body.attachments ?? [] as attachment (attachment.id)}
         {#if attachment.kind === 'image'}
           <a
+            class="image-tile"
             href={roomsApi.uploadUrl(message.roomId, attachment.id)}
             target="_blank"
             rel="noopener"
@@ -402,8 +483,18 @@
             />
           </a>
         {:else}
-          <a class="file" href={roomsApi.uploadUrl(message.roomId, attachment.id)} download
-            ><Paperclip size={14} />{attachment.filename ?? t('rooms.attachment.file')}</a
+          <a
+            class="file-card"
+            href={roomsApi.uploadUrl(message.roomId, attachment.id)}
+            download
+            aria-label="{attachment.filename ?? t('rooms.attachment.file')}, {t(
+              'rooms.attachment.download',
+            )}"
+            ><FileText size={28} aria-hidden="true" />
+            <span class="file-what"
+              ><span class="file-name">{attachment.filename ?? t('rooms.attachment.file')}</span
+              ><span class="file-sub">{t('rooms.attachment.download')}</span></span
+            ></a
           >
         {/if}
       {/each}
@@ -425,7 +516,6 @@
     margin: 2px 0 0;
     overflow: hidden;
     color: var(--muted);
-    font-family: var(--font-mono);
     font-size: 12px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -447,28 +537,46 @@
       animation: none;
     }
   }
+  /* 40px avatar, 16px gap, 48px on the right, as the design draws a message. */
   .message {
     position: relative;
     display: grid;
     grid-template-columns: 40px 1fr;
-    gap: 12px;
-    padding: 6px 20px 2px;
+    gap: 16px;
+    margin-top: 12px;
+    padding: 4px 48px 4px 16px;
   }
   .message.continued {
-    padding-top: 0;
+    margin-top: 2px;
+    padding-top: 2px;
   }
-  .message.question .content {
-    padding: 6px 10px;
-    border-left: 3px solid var(--accent);
-    border-radius: var(--radius-sm);
-    background: var(--bg-layer);
+  /* A question is a warning-tinted card around the whole row. */
+  .message.question {
+    margin: 8px 8px 0;
+    padding: 12px 40px 14px 8px;
+    border-radius: var(--radius-md);
+    background: var(--warning-soft);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 35%, transparent);
   }
   .choices {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
+    margin-top: 8px;
+  }
+  .request {
+    align-self: flex-start;
     margin-top: 6px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--code-bg);
+    color: var(--ink);
+    font-size: 13px;
+  }
+  .reply-note {
+    color: var(--muted);
+    font-size: 13px;
   }
   .muted.small {
     margin: 4px 0 0;
@@ -476,8 +584,18 @@
     color: var(--muted);
   }
   .asks {
-    font-size: 12px;
-    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 6px;
+    border-radius: 4px;
+    background: var(--warning);
+    color: var(--bg);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
   .caret {
     color: var(--muted);
@@ -496,13 +614,16 @@
   .message:hover {
     background: var(--bg-hover);
   }
+  .message.question:hover {
+    background: var(--warning-soft);
+  }
   .gutter {
     display: flex;
     justify-content: center;
   }
   .avatar {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     display: grid;
     place-items: center;
@@ -522,8 +643,14 @@
   .message:hover .hover-time {
     visibility: visible;
   }
+  .content {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
   header {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: 8px;
   }
@@ -542,6 +669,15 @@
   .face-name:hover {
     text-decoration: underline;
   }
+  .face-badge {
+    padding: 0 5px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
   time {
     font-size: 12px;
     color: var(--muted);
@@ -552,23 +688,134 @@
     overflow-wrap: anywhere;
     line-height: 1.5;
   }
-  .image {
-    display: block;
-    max-width: min(360px, 100%);
-    max-height: 280px;
-    margin-top: 6px;
-    border-radius: var(--radius-sm);
+  .mention {
+    padding: 0 3px;
+    border-radius: 4px;
+    font-weight: 500;
   }
-  .file {
+  /* The thread preview card: title, status, the workers, what it did last. */
+  .thread-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 520px;
+    margin-top: 6px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-md);
+    background: var(--bg-sidebar);
+  }
+  .thread-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+  }
+  .thread-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ink);
+    font-size: 14px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .thread-status {
     display: inline-flex;
     align-items: center;
     gap: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .thread-bottom {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .cluster {
+    display: inline-flex;
+  }
+  .initial {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--bg-sidebar);
+    border-radius: 50%;
+    background: var(--bg-subtle);
+    color: var(--text-2);
+    font-family: var(--font-mono);
+    font-size: 9px;
+  }
+  .last {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .open {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent-ink);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .worker-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+  }
+  .image-tile {
+    display: block;
+    max-width: 100%;
     margin-top: 6px;
-    padding: 6px 10px;
-    border: 1px solid var(--line-dark);
-    border-radius: var(--radius-sm);
-    color: var(--ink);
+    border-radius: var(--radius-md);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .image {
+    display: block;
+    width: 240px;
+    max-width: 100%;
+    height: 135px;
+    border-radius: var(--radius-md);
+    object-fit: cover;
+  }
+  /* A file attachment: its name, and "Download" underneath. */
+  .file-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    align-self: flex-start;
+    min-height: 52px;
+    margin-top: 6px;
+    padding: 8px 14px 8px 10px;
+    border-radius: var(--radius-md);
+    background: var(--bg-sidebar);
+    box-shadow: inset 0 0 0 1px var(--line);
+    color: var(--muted);
     text-decoration: none;
+  }
+  .file-what {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+  }
+  .file-name {
+    color: var(--accent-ink);
+    font-weight: 500;
+  }
+  .file-sub {
+    color: var(--faint);
+    font-size: 12px;
   }
   .pin {
     position: absolute;
@@ -586,23 +833,34 @@
   .pin:focus-visible {
     display: block;
   }
+  /* A line at the same 72px inset as a message's text, with its icon. */
   .line {
     display: flex;
-    align-items: baseline;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 8px;
-    padding: 4px 20px 4px 72px;
+    padding: 2px 48px 2px 72px;
     font-size: 13px;
     color: var(--muted);
   }
-  .link {
-    padding: 0;
+  .line-icon {
+    display: inline-flex;
+    flex: none;
+  }
+  .action {
+    padding: 2px 6px;
     border: 0;
+    border-radius: 4px;
     background: none;
-    color: var(--accent);
+    color: var(--accent-ink);
     font: inherit;
+    font-size: 13px;
     cursor: pointer;
   }
-  .link.quiet {
+  .action:hover {
+    background: var(--bg-hover);
+  }
+  .action.quiet {
     color: inherit;
     text-align: left;
   }
@@ -612,16 +870,6 @@
   }
   .line.error {
     color: var(--danger);
-  }
-  .worker {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 4px;
-    padding: 2px 10px;
-    border: 1px solid var(--line-dark);
-    border-radius: 999px;
-    font-size: 12px;
   }
   .muted {
     color: var(--muted);

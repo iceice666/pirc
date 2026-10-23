@@ -87,6 +87,8 @@ let calls: Array<{ method: string; url: string; body: any }>;
 let listed: RoomView[];
 let faces: Face[];
 let pages: Record<string, RoomMessage[]>;
+/** A room that looks writable but refuses a message (the archived 409). */
+let refuseSend: boolean;
 
 function reply(value: unknown, status = 200) {
   return new Response(value === undefined ? null : JSON.stringify(value), { status });
@@ -95,6 +97,7 @@ function reply(value: unknown, status = 200) {
 beforeEach(() => {
   FakeSocket.all = [];
   calls = [];
+  refuseSend = false;
   listed = [room('general', { lastSeq: 1, readSeq: 1 }), room('topic')];
   pages = { general: [message('general', 1)], topic: [] };
   faces = [face('host', 'pirc'), face('face_pm', 'PM', { color: '#3366cc', bio: 'Runs SlimeOS' })];
@@ -133,7 +136,19 @@ beforeEach(() => {
       if (url.pathname.endsWith('/activity')) return reply({ loops: [], workers: [], wakes: [] });
       const found = listed.find((item) => item.id === id);
       if (!found) return reply({ error: { code: 'not_found', message: 'Room not found' } }, 404);
-      if (!rest && method === 'GET') return reply({ room: found, pinned: [] });
+      if (!rest && method === 'GET')
+        return reply({
+          room: found,
+          pinned: (pages[id!] ?? []).filter((item) => item.pinnedAt),
+        });
+      if (!rest && method === 'PATCH') {
+        Object.assign(found, body);
+        if (body.archived === true) found.archivedAt = 5;
+        if (body.archived === false) found.archivedAt = null;
+        return reply({ room: found });
+      }
+      if (rest === 'messages' && method === 'POST' && refuseSend)
+        return reply({ error: { code: 'archived', message: 'This room is archived.' } }, 409);
       if (rest === 'uploads' && method === 'POST')
         return reply({ upload: { id: `up_${url.searchParams.get('filename')}` } }, 201);
       if (rest === 'messages' && method === 'GET')
@@ -524,7 +539,7 @@ describe('rooms page', () => {
     await show();
     const box = target.querySelector('textarea')!;
     const attached = () =>
-      [...target.querySelectorAll('.files li')].map((item) => item.textContent?.trim());
+      [...target.querySelectorAll('.files .file-name')].map((item) => item.textContent?.trim());
     const paste = (files: File[], text = '') => {
       const event = new Event('paste', { bubbles: true, cancelable: true });
       Object.defineProperty(event, 'clipboardData', {
@@ -619,7 +634,8 @@ describe('rooms page', () => {
     const store = await show();
     store.apply(event('brain_presence', 'general', { face: 'host', state: 'thinking' }, 0));
     await tick();
-    expect(target.querySelector('.presence.thinking')).not.toBeNull();
+    // The layout phase drops the header's presence pill; the log still says it.
+    expect(target.querySelector('.presence')).toBeNull();
     expect(target.querySelector('.typing')!.textContent).toContain('pirc is thinking…');
     const reply: RoomMessage = {
       ...message('general', 2, ME, 'Let me'),
@@ -644,7 +660,7 @@ describe('rooms page', () => {
     expect(article()).toBeNull();
     expect(target.querySelector('.markdown.streaming')).toBeNull();
     expect(target.textContent).toContain('Let me check.');
-    expect(target.querySelector('.presence.thinking')).toBeNull();
+    expect(target.querySelector('.typing')!.textContent).not.toContain('is thinking');
     store.apply(
       event('room_message', 'general', {
         message: { ...reply, id: 'q', seq: 3, kind: 'question', body: { text: 'Which one?' } },
@@ -802,7 +818,7 @@ describe('rooms page', () => {
         archived: item.classList.contains('archived'),
       }));
     expect(members()).toEqual([
-      { name: 'pirchost', archived: false },
+      { name: 'pirc', archived: false },
       { name: 'PM', archived: false },
       { name: 'Old', archived: true },
     ]);
@@ -851,5 +867,257 @@ describe('rooms page', () => {
     expect(target.textContent).toContain('kept');
     expect(target.textContent).toContain('Archived');
     expect(target.querySelector('textarea')).toBeNull();
+  });
+
+  it('lists unread as a red count with a rail, and counts the archived rooms', async () => {
+    listed[1] = room('topic', { lastActivityAt: 5, lastSeq: 2, unread: 2 });
+    listed.push(room('old', { archivedAt: 5 }));
+    await show();
+    const count = target.querySelector('.room.unread .count')!;
+    expect(count.textContent).toBe('2');
+    expect(count.getAttribute('aria-label')).toBe('2 unread');
+    expect(target.querySelector('.room.unread .rail')).not.toBeNull();
+    // The fold knows how many there are without opening it.
+    await vi.waitFor(() =>
+      expect(target.querySelector('button.fold')?.textContent).toContain('Archived · 1'),
+    );
+    // The header's subtitle names the kind of room, and nothing it does not know.
+    expect(target.querySelector('.room-head .subtitle')?.textContent).toContain('General room');
+  });
+
+  it('searches the messages already loaded, without asking the gateway', async () => {
+    pages.general = [
+      message('general', 1),
+      message('general', 2, 'other', 'bench numbers'),
+      message('general', 3, 'other', 'lint one'),
+      message('general', 4, 'other', 'lint two'),
+    ];
+    await show();
+    const search = target.querySelector<HTMLInputElement>('input[type="search"]')!;
+    const type = (value: string) => {
+      search.value = value;
+      search.dispatchEvent(new Event('input', { bubbles: true }));
+      flushSync();
+    };
+    const said = () =>
+      [...target.querySelectorAll('article .content')].map((item) => item.textContent ?? '');
+    type('lint');
+    expect(said()).toHaveLength(2);
+    expect(said().join(' ')).not.toContain('bench');
+    expect(target.querySelector('.search-note')?.textContent).toContain('2 matches');
+    // Client-side only: no request carries what was typed.
+    expect(calls.some((call) => call.url.includes('lint'))).toBe(false);
+    type('nothing like this');
+    expect(said()).toHaveLength(0);
+    expect(target.querySelector('.search-note')?.textContent).toBe('Nothing matches here.');
+    search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    flushSync();
+    expect(search.value).toBe('');
+    expect(said()).toHaveLength(4);
+  });
+
+  it('keeps three attachments and counts the rest', async () => {
+    await show();
+    const box = target.querySelector('textarea')!;
+    const paste = (file: File) => {
+      const event = new Event('paste', { bubbles: true, cancelable: true });
+      Object.defineProperty(event, 'clipboardData', {
+        value: {
+          items: [{ kind: 'file', type: file.type, getAsFile: () => file }],
+          getData: () => '',
+        },
+      });
+      box.dispatchEvent(event);
+      flushSync();
+    };
+    const names = () =>
+      [...target.querySelectorAll('.files .file-name')].map((item) => item.textContent);
+    for (const name of ['a.png', 'b.png', 'c.png', 'd.png', 'e.png'])
+      paste(new File([new Uint8Array([1])], name, { type: 'image/png', lastModified: 1 }));
+    expect(names()).toEqual(['a.png', 'b.png', 'c.png']);
+    const more = () => target.querySelector('.files .more');
+    expect(more()?.querySelector('span')?.textContent).toBe('+2');
+    expect(more()?.querySelector('.sr-only')?.textContent).toBe('2 more attachments');
+    target.querySelector<HTMLButtonElement>('.files li button')!.click();
+    await tick();
+    expect(names()).toEqual(['b.png', 'c.png', 'd.png']);
+    expect(more()?.querySelector('span')?.textContent).toBe('+1');
+  });
+
+  it('asks in a warning card, with the request in mono and every answer', async () => {
+    const store = await show();
+    const asked: RoomMessage = {
+      ...message('general', 2, ME),
+      id: 'ask',
+      speaker: 'face:host',
+      user: null,
+      kind: 'question',
+      threadId: 'thr_1',
+      body: {
+        text: 'May the worker push?',
+        question: {
+          interactionId: 'i1',
+          threadMessageId: 'tm_3',
+          request: { title: 'git push origin fix-lint', allowAgain: true },
+          status: 'pending',
+        },
+      },
+    };
+    store.apply(event('room_message', 'general', { message: asked }));
+    await tick();
+    const card = target.querySelector('article.question')!;
+    expect(card.querySelector('.asks')?.textContent).toBe('asks you');
+    expect(card.querySelector('code.request')?.textContent).toBe('git push origin fix-lint');
+    expect([...card.querySelectorAll('.choices button')].map((item) => item.textContent)).toEqual([
+      'Yes',
+      'Allow again this session',
+      'No',
+      'Thread',
+    ]);
+    // The fourth answer, in words: the composer already is it.
+    expect(card.querySelector('.reply-note')?.textContent).toBe('or just reply');
+  });
+
+  it('replaces an archived room’s composer with the banner, and unarchives it there', async () => {
+    listed.push(room('old', { archivedAt: 9 }));
+    pages.old = [message('old', 1, 'other', 'kept')];
+    const store = await show();
+    await store.open('old');
+    await tick();
+    const banner = target.querySelector('.read-only')!;
+    expect(banner.textContent).toContain('This room is archived.');
+    expect(target.querySelector('textarea')).toBeNull();
+    banner.querySelector<HTMLButtonElement>('button')!.click();
+    await vi.waitFor(() =>
+      expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({ archived: false }),
+    );
+    await vi.waitFor(() => expect(store.current?.archivedAt).toBeNull());
+    await vi.waitFor(() => expect(target.querySelector('textarea')).not.toBeNull());
+  });
+
+  it('turns a send the gateway refuses (409) into the same banner', async () => {
+    await show();
+    refuseSend = true;
+    const box = target.querySelector('textarea')!;
+    box.value = 'hello';
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await vi.waitFor(() => expect(target.querySelector('.read-only')).not.toBeNull());
+    expect(target.querySelector('textarea')).toBeNull();
+    expect(target.querySelector('.read-only')?.textContent).toContain('Unarchive');
+  });
+
+  it('marks where a day starts and where the unread messages begin', async () => {
+    pages.general = [message('general', 1), message('general', 2, 'other', 'm1 unread')];
+    await show();
+    expect(target.querySelector('.day')).not.toBeNull();
+    const divider = target.querySelector('.new')!;
+    expect(divider.textContent).toContain('New');
+    expect(divider.getAttribute('aria-label')).toBe('Unread messages start here');
+    // It sits between the read message and the unread one.
+    const order = [
+      ...target.querySelectorAll('.messages > .day, .messages > .new, .messages > article'),
+    ];
+    expect(order.indexOf(divider)).toBeGreaterThan(
+      order.findIndex((item) => item.id === 'message-general-1'),
+    );
+  });
+
+  it('groups the members by what they are doing, and opens a face page on click', async () => {
+    faces.push(face('face_ops', '學校助理', { color: '#5b3a8a' }));
+    const store = await show();
+    store.setFacePresence([
+      { faceId: 'host', state: 'idle' },
+      { faceId: 'face_pm', state: 'waiting', roomId: 'general', line: 'git push origin fix-lint' },
+      { faceId: 'face_ops', state: 'working', roomId: 'topic', line: 'reading Moodle' },
+    ]);
+    await tick();
+    target.querySelector<HTMLButtonElement>('button[aria-label="Members"]')!.click();
+    await tick();
+    const groups = [...target.querySelectorAll('.members section')].map((section) => ({
+      label: section.querySelector('h3')!.textContent,
+      names: [...section.querySelectorAll('.name')].map((item) => item.textContent),
+    }));
+    expect(groups).toEqual([
+      { label: 'Waiting for you — 1', names: ['PM'] },
+      { label: 'Idle — 1', names: ['pirc'] },
+      { label: 'In other rooms — 1', names: ['學校助理'] },
+    ]);
+    const text = target.querySelector('.members')!.textContent;
+    expect(text).toContain('Waiting · git push origin fix-lint');
+    expect(text).toContain('#topic · Working · reading Moodle');
+    // The rows carry no add or hide control (the person's decision keeps the
+    // add and the hidden toggle in the column's own menu).
+    expect(target.querySelector('.members li .small')).toBeNull();
+    target.querySelector<HTMLButtonElement>('.members li .face')!.click();
+    await vi.waitFor(() =>
+      expect(target.querySelector('[aria-label="PM\'s page"]')).not.toBeNull(),
+    );
+  });
+
+  it('opens the room’s threads and its pins beside the log', async () => {
+    pages.general = [
+      message('general', 1),
+      { ...message('general', 2, ME, 'kept one'), pinnedAt: 5 },
+    ];
+    const store = await show();
+    const anchor: RoomMessage = {
+      ...message('general', 3, ME, 'Fix lint'),
+      id: 'anchor',
+      speaker: 'face:host',
+      user: null,
+      threadId: 'thr_1',
+      body: {
+        text: 'Fix lint',
+        worker: {
+          delegationId: 'dlg_1',
+          threadId: 'thr_1',
+          status: 'running',
+          title: 'Fix the lint job',
+          workspace: 'slimeos',
+          workers: 3,
+          readOnly: false,
+          note: null,
+        },
+      },
+    };
+    store.apply(event('room_message', 'general', { message: anchor }));
+    await tick();
+    // The anchor is a thread card: its title, status, workers and thread.
+    const card = target.querySelector('#message-anchor .thread-card')!;
+    expect(card.textContent).toContain('Fix the lint job');
+    expect(card.textContent).toContain('Working (3)');
+    target.querySelector<HTMLButtonElement>('button[aria-label="Threads"]')!.click();
+    await tick();
+    const threads = target.querySelector('aside.panel[aria-label="Threads"]')!;
+    expect(threads.textContent).toContain('Fix the lint job');
+    expect(threads.textContent).toContain('No word yet');
+    target.querySelector<HTMLButtonElement>('button[aria-label="Pinned"]')!.click();
+    await tick();
+    const pins = target.querySelector('aside.panel[aria-label="Pinned"]')!;
+    expect(pins.textContent).toContain('kept one');
+    // An empty panel says so rather than showing nothing.
+    expect(target.querySelector('aside.panel[aria-label="Threads"]')).toBeNull();
+  });
+
+  it('takes files dropped on the composer, and highlights where they land', async () => {
+    await show();
+    const form = target.querySelector<HTMLFormElement>('.composer')!;
+    const shot = new File([new Uint8Array([1, 2, 3])], 'dropped.png', { type: 'image/png' });
+    const drop = new Event('drop', { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, 'dataTransfer', { value: { files: [shot], types: ['Files'] } });
+    const over = new Event('dragover', { bubbles: true, cancelable: true });
+    Object.defineProperty(over, 'dataTransfer', { value: { files: [], types: ['Files'] } });
+    form.dispatchEvent(over);
+    flushSync();
+    expect(over.defaultPrevented).toBe(true);
+    expect(form.classList.contains('dragging')).toBe(true);
+    form.dispatchEvent(drop);
+    flushSync();
+    expect(drop.defaultPrevented).toBe(true);
+    expect(form.classList.contains('dragging')).toBe(false);
+    expect(
+      [...target.querySelectorAll('.files .file-name')].map((item) => item.textContent),
+    ).toEqual(['dropped.png']);
   });
 });
