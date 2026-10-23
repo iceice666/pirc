@@ -6,6 +6,7 @@
    */
   import { onMount } from 'svelte';
   import { ApiError } from '../http';
+  import { t } from '../i18n';
   import { describeAnchor, describeClosed, loopsApi, type OpenLoop } from '../loops';
   import { describeOrigin } from '../memory';
   import { ago } from '../time';
@@ -34,20 +35,22 @@
     [
       describeOrigin(loop.origin),
       loop.why,
-      loop.nextCheck ? `next check: ${loop.nextCheck}` : '',
+      loop.nextCheck ? t('settings.loops.nextCheck', { when: loop.nextCheck }) : '',
       ago(loop.lastTouchedAt),
     ]
       .filter(Boolean)
       .join(' · ');
   const closedDetail = (loop: OpenLoop) =>
     [
-      loop.closedReason ? `Closed: ${describeClosed(loop.closedReason)}` : 'Closed',
+      loop.closedReason
+        ? t('settings.loops.closed', { reason: describeClosed(loop.closedReason) })
+        : t('settings.loops.closedPlain'),
       loop.closedAt ? ago(loop.closedAt) : '',
     ]
       .filter(Boolean)
       .join(' · ');
   const message = (cause: unknown) =>
-    cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
+    cause instanceof ApiError ? cause.message : t('settings.gateway.unreachable');
 
   async function load() {
     try {
@@ -98,21 +101,17 @@
 </script>
 
 <section class="settings-section" aria-labelledby="loops-title">
-  <h3 id="loops-title">Open loops</h3>
-  <p>
-    What is still open between pirc and you: always on its mind until it is resolved. pirc opens and
-    closes them on its own and says so in the room. Past {limit}, the ones without a time that
-    nobody mentioned for the longest go to memory as facts.
-  </p>
+  <h3 id="loops-title">{t('settings.loops.title')}</h3>
+  <p>{t('settings.loops.intro', { limit })}</p>
 
   {#if disabled}
-    <p role="status">Open loops are unavailable in demo mode.</p>
+    <p role="status">{t('settings.loops.demo')}</p>
   {:else if loading}
-    <p role="status">Loading open loops…</p>
+    <p role="status">{t('settings.loops.loading')}</p>
   {:else}
     {#if error}<p class="loops-error" role="alert">{error}</p>{/if}
     {#if open.length}
-      <ul class="loops-list" aria-label="Open loops">
+      <ul class="loops-list" aria-label={t('settings.loops.title')}>
         {#each open as loop (loop.id)}
           <li>
             <div class="loops-row">
@@ -125,20 +124,21 @@
                 class="button ghost small"
                 type="button"
                 disabled={!!busy}
-                onclick={() => act(loop, () => loopsApi.close(loop.id))}>Not needed</button
+                onclick={() => act(loop, () => loopsApi.close(loop.id))}
+                >{t('settings.loops.notNeeded')}</button
               >
             </div>
           </li>
         {/each}
       </ul>
     {:else}
-      <p>Nothing open. Ask pirc to remind you of something, or tell it what is still unresolved.</p>
+      <p>{t('settings.loops.empty')}</p>
     {/if}
 
     {#if closed.length}
       <details class="loops-closed">
-        <summary>Recently closed · {closed.length}</summary>
-        <ul class="loops-list" aria-label="Recently closed">
+        <summary>{t('settings.loops.recentlyClosed', { count: closed.length })}</summary>
+        <ul class="loops-list" aria-label={t('settings.loops.recentlyClosedAria')}>
           {#each closed as loop (loop.id)}
             <li>
               <div class="loops-row">
@@ -150,7 +150,8 @@
                   class="button ghost small"
                   type="button"
                   disabled={!!busy}
-                  onclick={() => act(loop, () => loopsApi.reopen(loop.id))}>Not done yet</button
+                  onclick={() => act(loop, () => loopsApi.reopen(loop.id))}
+                  >{t('settings.loops.notDoneYet')}</button
                 >
               </div>
             </li>

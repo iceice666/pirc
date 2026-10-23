@@ -1,6 +1,8 @@
 <script lang="ts">
   /** The connected nodes: what each machine can do and how busy it is (plan 08). */
   import { ago } from '../../time';
+  import { t } from '../../i18n';
+  import StatusGlyph from '../StatusGlyph.svelte';
   import type { NodeSummary } from '../../types';
 
   interface Props {
@@ -23,49 +25,56 @@
       .join(', ');
   const load = (node: NodeSummary) =>
     node.load
-      ? `${node.load.running} running${node.load.max != null ? ` of ${node.load.max}` : ''}`
+      ? node.load.max != null
+        ? t('engine.runningOf', { count: node.load.running, max: node.load.max })
+        : t('engine.running', { count: node.load.running })
       : '';
 </script>
 
 <section class="settings-section" aria-labelledby="nodes-title">
-  <h3 id="nodes-title">Nodes</h3>
+  <h3 id="nodes-title">{t('engine.section.nodes')}</h3>
   {#if !nodes.length}
-    <p class="muted">No node is connected. Start pirc-node on a machine to give pirc hands.</p>
+    <p class="muted">{t('engine.nodes.empty')}</p>
   {:else}
     <ul class="cards">
       {#each nodes as node (node.id)}
         {@const can = node.capabilities}
-        <li class="card" aria-label="Node {node.id}">
+        <li class="card" aria-label={t('engine.nodes.cardLabel', { name: node.id })}>
           <header>
-            <span class="dot" aria-hidden="true"></span>
+            <StatusGlyph state={node.load?.running ? 'working' : 'idle'} />
             <strong>{node.id}</strong>
-            <span class="muted">connected {ago(node.connectedAt)}</span>
+            <span class="muted">{t('engine.nodes.connected', { when: ago(node.connectedAt) })}</span
+            >
           </header>
           <dl>
             {#if can}
-              <dt>Machine</dt>
+              <dt>{t('engine.nodes.machine')}</dt>
               <dd>{can.os} · {can.arch}</dd>
               <dt>GPU</dt>
-              <dd>{gpus(node) || 'None'}</dd>
-              <dt>Can</dt>
+              <dd>{gpus(node) || t('common.none')}</dd>
+              <dt>{t('engine.nodes.can')}</dt>
               <dd>
-                {[can.browser ? 'browse' : '', can.terminals ? 'open terminals' : '']
+                {[
+                  can.browser ? t('engine.nodes.browse') : '',
+                  can.terminals ? t('engine.nodes.terminals') : '',
+                ]
                   .filter(Boolean)
-                  .join(', ') || 'run agents'}
+                  .join(', ') || t('engine.nodes.agents')}
               </dd>
-              <dt>Sandbox</dt>
+              <dt>{t('engine.nodes.sandbox')}</dt>
               <dd>{can.sandbox.backend} · {can.sandbox.status}</dd>
             {:else}
-              <dt>Machine</dt>
-              <dd class="muted">Not reported</dd>
+              <dt>{t('engine.nodes.machine')}</dt>
+              <dd class="muted">{t('engine.nodes.notReported')}</dd>
             {/if}
             {#if node.load}
-              <dt>Load</dt>
+              <dt>{t('engine.nodes.load')}</dt>
               <dd>{load(node)}</dd>
             {/if}
-            <dt>Workspaces</dt>
+            <dt>{t('engine.nodes.workspaces')}</dt>
             <dd>
-              {node.workspaces.map((workspace) => workspace.displayName).join(', ') || 'None'}
+              {node.workspaces.map((workspace) => workspace.displayName).join(', ') ||
+                t('common.none')}
             </dd>
           </dl>
         </li>
@@ -98,12 +107,6 @@
   header .muted {
     margin-left: auto;
     font-size: 12px;
-  }
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--success);
   }
   dl {
     display: grid;

@@ -2,6 +2,7 @@
   import { Paperclip, Pin } from '@lucide/svelte';
   import { hueOf, initialOf, speakerFace, type Face } from '../../faces';
   import { ApiError } from '../../http';
+  import { locale, t } from '../../i18n';
   import { lineAction } from '../../loops';
   import { describeOrigin, forgetRemembered } from '../../memory';
   import type { ThreadActivity } from '../../room-events';
@@ -17,6 +18,7 @@
     type WorkerAnchor,
   } from '../../workers';
   import Markdown from '../Markdown.svelte';
+  import StatusGlyph, { glyphOf } from '../StatusGlyph.svelte';
 
   interface Props {
     message: RoomMessage;
@@ -48,7 +50,7 @@
   const face = $derived(speakerFace(faces, message.speaker));
   const name = $derived(
     message.speaker === 'user'
-      ? (message.user ?? 'someone')
+      ? (message.user ?? t('common.unknownUser'))
       : (face?.name ??
           (message.speaker === 'face:host' ? 'pirc' : message.speaker.replace(/^face:/, ''))),
   );
@@ -62,11 +64,11 @@
       message.createdAt - previous.createdAt < 5 * 60_000,
   );
   const time = $derived(
-    new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(
+    new Intl.DateTimeFormat(locale(), { hour: '2-digit', minute: '2-digit' }).format(
       message.createdAt,
     ),
   );
-  const fullTime = $derived(new Date(message.createdAt).toLocaleString());
+  const fullTime = $derived(new Date(message.createdAt).toLocaleString(locale()));
   /** A stable hue per speaker; a face may have its own color and avatar. */
   const hue = $derived(hueOf(name));
   const initial = $derived(initialOf(name, face?.avatar));
@@ -77,10 +79,10 @@
   const detail = $derived.by(() => {
     if (!remembered) return '';
     const what =
-      remembered.kind === 'preference'
-        ? 'A preference: always on its mind.'
-        : 'A fact: found again when it matters.';
-    const whose = remembered.user ? ` · for ${remembered.user}` : '';
+      remembered.kind === 'preference' ? t('rooms.memory.preference') : t('rooms.memory.fact');
+    const whose = remembered.user
+      ? ` · ${t('rooms.memory.forUser', { user: remembered.user })}`
+      : '';
     return `${what} ${describeOrigin(remembered.origin ?? '')}${whose}.`;
   });
   let forgetting = $state(false);
@@ -99,7 +101,7 @@
       await loopAction.run();
       loopDone = true;
     } catch (cause) {
-      forgetError = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+      forgetError = cause instanceof ApiError ? cause.message : t('rooms.error.gateway');
     } finally {
       forgetting = false;
     }
@@ -120,7 +122,7 @@
       await wakesApi.cancel(wakeLine.id);
       wakeDone = true;
     } catch (cause) {
-      forgetError = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+      forgetError = cause instanceof ApiError ? cause.message : t('rooms.error.gateway');
     } finally {
       forgetting = false;
     }
@@ -165,7 +167,7 @@
       // The room's stream brings the settled question.
       await workersApi.answer(workerThread, question.interactionId, given);
     } catch (cause) {
-      answerError = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+      answerError = cause instanceof ApiError ? cause.message : t('rooms.error.gateway');
     } finally {
       answering = false;
     }
@@ -179,7 +181,7 @@
       // The anchor and the room say how it ended.
       await workersApi.stop(anchor.delegationId);
     } catch (cause) {
-      forgetError = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+      forgetError = cause instanceof ApiError ? cause.message : t('rooms.error.gateway');
     } finally {
       forgetting = false;
     }
@@ -193,7 +195,7 @@
       // The gateway rewrites the line; the room's stream brings it.
       await forgetRemembered(remembered);
     } catch (cause) {
-      forgetError = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+      forgetError = cause instanceof ApiError ? cause.message : t('rooms.error.gateway');
     } finally {
       forgetting = false;
     }
@@ -219,18 +221,20 @@
         aria-expanded={expanded}
         onclick={() => (expanded = !expanded)}>{message.body.text ?? ''}</button
       >
-      <button type="button" class="link" disabled={forgetting} onclick={dontKeep}>Don't keep</button
+      <button type="button" class="link" disabled={forgetting} onclick={dontKeep}
+        >{t('rooms.memory.dontKeep')}</button
       >
     {:else if wakeLine}
       <span>{message.body.text ?? ''}</span>
       {#if !wakeDone}
-        <button type="button" class="link" disabled={forgetting} onclick={cancelWake}>Cancel</button
+        <button type="button" class="link" disabled={forgetting} onclick={cancelWake}
+          >{t('common.cancel')}</button
         >
       {/if}
     {:else if message.body.worker && workerThread}
       <span>{message.body.text ?? ''}</span>
       <button type="button" class="link" onclick={() => onopenthread?.(workerThread)}
-        >Open the thread</button
+        >{t('rooms.worker.openThread')}</button
       >
     {:else if loopAction}
       <span>{message.body.text ?? ''}</span>
@@ -243,7 +247,9 @@
       <span>{message.body.text ?? ''}</span>
     {/if}
     {#if details}
-      <a class="link quiet" href={engineLink(details)} title="See it in the engine">Details</a>
+      <a class="link quiet" href={engineLink(details)} title={t('rooms.details.title')}
+        >{t('rooms.details.label')}</a
+      >
     {/if}
     <time datetime={new Date(message.createdAt).toISOString()} title={fullTime}>{time}</time>
   </div>
@@ -259,7 +265,9 @@
     class="message"
     class:continued={sameRun}
     class:question={message.kind === 'question'}
-    aria-label="{name}{message.kind === 'question' ? ' asks' : ''}, {fullTime}"
+    aria-label="{message.kind === 'question'
+      ? t('rooms.message.asks', { name })
+      : name}, {fullTime}"
     aria-busy={message.body.streaming ? 'true' : undefined}
   >
     <div class="gutter">
@@ -293,8 +301,9 @@
             <span class="name">{name}</span>
           {/if}
           <time datetime={new Date(message.createdAt).toISOString()} title={fullTime}>{time}</time>
-          {#if message.kind === 'question'}<span class="asks">asks you</span>{/if}
-          {#if message.pinnedAt}<Pin size={12} aria-label="Pinned" />{/if}
+          {#if message.kind === 'question'}<span class="asks">{t('rooms.message.asksYou')}</span
+            >{/if}
+          {#if message.pinnedAt}<Pin size={12} aria-label={t('common.pinned')} />{/if}
         </header>
       {/if}
       {#if message.body.text || message.body.streaming}
@@ -324,27 +333,27 @@
               type="button"
               class="button dark small"
               disabled={answering}
-              onclick={() => answerQuestion({ confirmed: true })}>Yes</button
+              onclick={() => answerQuestion({ confirmed: true })}>{t('common.yes')}</button
             >
             {#if question.request.allowAgain}
               <button
                 type="button"
                 class="button ghost small"
                 disabled={answering}
-                title="The same action, in the same place, runs without asking for the rest of the worker's session"
+                title={t('rooms.question.allowAgainTitle')}
                 onclick={() => answerQuestion({ confirmed: true, again: true })}
-                >Allow again this session</button
+                >{t('rooms.question.allowAgain')}</button
               >
             {/if}
             <button
               type="button"
               class="button ghost small"
               disabled={answering}
-              onclick={() => answerQuestion({ confirmed: false })}>No</button
+              onclick={() => answerQuestion({ confirmed: false })}>{t('common.no')}</button
             >
             {#if workerThread}
               <button type="button" class="link" onclick={() => onopenthread?.(workerThread)}
-                >Thread</button
+                >{t('rooms.worker.thread')}</button
               >
             {/if}
           </div>
@@ -355,15 +364,17 @@
       {/if}
       {#if anchor}
         <div class="worker {anchor.status}">
-          <span class="dot" aria-hidden="true"></span>
+          <StatusGlyph state={glyphOf(anchor.status)} />
           <span>{statusLabel(anchor.status, anchor.workers)}</span>
-          {#if anchor.note}<span class="muted">· waits for {anchor.note}</span>{/if}
+          {#if anchor.note}<span class="muted"
+              >· {t('rooms.worker.waitsFor', { note: anchor.note })}</span
+            >{/if}
           <button type="button" class="link" onclick={() => onopenthread?.(anchor.threadId)}
-            >Thread</button
+            >{t('rooms.worker.thread')}</button
           >
           {#if stoppable(anchor.status)}
             <button type="button" class="link" disabled={forgetting} onclick={stopWorker}
-              >Stop</button
+              >{t('rooms.worker.stop')}</button
             >
           {/if}
         </div>
@@ -373,7 +384,7 @@
         {#if forgetError}<p class="worker-error" role="alert">{forgetError}</p>{/if}
       {:else if message.body.worker && 'report' in message.body.worker && workerThread}
         <button type="button" class="link small" onclick={() => onopenthread?.(workerThread)}
-          >Open the thread</button
+          >{t('rooms.worker.openThread')}</button
         >
       {/if}
       {#each message.body.attachments ?? [] as attachment (attachment.id)}
@@ -386,13 +397,13 @@
             <img
               class="image"
               src={roomsApi.uploadUrl(message.roomId, attachment.id)}
-              alt="Attachment from {name}"
+              alt={t('rooms.attachment.alt', { name })}
               loading="lazy"
             />
           </a>
         {:else}
           <a class="file" href={roomsApi.uploadUrl(message.roomId, attachment.id)} download
-            ><Paperclip size={14} />{attachment.filename ?? 'file'}</a
+            ><Paperclip size={14} />{attachment.filename ?? t('rooms.attachment.file')}</a
           >
         {/if}
       {/each}
@@ -401,8 +412,8 @@
       <button
         type="button"
         class="pin"
-        aria-label={message.pinnedAt ? 'Unpin' : 'Pin'}
-        title={message.pinnedAt ? 'Unpin' : 'Pin'}
+        aria-label={message.pinnedAt ? t('rooms.pin.unpin') : t('rooms.pin.pin')}
+        title={message.pinnedAt ? t('rooms.pin.unpin') : t('rooms.pin.pin')}
         onclick={() => onpin(message, !message.pinnedAt)}><Pin size={14} /></button
       >
     {/if}
@@ -611,22 +622,6 @@
     border: 1px solid var(--line-dark);
     border-radius: 999px;
     font-size: 12px;
-  }
-  .worker .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--muted);
-  }
-  .worker.running .dot,
-  .worker.waiting_input .dot {
-    background: var(--accent);
-  }
-  .worker.completed .dot {
-    background: var(--success, #2e9d5b);
-  }
-  .worker.failed .dot {
-    background: var(--danger);
   }
   .muted {
     color: var(--muted);

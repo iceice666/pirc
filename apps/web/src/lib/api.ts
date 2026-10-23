@@ -1,4 +1,5 @@
 import { ApiError, request } from './http';
+import { t } from './i18n';
 import { getClientId } from './storage';
 import type {
   BackendModel,
@@ -163,7 +164,7 @@ export const backendApi = {
     });
     return result.ok
       ? result
-      : { ...result, message: safeBackendText(result.message, 'The connection test failed.') };
+      : { ...result, message: safeBackendText(result.message, t('settings.backend.testFailed')) };
   },
   setDefault: (model: BackendSettingsSnapshot['defaultModel'] | null) =>
     backendRequest<BackendSettingsSnapshot>('/api/providers/default-model', {

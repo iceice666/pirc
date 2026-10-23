@@ -6,6 +6,7 @@
  * This is the thread's API and the words the room uses for a worker.
  */
 import { request } from './http';
+import { t } from './i18n';
 
 export type WorkerStatus = 'queued' | 'running' | 'waiting_input' | 'completed' | 'failed';
 
@@ -124,19 +125,21 @@ export function questionOutcome(question: {
   answeredBy?: string;
   answer?: QuestionAnswer;
 }): string {
-  if (question.status === 'cancelled') return 'No longer asked.';
-  if (question.status === 'expired') return 'Nobody answered in time: the worker was told no.';
+  if (question.status === 'cancelled') return t('common.question.cancelled');
+  if (question.status === 'expired') return t('common.question.expired');
   const answer = question.answer;
   const how =
     answer && 'confirmed' in answer
       ? answer.confirmed
         ? answer.again
-          ? 'allowed for the rest of its session'
-          : 'allowed'
-        : 'declined'
-      : 'answered';
-  const capitalized = how[0].toUpperCase() + how.slice(1);
-  return question.answeredBy ? `${capitalized} by ${question.answeredBy}.` : `${capitalized}.`;
+          ? t('common.question.allowedAgain')
+          : t('common.question.allowed')
+        : t('common.question.declined')
+      : t('common.question.answered');
+  const capitalized = how[0]!.toUpperCase() + how.slice(1);
+  return question.answeredBy
+    ? t('common.question.by', { answer: capitalized, name: question.answeredBy })
+    : t('common.question.done', { answer: capitalized });
 }
 
 const json = (body: unknown): RequestInit => ({ body: JSON.stringify(body) });
@@ -174,15 +177,15 @@ export const workersApi = {
 export function statusLabel(status: WorkerStatus, count = 1): string {
   switch (status) {
     case 'queued':
-      return 'Waiting its turn';
+      return t('common.status.queued');
     case 'running':
-      return count > 1 ? `Working (${count})` : 'Working';
+      return count > 1 ? t('common.status.workingCount', { count }) : t('common.status.working');
     case 'waiting_input':
-      return 'Asking you';
+      return t('common.status.asking');
     case 'completed':
-      return 'Done';
+      return t('common.status.done');
     case 'failed':
-      return 'Failed';
+      return t('common.status.failed');
   }
 }
 
@@ -196,7 +199,7 @@ export function stoppable(status: WorkerStatus): boolean {
  * or the face that handed the work out.
  */
 export function speakerName(message: Pick<ThreadMessage, 'speaker' | 'user'>): string {
-  if (message.speaker === 'user') return message.user ?? 'someone';
+  if (message.speaker === 'user') return message.user ?? t('common.unknownUser');
   if (message.speaker.startsWith('face:')) {
     const face = message.speaker.slice(5);
     return face === 'host' ? 'pirc' : face;

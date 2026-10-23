@@ -3,6 +3,7 @@
  * room's latest turns, newest first. Its prompts live with the faces.
  */
 import { request } from './http';
+import { t } from './i18n';
 
 export interface BrainTurn {
   id: string;
@@ -34,25 +35,27 @@ export const brainApi = {
 
 /** "1.2k tokens" */
 export function tokens(count: number | undefined): string {
-  if (!count) return '0 tokens';
-  return count >= 1000 ? `${(count / 1000).toFixed(1)}k tokens` : `${count} tokens`;
+  if (!count) return t('engine.tokens.none');
+  return count >= 1000
+    ? t('engine.tokens.k', { count: (count / 1000).toFixed(1) })
+    : t('engine.tokens.count', { count });
 }
 
 /** What became of a turn, in words. */
 export function turnOutcome(turn: BrainTurn): string {
   switch (turn.outcome) {
     case null:
-      return 'Running';
+      return t('engine.turn.running');
     case 'done':
-      return 'Done';
+      return t('common.status.done');
     case 'failed':
-      return 'Failed';
+      return t('common.status.failed');
     case 'aborted':
-      return 'Stopped';
+      return t('engine.turn.stopped');
     case 'timeout':
-      return 'Timed out';
+      return t('engine.turn.timedOut');
     case 'preempted':
-      return 'Cut short by new messages';
+      return t('engine.turn.preempted');
     default:
       return turn.outcome;
   }

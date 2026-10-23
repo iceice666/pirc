@@ -3,21 +3,23 @@
  * `/engine` (`?session=`, `?workspace=`, `?open=<section>`). Notifications and
  * links name one of them (public/sw.js keeps its own copy of these rules).
  */
+import type { MessageKey } from './i18n/messages';
+
 export const ENGINE_PATH = '/engine';
 
 export function isEnginePath(pathname: string): boolean {
   return pathname === ENGINE_PATH || pathname.startsWith(`${ENGINE_PATH}/`);
 }
 
-/** The engine's front page, a tab each (`/engine?open=<id>`). */
+/** The engine's front page, a tab each (`/engine?open=<id>`); `key` names its title. */
 export const OVERVIEW_SECTIONS = [
-  { id: 'nodes', label: 'Nodes' },
-  { id: 'brain', label: 'Brain' },
-  { id: 'loops', label: 'Open loops' },
-  { id: 'wakes', label: 'Wakes' },
-  { id: 'memory', label: 'Memory' },
-  { id: 'sources', label: 'Sources' },
-] as const;
+  { id: 'nodes', key: 'engine.section.nodes' },
+  { id: 'brain', key: 'engine.section.brain' },
+  { id: 'loops', key: 'engine.section.loops' },
+  { id: 'wakes', key: 'engine.section.wakes' },
+  { id: 'memory', key: 'engine.section.memory' },
+  { id: 'sources', key: 'engine.section.sources' },
+] as const satisfies readonly { id: string; key: MessageKey }[];
 export type OverviewSection = (typeof OVERVIEW_SECTIONS)[number]['id'];
 
 export function isOverviewSection(value: unknown): value is OverviewSection {

@@ -4,6 +4,8 @@
  * household's, and the repositories' workspace notes).
  */
 import { request } from './http';
+import { t } from './i18n';
+import type { MessageKey } from './i18n/messages';
 
 export interface MemorySources {
   /** The room it was said in. */
@@ -97,33 +99,39 @@ export const memoryApi = {
 
 /** Where a fact or preference came from, for people. */
 export function describeOrigin(origin: string): string {
-  if (origin === 'user') return 'From your words';
-  if (origin === 'om:promoted') return 'From an earlier conversation';
-  if (origin === 'tool:assistant') return 'From the old assistant';
-  if (origin.startsWith('tool:')) return `From what it read (${origin.slice(5)})`;
-  return origin ? `From ${origin}` : '';
+  if (origin === 'user') return t('settings.memory.originUser');
+  if (origin === 'om:promoted') return t('settings.memory.originEarlier');
+  if (origin === 'tool:assistant') return t('settings.memory.originAssistant');
+  if (origin.startsWith('tool:'))
+    return t('settings.memory.originRead', { source: origin.slice(5) });
+  return origin ? t('settings.memory.originOther', { origin }) : '';
 }
 
 /** Where a preference's text came from, for people. */
 export function describeOrigins(origins: string[]): string {
-  return origins.includes('user') ? 'From your words' : describeOrigin(origins[0] ?? '');
+  return origins.includes('user')
+    ? t('settings.memory.originUser')
+    : describeOrigin(origins[0] ?? '');
 }
 
-const OPS: Record<MemoryVersion['op'], string> = {
-  add: 'Added',
-  replace: 'Changed',
-  remove: 'Removed',
-  restore: 'Restored',
-  forget: 'Forgotten',
+/** How a version changed it, in one word. */
+const OPS: Record<MemoryVersion['op'], MessageKey> = {
+  add: 'settings.memory.opAdd',
+  replace: 'settings.memory.opReplace',
+  remove: 'settings.memory.opRemove',
+  restore: 'settings.memory.opRestore',
+  forget: 'settings.memory.opForget',
 };
+
 /** "Added by pirc", "Restored by you". */
 export function describeVersion(version: MemoryVersion) {
   const who = version.actor.startsWith('face:')
-    ? 'pirc'
+    ? t('settings.memory.whoPirc')
     : version.actor === 'om'
-      ? 'pirc, from an earlier conversation'
-      : 'you';
-  return `${OPS[version.op] ?? version.op} by ${who}`;
+      ? t('settings.memory.whoEarlier')
+      : t('settings.memory.whoYou');
+  const op = OPS[version.op] ? t(OPS[version.op]) : version.op;
+  return t('settings.memory.version', { op, who });
 }
 
 /** What a room line says it remembered (`body.memory`). */

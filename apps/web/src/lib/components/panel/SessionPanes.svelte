@@ -20,6 +20,8 @@
   import { rovingFocus } from '../../a11y';
   import { engine } from '../../engine.svelte';
   import { onFilePreviewRequest, type FileTarget } from '../../file-links';
+  import { t } from '../../i18n';
+  import type { MessageKey } from '../../i18n/messages';
   import type { PanelTab } from '../../panel-api';
   import FilesTab from './FilesTab.svelte';
   import GitTab from './GitTab.svelte';
@@ -41,14 +43,15 @@
   /** Tabs visited so far; they stay mounted. */
   const mounted = new SvelteSet<PanelTab>();
 
-  const tabs: Array<{ id: PanelTab; label: string; icon: typeof FolderTree }> = [
-    { id: 'files', label: 'Files', icon: FolderTree },
-    { id: 'git', label: 'Git', icon: GitBranch },
-    { id: 'memory', label: 'Memory', icon: Brain },
-    { id: 'context', label: 'Context', icon: ScanText },
-    { id: 'tasks', label: 'Tasks', icon: ListChecks },
-    { id: 'terminal', label: 'Terminal', icon: SquareTerminal },
-    { id: 'browser', label: 'Browser', icon: Globe },
+  /** Tab labels live here as message keys; the markup translates them. */
+  const tabs: Array<{ id: PanelTab; label: MessageKey; icon: typeof FolderTree }> = [
+    { id: 'files', label: 'panel.tab.files', icon: FolderTree },
+    { id: 'git', label: 'panel.tab.git', icon: GitBranch },
+    { id: 'memory', label: 'panel.tab.memory', icon: Brain },
+    { id: 'context', label: 'panel.tab.context', icon: ScanText },
+    { id: 'tasks', label: 'panel.tab.tasks', icon: ListChecks },
+    { id: 'terminal', label: 'panel.tab.terminal', icon: SquareTerminal },
+    { id: 'browser', label: 'panel.tab.browser', icon: Globe },
   ];
 
   const sessionId = $derived(engine.sessionState?.session.id ?? '');
@@ -94,11 +97,11 @@
   } as Record<string, number>);
 </script>
 
-<section class="session-panes" aria-label="Session">
+<section class="session-panes" aria-label={t('panel.session')}>
   <div
     class="panel-tabs"
     role="tablist"
-    aria-label="Panes"
+    aria-label={t('panel.panes')}
     use:rovingFocus={{ selector: '[role="tab"]', activate: true }}
   >
     {#each shownTabs as item (item.id)}
@@ -110,13 +113,13 @@
         class:active={tab === item.id}
         aria-selected={tab === item.id}
         tabindex={tab === item.id ? 0 : -1}
-        title={item.label}
+        title={t(item.label)}
         onclick={() => (tab = item.id)}
       >
         <item.icon size={16} />
-        <span class="tab-label">{item.label}</span>
+        <span class="tab-label">{t(item.label)}</span>
         {#if badge[item.id]}<span class="tab-dot" aria-hidden="true"></span><span class="sr-only"
-            >(activity)</span
+            >{t('panel.tab.activity')}</span
           >{/if}
       </button>
     {/each}
@@ -124,7 +127,7 @@
 
   <div class="panel-body">
     {#if engine.usingDemo}
-      <p class="panel-empty">Connect to a gateway to use this panel.</p>
+      <p class="panel-empty">{t('panel.demo')}</p>
     {:else if sessionId}
       {#each shownTabs as item (item.id)}
         {#if mounted.has(item.id)}

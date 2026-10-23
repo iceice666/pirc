@@ -4,6 +4,7 @@
   import { engine } from '../../engine.svelte';
   import { errorMessage } from '../../errors';
   import type { FileTarget } from '../../file-links';
+  import { locale, t } from '../../i18n';
   import { Loader } from '../../loader.svelte';
   import {
     highlightCode,
@@ -50,7 +51,7 @@
     if (!file) fileLoader.error = '';
     const result = await dirLoader.run(
       (signal) => panelApi.files(id, path, signal),
-      'Unable to list directory.',
+      t('panel.files.couldNotList'),
     );
     if (!result || id !== sessionId) return;
     dir = result.path;
@@ -67,7 +68,7 @@
     const id = sessionId;
     const result = await fileLoader.run(
       (signal) => panelApi.file(id, path, signal),
-      (cause) => `${path}: ${errorMessage(cause, 'Unable to open file.')}`,
+      (cause) => `${path}: ${errorMessage(cause, t('panel.files.couldNotOpen'))}`,
     );
     if (id !== sessionId) return;
     if (!result) {
@@ -217,7 +218,7 @@
       <button
         class="icon-button small"
         type="button"
-        aria-label="Back to folder"
+        aria-label={t('panel.files.backToFolder')}
         onclick={closeFile}><ArrowLeft size={16} /></button
       >
       <span class="drill-title" title={file.path}
@@ -229,7 +230,7 @@
         <button
           class="icon-button small"
           type="button"
-          aria-label={rendered ? 'Show source' : 'Show rendered'}
+          aria-label={rendered ? t('panel.files.showSource') : t('panel.files.showRendered')}
           onclick={() => (rendered = !rendered)}
         >
           {#if rendered}<Code size={15} />{:else}<Eye size={15} />{/if}
@@ -238,9 +239,9 @@
     </div>
     <p class="file-meta">
       {size(file.size)}{#if showImage && imageSize}
-        · {imageSize.width} × {imageSize.height}{/if} · modified {new Date(
-        file.modifiedAt,
-      ).toLocaleString()}
+        · {imageSize.width} × {imageSize.height}{/if} · {t('panel.files.modified', {
+        time: new Date(file.modifiedAt).toLocaleString(locale()),
+      })}
     </p>
     {#if showImage}
       <div class="image-view">
@@ -256,7 +257,7 @@
       </div>
     {:else if file.binary}
       <p class="panel-empty">
-        {file.imageTooLarge ? 'Image too large to preview.' : 'Binary file — not shown.'}
+        {file.imageTooLarge ? t('panel.files.imageTooLarge') : t('panel.files.binary')}
       </p>
     {:else if isMarkdown && rendered}
       <div class="doc">
@@ -282,12 +283,12 @@
       </div>
     {/if}
     {#if file.truncated && !showImage && !file.binary}<p class="panel-empty">
-        Showing the first 1 MB.
+        {t('panel.files.truncated')}
       </p>{/if}
   {:else}
     <div class="toolbar">
-      <nav class="crumbs" aria-label="Folder">
-        <button type="button" onclick={() => listDir('')}>workspace</button>
+      <nav class="crumbs" aria-label={t('panel.files.folder')}>
+        <button type="button" onclick={() => listDir('')}>{t('panel.files.workspace')}</button>
         {#each crumbs as crumb, index}
           <ChevronRight size={12} />
           <button type="button" onclick={() => listDir(crumbs.slice(0, index + 1).join('/'))}
@@ -298,7 +299,7 @@
       <button
         class="icon-button small"
         type="button"
-        aria-label="Refresh"
+        aria-label={t('common.refresh')}
         onclick={reload}
         disabled={dirLoader.loading}
         ><RefreshCw class={dirLoader.loading ? 'spin' : ''} size={15} /></button
@@ -333,9 +334,9 @@
       {/each}
     </ul>
     {#if !dirLoader.loading && !entries.length && !error}<p class="panel-empty">
-        Empty folder.
+        {t('panel.files.empty')}
       </p>{/if}
-    {#if truncated}<p class="panel-empty">Showing the first 2,000 entries.</p>{/if}
+    {#if truncated}<p class="panel-empty">{t('panel.files.truncatedEntries')}</p>{/if}
   {/if}
 </div>
 

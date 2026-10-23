@@ -1,6 +1,7 @@
 <script lang="ts">
   import { CircleAlert, Clock3, RefreshCw, ShieldCheck, ShieldOff, X } from '@lucide/svelte';
   import { onMount } from 'svelte';
+  import { t } from '../../i18n';
   import Modal from './Modal.svelte';
   import {
     nativeManagementApi,
@@ -35,7 +36,9 @@
   function remainingLabel(): string {
     const minutes = Math.floor(remainingSeconds / 60);
     const seconds = remainingSeconds % 60;
-    return minutes ? `${minutes}m ${seconds}s` : `${seconds}s`;
+    return minutes
+      ? t('settings.native.remainingMinSec', { minutes, seconds })
+      : t('settings.native.remainingSec', { seconds });
   }
 
   async function fetchStatus(): Promise<void> {
@@ -53,7 +56,7 @@
     try {
       await fetchStatus();
     } catch {
-      if (alive) error = 'Unable to check this request. Check your connection and try again.';
+      if (alive) error = t('settings.native.checkFailed');
     } finally {
       checking = false;
       loading = false;
@@ -69,7 +72,7 @@
       else if (action === 'deny') await nativeManagementApi.deny(requestId);
       else await nativeManagementApi.revoke(requestId);
     } catch {
-      if (alive) error = 'Could not update this request. Check its status, then try again.';
+      if (alive) error = t('settings.native.updateFailed');
       try {
         await fetchStatus();
       } catch {
@@ -82,9 +85,7 @@
     try {
       await fetchStatus();
     } catch {
-      if (alive)
-        error =
-          'The change was sent, but its status could not be confirmed. Retry the status check.';
+      if (alive) error = t('settings.native.unconfirmed');
     } finally {
       busy = false;
     }
@@ -114,83 +115,85 @@
 <Modal bind:open labelledby="native-management-title" class="native-management-dialog">
   <header>
     <div>
-      <span class="eyebrow">Temporary access</span>
-      <h2 id="native-management-title">Review management request</h2>
+      <span class="eyebrow">{t('settings.native.eyebrow')}</span>
+      <h2 id="native-management-title">{t('settings.native.title')}</h2>
     </div>
-    <button class="icon-button" type="button" aria-label="Close" onclick={() => (open = false)}
-      ><X size={19} /></button
+    <button
+      class="icon-button"
+      type="button"
+      aria-label={t('common.close')}
+      onclick={() => (open = false)}><X size={19} /></button
     >
   </header>
 
   {#if loading && !snapshot}
     <p class="state-line" role="status">
-      <RefreshCw class="spin" size={16} /> Checking this request…
+      <RefreshCw class="spin" size={16} />
+      {t('settings.native.checking')}
     </p>
   {:else if !snapshot}
     <div class="request-error" role="alert">
       <CircleAlert size={17} />
-      <p>{error || 'Unable to check this request. Check your connection and try again.'}</p>
+      <p>{error || t('settings.native.checkFailed')}</p>
     </div>
     <footer>
       <button class="button primary" type="button" disabled={checking} onclick={() => refresh()}>
-        {#if checking}<RefreshCw class="spin" size={15} />{/if}Retry
+        {#if checking}<RefreshCw class="spin" size={15} />{/if}{t('common.retry')}
       </button>
     </footer>
   {:else}
     <p class="requesting">
-      <strong>{snapshot.deviceName}</strong> is requesting management access.
+      <strong>{snapshot.deviceName}</strong>
+      {t('settings.native.requestingRest')}
     </p>
 
     <section class="permissions" aria-labelledby="native-management-permissions">
-      <h3 id="native-management-permissions">Requested permissions</h3>
+      <h3 id="native-management-permissions">{t('settings.native.permissions')}</h3>
       {#if snapshot.capabilities.includes('providers')}
         <div class="permission-row">
           <span class="permission-icon"><ShieldCheck size={17} /></span>
-          <p>
-            Manage model providers, including adding, editing, and removing providers, and signing
-            in or out of subscription accounts. This can change saved provider credentials.
-          </p>
+          <p>{t('settings.native.permProviders')}</p>
         </div>
       {/if}
       {#if snapshot.capabilities.includes('devices')}
         <div class="permission-row">
           <span class="permission-icon"><ShieldOff size={17} /></span>
-          <p>View, pair, and revoke connected devices.</p>
+          <p>{t('settings.native.permDevices')}</p>
         </div>
       {/if}
       {#if snapshot.capabilities.length === 0}
-        <p class="missing-permissions">
-          No supported permissions were listed. This request cannot be approved.
-        </p>
+        <p class="missing-permissions">{t('settings.native.noPermissions')}</p>
       {/if}
     </section>
 
     {#if snapshot.status === 'pending'}
       <p class="expiry">
-        <Clock3 size={15} /> This request expires in <strong>{remainingLabel()}</strong>. If
-        approved, access lasts up to 15 minutes after the device claims it.
+        <Clock3 size={15} />
+        {t('settings.native.expiryLead')} <strong>{remainingLabel()}</strong>{t(
+          'settings.native.expiryTail',
+        )}
       </p>
       {#if expiredLocally}<p class="status-note" role="status">
-          The request may have expired. Checking for an updated status…
+          {t('settings.native.maybeExpired')}
         </p>{/if}
     {:else if snapshot.status === 'approved'}
       <p class="status-note" role="status">
-        <ShieldCheck size={16} /> Approved. The device can claim temporary access. This approval expires
-        in
-        <strong>{remainingLabel()}</strong>.
+        <ShieldCheck size={16} />
+        {t('settings.native.approvedLead')}
+        <strong>{remainingLabel()}</strong>{t('settings.native.approvedTail')}
       </p>
     {:else if snapshot.status === 'claimed'}
       <p class="status-note active" role="status">
         <ShieldCheck size={16} />
-        {snapshot.deviceName} has claimed temporary access. It expires in
-        <strong>{remainingLabel()}</strong>.
+        {t('settings.native.claimedLead', { device: snapshot.deviceName })}
+        <strong>{remainingLabel()}</strong>{t('settings.native.claimedTail')}
       </p>
     {:else if snapshot.status === 'denied'}
-      <p class="status-note" role="status">This request was denied.</p>
+      <p class="status-note" role="status">{t('settings.native.denied')}</p>
     {:else if snapshot.status === 'revoked'}
-      <p class="status-note" role="status">Temporary access was revoked.</p>
+      <p class="status-note" role="status">{t('settings.native.revokedAccess')}</p>
     {:else}
-      <p class="status-note" role="status">This request or temporary access has expired.</p>
+      <p class="status-note" role="status">{t('settings.native.expired')}</p>
     {/if}
 
     {#if error}
@@ -203,7 +206,7 @@
           disabled={checking || busy}
           onclick={() => refresh()}
         >
-          {#if checking}<RefreshCw class="spin" size={14} />{/if}Retry status check
+          {#if checking}<RefreshCw class="spin" size={14} />{/if}{t('settings.native.retryStatus')}
         </button>
       </div>
     {/if}
@@ -214,20 +217,23 @@
           class="button ghost"
           type="button"
           disabled={busy || loading || expiredLocally}
-          onclick={() => update('deny')}>{busy ? 'Updating…' : 'Deny'}</button
+          onclick={() => update('deny')}
+          >{busy ? t('settings.native.updating') : t('settings.native.deny')}</button
         >
         <button
           class="button primary"
           type="button"
           disabled={busy || loading || !canApprove}
-          onclick={() => update('approve')}>{busy ? 'Updating…' : 'Approve for 15 minutes'}</button
+          onclick={() => update('approve')}
+          >{busy ? t('settings.native.updating') : t('settings.native.approve')}</button
         >
       {:else if snapshot.status === 'approved' || snapshot.status === 'claimed'}
         <button
           class="button revoke"
           type="button"
           disabled={busy || loading || expiredLocally}
-          onclick={() => update('revoke')}>{busy ? 'Updating…' : 'Revoke access'}</button
+          onclick={() => update('revoke')}
+          >{busy ? t('settings.native.updating') : t('settings.native.revokeAccess')}</button
         >
       {/if}
     </footer>
@@ -271,7 +277,7 @@
     color: var(--text-2);
     font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
   }
   .permission-row {

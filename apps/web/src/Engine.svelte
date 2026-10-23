@@ -33,6 +33,7 @@
   import { activateUpdate, registerPwa } from './lib/pwa';
   import { loadLayout, saveLayout } from './lib/storage';
   import { motion } from './lib/motion';
+  import { t } from './lib/i18n';
   import { trackViewportHeight } from './lib/viewport';
 
   /**
@@ -226,7 +227,7 @@
     {:else if engine.loading}
       <div class="loading-state">
         <span class="large-mark"><Sparkles size={24} /></span>
-        <p>Connecting to your sessions…</p>
+        <p>{t('engine.loading')}</p>
       </div>
     {:else if sessionState}
       <header class="topbar">
@@ -234,8 +235,8 @@
           <button
             class="sidebar-expand icon-button"
             type="button"
-            aria-label="Show sidebar"
-            title="Show sidebar"
+            aria-label={t('engine.header.showSidebar')}
+            title={t('engine.header.showSidebar')}
             transition:fade={{ duration: motion(160) }}
             onclick={() => (sidebarCollapsed = false)}><PanelLeftOpen size={19} /></button
           >
@@ -245,10 +246,12 @@
             {#if engine.activeWorkspace}<button
                 class="crumb"
                 type="button"
-                title="Open {engine.activeWorkspace.displayName}"
+                title={t('engine.header.openWorkspace', {
+                  name: engine.activeWorkspace.displayName,
+                })}
                 onclick={() => openWorkspace(engine.activeWorkspace!.id)}
                 >{engine.activeWorkspace.displayName}</button
-              >{:else}<span>Workspace</span>{/if}<span>/</span><span
+              >{:else}<span>{t('engine.workspace.title')}</span>{/if}<span>/</span><span
               >{sessionState.session.name}</span
             >
           </div>
@@ -257,7 +260,7 @@
             <a
               class="origin-chip"
               href="/?room={encodeURIComponent(origin.roomId)}"
-              title="Open the room pirc called this worker in"
+              title={t('engine.header.openOriginRoom')}
               ><Forward size={13} /><span>Worker · {origin.title}</span></a
             >
           {/if}
@@ -267,8 +270,9 @@
               class="origin-chip unsandboxed"
               role="status"
               title={sessionState.sandbox.reason
-                ? `Not sandboxed: ${sessionState.sandbox.reason}`
-                : 'Not sandboxed'}><ShieldOff size={13} /><span>Not sandboxed</span></span
+                ? t('engine.header.notSandboxedReason', { reason: sessionState.sandbox.reason })
+                : t('engine.header.notSandboxed')}
+              ><ShieldOff size={13} /><span>{t('engine.header.notSandboxed')}</span></span
             >
           {/if}
         </div>
@@ -279,16 +283,19 @@
             class:reconnecting={connection === 'reconnecting'}
             class="connection-pill"
           >
-            {#if connection === 'connected'}<Radio size={13} /> Live{:else if connection === 'offline'}<CloudOff
-                size={13}
-              /> Offline{:else}<RefreshCw class="spin" size={13} /> Reconnecting{/if}
+            {#if connection === 'connected'}<Radio size={13} />
+              {t('engine.header.live')}{:else if connection === 'offline'}<CloudOff size={13} />
+              {t('common.status.offline')}{:else}<RefreshCw class="spin" size={13} />
+              {t('common.status.reconnecting')}{/if}
           </span>
           {#if !hasControl}
             <button class="button takeover" type="button" onclick={() => engine.takeControl()}
-              ><ShieldCheck size={15} /> Take control</button
+              ><ShieldCheck size={15} /> {t('engine.header.takeControl')}</button
             >
           {:else}
-            <span class="control-pill"><ShieldCheck size={14} /> In control</span>
+            <span class="control-pill"
+              ><ShieldCheck size={14} /> {t('engine.header.inControl')}</span
+            >
           {/if}
         </div>
       </header>
@@ -297,7 +304,7 @@
         <div class="error-banner" role="alert">
           <CircleAlert size={16} /><span>{engine.pageError}</span><button
             type="button"
-            aria-label="Dismiss error"
+            aria-label={t('engine.header.dismissError')}
             onclick={() => (engine.pageError = '')}><X size={15} /></button
           >
         </div>
@@ -305,9 +312,12 @@
       {#if !hasControl}
         <div class="viewer-banner">
           <span
-            >You’re viewing this session. {sessionState.control.holderName ?? 'Another device'} currently
-            has control.</span
-          ><button type="button" onclick={() => engine.takeControl()}>Take control</button>
+            >{t('engine.viewer.banner', {
+              name: sessionState.control.holderName ?? t('engine.viewer.anotherDevice'),
+            })}</span
+          ><button type="button" onclick={() => engine.takeControl()}
+            >{t('engine.header.takeControl')}</button
+          >
         </div>
       {/if}
 
@@ -315,7 +325,7 @@
     {:else}
       <div class="loading-state">
         <CircleAlert size={24} />
-        <p>No session could be loaded.</p>
+        <p>{t('engine.noSession')}</p>
       </div>
     {/if}
   </main>
@@ -342,16 +352,18 @@
 {#if updateRegistration}
   <div class="update-toast" role="status">
     <Download size={18} />
-    <div><strong>Update ready</strong><span>The page reloads; your draft is kept.</span></div>
+    <div>
+      <strong>{t('engine.update.ready')}</strong><span>{t('engine.update.note')}</span>
+    </div>
     <button
       type="button"
       onclick={() => {
         activateUpdate(updateRegistration!);
         updateRegistration = undefined;
-      }}>Update</button
+      }}>{t('engine.update.action')}</button
     ><button
       type="button"
-      aria-label="Dismiss update"
+      aria-label={t('engine.update.dismiss')}
       onclick={() => (updateRegistration = undefined)}><X size={15} /></button
     >
   </div>
@@ -363,6 +375,7 @@
     --sidebar-width: 264px;
     --layout-duration: 0.26s;
     height: 100%;
+    font-size: 14px;
     display: grid;
     grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
     overflow: hidden;

@@ -14,6 +14,7 @@ import { PanelStateResource } from './panel-state.svelte';
 import { fromSnapshot, reduceEvent } from './state';
 import { isOverviewSection, type OverviewSection } from './routes';
 import { getClientId } from './storage';
+import { t } from './i18n';
 import { needsInput } from './work';
 import type {
   ClientSessionState,
@@ -201,7 +202,7 @@ class EngineState {
         this.activeSessionId = demo.demoSnapshot.session.id;
       } else {
         this.#bootstrapFailed = true;
-        this.pageError = errorMessage(error, 'Unable to connect to the gateway.');
+        this.pageError = errorMessage(error, t('engine.error.connect'));
       }
     }
     // A workspace page the address names stays in front of the session behind it.
@@ -393,7 +394,7 @@ class EngineState {
       }
     } catch (error) {
       if (seq === this.#openSeq)
-        this.pageError = errorMessage(error, 'Unable to load this session.');
+        this.pageError = errorMessage(error, t('engine.error.loadSession'));
     }
   }
 
@@ -421,7 +422,7 @@ class EngineState {
       }
     } catch (error) {
       if (seq === this.#openSeq && !this.#snapshotAgain.has(seq))
-        this.pageError = errorMessage(error, 'Could not refresh the session.');
+        this.pageError = errorMessage(error, t('engine.error.refreshSession'));
     } finally {
       this.#snapshotLoading.delete(seq);
       if (this.#snapshotAgain.delete(seq) && seq === this.#openSeq) void this.refreshSnapshot();
@@ -464,7 +465,7 @@ class EngineState {
       apply({ name: updated.name });
     } catch (error) {
       apply({ name: previous.name });
-      this.pageError = errorMessage(error, 'Could not rename the session.');
+      this.pageError = errorMessage(error, t('engine.error.renameSession'));
     }
   }
 
@@ -494,13 +495,13 @@ class EngineState {
       const control = this.demo
         ? {
             heldByCurrentClient: true,
-            holderName: 'This browser',
+            holderName: t('engine.header.thisBrowser'),
             generation: (state.control.generation ?? 0) + 1,
           }
         : await api.takeControl(this.activeSessionId, this.clientId);
       if (this.sessionState) this.sessionState = { ...this.sessionState, control };
     } catch (error) {
-      this.pageError = errorMessage(error, 'Control could not be transferred.');
+      this.pageError = errorMessage(error, t('engine.error.control'));
     }
   }
 

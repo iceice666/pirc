@@ -2,6 +2,7 @@
   import { ArrowLeft, Bot, ListChecks, RefreshCw, SquareTerminal, Users } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { engine } from '../../engine.svelte';
+  import { locale, t } from '../../i18n';
   import { Loader } from '../../loader.svelte';
   import { panelApi, type BackgroundTask } from '../../panel-api';
   import { duration } from '../../time';
@@ -42,7 +43,7 @@
     const taskId = selected.id;
     const result = await outputLoader.run(
       (signal) => panelApi.backgroundOutput(id, taskId, 400, signal),
-      'Unable to load output.',
+      t('panel.tasks.couldNotOutput'),
     );
     if (!result || id !== sessionId || selected?.id !== taskId) return;
     selected = result.task;
@@ -90,7 +91,7 @@
 <div class="tab-body">
   {#if selected}
     <div class="drill-head">
-      <button class="icon-button small" type="button" aria-label="Back" onclick={back}
+      <button class="icon-button small" type="button" aria-label={t('common.back')} onclick={back}
         ><ArrowLeft size={16} /></button
       >
       <span class="drill-title mono">{selected.id}</span>
@@ -98,7 +99,7 @@
       <button
         class="icon-button small"
         type="button"
-        aria-label="Refresh output"
+        aria-label={t('panel.tasks.refreshOutput')}
         onclick={refreshOutput}
         disabled={outputLoader.loading}
         ><RefreshCw class={outputLoader.loading ? 'spin' : ''} size={15} /></button
@@ -106,19 +107,19 @@
     </div>
     <pre class="task-command">{selected.command}</pre>
     {#if outputLoader.error}<p class="panel-error">{outputLoader.error}</p>{/if}
-    <pre class="task-output" bind:this={outputEl}>{output || 'No output yet.'}</pre>
+    <pre class="task-output" bind:this={outputEl}>{output || t('panel.tasks.noOutput')}</pre>
   {:else if engine.panel.error && !panelState}
     <p class="panel-error">{engine.panel.error}</p>
   {:else if !panelState}
-    <p class="panel-empty">Loading…</p>
+    <p class="panel-empty">{t('common.loading')}</p>
   {:else if !panelState.agentRunning && !tasks.length && !agents.length}
-    <p class="panel-empty">
-      The agent is not running. Background tasks, subagents and teammates appear here while it is.
-    </p>
+    <p class="panel-empty">{t('panel.tasks.agentStopped')}</p>
   {:else}
-    <div class="group-title">Background tasks<span>{tasks.length}</span></div>
+    <div class="group-title">
+      {t('panel.tasks.background')}<span>{tasks.length}</span>
+    </div>
     {#if !tasks.length}
-      <p class="panel-empty">No background tasks.</p>
+      <p class="panel-empty">{t('panel.tasks.noBackground')}</p>
     {:else}
       <ul class="file-list">
         {#each tasks as task (task.id)}
@@ -132,12 +133,14 @@
                     task.startedAt,
                     task.endedAt,
                   )}{#if task.exitCode !== undefined && task.exitCode !== null}
-                    · exit {task.exitCode}{/if}</span
+                    · {t('panel.tasks.exit', { code: task.exitCode })}{/if}</span
                 >
               </span>
-              {#if task.tty}<span class="chip">tty</span>{/if}
-              {#if task.notifyOn}<span class="chip" title="notify_on /{task.notifyOn}/"
-                  >watch {task.matches ?? 0}</span
+              {#if task.tty}<span class="chip">{t('panel.tasks.tty')}</span>{/if}
+              {#if task.notifyOn}<span
+                  class="chip"
+                  title={t('panel.tasks.notifyOn', { pattern: task.notifyOn })}
+                  >{t('panel.tasks.watch', { count: task.matches ?? 0 })}</span
                 >{/if}
               <span class="chip status-{task.status}">{task.status.replace('_', ' ')}</span>
             </button>
@@ -147,7 +150,9 @@
     {/if}
 
     {#if subagents.length}
-      <div class="group-title">Subagents<span>{subagents.length}</span></div>
+      <div class="group-title">
+        {t('panel.tasks.subagents')}<span>{subagents.length}</span>
+      </div>
       <ul class="file-list">
         {#each subagents as agent (agent.name)}
           <li class="task-row static">
@@ -155,8 +160,8 @@
             <span class="task-text">
               <span class="task-cmd"
                 >{agent.name}<span class="muted">
-                  · {agent.kind ?? 'general'}{agent.background
-                    ? ' · background'
+                  · {agent.kind ?? t('panel.tasks.general')}{agent.background
+                    ? ` · ${t('panel.tasks.backgroundMode')}`
                     : ''}{#if agent.model}
                     · {agent.model}{/if}</span
                 ></span
@@ -164,14 +169,16 @@
               {#if agent.task}<span class="memory-sub clamped">{agent.task}</span>{/if}
               {#if agent.lastError}<span class="memory-sub danger">{agent.lastError}</span>{/if}
             </span>
-            <span class="chip status-{agent.status}">{agent.status ?? 'unknown'}</span>
+            <span class="chip status-{agent.status}">{agent.status ?? t('panel.unknown')}</span>
           </li>
         {/each}
       </ul>
     {/if}
 
     {#if boardTasks.length}
-      <div class="group-title">Task board<span>{boardTasks.length}</span></div>
+      <div class="group-title">
+        {t('panel.tasks.board')}<span>{boardTasks.length}</span>
+      </div>
       <ul class="file-list">
         {#each boardTasks as task (task.id)}
           <li class="task-row static">
@@ -179,9 +186,13 @@
             <span class="task-text">
               <span class="task-cmd"><span class="mono">#{task.id}</span> {task.subject}</span>
               <span class="memory-sub"
-                >{task.owner ? `owner ${task.owner}` : 'unowned'}{#if task.blockedBy.length}
-                  · after {task.blockedBy.map((id) => `#${id}`).join(', ')}{/if}{#if task.blocked}
-                  · blocked{/if}</span
+                >{task.owner
+                  ? t('panel.tasks.owner', { name: task.owner })
+                  : t('panel.tasks.unowned')}{#if task.blockedBy.length}
+                  · {t('panel.tasks.after', {
+                    ids: task.blockedBy.map((id) => `#${id}`).join(', '),
+                  })}{/if}{#if task.blocked}
+                  · {t('panel.tasks.blocked')}{/if}</span
               >
             </span>
             <span class="chip status-{task.status}">{task.status.replace('_', ' ')}</span>
@@ -190,9 +201,11 @@
       </ul>
     {/if}
 
-    <div class="group-title">Teammates<span>{teammates.length}</span></div>
+    <div class="group-title">
+      {t('panel.tasks.teammates')}<span>{teammates.length}</span>
+    </div>
     {#if !teammates.length}
-      <p class="panel-empty">No teammates spawned.</p>
+      <p class="panel-empty">{t('panel.tasks.noTeammates')}</p>
     {:else}
       <ul class="file-list">
         {#each teammates as agent (agent.name)}
@@ -205,17 +218,17 @@
               {#if agent.task}<span class="memory-sub clamped">{agent.task}</span>{/if}
               {#if agent.lastError}<span class="memory-sub danger">{agent.lastError}</span>{/if}
             </span>
-            <span class="chip status-{agent.status}">{agent.status ?? 'unknown'}</span>
+            <span class="chip status-{agent.status}">{agent.status ?? t('panel.unknown')}</span>
           </li>
         {/each}
       </ul>
     {/if}
     {#if teamEvents.length}
-      <div class="group-title">Recent team activity</div>
+      <div class="group-title">{t('panel.tasks.recentActivity')}</div>
       <ul class="event-list">
         {#each teamEvents as event (event.id)}
           <li>
-            <span class="muted">{new Date(event.time).toLocaleTimeString()}</span>
+            <span class="muted">{new Date(event.time).toLocaleTimeString(locale())}</span>
             <strong>{event.kind}</strong>
             {#if event.from || event.to}<span
                 >{event.from ?? ''}{event.to ? ` → ${event.to}` : ''}</span

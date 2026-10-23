@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import { engine } from '../../engine.svelte';
+  import { locale, t } from '../../i18n';
   import { Loader } from '../../loader.svelte';
   import { panelApi, type ContextPanel } from '../../panel-api';
   import { watch } from '../../watch.svelte';
@@ -17,7 +18,7 @@
     const id = sessionId;
     const next = await loader.run(
       (signal) => panelApi.context(id, signal),
-      'Unable to load context.',
+      t('panel.context.couldNotLoad'),
     );
     if (id === sessionId && next) value = next;
   }
@@ -83,37 +84,38 @@
           .filter(Boolean)
           .join('\n\n'),
       );
-      copied = 'Copied system prompt.';
+      copied = t('panel.context.copied');
     } catch {
-      copied = 'Unable to copy. Select the expanded section text instead.';
+      copied = t('panel.context.copyFailed');
     }
   }
 </script>
 
 <div class="context-tab">
   <div class="actions">
-    <h3>Context</h3>
+    <h3>{t('panel.context.title')}</h3>
     <button class="button ghost" type="button" disabled={loader.loading} onclick={load}
-      >Refresh</button
+      >{t('common.refresh')}</button
     >
   </div>
   {#if loader.error}<p role="alert">{loader.error}</p>{/if}
-  {#if loader.loading && !snapshot}<p role="status">Loading context…</p>{/if}
+  {#if loader.loading && !snapshot}<p role="status">{t('panel.context.loading')}</p>{/if}
   {#if snapshot && value}
     {#if !value.agentRunning || value.source === 'snapshot'}<p class="stale" role="status">
-        Saved snapshot{!value.agentRunning ? ' — agent stopped' : ''}. This is the last request, not
-        current configuration.
+        {value.agentRunning ? t('panel.context.savedSnapshot') : t('panel.context.savedStopped')}
       </p>{/if}
     <p class="meta">
       {snapshot.model.provider} / {snapshot.model.id}<br /><time
         datetime={new Date(snapshot.takenAt).toISOString()}
-        >{new Date(snapshot.takenAt).toLocaleString()}</time
+        >{new Date(snapshot.takenAt).toLocaleString(locale())}</time
       >
     </p>
     <div
       class="usage-bar"
       role="img"
-      aria-label="Context usage: {segments.map((s) => s.name + ' ' + tokens(s.tokens)).join(', ')}"
+      aria-label={t('panel.context.usage', {
+        parts: segments.map((s) => s.name + ' ' + tokens(s.tokens)).join(', '),
+      })}
     >
       {#each segments as segment}<span
           class={segment.name}
@@ -127,30 +129,36 @@
         </li>{/each}
     </ul>
     <p class="meta">
-      Estimated input: {tokens(snapshot.usage.estimatedInput)} · Reported input: {snapshot.usage
-        .reportedInput === undefined
-        ? 'not available'
-        : tokens(snapshot.usage.reportedInput)}<br />Context window: {snapshot.model.contextWindow
-        ? tokens(snapshot.model.contextWindow)
-        : 'unknown'}
+      {t('panel.context.estimatedInput', { count: tokens(snapshot.usage.estimatedInput) })} ·
+      {t('panel.context.reportedInput', {
+        count:
+          snapshot.usage.reportedInput === undefined
+            ? t('panel.context.notAvailable')
+            : tokens(snapshot.usage.reportedInput),
+      })}<br />{t('panel.context.contextWindow', {
+        count: snapshot.model.contextWindow
+          ? tokens(snapshot.model.contextWindow)
+          : t('panel.unknown'),
+      })}
     </p>
     <p class="meta">
-      Bucket sizes are estimates{snapshot.usage.reportedInput === undefined
-        ? ''
-        : ' scaled to reported input (including cache)'}. Memory is observations/reflections within
-      messages, not an extra copy. System memory stays in system.
+      {snapshot.usage.reportedInput === undefined
+        ? t('panel.context.estimatesNote')
+        : t('panel.context.estimatesNoteScaled')}
     </p>
     <div class="actions">
-      <h4>System sections</h4>
-      <button type="button" class="button ghost" onclick={copy}>Copy all</button>
+      <h4>{t('panel.context.systemSections')}</h4>
+      <button type="button" class="button ghost" onclick={copy}>{t('panel.context.copyAll')}</button
+      >
     </div>
     <p role="status">{copied}</p>
     {#each snapshot.sections as section, index (`${index}:${section.id}`)}
       <details>
         <summary
           >{section.title}
-          <span class="meta">~{tokens(section.estimatedTokens)} tokens</span
-          >{#if section.frozen}<span class="badge">Frozen</span>{/if}</summary
+          <span class="meta"
+            >{t('panel.context.tokens', { count: tokens(section.estimatedTokens) })}</span
+          >{#if section.frozen}<span class="badge">{t('panel.context.frozen')}</span>{/if}</summary
         >
         <p class="source">
           {#if section.filePath !== undefined}<button
@@ -162,22 +170,22 @@
         <pre>{section.text}</pre>
       </details>
     {/each}
-    <h4>Model tools ({snapshot.tools.length})</h4>
+    <h4>{t('panel.context.modelTools', { count: snapshot.tools.length })}</h4>
     {#each snapshot.tools as tool (tool.name)}
       <details>
         <summary
-          >{tool.name} <span class="meta">~{tokens(tool.estimatedTokens)} tokens</span></summary
+          >{tool.name}
+          <span class="meta"
+            >{t('panel.context.tokens', { count: tokens(tool.estimatedTokens) })}</span
+          ></summary
         >
         <pre>{tool.description}</pre>
         <pre>{JSON.stringify(tool.parameters, null, 2)}</pre>
       </details>
     {/each}
     {#if snapshot.capabilities}
-      <h4>Capabilities ({snapshot.capabilities.length})</h4>
-      <p class="meta">
-        Called from ptc scripts; the core ones are also tools above. The others are only named in
-        the system prompt, and ptc_docs returns their schemas on request.
-      </p>
+      <h4>{t('panel.context.capabilities', { count: snapshot.capabilities.length })}</h4>
+      <p class="meta">{t('panel.context.capabilitiesNote')}</p>
       <ul class="capabilities">
         {#each snapshot.capabilities as capability (capability.name)}
           <li>

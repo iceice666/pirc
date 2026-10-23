@@ -1,0 +1,43 @@
+/**
+ * A worker's thread in the right column. The words a thread shares with a
+ * room's message row (Stop, Thread, Allow again this session, "waits for …",
+ * the gateway error) live in `rooms.*` so there is one copy of each.
+ */
+export const thread = {
+  en: {
+    'thread.title': 'Thread',
+    'thread.readOnly': 'read-only',
+    'thread.session': 'Its session in the engine',
+    'thread.close': 'Close the thread',
+    'thread.workers': 'Workers',
+    'thread.messages': "The thread's messages",
+    'thread.question': 'A question',
+    'thread.waitingFor': 'Waiting for {name}.',
+    'thread.whomItWorksFor': 'whom it works for',
+    'thread.answer.label': 'Your answer',
+    'thread.answer.send': 'Answer',
+    'thread.given': 'What it was given',
+    'thread.say.label': 'Say something to the worker',
+    'thread.say.tell': 'Tell the worker…',
+    'thread.say.more': 'Give it more to do…',
+    'thread.error.open': 'Unable to open the thread.',
+  },
+  zh: {
+    'thread.title': 'Thread',
+    'thread.readOnly': '唯讀',
+    'thread.session': '它在 engine 裡的 session',
+    'thread.close': '關閉 thread',
+    'thread.workers': 'worker 清單',
+    'thread.messages': 'thread 的訊息',
+    'thread.question': '一個問題',
+    'thread.waitingFor': '正在等 {name}。',
+    'thread.whomItWorksFor': '它為誰工作',
+    'thread.answer.label': '你的回答',
+    'thread.answer.send': '回答',
+    'thread.given': '它收到的內容',
+    'thread.say.label': '對 worker 說點什麼',
+    'thread.say.tell': '告訴 worker…',
+    'thread.say.more': '再交辦一些…',
+    'thread.error.open': '無法開啟 thread。',
+  },
+} as const;

@@ -2,6 +2,7 @@
   /** A room's latest brain turns: when, why, how it ended and what it cost (plan 02). */
   import { brainApi, tokens, turnOutcome, type BrainTurn } from '../../brain';
   import { ApiError } from '../../http';
+  import { locale, t } from '../../i18n';
   import { duration } from '../../time';
 
   interface Props {
@@ -29,7 +30,7 @@
     } catch (cause) {
       if (id !== roomId) return;
       turns = [];
-      error = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+      error = cause instanceof ApiError ? cause.message : t('engine.error.gateway');
     } finally {
       if (id === roomId) loading = false;
     }
@@ -40,7 +41,7 @@
   });
 
   const at = (time: number) =>
-    new Intl.DateTimeFormat(undefined, {
+    new Intl.DateTimeFormat(locale(), {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
@@ -49,9 +50,9 @@
 </script>
 
 <section class="settings-section" aria-labelledby="brain-title">
-  <h3 id="brain-title">Brain turns</h3>
+  <h3 id="brain-title">{t('engine.brain.title')}</h3>
   <label class="room">
-    Room
+    {t('engine.brain.room')}
     <select bind:value={roomId}>
       {#each choices as id (id)}
         <option value={id}>#{roomNames[id] ?? id}</option>
@@ -59,17 +60,21 @@
     </select>
   </label>
   {#if disabled}
-    <p class="muted">Not available in demo mode.</p>
+    <p class="muted">{t('engine.demoUnavailable')}</p>
   {:else if error}
     <p class="error" role="alert">{error}</p>
   {:else if loading && !turns.length}
-    <p class="muted" role="status">Loading…</p>
+    <p class="muted" role="status">{t('common.loading')}</p>
   {:else if !turns.length}
-    <p class="muted">No turns in this room yet.</p>
+    <p class="muted">{t('engine.brain.empty')}</p>
   {:else}
     <table>
       <thead>
-        <tr><th>Started</th><th>Why</th><th>Outcome</th><th>Took</th><th>Used</th></tr>
+        <tr>
+          <th>{t('engine.brain.started')}</th><th>{t('engine.brain.why')}</th><th
+            >{t('engine.brain.outcome')}</th
+          ><th>{t('engine.brain.took')}</th><th>{t('engine.brain.used')}</th>
+        </tr>
       </thead>
       <tbody>
         {#each turns as turn (turn.id)}
@@ -77,10 +82,15 @@
             <td>{at(turn.startedAt)}</td>
             <td
               >{turn.kind === 'wake'
-                ? 'Came back on its own'
+                ? t('engine.brain.kindWake')
                 : turn.kind === 'report'
-                  ? 'A worker ended'
-                  : `${turn.messageIds.length} message${turn.messageIds.length === 1 ? '' : 's'}`}</td
+                  ? t('engine.brain.kindReport')
+                  : t(
+                      turn.messageIds.length === 1
+                        ? 'engine.brain.message'
+                        : 'engine.brain.messages',
+                      { count: turn.messageIds.length },
+                    )}</td
             >
             <td>
               {turnOutcome(turn)}

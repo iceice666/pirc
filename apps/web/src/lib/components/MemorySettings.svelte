@@ -6,6 +6,7 @@
    */
   import { onMount } from 'svelte';
   import { ApiError } from '../http';
+  import { t } from '../i18n';
   import {
     describeOrigin,
     describeOrigins,
@@ -44,7 +45,7 @@
 
   const number = (value: number) => value.toLocaleString();
   const message = (cause: unknown) =>
-    cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
+    cause instanceof ApiError ? cause.message : t('settings.gateway.unreachable');
 
   function show(next: PreferencesView) {
     view = next;
@@ -149,63 +150,65 @@
 </script>
 
 <section class="settings-section" aria-labelledby="memory-title">
-  <h3 id="memory-title">Memory</h3>
+  <h3 id="memory-title">{t('settings.memory.title')}</h3>
   <p>
-    What pirc remembers, in every room. <strong>Preferences</strong> are always on its mind; it
-    saves one only when you say so. <strong>Facts</strong> it keeps on its own and brings up when they
-    matter; each says where it came from, and the room shows a line when one is kept. Coding sessions
-    on the nodes have none of this: repositories keep their own workspace notes.
+    {t('settings.memory.intro1')} <strong>{t('settings.memory.preferences')}</strong>
+    {t('settings.memory.intro2')} <strong>{t('settings.memory.facts')}</strong>
+    {t('settings.memory.intro3')}
   </p>
 
   {#if disabled}
-    <p role="status">Memory is unavailable in demo mode.</p>
+    <p role="status">{t('settings.memory.demo')}</p>
   {:else if loading}
-    <p role="status">Loading memory…</p>
+    <p role="status">{t('settings.memory.loading')}</p>
   {:else}
     {#if error}<p class="memory-error" role="alert">{error}</p>{/if}
     {#if view}
-      <h4>Preferences</h4>
+      <h4>{t('settings.memory.preferences')}</h4>
       <p class="memory-usage">
-        {number(view.usage.used)}/{number(view.usage.max)} characters
+        {t('settings.memory.usage', {
+          used: number(view.usage.used),
+          max: number(view.usage.max),
+        })}
       </p>
       {#if view.preferences.length}
-        {@render preferences(view.preferences, 'Preferences')}
+        {@render preferences(view.preferences, t('settings.memory.preferences'))}
       {:else}
-        <p>None yet. Tell pirc how you want things, or say yes when it offers to remember.</p>
+        <p>{t('settings.memory.preferencesEmpty')}</p>
       {/if}
 
       {#if view.removed.length}
         <details class="memory-removed">
-          <summary>Removed · {view.removed.length}</summary>
-          {@render preferences(view.removed, 'Removed')}
+          <summary>{t('settings.memory.removedCount', { count: view.removed.length })}</summary>
+          {@render preferences(view.removed, t('settings.memory.removed'))}
         </details>
       {/if}
     {/if}
 
-    <h4>Facts</h4>
+    <h4>{t('settings.memory.facts')}</h4>
     <form class="memory-search" role="search" onsubmit={search}>
       <input
         type="search"
-        aria-label="Search facts"
-        placeholder="Search facts"
+        aria-label={t('settings.memory.searchFacts')}
+        placeholder={t('settings.memory.searchFacts')}
         bind:value={query}
       />
       <select
-        aria-label="Which facts"
+        aria-label={t('settings.memory.whichFacts')}
         value={scope}
         onchange={(event) => {
           scope = event.currentTarget.value as RecordScope;
           void loadRecords();
         }}
       >
-        <option value="person">Yours</option>
-        <option value="repo">Repositories</option>
-        <option value="all">Both</option>
+        <option value="person">{t('settings.memory.scopePerson')}</option>
+        <option value="repo">{t('settings.memory.scopeRepo')}</option>
+        <option value="all">{t('settings.memory.scopeAll')}</option>
       </select>
-      <button class="button ghost small" type="submit">Search</button>
+      <button class="button ghost small" type="submit">{t('settings.memory.search')}</button>
     </form>
     {#if records.length}
-      <ul class="memory-list" aria-label="Facts">
+      <ul class="memory-list" aria-label={t('settings.memory.facts')}>
         {#each records as record (record.kind + record.id)}
           <li>
             <div class="memory-row">
@@ -215,8 +218,10 @@
                   >{record.kind === 'fact'
                     ? describeOrigin(record.origin ?? '')
                     : record.kind === 'delegation'
-                      ? `Delegated to ${record.workspace}`
-                      : `Workspace note · ${record.workspace}`}{#if record.git}
+                      ? t('settings.memory.delegatedTo', { workspace: record.workspace ?? '' })
+                      : t('settings.memory.workspaceNote', {
+                          workspace: record.workspace ?? '',
+                        })}{#if record.git}
                     · {record.git}{/if} · {record.date}{#if record.status !== 'active'}
                     · {record.status}{/if}</small
                 >
@@ -228,19 +233,20 @@
                       class="button ghost small forget"
                       type="button"
                       disabled={!!busy}
-                      onclick={() => forgetRecord(record)}>Forget for good</button
+                      onclick={() => forgetRecord(record)}
+                      >{t('settings.memory.forgetForGood')}</button
                     >
                     <button
                       class="button ghost small"
                       type="button"
-                      onclick={() => (confirming = undefined)}>Cancel</button
+                      onclick={() => (confirming = undefined)}>{t('common.cancel')}</button
                     >
                   {:else}
                     <button
                       class="button ghost small"
                       type="button"
                       disabled={!!busy}
-                      onclick={() => (confirming = record.id)}>Forget</button
+                      onclick={() => (confirming = record.id)}>{t('settings.memory.forget')}</button
                     >
                   {/if}
                 </div>
@@ -250,19 +256,15 @@
         {/each}
       </ul>
     {:else}
-      <p>{query.trim() ? 'Nothing found.' : 'No facts yet.'}</p>
+      <p>{query.trim() ? t('settings.memory.nothingFound') : t('settings.memory.noFacts')}</p>
     {/if}
 
-    <p class="memory-fine-print">
-      Forget erases a preference or fact with all its versions, takes it out of search and of the
-      room's line, and keeps the same text from being saved again; rewordings are not caught. A
-      repository's notes are forgotten on its node.
-    </p>
+    <p class="memory-fine-print">{t('settings.memory.finePrint')}</p>
   {/if}
 </section>
 
 {#snippet room(roomId: string | null)}
-  {#if roomId && view?.rooms[roomId]}#{view.rooms[roomId]}{:else}a room{/if}
+  {#if roomId && view?.rooms[roomId]}#{view.rooms[roomId]}{:else}{t('settings.memory.aRoom')}{/if}
 {/snippet}
 
 {#snippet preferences(list: Preference[], label: string)}
@@ -274,9 +276,10 @@
             <span>{preference.content}</span>
             <small
               >{describeOrigins(preference.origins)}{#if preference.sources.quote}
-                — you said “{preference.sources.quote}”{/if} · in {@render room(
-                preference.createdInRoom,
-              )} · {ago(preference.updatedAt)}</small
+                {t('settings.memory.youSaid', { quote: preference.sources.quote })}{/if} ·
+              {t('settings.memory.in')}
+              {@render room(preference.createdInRoom)} ·
+              {ago(preference.updatedAt)}</small
             >
           </div>
           <div class="memory-actions">
@@ -286,21 +289,21 @@
                 type="button"
                 disabled={!!busy}
                 onclick={() => act(preference.id, () => memoryApi.restore(preference.id))}
-                >Restore</button
+                >{t('settings.memory.restore')}</button
               >
             {:else}
               <button
                 class="button ghost small"
                 type="button"
                 aria-expanded={historyFor === preference.id}
-                onclick={() => toggleHistory(preference)}>History</button
+                onclick={() => toggleHistory(preference)}>{t('settings.memory.history')}</button
               >
               <button
                 class="button ghost small"
                 type="button"
                 disabled={!!busy}
                 onclick={() => act(preference.id, () => memoryApi.remove(preference.id))}
-                >Remove</button
+                >{t('common.remove')}</button
               >
             {/if}
             {#if confirming === preference.id}
@@ -309,25 +312,25 @@
                 type="button"
                 disabled={!!busy}
                 onclick={() => act(preference.id, () => memoryApi.forget(preference.id))}
-                >Forget for good</button
+                >{t('settings.memory.forgetForGood')}</button
               >
               <button
                 class="button ghost small"
                 type="button"
-                onclick={() => (confirming = undefined)}>Cancel</button
+                onclick={() => (confirming = undefined)}>{t('common.cancel')}</button
               >
             {:else}
               <button
                 class="button ghost small"
                 type="button"
                 disabled={!!busy}
-                onclick={() => (confirming = preference.id)}>Forget</button
+                onclick={() => (confirming = preference.id)}>{t('settings.memory.forget')}</button
               >
             {/if}
           </div>
         </div>
         {#if historyFor === preference.id}
-          <ol class="memory-history" aria-label="History">
+          <ol class="memory-history" aria-label={t('settings.memory.history')}>
             {#each versions as version (version.revision)}
               <li>
                 <small>{describeVersion(version)} · {ago(version.at)}</small>
@@ -339,7 +342,7 @@
                     disabled={!!busy}
                     onclick={() =>
                       act(preference.id, () => memoryApi.restore(preference.id, version.revision))}
-                    >Restore this</button
+                    >{t('settings.memory.restoreThis')}</button
                   >
                 {/if}
               </li>

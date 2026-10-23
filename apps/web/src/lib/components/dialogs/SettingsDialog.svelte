@@ -1,10 +1,12 @@
 <script lang="ts" module>
+  import type { MessageKey } from '../../i18n/messages';
+
   const SETTINGS_TABS = [
-    { id: 'models', label: 'Models & sources' },
-    { id: 'devices', label: 'Devices' },
-    { id: 'notifications', label: 'Notifications' },
-    { id: 'about', label: 'About' },
-  ] as const;
+    { id: 'models', label: 'settings.tab.models' },
+    { id: 'devices', label: 'settings.tab.devices' },
+    { id: 'notifications', label: 'settings.tab.notifications' },
+    { id: 'about', label: 'settings.tab.about' },
+  ] as const satisfies readonly { id: string; label: MessageKey }[];
   export type SettingsTab = (typeof SETTINGS_TABS)[number]['id'];
 </script>
 
@@ -15,8 +17,9 @@
    * (and the rooms muted here), and this browser. What pirc keeps (memory,
    * loops, wakes) is on the engine's front page; preferences on the host's.
    */
-  import { X } from '@lucide/svelte';
+  import { Languages, X } from '@lucide/svelte';
   import { rovingFocus } from '../../a11y';
+  import { LOCALES, locale, setLocale, t, type Locale } from '../../i18n';
   import { mutedRooms, setMuted } from '../../mute';
   import { engineLink } from '../../routes';
   import { getClientId } from '../../storage';
@@ -60,10 +63,26 @@
   <header>
     <div>
       <span class="eyebrow">pirc</span>
-      <h2 id="settings-title">Settings</h2>
+      <h2 id="settings-title">{t('settings.title')}</h2>
     </div>
-    <button class="icon-button" type="button" aria-label="Close" onclick={() => (open = false)}
-      ><X size={19} /></button
+    <label class="language">
+      <Languages size={15} aria-hidden="true" />
+      <span class="sr-only">{t('settings.language')}</span>
+      <select
+        aria-label={t('settings.language')}
+        value={locale()}
+        onchange={(event) => setLocale(event.currentTarget.value as Locale)}
+      >
+        {#each LOCALES as choice (choice.id)}
+          <option value={choice.id}>{choice.label}</option>
+        {/each}
+      </select>
+    </label>
+    <button
+      class="icon-button"
+      type="button"
+      aria-label={t('common.close')}
+      onclick={() => (open = false)}><X size={19} /></button
     >
   </header>
 
@@ -71,7 +90,7 @@
     <div
       class="settings-nav"
       role="tablist"
-      aria-label="Settings categories"
+      aria-label={t('settings.categories')}
       aria-orientation="vertical"
       use:rovingFocus={{ selector: '[role="tab"]', orientation: 'vertical', activate: true }}
     >
@@ -84,7 +103,7 @@
           aria-selected={settingsTab === tab.id}
           tabindex={settingsTab === tab.id ? 0 : -1}
           class:chosen={settingsTab === tab.id}
-          onclick={() => (settingsTab = tab.id)}>{tab.label}</button
+          onclick={() => (settingsTab = tab.id)}>{t(tab.label)}</button
         >
       {/each}
     </div>
@@ -110,10 +129,12 @@
       >
         <PairedDevices {disabled} />
         <section class="settings-section">
-          <h3>Nodes</h3>
+          <h3>{t('settings.devices.nodes.title')}</h3>
           <p>
-            The machines pirc works on, and what each can do, are on the
-            <a href={engineLink('nodes')}>engine's front page</a>.
+            {t('settings.devices.nodes.about')}
+            <a href={engineLink('nodes')}>{t('settings.devices.nodes.aboutLink')}</a>{t(
+              'settings.devices.nodes.aboutEnd',
+            )}
           </p>
         </section>
       </div>
@@ -126,7 +147,7 @@
       >
         <NotificationSettings {disabled} />
         <section class="settings-section">
-          <h3>Muted rooms on this device</h3>
+          <h3>{t('settings.muted.title')}</h3>
           {#if muted.length}
             <ul class="muted-rooms">
               {#each muted as roomId (roomId)}
@@ -135,13 +156,14 @@
                   <button
                     type="button"
                     class="button ghost small"
-                    onclick={() => (muted = setMuted(roomId, false))}>Unmute</button
+                    onclick={() => (muted = setMuted(roomId, false))}
+                    >{t('settings.muted.unmute')}</button
                   >
                 </li>
               {/each}
             </ul>
           {:else}
-            <p>None. Mute a room from its header: it stops notifying this device only.</p>
+            <p>{t('settings.muted.none')}</p>
           {/if}
         </section>
       </div>
@@ -153,18 +175,24 @@
         hidden={settingsTab !== 'about'}
       >
         <section class="settings-section">
-          <h3>This browser</h3>
+          <h3>{t('settings.about.browser')}</h3>
           <div class="settings-row">
-            <span>Client ID</span>
+            <span>{t('settings.language')}</span>
+            <span>{LOCALES.find((choice) => choice.id === locale())?.label}</span>
+          </div>
+          <div class="settings-row">
+            <span>{t('settings.about.clientId')}</span>
             <code>{clientId}</code>
           </div>
         </section>
         {#if onresetlayout}
           <section class="settings-section">
-            <h3>Layout</h3>
+            <h3>{t('settings.about.layout')}</h3>
             <div class="settings-row">
-              <span>Show the engine's sidebar again if it was collapsed.</span>
-              <button class="button ghost" type="button" onclick={onresetlayout}>Reset</button>
+              <span>{t('settings.about.layoutHint')}</span>
+              <button class="button ghost" type="button" onclick={onresetlayout}
+                >{t('settings.about.reset')}</button
+              >
             </div>
           </section>
         {/if}
@@ -174,6 +202,25 @@
 </Modal>
 
 <style>
+  .language {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    color: var(--muted);
+  }
+  .language select {
+    height: 28px;
+    padding: 0 4px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--text-2);
+    background: transparent;
+    font-size: 13px;
+  }
+  .language select:hover {
+    background: var(--bg-hover);
+  }
   /* Sections include BackendSettings' own, hence :global. */
   .settings-panels :global(.settings-section + .settings-section) {
     margin-top: 18px;
@@ -185,7 +232,7 @@
     color: var(--text-2);
     font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
   }
   .settings-panels :global(.settings-section p) {

@@ -7,6 +7,7 @@
    * Markdown, so marked and DOMPurify are a chunk the two share, and KaTeX,
    * highlight.js and Mermaid still load only once a message needs them.
    */
+  import { t } from './lib/i18n';
   import { isEnginePath } from './lib/routes';
 
   const page = isEnginePath(location.pathname)
@@ -19,7 +20,8 @@
 {:catch}
   <!-- A chunk of an older build was removed by a deploy since this page loaded. -->
   <p class="load-failed" role="alert">
-    pirc could not load. <button type="button" onclick={() => location.reload()}>Reload</button>
+    {t('common.couldNotLoad')}
+    <button type="button" onclick={() => location.reload()}>{t('common.reload')}</button>
   </p>
 {/await}
 

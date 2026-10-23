@@ -1,5 +1,6 @@
 <script lang="ts" module>
   import { House, Settings, SquareTerminal, Users } from '@lucide/svelte';
+  import type { MessageKey } from '../i18n/messages';
 
   export type MobileTabId = 'rooms' | 'members' | 'engine' | 'settings';
 
@@ -11,16 +12,18 @@
     badge?: number;
   }
 
-  const LABELS: Record<MobileTabId, string> = {
-    rooms: 'Rooms',
-    members: 'Members',
-    engine: 'Engine',
-    settings: 'Settings',
+  const LABELS: Record<MobileTabId, MessageKey> = {
+    rooms: 'common.tab.rooms',
+    members: 'common.tab.members',
+    engine: 'common.tab.engine',
+    settings: 'common.tab.settings',
   };
   const ICONS = { rooms: House, members: Users, engine: SquareTerminal, settings: Settings };
 </script>
 
 <script lang="ts">
+  import { t } from '../i18n';
+
   interface Props {
     tabs: MobileTab[];
     current: MobileTabId;
@@ -31,16 +34,16 @@
 </script>
 
 <!-- The phone's bottom navigation (desktop has the room list's footer instead). -->
-<nav class="mobile-tabs" aria-label="Sections">
+<nav class="mobile-tabs" aria-label={t('common.sections')}>
   {#each tabs as tab (tab.id)}
     {@const Icon = ICONS[tab.id]}
     {#snippet inner()}
       <span class="icon-wrap"
         ><Icon size={20} />{#if tab.badge}<span
             class="tab-badge"
-            aria-label="{tab.badge} waiting for you">{tab.badge}</span
+            aria-label={t('common.waitingCount', { count: tab.badge })}>{tab.badge}</span
           >{/if}</span
-      ><span>{LABELS[tab.id]}</span>
+      ><span>{t(LABELS[tab.id])}</span>
     {/snippet}
     {#if tab.href}
       <a class="tab" href={tab.href}>{@render inner()}</a>

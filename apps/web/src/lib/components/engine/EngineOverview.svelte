@@ -6,6 +6,7 @@
    */
   import { onMount } from 'svelte';
   import { rovingFocus } from '../../a11y';
+  import { t } from '../../i18n';
   import { OVERVIEW_SECTIONS, type OverviewSection } from '../../routes';
   import { roomsApi } from '../../rooms';
   import type { NodeSummary } from '../../types';
@@ -45,13 +46,13 @@
 
 <div class="overview">
   <header>
-    <h1>Engine</h1>
-    <p class="muted">What runs behind the rooms.</p>
+    <h1>{t('engine.title')}</h1>
+    <p class="muted">{t('engine.tagline')}</p>
   </header>
   <div
     class="tabs"
     role="tablist"
-    aria-label="Engine sections"
+    aria-label={t('engine.sections')}
     use:rovingFocus={{ selector: '[role="tab"]', activate: true }}
   >
     {#each OVERVIEW_SECTIONS as tab (tab.id)}
@@ -63,7 +64,7 @@
         aria-selected={section === tab.id}
         tabindex={section === tab.id ? 0 : -1}
         class:chosen={section === tab.id}
-        onclick={() => onsection(tab.id)}>{tab.label}</button
+        onclick={() => onsection(tab.id)}>{t(tab.key)}</button
       >
     {/each}
   </div>

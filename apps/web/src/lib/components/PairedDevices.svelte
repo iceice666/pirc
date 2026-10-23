@@ -5,6 +5,7 @@
    */
   import { onMount } from 'svelte';
   import { ApiError } from '../http';
+  import { locale, t } from '../i18n';
   import { deviceApi, pairingUri, qrPath, type PairedDevice } from '../devices';
   import { ago } from '../time';
 
@@ -27,9 +28,9 @@
   let qr = $derived(paired ? qrPath(paired.uri) : undefined);
 
   const message = (cause: unknown) =>
-    cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
+    cause instanceof ApiError ? cause.message : t('settings.gateway.unreachable');
   const until = (time: number) =>
-    new Date(time).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    new Date(time).toLocaleDateString(locale(), { month: 'short', day: 'numeric' });
 
   async function refresh() {
     try {
@@ -92,43 +93,41 @@
 </script>
 
 <section class="settings-section" aria-labelledby="phones-title">
-  <h3 id="phones-title">Phones</h3>
-  <p>
-    Pair the pirc Android app. A phone gets the same access as this browser, including files and
-    shells on your nodes, but cannot manage devices or model backends. Its token stops working after
-    a stretch without use, at a fixed age after pairing, or when revoked here.
-  </p>
+  <h3 id="phones-title">{t('settings.devices.title')}</h3>
+  <p>{t('settings.devices.intro')}</p>
 
   {#if disabled}
-    <p role="status">Pairing is unavailable in demo mode.</p>
+    <p role="status">{t('settings.devices.demo')}</p>
   {:else}
     {#if error}<p class="device-error" role="alert">{error}</p>{/if}
 
     {#if paired && qr}
-      <div class="pairing" role="group" aria-label="Pair {paired.device.name}">
+      <div
+        class="pairing"
+        role="group"
+        aria-label={t('settings.devices.pairNamed', { name: paired.device.name })}
+      >
         <svg
           class="qr"
           viewBox="0 0 {qr.size} {qr.size}"
           role="img"
-          aria-label="Pairing QR code"
+          aria-label={t('settings.devices.qr')}
           shape-rendering="crispEdges"
         >
           <rect width={qr.size} height={qr.size} fill="#fff" />
           <path d={qr.path} fill="#000" />
         </svg>
         <div class="pairing-text">
-          <strong>Scan with the pirc app</strong>
-          <small
-            >Shown only once. Anyone with this code can use your nodes until you revoke it.</small
-          >
+          <strong>{t('settings.devices.scan')}</strong>
+          <small>{t('settings.devices.once')}</small>
           <code>{paired.uri}</code>
           <div class="device-actions">
-            <a class="button ghost" href={paired.uri}>Open in app</a>
+            <a class="button ghost" href={paired.uri}>{t('settings.devices.openInApp')}</a>
             <button class="button ghost" type="button" onclick={copy}
-              >{copied ? 'Copied' : 'Copy link'}</button
+              >{copied ? t('common.copied') : t('settings.copyLink')}</button
             >
             <button class="button ghost" type="button" onclick={() => (paired = undefined)}
-              >Done</button
+              >{t('common.done')}</button
             >
           </div>
         </div>
@@ -137,35 +136,46 @@
 
     <form class="pair-form" onsubmit={pair}>
       <label>
-        <span>Device name</span>
-        <input bind:value={name} maxlength="100" placeholder="Pixel 9" disabled={busy} />
+        <span>{t('settings.devices.nameLabel')}</span>
+        <input
+          bind:value={name}
+          maxlength="100"
+          placeholder={t('settings.devices.namePlaceholder')}
+          disabled={busy}
+        />
       </label>
-      <button class="button ghost" type="submit" disabled={busy || !name.trim()}>Pair device</button
+      <button class="button ghost" type="submit" disabled={busy || !name.trim()}
+        >{t('settings.devices.pair')}</button
       >
     </form>
 
     {#if loading}
-      <p role="status">Loading devices…</p>
+      <p role="status">{t('settings.devices.loading')}</p>
     {:else if devices.length}
       <ul class="device-list">
         {#each devices as device (device.id)}
           <li>
             <div>
               <strong>{device.name}</strong>
-              <small>Used {ago(device.lastUsedAt)} · Expires {until(device.expiresAt)}</small>
+              <small
+                >{t('settings.devices.usedExpires', {
+                  used: ago(device.lastUsedAt),
+                  expires: until(device.expiresAt),
+                })}</small
+              >
             </div>
             <button
               class="button ghost"
               type="button"
               disabled={busy}
-              aria-label="Revoke {device.name}"
-              onclick={() => revoke(device)}>Revoke</button
+              aria-label={t('settings.devices.revokeNamed', { name: device.name })}
+              onclick={() => revoke(device)}>{t('settings.devices.revoke')}</button
             >
           </li>
         {/each}
       </ul>
     {:else}
-      <p>No phones paired.</p>
+      <p>{t('settings.devices.empty')}</p>
     {/if}
   {/if}
 </section>

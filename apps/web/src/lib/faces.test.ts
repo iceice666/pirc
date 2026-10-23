@@ -49,11 +49,14 @@ describe('faces', () => {
   });
 
   it('says what a face is doing', () => {
-    expect(presenceLabel(undefined)).toBe('Here');
-    expect(presenceLabel({ faceId: 'pm', state: 'working', line: 'the PR' })).toBe(
-      'Working on the PR',
-    );
-    expect(presenceLabel({ faceId: 'pm', state: 'thinking' })).toBe('Thinking');
+    expect(presenceLabel(undefined)).toEqual({ word: 'common.status.here' });
+    expect(presenceLabel({ faceId: 'pm', state: 'working', line: 'the PR' })).toEqual({
+      word: 'common.status.working',
+      line: 'the PR',
+    });
+    expect(presenceLabel({ faceId: 'pm', state: 'thinking' })).toEqual({
+      word: 'common.status.thinking',
+    });
     expect(initialOf('pm')).toBe('P');
     expect(initialOf('pm', '🦀')).toBe('🦀');
   });

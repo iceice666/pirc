@@ -12,8 +12,10 @@
   import { motion } from '../motion';
   import { tick } from 'svelte';
   import { rovingFocus } from '../a11y';
+  import StatusGlyph, { glyphOf } from './StatusGlyph.svelte';
   import { engine } from '../engine.svelte';
   import { errorMessage } from '../errors';
+  import { t } from '../i18n';
   import { Loader } from '../loader.svelte';
   import { panelApi, type BackgroundTask, type TeamMember } from '../panel-api';
   import { duration } from '../time';
@@ -89,7 +91,7 @@
     }
     const result = await outputLoader.run(
       (signal) => panelApi.backgroundOutput(session, id, 200, signal),
-      'Output unavailable.',
+      t('settings.jobs.outputUnavailable'),
     );
     if (!result || expanded !== id || sessionId !== session) return false;
     // Measured after the await: the element may belong to a task shown since.
@@ -116,7 +118,7 @@
       const { task: next } = await panelApi.stopBackground(session, task.id, generation);
       if (session === sessionId) engine.panel.updateTask(next);
     } catch (cause) {
-      if (session === sessionId) stopError = errorMessage(cause, 'Could not stop the task.');
+      if (session === sessionId) stopError = errorMessage(cause, t('settings.jobs.couldNotStop'));
     }
   }
   function clearFinished() {
@@ -125,11 +127,16 @@
   }
 
   function detail(task: BackgroundTask) {
-    if (task.status === 'running') return task.tty ? 'tty' : '';
-    if (task.status === 'stopping') return 'stopping';
-    if (task.status === 'completed') return task.exitCode ? `exit ${task.exitCode}` : 'done';
+    if (task.status === 'running') return task.tty ? t('settings.jobs.tty') : '';
+    if (task.status === 'stopping') return t('settings.jobs.stopping');
+    if (task.status === 'completed')
+      return task.exitCode
+        ? t('settings.jobs.exitCode', { code: task.exitCode })
+        : t('settings.jobs.done');
     if (task.status === 'failed')
-      return task.exitCode != null ? `exit ${task.exitCode}` : (task.error ?? 'failed');
+      return task.exitCode != null
+        ? t('settings.jobs.exitCode', { code: task.exitCode })
+        : (task.error ?? t('settings.jobs.failed'));
     return task.status.replace('_', ' ');
   }
   const dot = (task: BackgroundTask) =>
@@ -186,8 +193,10 @@
   });
   let label = $derived(
     liveCount
-      ? `${liveCount} running`
-      : `${finished.length} background task${finished.length === 1 ? '' : 's'}`,
+      ? t('settings.jobs.runningCount', { count: liveCount })
+      : finished.length === 1
+        ? t('settings.jobs.finishedOne')
+        : t('settings.jobs.finishedMany', { count: finished.length }),
   );
   // A ticking clock for durations, only while the list is visible.
   $effect(() => {
@@ -232,13 +241,15 @@
       type="button"
       aria-expanded={open}
       aria-haspopup="true"
-      aria-label="{label}. Show background jobs"
-      title="Background jobs"
+      aria-label={t('settings.jobs.show', { label })}
+      title={t('settings.jobs.title')}
       onclick={toggleOpen}
     >
-      {#if liveCount}<span class="state-dot ongoing" aria-hidden="true"></span>{/if}
+      {#if liveCount}<StatusGlyph state="working" pulse />{/if}
       <span class="jobs-count">{liveCount || finished.length}</span>
-      <span class="jobs-label">{liveCount ? 'running' : 'finished'}</span>
+      <span class="jobs-label"
+        >{liveCount ? t('settings.jobs.running') : t('settings.jobs.finished')}</span
+      >
       <ChevronDown size={12} />
     </button>
 
@@ -247,19 +258,19 @@
         class="jobs-popover"
         role="dialog"
         aria-modal="false"
-        aria-label="Background jobs"
+        aria-label={t('settings.jobs.title')}
         bind:this={popover}
         use:rovingFocus={{ selector: 'button', orientation: 'vertical', wrap: false }}
       >
         {#if liveTasks.length || agents.length}
-          <div class="jobs-section">Running</div>
+          <div class="jobs-section">{t('settings.jobs.sectionRunning')}</div>
         {/if}
         {#each liveTasks as task (task.id)}
           {@render taskRow(task, true)}
         {/each}
         {#each agents as agent (agent.name)}
           <div class="job-row static">
-            <span class="state-dot ongoing" aria-hidden="true"></span>
+            <StatusGlyph state="working" pulse />
             <span class="job-icon"
               >{#if agent.mode === 'subagent'}<Bot size={13} />{:else}<Users size={13} />{/if}</span
             >
@@ -283,9 +294,11 @@
               <span class="section-chevron" class:open={finishedOpen || !liveCount}
                 ><ChevronRight size={12} /></span
               >
-              Finished {finished.length}
+              {t('settings.jobs.sectionFinished', { count: finished.length })}
             </button>
-            <button class="jobs-section-toggle" type="button" onclick={clearFinished}>Clear</button>
+            <button class="jobs-section-toggle" type="button" onclick={clearFinished}
+              >{t('settings.jobs.clear')}</button
+            >
           </div>
           {#if finishedOpen || !liveCount}
             {#each finished as task (task.id)}
@@ -308,7 +321,7 @@
         aria-expanded={expanded === task.id}
         onclick={() => toggleTask(task)}
       >
-        <span class="state-dot {dot(task)}" aria-hidden="true"></span>
+        <StatusGlyph state={glyphOf(dot(task))} />
         <span class="job-main">
           <span class="job-label mono" title={task.command}>{task.command}</span>
         </span>
@@ -322,22 +335,24 @@
           class="job-stop touch-target"
           class:armed={armed === task.id}
           type="button"
-          aria-label={armed === task.id ? 'Confirm stop' : `Stop ${task.id}`}
-          title={armed === task.id ? 'Click again to stop' : 'Stop task'}
+          aria-label={armed === task.id
+            ? t('settings.jobs.confirmStop')
+            : t('settings.jobs.stopNamed', { id: task.id })}
+          title={armed === task.id ? t('settings.jobs.clickAgain') : t('settings.jobs.stopTask')}
           onclick={() => pressStop(task)}
         >
           <Square size={9} fill="currentColor" />
-          {#if armed === task.id}<span>Stop</span>{/if}
+          {#if armed === task.id}<span>{t('settings.jobs.stop')}</span>{/if}
         </button>
       {:else if task.status === 'stopping'}
-        <span class="job-stop pending" role="img" aria-label="Stopping"
+        <span class="job-stop pending" role="img" aria-label={t('settings.jobs.stoppingAria')}
           ><LoaderCircle class="spin" size={12} /></span
         >
       {/if}
     </div>
     {#if expanded === task.id}
       {#if outputLoader.error}<p class="jobs-error">{outputLoader.error}</p>{/if}
-      <pre class="job-output" bind:this={outputEl}>{output || 'No output yet.'}</pre>
+      <pre class="job-output" bind:this={outputEl}>{output || t('settings.jobs.noOutput')}</pre>
     {/if}
   </div>
 {/snippet}

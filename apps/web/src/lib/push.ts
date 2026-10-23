@@ -4,6 +4,7 @@
  * service worker (`public/sw.js`) shows it and opens what it points at.
  */
 import { request } from './http';
+import { t } from './i18n';
 
 export interface PushPlace {
   id: string;
@@ -94,7 +95,7 @@ function browserName(): string {
         ? 'Chrome'
         : /Safari\//.test(agent)
           ? 'Safari'
-          : 'Browser';
+          : t('settings.push.browser');
   const system = /Android/.test(agent)
     ? 'Android'
     : /iPhone|iPad/.test(agent)
@@ -106,7 +107,7 @@ function browserName(): string {
           : /Linux/.test(agent)
             ? 'Linux'
             : '';
-  return system ? `${browser} on ${system}` : browser;
+  return system ? t('settings.push.browserOn', { browser, system }) : browser;
 }
 
 /**

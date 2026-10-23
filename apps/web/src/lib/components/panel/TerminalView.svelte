@@ -5,6 +5,8 @@
    * view is rebuilt from scratch on every (re)connect.
    */
   import { onDestroy, onMount, untrack } from 'svelte';
+  import { t } from '../../i18n';
+  import type { MessageKey } from '../../i18n/messages';
   import { panelApi, type TerminalInfo } from '../../panel-api';
   import { getClientId } from '../../storage';
   import { watch } from '../../watch.svelte';
@@ -28,7 +30,9 @@
   }: Props = $props();
 
   let host: HTMLDivElement;
-  let notice = $state('');
+  /** A notice to show under the terminal, held as a message key so it survives a locale switch. */
+  let notice = $state<MessageKey | ''>('');
+  let noticeText = $derived(notice ? t(notice) : '');
   let destroyed = false;
   let socket: WebSocket | undefined;
   let retry: ReturnType<typeof setTimeout> | undefined;
@@ -43,10 +47,10 @@
     const color = (name: string, fallback: string) =>
       style.getPropertyValue(name).trim() || fallback;
     return {
-      background: color('--code-bg', '#f6f7f9'),
-      foreground: color('--code-ink', '#24292f'),
-      cursor: color('--accent', '#4176e6'),
-      selectionBackground: color('--accent-soft', '#edf3fe'),
+      background: color('--code-bg', '#111113'),
+      foreground: color('--code-ink', '#dbdee1'),
+      cursor: color('--accent', '#5686fe'),
+      selectionBackground: color('--accent-soft', '#26262b'),
     };
   }
 
@@ -96,21 +100,25 @@
       else if (message.type === 'exit') {
         exited = true;
         xterm?.write(
-          `\r\n\x1b[2m[process exited${message.exitCode === null ? '' : ` with code ${message.exitCode}`}]\x1b[0m\r\n`,
+          `\r\n\x1b[2m${
+            message.exitCode === null
+              ? t('panel.terminalView.exited')
+              : t('panel.terminalView.exitedCode', { code: message.exitCode })
+          }\x1b[0m\r\n`,
         );
         onexit(message.exitCode ?? null);
       } else if (message.type === 'error' && message.code === 'lost_control')
-        notice = 'Take control of the session to type here.';
+        notice = 'panel.terminalView.needControl';
     });
     socket.addEventListener('close', (event) => {
       if (destroyed || exited) return;
       if (event.code === 4404) {
         exited = true;
-        notice = 'This terminal no longer exists.';
+        notice = 'panel.terminalView.gone';
         onexit(null);
         return;
       }
-      notice = 'Reconnecting…';
+      notice = 'panel.reconnecting';
       retry = setTimeout(connect, Math.min(10_000, 500 * 2 ** attempts++));
     });
   }
@@ -137,26 +145,30 @@
     xterm.open(host);
     xterm.onData((data) => {
       if (!hasControl) {
-        notice = 'Take control of the session to type here.';
+        notice = 'panel.terminalView.needControl';
         return;
       }
       send({ type: 'input', data });
     });
     observer = new ResizeObserver(scheduleResize);
     observer.observe(host);
-    scheme.addEventListener('change', retheme);
+    themeWatcher.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
     connect();
   });
 
   // Lifecycle hooks must be registered synchronously, not after onMount's awaits.
-  const scheme = matchMedia('(prefers-color-scheme: dark)');
   const retheme = () => {
     if (xterm) xterm.options.theme = theme();
   };
+  /** Follow the app's theme (the token set), not the OS's preference. */
+  const themeWatcher = new MutationObserver(retheme);
 
   onDestroy(() => {
     destroyed = true;
-    scheme.removeEventListener('change', retheme);
+    themeWatcher.disconnect();
     if (retry) clearTimeout(retry);
     clearTimeout(resizeTimer);
     observer?.disconnect();
@@ -172,7 +184,7 @@
       });
   });
   $effect.pre(() => {
-    if (hasControl && untrack(() => notice).startsWith('Take control')) notice = '';
+    if (hasControl && untrack(() => notice) === 'panel.terminalView.needControl') notice = '';
   });
   // Regaining control: the pty may have been resized by another client meanwhile.
   watch(
@@ -193,7 +205,7 @@
   aria-labelledby="terminal-tab-{terminal.id}"
 >
   <div class="terminal-host" bind:this={host}></div>
-  {#if notice}<p class="terminal-notice">{notice}</p>{/if}
+  {#if notice}<p class="terminal-notice">{noticeText}</p>{/if}
 </div>
 
 <style>

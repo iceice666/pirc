@@ -5,15 +5,9 @@
    * hides it (decision #18). Clicking one opens its page; "Add" makes one.
    */
   import { Plus, X } from '@lucide/svelte';
-  import {
-    hueOf,
-    initialOf,
-    listed,
-    presenceLabel,
-    roomFace,
-    type Face,
-    type FacePresence,
-  } from '../../faces';
+  import StatusGlyph, { glyphOf } from '../StatusGlyph.svelte';
+  import { presenceText, t } from '../../i18n';
+  import { hueOf, initialOf, listed, roomFace, type Face, type FacePresence } from '../../faces';
 
   interface Props {
     faces: Face[];
@@ -45,7 +39,7 @@
       name = '';
       adding = false;
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Could not add the face.';
+      error = cause instanceof Error ? cause.message : t('rooms.members.couldNotAdd');
     }
   }
 
@@ -54,22 +48,22 @@
     try {
       await onhide(face.id, !face.hiddenAt);
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : 'Could not change it.';
+      error = cause instanceof Error ? cause.message : t('rooms.members.couldNotChange');
     }
   }
 </script>
 
-<aside class="members" aria-label="Members">
+<aside class="members" aria-label={t('rooms.members.title')}>
   <header>
-    <h2>Members</h2>
+    <h2>{t('rooms.members.title')}</h2>
     <button
       type="button"
       class="icon"
-      aria-label="Add a face"
-      title="Add a face"
+      aria-label={t('rooms.members.add')}
+      title={t('rooms.members.add')}
       onclick={() => (adding = !adding)}><Plus size={16} /></button
     >
-    <button type="button" class="icon" aria-label="Close the members" onclick={onclose}
+    <button type="button" class="icon" aria-label={t('rooms.members.close')} onclick={onclose}
       ><X size={16} /></button
     >
   </header>
@@ -77,8 +71,8 @@
     <form class="add" onsubmit={add}>
       <!-- svelte-ignore a11y_autofocus -->
       <input
-        aria-label="Name of the new face"
-        placeholder="Name"
+        aria-label={t('rooms.members.nameLabel')}
+        placeholder={t('rooms.members.namePlaceholder')}
         maxlength="40"
         bind:value={name}
         autofocus
@@ -99,19 +93,20 @@
           >
           <span class="who">
             <span class="name"
-              >{face.name}{#if face.isHost}<span class="tag">host</span
-                >{/if}{#if own?.id === face.id}<span class="tag">this room</span>{/if}</span
+              >{face.name}{#if face.isHost}<span class="tag">{t('common.host')}</span
+                >{/if}{#if own?.id === face.id}<span class="tag">{t('common.thisRoom')}</span
+                >{/if}</span
             >
             <span class="state {face.archivedAt ? 'idle' : (state?.state ?? 'idle')}">
-              <span class="dot" aria-hidden="true"></span>{face.archivedAt
-                ? 'Archived'
-                : presenceLabel(state)}
+              <StatusGlyph
+                state={face.archivedAt ? 'idle' : glyphOf(state?.state ?? 'idle')}
+              />{face.archivedAt ? t('common.archived') : presenceText(state)}
             </span>
           </span>
         </button>
         {#if face.archivedAt}
           <button type="button" class="small" onclick={() => hide(face)}
-            >{face.hiddenAt ? 'Show' : 'Hide'}</button
+            >{face.hiddenAt ? t('common.show') : t('common.hide')}</button
           >
         {/if}
       </li>
@@ -119,7 +114,9 @@
   </ul>
   {#if hiddenCount}
     <button type="button" class="link" onclick={() => (showHidden = !showHidden)}
-      >{showHidden ? 'Leave out the hidden ones' : `Show hidden (${hiddenCount})`}</button
+      >{showHidden
+        ? t('rooms.members.leaveOutHidden')
+        : t('rooms.members.showHidden', { count: hiddenCount })}</button
     >
   {/if}
 </aside>
@@ -218,23 +215,6 @@
     color: var(--muted);
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  .dot {
-    flex: none;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--success);
-  }
-  .archived .dot {
-    background: var(--muted);
-  }
-  .thinking .dot,
-  .working .dot {
-    background: var(--accent);
-  }
-  .waiting .dot {
-    background: var(--warning);
   }
   .add {
     padding: 0 12px 8px;

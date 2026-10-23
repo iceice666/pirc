@@ -4,6 +4,7 @@
  * close one ("not needed") or open it again ("not done yet").
  */
 import { request } from './http';
+import { locale, t } from './i18n';
 
 /** A time anchor: one time, or a recurrence. */
 export interface LoopAnchor {
@@ -72,15 +73,15 @@ export const loopsApi = {
 /** What a line's button does: undo an opening, or open again. */
 export function lineAction(line: LoopLine): { label: string; run: () => Promise<unknown> } {
   return line.event === 'opened' || line.event === 'reopened'
-    ? { label: "Don't keep", run: () => loopsApi.close(line.id) }
-    : { label: 'Not done yet', run: () => loopsApi.reopen(line.id) };
+    ? { label: t('settings.loops.dontKeep'), run: () => loopsApi.close(line.id) }
+    : { label: t('settings.loops.notDoneYet'), run: () => loopsApi.reopen(line.id) };
 }
 
 /** `Wed 18:00` in the anchor's zone (with the date when not within a week). */
 export function when(at: number, zone: string, now = Date.now()): string {
   const soon = at - now < 6 * 86_400_000 && at >= now - 86_400_000;
   try {
-    return new Intl.DateTimeFormat(undefined, {
+    return new Intl.DateTimeFormat(locale(), {
       weekday: 'short',
       ...(soon ? {} : { month: 'short', day: 'numeric' }),
       hour: '2-digit',
@@ -88,7 +89,7 @@ export function when(at: number, zone: string, now = Date.now()): string {
       timeZone: zone,
     }).format(at);
   } catch {
-    return new Date(at).toLocaleString();
+    return new Date(at).toLocaleString(locale());
   }
 }
 
@@ -99,21 +100,25 @@ export function describeAnchor(loop: OpenLoop, now = Date.now()): string {
   if (anchor.cron) {
     const parts: string[] = [];
     if (loop.status === 'open' && loop.dueAt)
-      parts.push(`Next: ${when(loop.dueAt, anchor.zone, now)}`);
-    parts.push(`repeats (${anchor.cron})`);
-    if (anchor.until) parts.push(`until ${when(anchor.until, anchor.zone, now)}`);
+      parts.push(t('settings.loops.next', { when: when(loop.dueAt, anchor.zone, now) }));
+    parts.push(t('settings.loops.repeats', { cron: anchor.cron }));
+    if (anchor.until)
+      parts.push(t('settings.loops.until', { when: when(anchor.until, anchor.zone, now) }));
     return parts.join(' · ');
   }
   if (anchor.at === undefined) return '';
   const time = when(anchor.at, anchor.zone, now);
-  const due = loop.status === 'open' && loop.dueAt ? `Due ${time}` : `Was due ${time}`;
-  return anchor.autoClose ? `${due} · closes itself then` : due;
+  const due =
+    loop.status === 'open' && loop.dueAt
+      ? t('settings.loops.due', { when: time })
+      : t('settings.loops.wasDue', { when: time });
+  return anchor.autoClose ? t('settings.loops.autoClose', { due }) : due;
 }
 
 /** Why a loop was closed, for people. */
 export function describeClosed(reason: string | null): string {
-  if (reason === 'elapsed') return 'its time has passed';
-  if (reason === 'recurrence_ended') return 'it does not come again';
-  if (reason === 'demoted') return 'kept in memory (untouched for a while)';
+  if (reason === 'elapsed') return t('settings.loops.reasonElapsed');
+  if (reason === 'recurrence_ended') return t('settings.loops.reasonEnded');
+  if (reason === 'demoted') return t('settings.loops.reasonDemoted');
   return reason ?? '';
 }

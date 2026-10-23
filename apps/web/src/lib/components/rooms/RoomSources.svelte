@@ -6,6 +6,7 @@
    */
   import { Rss } from '@lucide/svelte';
   import { ApiError } from '../../http';
+  import { t } from '../../i18n';
   import {
     KIND_LABELS,
     followedSources,
@@ -32,7 +33,7 @@
       sources = (await sourcesApi.list()).sources;
       error = '';
     } catch (cause) {
-      error = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+      error = cause instanceof ApiError ? cause.message : t('rooms.error.gateway');
     }
   }
 
@@ -46,7 +47,7 @@
         : followed.filter((known) => known !== id);
       await onchange(withFollowed(scope, ids));
     } catch (cause) {
-      error = cause instanceof ApiError ? cause.message : 'Could not change it.';
+      error = cause instanceof ApiError ? cause.message : t('rooms.members.couldNotChange');
     } finally {
       busy = false;
     }
@@ -59,17 +60,19 @@
     if ((event.currentTarget as HTMLDetailsElement).open) void load();
   }}
 >
-  <summary aria-label="Sources #{roomName} follows" title="Sources this room follows"
+  <summary
+    aria-label={t('rooms.sources.label', { room: roomName })}
+    title={t('rooms.sources.title')}
     ><Rss size={16} />{#if followed.length}<span class="count">{followed.length}</span
       >{/if}</summary
   >
   <div class="menu">
-    <strong>Sources #{roomName} follows</strong>
+    <strong>{t('rooms.sources.label', { room: roomName })}</strong>
     {#if error}<p class="error" role="alert">{error}</p>{/if}
     {#if sources === undefined}
-      <p>Loading…</p>
+      <p>{t('common.loading')}</p>
     {:else if !sources.length}
-      <p>No sources yet. Add them in Settings → Models &amp; sources.</p>
+      <p>{t('rooms.sources.none')}</p>
     {:else}
       {#each sources as source (source.id)}
         <label
@@ -81,7 +84,7 @@
           /><span>{source.name} <small>{KIND_LABELS[source.kind]}</small></span></label
         >
       {/each}
-      <p>pirc hears of everything new in what this room follows.</p>
+      <p>{t('rooms.sources.note')}</p>
     {/if}
   </div>
 </details>

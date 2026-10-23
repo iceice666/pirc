@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import type { ModeInfo, NodeSummary, Workspace } from './types';
 
 /**
@@ -22,7 +23,9 @@ const nothing = {
 export const LEGACY_DIRECTORY: ModeInfo = {
   ...nothing,
   id: 'directory',
-  label: 'Work',
+  get label() {
+    return t('settings.modes.work');
+  },
   ui: { noun: 'session' },
   workdir: 'workspace',
   delegate_target: true,
@@ -39,7 +42,9 @@ export const LEGACY_DIRECTORY: ModeInfo = {
 export const UNAVAILABLE: ModeInfo = {
   ...nothing,
   id: '',
-  label: 'Unavailable',
+  get label() {
+    return t('settings.modes.unavailable');
+  },
   ui: { noun: 'session' },
   workdir: 'per-session',
 };
@@ -76,9 +81,15 @@ export function describeNode(node: NodeSummary): string {
   if (!caps) return '';
   const parts = [`${caps.os} ${caps.arch}`];
   const gpus = caps.gpus.map((gpu) => `${gpu.count}× ${gpu.vendor}`).join(', ');
-  if (gpus) parts.push(caps.sandbox.gpu ? gpus : `${gpus} (not in the sandbox)`);
-  if (caps.sandbox.status !== 'active') parts.push('no sandbox: no agents');
-  if (node.load) parts.push(`${node.load.running} of ${node.load.max ?? caps.maxRunning} running`);
+  if (gpus) parts.push(caps.sandbox.gpu ? gpus : t('settings.nodes.gpusNoSandbox', { gpus }));
+  if (caps.sandbox.status !== 'active') parts.push(t('settings.nodes.noSandbox'));
+  if (node.load)
+    parts.push(
+      t('settings.nodes.running', {
+        running: node.load.running,
+        max: node.load.max ?? caps.maxRunning,
+      }),
+    );
   return parts.join(' · ');
 }
 

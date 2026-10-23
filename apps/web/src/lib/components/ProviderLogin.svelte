@@ -7,6 +7,7 @@
    */
   import { onMount } from 'svelte';
   import { backendApi, ApiError } from '../api';
+  import { t } from '../i18n';
   import type { OAuthProviderOption, ProviderAuthPrompt, ProviderAuthSession } from '../types';
 
   interface Props {
@@ -52,9 +53,7 @@
   });
 
   function safeError(cause: unknown) {
-    return cause instanceof ApiError
-      ? cause.message
-      : 'Unable to update backend settings. Check the connection and try again.';
+    return cause instanceof ApiError ? cause.message : t('settings.backends.updateFailed');
   }
 
   function clearTimers() {
@@ -100,7 +99,9 @@
 
   function remaining(expiresAt: number) {
     const minutes = Math.max(1, Math.ceil((expiresAt - Date.now()) / 60_000));
-    return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+    return minutes === 1
+      ? t('settings.login.minutesOne')
+      : t('settings.login.minutesMany', { count: minutes });
   }
 
   async function acceptLogin(snapshot: ProviderAuthSession, version: number) {
@@ -132,7 +133,7 @@
             if (alive && version === generation) {
               error = {
                 providerId: snapshot.providerId,
-                text: 'Login status is unavailable. Start a new login to retry.',
+                text: t('settings.login.statusUnavailable'),
               };
               await cancelLogin();
             }
@@ -193,7 +194,7 @@
       if (alive)
         error = {
           providerId,
-          text: 'Could not confirm cancellation. This login will expire on the gateway.',
+          text: t('settings.login.cancelUnconfirmed'),
         };
     }
   }
@@ -234,11 +235,8 @@
   }
 </script>
 
-<h4>Subscription accounts</h4>
-<p class="note">
-  Sign in with an existing subscription. pi-ai's built-in model list is not a verification of your
-  account's model access or service policy.
-</p>
+<h4>{t('settings.login.title')}</h4>
+<p class="note">{t('settings.login.intro')}</p>
 {#each providers as provider (provider.id)}
   {@const current = login?.providerId === provider.id ? login : undefined}
   <div class="backend-card">
@@ -246,9 +244,11 @@
       <div>
         <strong>{provider.name}</strong><small
           ><span class="badge" class:connected={provider.connected}
-            >{provider.connected ? 'Connected' : 'Not connected'}</span
+            >{provider.connected
+              ? t('settings.login.connected')
+              : t('settings.login.notConnected')}</span
           >
-          · {provider.modelCount} known models</small
+          · {t('settings.login.knownModels', { count: provider.modelCount })}</small
         >
       </div>
       <div class="backend-actions">
@@ -257,14 +257,17 @@
             type="button"
             disabled={locked || activeLogin}
             onclick={() => requestLogin(provider)}
-            >{provider.connected ? 'Reconnect' : 'Log in'}</button
+            >{provider.connected
+              ? t('settings.login.reconnect')
+              : t('settings.login.logIn')}</button
           >{/if}
         {#if provider.connected && current?.status !== 'pending'}<button
             class="button ghost"
             type="button"
-            title="Removes this gateway's saved credentials. It does not revoke your account upstream or recall content already sent."
+            title={t('settings.login.logoutTitle')}
             disabled={locked || activeLogin}
-            onclick={() => onlogout(provider.providerId)}>Log out {provider.name}</button
+            onclick={() => onlogout(provider.providerId)}
+            >{t('settings.login.logOut', { name: provider.name })}</button
           >{/if}
       </div>
     </div>
@@ -274,65 +277,66 @@
       </p>{/if}
 
     {#if consenting === provider.id}
-      <div class="login-panel" role="region" aria-label="Login consent">
-        <p>Logging in enables the policies for all known GitHub Copilot models in your account.</p>
+      <div class="login-panel" role="region" aria-label={t('settings.login.consentAria')}>
+        <p>{t('settings.login.consentText')}</p>
         <div class="backend-actions">
           <button
             class="button primary"
             type="button"
             disabled={locked || activeLogin}
-            onclick={() => startLogin(provider, true)}>I agree, log in</button
+            onclick={() => startLogin(provider, true)}>{t('settings.login.agree')}</button
           ><button class="button ghost" type="button" onclick={() => (consenting = undefined)}
-            >Not now</button
+            >{t('settings.login.notNow')}</button
           >
         </div>
       </div>
     {/if}
 
     {#if current}
-      <div class="login-panel" role="region" aria-label="Provider login" aria-live="polite">
+      <div
+        class="login-panel"
+        role="region"
+        aria-label={t('settings.login.loginAria')}
+        aria-live="polite"
+      >
         {#if current.status === 'pending'}
           {#if current.auth}
             {@const url = authUrl(current.auth.url)}
             {#if current.auth.userCode}
               <div class="step">
-                <span>1. Copy your one-time code</span>
+                <span>{t('settings.login.step1')}</span>
                 <div class="backend-actions">
                   <code class="user-code">{current.auth.userCode}</code><button
                     class="button ghost"
                     type="button"
                     onclick={() => copy(current.auth!.userCode!, 'code')}
-                    >{copied === 'code' ? 'Copied' : 'Copy code'}</button
+                    >{copied === 'code' ? t('common.copied') : t('settings.login.copyCode')}</button
                   >
                 </div>
               </div>
             {/if}
             <div class="step">
-              {#if current.auth.userCode}<span>2. Enter it on the authorization page</span>{/if}
+              {#if current.auth.userCode}<span>{t('settings.login.step2')}</span>{/if}
               {#if url}<div class="backend-actions">
                   <a
                     class="button primary"
                     href={url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    referrerpolicy="no-referrer">Open authorization page</a
+                    referrerpolicy="no-referrer">{t('settings.login.openAuthPage')}</a
                   ><button class="button ghost" type="button" onclick={() => copy(url, 'link')}
-                    >{copied === 'link' ? 'Copied' : 'Copy link'}</button
+                    >{copied === 'link' ? t('common.copied') : t('settings.copyLink')}</button
                   >
                 </div>
-              {:else}<p role="alert">
-                  The provider returned an unsupported authorization URL.
-                </p>{/if}
+              {:else}<p role="alert">{t('settings.login.unsupportedUrl')}</p>{/if}
             </div>
             {#if provider.usesCallbackServer}<p class="instructions">
-                Sign in on the authorization page. If this browser runs on the gateway's machine,
-                the login finishes by itself. Otherwise the browser ends on a localhost page that
-                may not load. Copy that page's full address and paste it below.
+                {t('settings.login.instructions')}
               </p>
             {:else if current.auth.instructions && !current.auth.userCode}<p class="instructions">
                 {current.auth.instructions}
               </p>{/if}
-          {:else}<p>Preparing the login…</p>{/if}
+          {:else}<p>{t('settings.login.preparing')}</p>{/if}
           {#if current.progress}<p class="note">{current.progress}</p>{/if}
           {#each current.prompts as prompt (prompt.id)}
             <form
@@ -349,7 +353,7 @@
                     bind:value={answers[prompt.id]}
                     disabled={locked}
                     required={!prompt.allowEmpty}
-                    ><option value="">Choose an option</option
+                    ><option value="">{t('settings.login.chooseOption')}</option
                     >{#each prompt.options ?? [] as option}<option value={option.id}
                         >{option.label}</option
                       >{/each}</select
@@ -372,41 +376,42 @@
                   class="button ghost"
                   type="submit"
                   disabled={locked || (!prompt.allowEmpty && !answers[prompt.id])}
-                  >{prompt.kind === 'manual' ? 'Finish login' : 'Continue'}</button
+                  >{prompt.kind === 'manual'
+                    ? t('settings.login.finish')
+                    : t('settings.login.continue')}</button
                 >{#if prompt.kind === 'select'}<button
                     class="button ghost"
                     type="button"
                     disabled={locked}
-                    onclick={() => answerPrompt(prompt, true)}>Skip selection</button
+                    onclick={() => answerPrompt(prompt, true)}
+                    >{t('settings.login.skipSelection')}</button
                   >{/if}
               </div>
             </form>
           {/each}
           <div class="backend-actions footer">
-            <small
-              >Waiting for authorization · expires in {remaining(current.expiresAt)} · closing settings
-              cancels it</small
+            <small>{t('settings.login.waiting', { left: remaining(current.expiresAt) })}</small
             ><button class="button ghost" type="button" onclick={() => cancelLogin()}
-              >Cancel login</button
+              >{t('settings.login.cancel')}</button
             >
           </div>
         {:else if current.status === 'succeeded'}<p class="backend-ok">
-            Connected. {provider.modelCount} models are now available.
+            {t('settings.login.succeeded', { count: provider.modelCount })}
           </p>
         {:else}
           <p role="alert">
             {current.status === 'expired'
-              ? 'The login timed out before it was completed.'
-              : 'The login failed.'}
+              ? t('settings.login.expired')
+              : t('settings.login.failed')}
           </p>
           <div class="backend-actions">
             <button
               class="button ghost"
               type="button"
               disabled={locked || activeLogin}
-              onclick={() => requestLogin(provider)}>Try again</button
+              onclick={() => requestLogin(provider)}>{t('settings.login.tryAgain')}</button
             ><button class="button ghost" type="button" onclick={() => (login = undefined)}
-              >Dismiss</button
+              >{t('common.dismiss')}</button
             >
           </div>
         {/if}
@@ -414,10 +419,7 @@
     {/if}
   </div>
 {/each}
-<p class="note">
-  Log out removes this gateway's saved credentials and prevents new requests. It does not revoke
-  your account upstream or recall content already sent.
-</p>
+<p class="note">{t('settings.login.logoutNote')}</p>
 
 <style>
   h4 {

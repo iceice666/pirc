@@ -7,6 +7,7 @@
  * change touches an open loop.
  */
 import { request } from './http';
+import { t } from './i18n';
 
 export type SourceKind = 'email' | 'calendar' | 'moodle' | 'workspace';
 
@@ -98,11 +99,24 @@ export const sourcesApi = {
     ),
 };
 
+/**
+ * What a kind of source is called, in the current locale. Getters, so a
+ * component that reads `KIND_LABELS[source.kind]` re-renders with the rest of
+ * the page when someone switches language.
+ */
 export const KIND_LABELS: Record<SourceKind, string> = {
-  email: 'Email',
-  calendar: 'Calendar',
-  moodle: 'Moodle',
-  workspace: 'Workspace',
+  get email() {
+    return t('engine.source.kind.email');
+  },
+  get calendar() {
+    return t('engine.source.kind.calendar');
+  },
+  get moodle() {
+    return t('engine.source.kind.moodle');
+  },
+  get workspace() {
+    return t('engine.source.kind.workspace');
+  },
 };
 
 /** What a source is, in one line (no credential is ever in `config`). */
@@ -128,18 +142,24 @@ export function describeSource(source: Source): string {
 /** How often it is read, for people. */
 export function cadence(ms: number): string {
   const minutes = Math.round(ms / 60_000);
-  if (minutes < 60) return `every ${minutes} min`;
+  if (minutes < 60) return t('engine.source.cadence.minutes', { count: minutes });
   const hours = Math.round(minutes / 60);
-  return hours >= 24 ? 'once a day' : `every ${hours} h`;
+  return hours >= 24
+    ? t('engine.source.cadence.daily')
+    : t('engine.source.cadence.hours', { count: hours });
 }
 
 /** Its state, for people: paused, failing, read, or not yet. */
 export function sourceStatus(source: Source): { text: string; tone: 'muted' | 'ok' | 'error' } {
-  if (source.pausedAt) return { text: 'Paused', tone: 'muted' };
+  if (source.pausedAt) return { text: t('common.status.paused'), tone: 'muted' };
   if (source.failures > 0 && source.lastError)
-    return { text: `Cannot be read: ${source.lastError}`, tone: 'error' };
-  if (source.lastPolledAt) return { text: `Read ${cadence(source.cadenceMs)}`, tone: 'ok' };
-  return { text: 'Not read yet', tone: 'muted' };
+    return { text: t('engine.source.cannotRead', { error: source.lastError }), tone: 'error' };
+  if (source.lastPolledAt)
+    return {
+      text: t('engine.source.read', { when: cadence(source.cadenceMs) }),
+      tone: 'ok',
+    };
+  return { text: t('engine.source.notRead'), tone: 'muted' };
 }
 
 /** The source ids a room's `sourceScope` follows. */

@@ -1,4 +1,5 @@
 /** Time formatting shared by the sidebar, panels and jobs menu. */
+import { locale, t } from './i18n';
 
 type Instant = string | number | Date;
 
@@ -7,20 +8,20 @@ const ms = (value: Instant) => new Date(value).getTime();
 /** "just now", "5m ago", "3h ago", "2d ago", then the date (Git history). */
 export function ago(time: Instant, now = Date.now()): string {
   const seconds = Math.max(0, (now - ms(time)) / 1000);
-  if (seconds < 60) return 'just now';
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`;
-  if (seconds < 30 * 86_400) return `${Math.floor(seconds / 86_400)}d ago`;
-  return new Date(time).toLocaleDateString();
+  if (seconds < 60) return t('common.justNow');
+  if (seconds < 3600) return t('common.minutesAgo', { count: Math.floor(seconds / 60) });
+  if (seconds < 86_400) return t('common.hoursAgo', { count: Math.floor(seconds / 3600) });
+  if (seconds < 30 * 86_400) return t('common.daysAgo', { count: Math.floor(seconds / 86_400) });
+  return new Date(time).toLocaleDateString(locale());
 }
 
 /** Compact age for dense lists: "now", "5m", "3h", "2d". */
 export function shortAgo(time: Instant, now = Date.now()): string {
   const delta = now - ms(time);
-  if (delta < 60_000) return 'now';
-  if (delta < 3_600_000) return `${Math.floor(delta / 60_000)}m`;
-  if (delta < 86_400_000) return `${Math.floor(delta / 3_600_000)}h`;
-  return `${Math.floor(delta / 86_400_000)}d`;
+  if (delta < 60_000) return t('common.now');
+  if (delta < 3_600_000) return t('common.minutes', { count: Math.floor(delta / 60_000) });
+  if (delta < 86_400_000) return t('common.hours', { count: Math.floor(delta / 3_600_000) });
+  return t('common.days', { count: Math.floor(delta / 86_400_000) });
 }
 
 /** Wall-clock run time, "12s", "3m 4s", "1h 2m"; open-ended runs count up to `now`. */

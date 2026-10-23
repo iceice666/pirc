@@ -1,4 +1,5 @@
 import { isAbort } from './http';
+import { t } from './i18n';
 
 /**
  * One request slot with `loading` / `error` state. Starting a new request
@@ -16,7 +17,7 @@ export class Loader {
    */
   async run<T>(
     task: (signal: AbortSignal) => Promise<T>,
-    failure: string | ((cause: unknown) => string) = 'Request failed.',
+    failure: string | ((cause: unknown) => string) = t('common.requestFailed'),
   ): Promise<T | undefined> {
     this.#controller?.abort();
     const controller = new AbortController();

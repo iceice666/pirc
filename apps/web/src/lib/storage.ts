@@ -94,3 +94,12 @@ export function saveLayout(name: string, value: number | boolean): void {
   // Layout just won't persist without storage.
   write(`${LAYOUT_PREFIX}${name}`, JSON.stringify(value));
 }
+
+/** The language chosen on this device (plans/rewrite/11-web.md); null: follow the browser. */
+export function loadLocale(): string | null {
+  return read(`${LAYOUT_PREFIX}locale`);
+}
+
+export function saveLocale(locale: string): void {
+  write(`${LAYOUT_PREFIX}locale`, locale);
+}

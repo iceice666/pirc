@@ -7,6 +7,7 @@
    */
   import { onDestroy, onMount, untrack } from 'svelte';
   import { backendApi, ApiError } from '../api';
+  import { t } from '../i18n';
   import { watch } from '../watch.svelte';
   import type {
     BackendModel,
@@ -115,9 +116,7 @@
   });
 
   function safeError(cause: unknown) {
-    return cause instanceof ApiError
-      ? cause.message
-      : 'The gateway could not be reached. Check the connection and try again.';
+    return cause instanceof ApiError ? cause.message : t('settings.providers.unreachable');
   }
 
   function freeId(base: string) {
@@ -192,8 +191,10 @@
       discovery = {
         ok: true,
         text: list.length
-          ? `Found ${list.length} model${list.length === 1 ? '' : 's'}. Select the ones to use.`
-          : 'The endpoint lists no models. Add model IDs manually.',
+          ? list.length === 1
+            ? t('settings.providers.foundOne')
+            : t('settings.providers.foundMany', { count: list.length })
+          : t('settings.providers.endpointNoModels'),
       };
     } catch (cause) {
       if (alive) discovery = { ok: false, text: safeError(cause) };
@@ -242,10 +243,12 @@
     const context = tokens(model.contextWindow);
     const output = tokens(model.maxTokens);
     return [
-      context ? `${context} context` : 'default limits',
-      output ? `${output} output` : undefined,
-      model.reasoning ? 'reasoning' : undefined,
-      model.input?.includes('image') ? 'images' : undefined,
+      context
+        ? t('settings.providers.contextTokens', { tokens: context })
+        : t('settings.providers.defaultLimits'),
+      output ? t('settings.providers.outputTokens', { tokens: output }) : undefined,
+      model.reasoning ? t('settings.providers.reasoning') : undefined,
+      model.input?.includes('image') ? t('settings.providers.images') : undefined,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -260,51 +263,57 @@
   }}
   autocomplete="off"
 >
-  <h4>{editingId ? `Edit ${editingId}` : 'New backend'}</h4>
+  <h4>
+    {editingId
+      ? t('settings.providers.editTitle', { id: editingId })
+      : t('settings.providers.newTitle')}
+  </h4>
   {#if !editingId}
     <label
-      ><span>Service</span><select
+      ><span>{t('settings.providers.service')}</span><select
         value={presetId}
         disabled={busy}
         onchange={(event) => choosePreset(event.currentTarget.value)}
-        ><option value="">Custom endpoint</option>
-        {#if presets.some((item) => item.catalog)}<optgroup label="Cloud services"
+        ><option value="">{t('settings.providers.customEndpoint')}</option>
+        {#if presets.some((item) => item.catalog)}<optgroup
+            label={t('settings.providers.cloudServices')}
             >{#each presets.filter((item) => item.catalog) as item (item.id)}<option value={item.id}
                 >{item.name}</option
               >{/each}</optgroup
           >{/if}
-        {#if presets.some((item) => !item.catalog)}<optgroup label="Local servers"
+        {#if presets.some((item) => !item.catalog)}<optgroup
+            label={t('settings.providers.localServers')}
             >{#each presets.filter((item) => !item.catalog) as item (item.id)}<option
                 value={item.id}>{item.name}</option
               >{/each}</optgroup
           >{/if}</select
       ></label
     >
-    {#if presetsUnavailable}<small
-        >Service presets are unavailable. Enter the endpoint details manually.</small
-      >{/if}
+    {#if presetsUnavailable}<small>{t('settings.providers.presetsUnavailable')}</small>{/if}
   {/if}
   {#if savedPreset}<p class="hint">
-      Uses pi-ai's {presetName} catalog. Known models keep their limits and request compatibility.
+      {t('settings.providers.presetHint', { preset: presetName ?? '' })}
     </p>{/if}
   <label
-    ><span>Backend ID</span><input
+    ><span>{t('settings.providers.backendId')}</span><input
       bind:value={providerId}
       required
       disabled={!!editingId || busy}
     /></label
   >
   <label
-    ><span>API</span><select bind:value={providerApi} disabled={busy || !!savedPreset}
-      ><option value="openai-completions">OpenAI-compatible chat</option><option value="openai-chat"
-        >OpenAI chat (legacy)</option
-      ><option value="openai-responses">OpenAI Responses</option><option value="anthropic-messages"
-        >Anthropic Messages</option
+    ><span>{t('settings.providers.api')}</span><select
+      bind:value={providerApi}
+      disabled={busy || !!savedPreset}
+      ><option value="openai-completions">{t('settings.providers.apiCompletions')}</option><option
+        value="openai-chat">{t('settings.providers.apiChat')}</option
+      ><option value="openai-responses">{t('settings.providers.apiResponses')}</option><option
+        value="anthropic-messages">{t('settings.providers.apiAnthropic')}</option
       ></select
     ></label
   >
   <label
-    ><span>Base URL</span><input
+    ><span>{t('settings.providers.baseUrl')}</span><input
       type="url"
       bind:value={baseUrl}
       placeholder="http://localhost:11434/v1"
@@ -313,34 +322,35 @@
     /></label
   >
   <label
-    ><span>API key (optional)</span><input
+    ><span>{t('settings.providers.apiKey')}</span><input
       type="password"
       bind:value={apiKey}
       autocomplete="new-password"
       disabled={busy || clearKey}
       placeholder={editingId
-        ? 'Leave blank to keep saved key'
+        ? t('settings.providers.keepKey')
         : preset?.keyless
-          ? 'Not needed for a local server'
-          : 'Leave blank for a no-key endpoint'}
+          ? t('settings.providers.keyless')
+          : t('settings.providers.noKeyEndpoint')}
     /></label
   >
   {#if editingId}<label class="backend-checkbox"
       ><input type="checkbox" bind:checked={clearKey} disabled={busy} /><span
-        >Remove the saved API key</span
+        >{t('settings.providers.clearKey')}</span
       ></label
     >{/if}
   {#if !savedPreset}<label class="backend-checkbox"
       ><input type="checkbox" bind:checked={opencodeGo} disabled={busy} /><span
-        >OpenCode compatibility (session routing + pirc User-Agent; automatic for opencode.ai/zen
-        and opencode.ai/inference)</span
+        >{t('settings.providers.opencodeGo')}</span
       ></label
     >{/if}
 
-  <h5>Models</h5>
+  <h5>{t('settings.providers.modelsTitle')}</h5>
   <div class="backend-actions">
     <button class="button ghost" type="button" disabled={busy || !baseUrl.trim()} onclick={discover}
-      >{checking === 'discover' ? 'Fetching models…' : 'Fetch models from endpoint'}</button
+      >{checking === 'discover'
+        ? t('settings.providers.fetching')
+        : t('settings.providers.fetch')}</button
     >
   </div>
   {#if discovery}<p class:backend-error={!discovery.ok} role="status">{discovery.text}</p>{/if}
@@ -352,14 +362,14 @@
           class="filter"
           type="search"
           bind:value={filter}
-          placeholder={`Filter ${choices.length} models`}
-          aria-label="Filter models"
+          placeholder={t('settings.providers.filter', { count: choices.length })}
+          aria-label={t('settings.providers.filterAria')}
         />
         <button class="button ghost" type="button" disabled={busy} onclick={selectShown}
-          >Select shown</button
+          >{t('settings.providers.selectShown')}</button
         >
       </div>
-      <ul class="choices" aria-label="Available models">
+      <ul class="choices" aria-label={t('settings.providers.available')}>
         {#each shown as model (model.id)}
           <li>
             <label class="backend-checkbox"
@@ -372,13 +382,13 @@
               ></label
             >
           </li>
-        {:else}<li><small>No models match the filter.</small></li>{/each}
+        {:else}<li><small>{t('settings.providers.noMatch')}</small></li>{/each}
       </ul>
     </div>
   {/if}
 
   {#if models.length}
-    <ul class="selected" aria-label="Selected models">
+    <ul class="selected" aria-label={t('settings.providers.selected')}>
       {#each models as model (model.id)}
         <li>
           <div class="model-head">
@@ -389,15 +399,20 @@
               class="button ghost"
               type="button"
               disabled={busy}
-              onclick={() => toggle(model, false)}>Remove {model.id}</button
+              onclick={() => toggle(model, false)}
+              >{t('settings.providers.removeModel', { id: model.id })}</button
             >
           </div>
           <details>
-            <summary>Details</summary>
+            <summary>{t('settings.providers.details')}</summary>
             <fieldset disabled={busy}>
-              <label><span>Display name</span><input bind:value={model.name} /></label>
               <label
-                ><span>Context window (tokens)</span><input
+                ><span>{t('settings.providers.displayName')}</span><input
+                  bind:value={model.name}
+                /></label
+              >
+              <label
+                ><span>{t('settings.providers.contextWindow')}</span><input
                   type="number"
                   min="1"
                   step="1"
@@ -406,7 +421,7 @@
                 /></label
               >
               <label
-                ><span>Maximum output tokens</span><input
+                ><span>{t('settings.providers.maxOutput')}</span><input
                   type="number"
                   min="1"
                   step="1"
@@ -419,14 +434,14 @@
                   type="checkbox"
                   checked={model.reasoning ?? false}
                   onchange={(event) => (model.reasoning = event.currentTarget.checked)}
-                /><span>Supports reasoning</span></label
+                /><span>{t('settings.providers.supportsReasoning')}</span></label
               >
               <label class="backend-checkbox"
                 ><input
                   type="checkbox"
                   checked={model.input?.includes('image') ?? false}
                   onchange={(event) => setImage(model, event.currentTarget.checked)}
-                /><span>Supports image input</span></label
+                /><span>{t('settings.providers.supportsImage')}</span></label
               >
             </fieldset>
           </details>
@@ -434,14 +449,12 @@
       {/each}
     </ul>
   {:else}<p class="hint">
-      {choices.length
-        ? 'Select at least one model above, or add a model ID.'
-        : 'Fetch the endpoint’s models, or add a model ID.'}
+      {choices.length ? t('settings.providers.selectOne') : t('settings.providers.fetchFirst')}
     </p>{/if}
 
   <div class="backend-actions manual">
     <label
-      ><span>Model ID</span><input
+      ><span>{t('settings.providers.modelId')}</span><input
         bind:value={manualId}
         disabled={busy}
         onkeydown={(event) => {
@@ -455,13 +468,15 @@
       class="button ghost"
       type="button"
       disabled={busy || !manualId.trim() || selected.has(manualId.trim())}
-      onclick={addManual}>Add model</button
+      onclick={addManual}>{t('settings.providers.addModel')}</button
     >
   </div>
 
   <div class="backend-actions">
     {#if models.length > 1}<label class="inline"
-        ><span>Test with</span><select bind:value={testModel} disabled={busy}
+        ><span>{t('settings.providers.testWith')}</span><select
+          bind:value={testModel}
+          disabled={busy}
           >{#each models as model (model.id)}<option value={model.id}
               >{model.name || model.id}</option
             >{/each}</select
@@ -471,7 +486,10 @@
       class="button ghost"
       type="button"
       disabled={busy || !models.length || !baseUrl.trim()}
-      onclick={test}>{checking === 'test' ? 'Testing…' : 'Test connection'}</button
+      onclick={test}
+      >{checking === 'test'
+        ? t('settings.providers.testing')
+        : t('settings.providers.test')}</button
     >
   </div>
   {#if testResult}<p
@@ -479,13 +497,16 @@
       class:backend-ok={testResult.ok}
       role="status"
     >
-      {testResult.ok ? `Connected. ${testResult.message}` : testResult.message}
+      {testResult.ok
+        ? t('settings.providers.connected', { message: testResult.message })
+        : testResult.message}
     </p>{/if}
 
   <div class="backend-actions">
-    <button class="button primary" type="submit" disabled={busy || !ready}>Save backend</button
+    <button class="button primary" type="submit" disabled={busy || !ready}
+      >{t('settings.providers.save')}</button
     ><button class="button ghost" type="button" disabled={locked} onclick={oncancel}
-      >Cancel editing</button
+      >{t('settings.providers.cancelEditing')}</button
     >
   </div>
 </form>

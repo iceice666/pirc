@@ -6,6 +6,7 @@
  * that has not started.
  */
 import { request } from './http';
+import { t } from './i18n';
 import { when } from './loops';
 
 export interface Wake {
@@ -68,17 +69,17 @@ export const wakesApi = {
 
 /** What woke (or will wake) pirc, for people. */
 export function describeTrigger(wake: Wake): string {
-  if (wake.kind === 'self') return `Coming back to look at: ${wake.trigger.why ?? ''}`;
+  if (wake.kind === 'self') return t('settings.wakes.triggerSelf', { why: wake.trigger.why ?? '' });
   if (wake.kind === 'anchor') {
-    if (wake.trigger.moment === 'eve') return 'The day before an open loop is due';
-    if (wake.trigger.moment === 'next') return 'A recurring open loop came round';
-    return "An open loop's time came";
+    if (wake.trigger.moment === 'eve') return t('settings.wakes.triggerEve');
+    if (wake.trigger.moment === 'next') return t('settings.wakes.triggerNext');
+    return t('settings.wakes.triggerDue');
   }
   const name = wake.trigger.name ?? wake.trigger.sourceId;
-  if (!name) return 'A source changed';
+  if (!name) return t('settings.wakes.triggerSource');
   return wake.trigger.reason === 'loop'
-    ? `Something new in ${name} touched an open loop`
-    : `Something new in ${name}`;
+    ? t('settings.wakes.triggerSourceLoop', { name })
+    : t('settings.wakes.triggerSourceNew', { name });
 }
 
 /** The browser's own zone: when a wake comes, as the person reads it. */
@@ -88,18 +89,24 @@ const localZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 export function describeOutcome(wake: Wake, zone = localZone(), now = Date.now()): string {
   switch (wake.outcome) {
     case null:
-      return wake.startedAt ? 'Awake now' : `At ${when(wake.scheduledAt, zone, now)}`;
+      return wake.startedAt
+        ? t('settings.wakes.awakeNow')
+        : t('settings.wakes.at', { when: when(wake.scheduledAt, zone, now) });
     case 'spoke':
-      return 'Said something in the room';
+      return t('settings.wakes.spoke');
     case 'silent':
-      return wake.note ? `Nothing to say (${wake.note})` : 'Nothing to say';
+      return wake.note
+        ? t('settings.wakes.silentNote', { note: wake.note })
+        : t('settings.wakes.silent');
     case 'preempted':
-      return 'Someone spoke first; it came back after';
+      return t('settings.wakes.preempted');
     case 'failed':
-      return wake.note ? `Failed: ${wake.note}` : 'Failed';
+      return wake.note
+        ? t('settings.wakes.failedNote', { note: wake.note })
+        : t('settings.wakes.failed');
     case 'quota':
-      return "Skipped: today's wakes were used up";
+      return t('settings.wakes.quota');
     case 'cancelled':
-      return 'Cancelled';
+      return t('settings.wakes.cancelled');
   }
 }

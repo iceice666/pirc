@@ -16,6 +16,8 @@
   } from '@lucide/svelte';
   import { tick } from 'svelte';
   import { engine, type InboxItem } from '../engine.svelte';
+  import { t } from '../i18n';
+  import type { MessageKey } from '../i18n/messages';
   import { isReadOnly, workNodes } from '../modes';
   import { shortAgo } from '../time';
   import type { DelegationStatus, SessionSummary, Workspace } from '../types';
@@ -49,11 +51,11 @@
     onoverview,
   }: Props = $props();
 
-  const DELEGATION_STATUS: Record<DelegationStatus, string> = {
-    running: 'is running',
-    waiting_input: 'waits for you',
-    completed: 'finished',
-    failed: 'failed',
+  const DELEGATION_STATUS: Record<DelegationStatus, MessageKey> = {
+    running: 'engine.delegation.running',
+    waiting_input: 'engine.delegation.waiting',
+    completed: 'engine.delegation.completed',
+    failed: 'engine.delegation.failed',
   };
   const nodes = $derived(engine.nodes);
   const catalog = $derived(engine.modeCatalog);
@@ -148,7 +150,7 @@
 {#if open}<button
     class="sidebar-scrim"
     type="button"
-    aria-label="Close navigation"
+    aria-label={t('engine.nav.close')}
     onclick={onclose}
   ></button>{/if}
 <aside
@@ -156,25 +158,25 @@
   class:open
   class:collapsed
   class="sidebar"
-  aria-label="Sessions"
+  aria-label={t('engine.nav.sessions')}
   inert={collapsed && !open}
 >
   <div class="brand-row">
-    <a class="brand" href="/" aria-label="pirc home">
+    <a class="brand" href="/" aria-label={t('engine.nav.home')}>
       <span class="brand-mark"><Command size={16} /></span><span>pirc</span>
     </a>
     <button
       class="sidebar-collapse icon-button"
       type="button"
-      aria-label="Hide sidebar"
-      title="Hide sidebar"
+      aria-label={t('engine.header.hideSidebar')}
+      title={t('engine.header.hideSidebar')}
       onclick={oncollapse}><PanelLeftClose size={18} /></button
     >
     <button
       bind:this={closeButton}
       class="mobile-close icon-button"
       type="button"
-      aria-label="Close navigation"
+      aria-label={t('engine.nav.close')}
       onclick={onclose}><X size={19} /></button
     >
   </div>
@@ -183,29 +185,32 @@
     class:current={engine.view === 'overview'}
     type="button"
     aria-current={engine.view === 'overview' ? 'page' : undefined}
-    onclick={onoverview}><Gauge size={16} /> Overview</button
+    onclick={onoverview}><Gauge size={16} /> {t('engine.nav.overview')}</button
   >
   <label class="search">
     <Search size={16} />
-    <span class="sr-only">Search sessions</span>
-    <input bind:value={query} placeholder="Search sessions" />
+    <span class="sr-only">{t('engine.search.sessions')}</span>
+    <input bind:value={query} placeholder={t('engine.search.sessions')} />
   </label>
 
   <div class="sidebar-scroll">
     {#if query}
-      <section class="list-section" aria-label="Search results">
-        <div class="section-heading"><strong>Results</strong><small>{results.length}</small></div>
+      <section class="list-section" aria-label={t('engine.search.results')}>
+        <div class="section-heading">
+          <strong>{t('engine.search.heading')}</strong><small>{results.length}</small>
+        </div>
         <div class="session-list">
           {#each results as session (session.id)}{@render sessionRow(session, true)}{:else}
-            <p class="empty-note">Nothing matches.</p>
+            <p class="empty-note">{t('engine.search.nothing')}</p>
           {/each}
         </div>
       </section>
     {:else}
       {#if inbox.length}
-        <section class="list-section" aria-label="Needs you">
+        <section class="list-section" aria-label={t('engine.inbox.title')}>
           <div class="section-heading attention">
-            <strong>Needs you</strong><span class="count-badge">{inbox.length}</span>
+            <strong>{t('engine.inbox.title')}</strong><span class="count-badge">{inbox.length}</span
+            >
           </div>
           <div class="inbox-list">
             {#each inbox as item (item.id)}{@render inboxRow(item)}{/each}
@@ -217,25 +222,26 @@
           <div class="section-heading">
             <span class="host-dot" class:online={host.online}></span>
             <strong>{host.id}</strong>
-            {#if !host.online}<small>offline</small>{/if}
+            {#if !host.online}<small>{t('engine.host.offline')}</small>{/if}
             <button
               class="heading-action"
               type="button"
               onclick={() => onaddworkspace(host.id)}
               disabled={!host.online}
-              aria-label="Add workspace on {host.id}"><Plus size={15} /></button
+              aria-label={t('engine.host.addWorkspace', { name: host.id })}
+              ><Plus size={15} /></button
             >
           </div>
           <div class="workspace-list">
             {#each host.workspaces as workspace (workspace.id)}
               {@render workspaceRow(workspace)}
             {:else}
-              <p class="empty-note">No workspaces yet.</p>
+              <p class="empty-note">{t('engine.host.noWorkspaces')}</p>
             {/each}
           </div>
         </section>
       {:else}
-        <p class="empty-note">Connect a device to add a workspace.</p>
+        <p class="empty-note">{t('engine.host.connectDevice')}</p>
       {/each}
     {/if}
   </div>
@@ -243,7 +249,7 @@
   <div class="sidebar-footer">
     <button class="settings-entry" type="button" onclick={onsettings}>
       <Settings size={17} />
-      <span>Settings</span>
+      <span>{t('common.tab.settings')}</span>
     </button>
   </div>
 </aside>
@@ -252,8 +258,8 @@
   bind:this={menuButton}
   class="mobile-menu icon-button"
   type="button"
-  aria-label="Back to the list"
-  title="Back"
+  aria-label={t('engine.nav.back')}
+  title={t('common.back')}
   onclick={() => (open = true)}><ChevronLeft size={22} /></button
 >
 
@@ -273,18 +279,20 @@
       >
         <Folder size={15} />
         <strong>{workspace.displayName}</strong>
-        {#if isReadOnly(workspace)}<small>· read-only</small>{/if}
+        {#if isReadOnly(workspace)}<small>· {t('engine.workspace.readOnly')}</small>{/if}
         <span class="workspace-meta">
           {#if sessions.some((s) => s.writeLease && s.workspaceId === workspace.id)}<span
               class="lease-lock"
               role="img"
-              aria-label="A session holds the write lease"
-              title="A session holds the write lease"><Lock size={12} /></span
+              aria-label={t('engine.workspace.writeLeaseHeld')}
+              title={t('engine.workspace.writeLeaseHeld')}><Lock size={12} /></span
             >{/if}
-          {#if running}<small class="running-count" title="{running} running"
+          {#if running}<small class="running-count" title={t('engine.running', { count: running })}
               ><span class="status-dot running"></span>{running}</small
             >{/if}
-          {#if unread}<span class="unread-count" aria-label="{unread} unread">{unread}</span>{/if}
+          {#if unread}<span class="unread-count" aria-label={t('common.unread', { count: unread })}
+              >{unread}</span
+            >{/if}
         </span>
       </button>
     </div>
@@ -305,13 +313,17 @@
         <strong>{session.name}</strong>
         <small
           >{session.origin
-            ? `Delegated · ${session.origin.title}`
-            : (workspaceById.get(session.workspaceId)?.displayName ?? '')} · waiting for you</small
+            ? t('engine.inbox.delegated', { title: session.origin.title })
+            : (workspaceById.get(session.workspaceId)?.displayName ?? '')} · {t(
+            'engine.inbox.waitingForYou',
+          )}</small
         >
       </span>
     </button>
     <div class="inbox-actions">
-      <button type="button" class="pill-button" onclick={() => onselect(session.id)}>Reply</button>
+      <button type="button" class="pill-button" onclick={() => onselect(session.id)}
+        >{t('engine.inbox.reply')}</button
+      >
     </div>
   </div>
 {/snippet}
@@ -337,7 +349,7 @@
           bind:this={renameInput}
           bind:value={renameValue}
           maxlength="200"
-          aria-label="Session name"
+          aria-label={t('engine.session.nameLabel')}
           onkeydown={(event) => event.key === 'Escape' && finishRename(false)}
           onblur={() => finishRename(true)}
         />
@@ -363,35 +375,45 @@
           class:running={session.runStatus === 'running' || session.runStatus === 'queued'}
           class="status-dot"
           title={session.runStatus === 'waiting_input'
-            ? 'Needs input'
+            ? t('engine.session.needsInput')
             : session.runStatus === 'running'
-              ? 'Working'
+              ? t('common.status.working')
               : (session.runStatus ?? session.runnerStatus)}
         ></span>
         {#if session.origin?.kind === 'delegation'}<span
             class="origin-icon"
-            title="Delegated: {session.origin.title}{session.origin.status
-              ? ` (${DELEGATION_STATUS[session.origin.status]})`
-              : ''}"><Forward size={13} /></span
+            title="{t('engine.session.delegated', {
+              title: session.origin.title,
+            })}{session.origin.status && ` (${t(DELEGATION_STATUS[session.origin.status])})`}"
+            ><Forward size={13} /></span
           >{/if}
         <span class="session-name">{session.name}</span>
         <span class="session-meta">
           {#if session.writeLease}<span
               class="lease-lock"
               role="img"
-              aria-label="Holds the write lease"
-              title="Holds the {workspace?.displayName ?? 'workspace'} write lease"
-              ><Lock size={12} /></span
+              aria-label={t('engine.session.holdsLease')}
+              title={t('engine.session.holdsWorkspaceLease', {
+                name: workspace?.displayName ?? t('engine.workspace.word'),
+              })}><Lock size={12} /></span
             >{/if}
           {#if session.origin?.kind === 'delegation' && (session.origin.status === 'completed' || session.origin.status === 'failed')}<span
               class="delegation-status"
               class:failed={session.origin.status === 'failed'}
-              title="The delegated task {DELEGATION_STATUS[session.origin.status]}"
-              >{session.origin.status === 'completed' ? 'Done' : 'Failed'}</span
+              title={t('engine.session.delegatedTask', {
+                status: t(DELEGATION_STATUS[session.origin.status]),
+              })}
+              >{session.origin.status === 'completed'
+                ? t('common.status.done')
+                : t('common.status.failed')}</span
             >{/if}
           {#if showWorkspace && workspace}<span class="workspace-chip">{workspace.displayName}</span
             >{/if}
-          {#if session.unread}<span class="unread-dot" role="img" aria-label="Unread"></span>{/if}
+          {#if session.unread}<span
+              class="unread-dot"
+              role="img"
+              aria-label={t('engine.session.unread')}
+            ></span>{/if}
           <small>{shortAgo(session.lastActivityAt)}</small>
         </span>
       </button>
@@ -399,15 +421,15 @@
         <button
           class="session-more"
           type="button"
-          aria-label="Actions for {session.name}"
+          aria-label={t('engine.session.actions', { name: session.name })}
           onclick={() => (revealedId = session.id)}><Ellipsis size={16} /></button
         >
       {/if}
       <div class="session-actions">
         <button
           type="button"
-          aria-label="Rename {session.name}"
-          title="Rename (F2)"
+          aria-label={t('engine.session.renameName', { name: session.name })}
+          title={t('engine.session.renameTitle')}
           onclick={() => startRename(session)}><Pencil size={14} /></button
         >
       </div>
@@ -542,7 +564,7 @@
     gap: 6px;
     padding: 0 8px;
     color: var(--muted);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;

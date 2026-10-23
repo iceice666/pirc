@@ -5,6 +5,7 @@
  */
 import { facesApi, type Face, type FaceInput, type FacePresence as FaceState } from './faces';
 import { ApiError } from './http';
+import { t } from './i18n';
 import {
   appendMessage,
   byActivity,
@@ -119,7 +120,7 @@ export class RoomsState {
     } catch (error) {
       // Dev only: the import is left out of production builds.
       if (import.meta.env.DEV && !this.demo) await this.#startDemo(await import('./mock'));
-      else this.error = message(error, 'Unable to load rooms.');
+      else this.error = message(error, t('rooms.error.load'));
     } finally {
       this.loading = false;
     }
@@ -149,7 +150,7 @@ export class RoomsState {
       this.messages = demo.demoMessages[roomId] ?? [];
       this.pinned = [];
       this.hasMore = false;
-      this.error = room ? '' : 'This room does not exist.';
+      this.error = room ? '' : t('rooms.error.missing');
       return;
     }
     try {
@@ -170,8 +171,8 @@ export class RoomsState {
       this.messages = [];
       this.error =
         error instanceof ApiError && error.status === 404
-          ? 'This room does not exist.'
-          : message(error, 'Unable to open the room.');
+          ? t('rooms.error.missing')
+          : message(error, t('rooms.error.open'));
     }
   }
 
@@ -422,7 +423,7 @@ export class RoomsState {
       if (token !== this.#threadToken) return;
       this.threadMessages = [];
       this.threadWorkers = [];
-      this.threadError = message(error, 'Unable to open the thread.');
+      this.threadError = message(error, t('thread.error.open'));
     }
   }
 

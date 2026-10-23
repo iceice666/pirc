@@ -3,6 +3,7 @@
   import { tick } from 'svelte';
   import { rovingFocus } from '../../a11y';
   import { engine } from '../../engine.svelte';
+  import { t } from '../../i18n';
   import { capitalized, isReadOnly } from '../../modes';
   import { shortAgo } from '../../time';
   import type { SessionSummary, Workspace } from '../../types';
@@ -28,10 +29,10 @@
   const noun = $derived(mode.ui.noun);
   const subtitle = $derived(
     [
-      mode.repository ? 'Workspace' : mode.label,
+      mode.repository ? t('engine.workspace.title') : mode.label,
       workspace.hostId,
-      online ? '' : 'offline',
-      readOnly ? 'read-only' : '',
+      online ? '' : t('engine.host.offline'),
+      readOnly ? t('engine.workspace.readOnly') : '',
     ]
       .filter(Boolean)
       .join(' · '),
@@ -80,9 +81,9 @@
   }
 
   function status(session: SessionSummary) {
-    if (needsInput(session)) return 'Needs input';
-    if (isRunning(session)) return 'Working';
-    return session.unread ? 'Unread' : '';
+    if (needsInput(session)) return t('engine.session.needsInput');
+    if (isRunning(session)) return t('common.status.working');
+    return session.unread ? t('engine.session.unread') : '';
   }
 </script>
 
@@ -92,8 +93,8 @@
       <button
         class="icon-button"
         type="button"
-        aria-label="Show sidebar"
-        title="Show sidebar"
+        aria-label={t('engine.header.showSidebar')}
+        title={t('engine.header.showSidebar')}
         onclick={onexpand}><PanelLeftOpen size={19} /></button
       >
     {/if}
@@ -107,10 +108,10 @@
   <div
     class="page-tabs"
     role="tablist"
-    aria-label="{workspace.displayName} sections"
+    aria-label={t('engine.workspace.sections', { name: workspace.displayName })}
     use:rovingFocus={{ selector: '[role="tab"]', orientation: 'horizontal', activate: true }}
   >
-    {#each [{ id: 'sessions' as Tab, label: `${capitalized(noun)}s` }, { id: 'settings' as Tab, label: 'Settings' }] as item (item.id)}
+    {#each [{ id: 'sessions' as Tab, label: `${capitalized(noun)}s` }, { id: 'settings' as Tab, label: t('common.tab.settings') }] as item (item.id)}
       <button
         type="button"
         role="tab"
@@ -122,7 +123,7 @@
         onclick={() => (tab = item.id)}
         >{item.label}{#if item.id === 'sessions' && unread}<span class="sr-only">,</span><span
             class="tab-count"
-            aria-label="{unread} unread">{unread}</span
+            aria-label={t('common.unread', { count: unread })}>{unread}</span
           >{/if}</button
       >
     {/each}
@@ -132,7 +133,7 @@
     <div class="page-body">
       {#if readOnly}
         <p class="note" role="status">
-          This workspace's mode is no longer available on the gateway: its {noun}s are read-only.
+          {t('engine.workspace.modeGone', { noun })}
         </p>
       {/if}
       {#if tab === 'sessions'}
@@ -140,8 +141,16 @@
           <div class="list-tools">
             <label class="search">
               <Search size={15} />
-              <span class="sr-only">Search {noun}s in {workspace.displayName}</span>
-              <input bind:value={query} placeholder="Search {noun}s" />
+              <span class="sr-only"
+                >{t('engine.workspace.searchLabel', {
+                  noun,
+                  name: workspace.displayName,
+                })}</span
+              >
+              <input
+                bind:value={query}
+                placeholder={t('engine.workspace.searchPlaceholder', { noun })}
+              />
             </label>
           </div>
           <ul class="session-rows">
@@ -149,8 +158,9 @@
               {@render row(session)}
             {:else}
               <li class="empty-note">
-                {#if query}Nothing matches.{:else}No
-                  {noun}s yet. pirc starts them when it hands work to this workspace.{/if}
+                {#if query}{t('engine.search.nothing')}{:else}{t('engine.workspace.empty', {
+                    noun,
+                  })}{/if}
               </li>
             {/each}
           </ul>
@@ -158,35 +168,41 @@
       {:else}
         <div id="workspace-panel-settings" role="tabpanel" aria-labelledby="workspace-tab-settings">
           <section class="settings-section">
-            <h3>Workspace</h3>
+            <h3>{t('engine.workspace.title')}</h3>
             <dl class="facts">
               <div>
-                <dt>Device</dt>
-                <dd>{workspace.hostId} · {online ? 'online' : 'offline'}</dd>
+                <dt>{t('engine.workspace.device')}</dt>
+                <dd>
+                  {workspace.hostId} · {online ? t('engine.host.online') : t('engine.host.offline')}
+                </dd>
               </div>
               <div>
-                <dt>Sessions</dt>
+                <dt>{t('engine.workspace.sessions')}</dt>
                 <dd>
                   {all.length}{#if running}
-                    · {running} running{/if}{#if unread}
-                    · {unread} unread{/if}
+                    · {t('engine.running', { count: running })}{/if}{#if unread}
+                    · {t('common.unread', { count: unread })}{/if}
                 </dd>
               </div>
               {#if mode.workdir === 'workspace'}
                 <div>
-                  <dt>Write lease</dt>
-                  <dd>{leaseHolder ? `Held by “${leaseHolder.name}”` : 'Free'}</dd>
+                  <dt>{t('engine.workspace.writeLease')}</dt>
+                  <dd>
+                    {leaseHolder
+                      ? t('engine.workspace.leaseHeldBy', { name: leaseHolder.name })
+                      : t('engine.workspace.leaseFree')}
+                  </dd>
                 </div>
               {/if}
               {#if workspace.defaults.modelId}
                 <div>
-                  <dt>Default model</dt>
+                  <dt>{t('engine.workspace.defaultModel')}</dt>
                   <dd>{workspace.defaults.modelId}</dd>
                 </div>
               {/if}
               {#if workspace.defaults.thinkingLevel}
                 <div>
-                  <dt>Default thinking</dt>
+                  <dt>{t('engine.workspace.defaultThinking')}</dt>
                   <dd>{workspace.defaults.thinkingLevel}</dd>
                 </div>
               {/if}
@@ -194,11 +210,9 @@
           </section>
           {#if mode.project_config}
             {#if engine.usingDemo}
-              <p class="note">The project config is unavailable in demo mode.</p>
+              <p class="note">{t('engine.workspace.projectConfigDemo')}</p>
             {:else if !online}
-              <p class="note">
-                The workspace's node is offline: its project config can be reviewed once it is back.
-              </p>
+              <p class="note">{t('engine.workspace.projectConfigOffline')}</p>
             {:else}
               <ProjectTrust workspaceId={workspace.id} />
             {/if}
@@ -223,7 +237,7 @@
           bind:this={renameInput}
           bind:value={renameValue}
           maxlength="200"
-          aria-label="Session name"
+          aria-label={t('engine.session.nameLabel')}
           onkeydown={(event) => event.key === 'Escape' && finishRename(false)}
           onblur={() => finishRename(true)}
         />
@@ -252,23 +266,25 @@
         ></span>
         {#if session.origin?.kind === 'delegation'}<span
             class="origin-icon"
-            title="Delegated: {session.origin.title}"><Forward size={13} /></span
+            title={t('engine.session.delegated', {
+              title: session.origin.title,
+            })}><Forward size={13} /></span
           >{/if}
         <span class="row-name">{session.name}</span>
         {#if status(session)}<span class="sr-only">· {status(session)}</span>{/if}
         {#if session.writeLease}<span
             class="lease-lock"
             role="img"
-            aria-label="Holds the write lease"
-            title="Holds the write lease"><Lock size={12} /></span
+            aria-label={t('engine.session.holdsLease')}
+            title={t('engine.session.holdsLease')}><Lock size={12} /></span
           >{/if}
         <small>{shortAgo(session.lastActivityAt)}</small>
       </button>
       <div class="row-actions">
         <button
           type="button"
-          aria-label="Rename {session.name}"
-          title="Rename (F2)"
+          aria-label={t('engine.session.renameName', { name: session.name })}
+          title={t('engine.session.renameTitle')}
           onclick={() => startRename(session)}><Pencil size={14} /></button
         >
       </div>
@@ -531,7 +547,7 @@
     color: var(--text-2);
     font-size: 12px;
     font-weight: 600;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.04em;
     text-transform: uppercase;
   }
   .page-body :global(.settings-section p) {

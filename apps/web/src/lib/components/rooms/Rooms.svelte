@@ -26,8 +26,11 @@
   import { listFocus, rovingFocus } from '../../a11y';
   import { registerPwa } from '../../pwa';
   import { watch } from '../../watch.svelte';
-  import type { RoomView } from '../../rooms';
+  import type { RoomView, RoomsConnection } from '../../rooms';
+  import { t } from '../../i18n';
+  import type { MessageKey } from '../../i18n/messages';
   import { rooms as defaultRooms, roomFromUrl, type RoomsState } from '../../rooms.svelte';
+  import StatusGlyph from '../StatusGlyph.svelte';
   import { mutedRooms, setMuted, syncMuted } from '../../mute';
   import { loadRoomDraft, saveRoomDraft } from '../../storage';
   import SettingsDialog, { type SettingsTab } from '../dialogs/SettingsDialog.svelte';
@@ -45,6 +48,14 @@
   }
 
   let { store: rooms = defaultRooms }: Props = $props();
+
+  /** The stream's state in the header, in the shared status words. */
+  const CONNECTION: Record<RoomsConnection, MessageKey> = {
+    connecting: 'rooms.connection.connecting',
+    connected: 'common.status.connected',
+    reconnecting: 'common.status.reconnecting',
+    offline: 'common.status.offline',
+  };
 
   /** Each room keeps what was being written in it. */
   let draftRoom = roomFromUrl() ?? 'general';
@@ -127,9 +138,9 @@
       if (!id || !message) return;
       const who =
         message.speaker === 'user'
-          ? (message.user ?? 'someone')
+          ? (message.user ?? t('common.unknownUser'))
           : faceName(message.speaker.replace(/^face:/, ''));
-      const text = message.body.text ?? 'an attachment';
+      const text = message.body.text ?? t('common.attachment');
       announcement = `${who}: ${text.length > 280 ? `${text.slice(0, 280)}…` : text}`;
     },
   );
@@ -347,7 +358,7 @@
       try {
         await rooms.send(text, { immediate, files: attached });
       } catch (error) {
-        sendError = error instanceof Error ? error.message : 'Could not send.';
+        sendError = error instanceof Error ? error.message : t('rooms.composer.couldNotSend');
         // Give the words back unless something new was written meanwhile.
         if (!draft) draft = text;
         if (!files.length) files = attached;
@@ -395,7 +406,7 @@
       newRoomName = '';
       creating = false;
     } catch (error) {
-      rooms.error = error instanceof Error ? error.message : 'Could not create the room.';
+      rooms.error = error instanceof Error ? error.message : t('rooms.newRoom.couldNot');
     }
   }
 
@@ -419,10 +430,12 @@
   >
     <Hash size={16} />
     <span class="room-name">{room.name}</span>
-    {#if muted.includes(room.id)}<BellOff size={13} aria-label="Muted" />{/if}
-    {#if room.waiting}<span class="waiting" title="Waiting for your reply">Your turn</span>{/if}
+    {#if muted.includes(room.id)}<BellOff size={13} aria-label={t('rooms.room.muted')} />{/if}
+    {#if room.waiting}<span class="waiting" title={t('rooms.room.yourTurnTitle')}
+        >{t('rooms.room.yourTurn')}</span
+      >{/if}
     {#if room.unread > 0 && room.id !== rooms.currentId}
-      <span class="dot" aria-label="{room.unread} unread"></span>
+      <span class="dot" aria-label={t('common.unread', { count: room.unread })}></span>
     {/if}
   </button>
 {/snippet}
@@ -430,14 +443,14 @@
 <svelte:window onkeydown={onWindowKeydown} />
 
 <div class="rooms" class:list-open={listOpen} class:thread-open={!!rooms.threadId || sideOpen}>
-  <nav class="list" aria-label="Rooms">
+  <nav class="list" aria-label={t('common.tab.rooms')}>
     <div class="list-head">
       <a class="brand" href="/" aria-label="pirc">pirc</a>
       <button
         type="button"
         class="icon"
-        aria-label="New room"
-        title="New room"
+        aria-label={t('rooms.newRoom.title')}
+        title={t('rooms.newRoom.title')}
         onclick={() => (creating = !creating)}><Plus size={18} /></button
       >
     </div>
@@ -445,8 +458,8 @@
       <form class="new-room" onsubmit={createRoom}>
         <!-- svelte-ignore a11y_autofocus -->
         <input
-          aria-label="Room name"
-          placeholder="Room name"
+          aria-label={t('rooms.newRoom.name')}
+          placeholder={t('rooms.newRoom.name')}
           maxlength="80"
           bind:value={newRoomName}
           autofocus
@@ -463,57 +476,63 @@
         {/each}
       </ul>
       <button type="button" class="fold" aria-expanded={showArchived} onclick={toggleArchived}
-        ><ChevronRight size={14} />Archived</button
+        ><ChevronRight size={14} />{t('common.archived')}</button
       >
       {#if showArchived}
-        <ul class="archived" aria-label="Archived rooms">
+        <ul class="archived" aria-label={t('rooms.list.archivedRooms')}>
           {#each rooms.archived as room (room.id)}
             <li>{@render roomRow(room)}</li>
           {:else}
-            <li class="none">No archived rooms.</li>
+            <li class="none">{t('rooms.list.noArchived')}</li>
           {/each}
         </ul>
       {/if}
     </div>
     <div class="list-foot">
-      <a class="engine" href="/engine"><SquareTerminal size={16} />Engine</a>
+      <a class="engine" href="/engine"><SquareTerminal size={16} />{t('common.tab.engine')}</a>
       <button type="button" class="engine" onclick={() => openSettings()}
-        ><Settings size={16} />Settings</button
+        ><Settings size={16} />{t('common.tab.settings')}</button
       >
     </div>
   </nav>
 
-  <main class="room-view" aria-label={current ? `#${current.name}` : 'Room'}>
+  <main class="room-view" aria-label={current ? `#${current.name}` : t('rooms.header.room')}>
     <header class="room-head">
       <h1><Hash size={18} />{current?.name ?? rooms.currentId}</h1>
-      {#if current?.archivedAt}<span class="badge">Archived</span>{/if}
+      {#if current?.archivedAt}<span class="badge">{t('common.archived')}</span>{/if}
       <span class="spacer"></span>
       <span
         class="presence"
         class:thinking={thinkingNow.length > 0}
         role="status"
-        title={thinkingNow.length ? `${thinkingNow.join(', ')} thinking` : `${here} is here`}
-        ><span class="presence-dot" aria-hidden="true"></span>{thinkingNow.length
-          ? thinkingNow.join(', ')
-          : here}<span class="sr-only">{thinkingNow.length ? ' is thinking' : ' is here'}</span
+        title={thinkingNow.length
+          ? t('rooms.header.thinkingTitle', { names: thinkingNow.join(', ') })
+          : t('rooms.header.hereTitle', { name: here })}
+        ><StatusGlyph
+          state={thinkingNow.length ? 'working' : 'idle'}
+          pulse={thinkingNow.length > 0}
+        />{thinkingNow.length ? thinkingNow.join(', ') : here}<span class="sr-only"
+          >{thinkingNow.length
+            ? ` ${t('rooms.header.isThinking')}`
+            : ` ${t('rooms.header.isHere')}`}</span
         ></span
       >
       <button
         type="button"
         class="icon"
-        aria-label="Members"
-        title="Members"
+        aria-label={t('rooms.members.title')}
+        title={t('rooms.members.title')}
         aria-pressed={sideOpen}
         onclick={() => (side = sideOpen ? null : 'members')}><Users size={18} /></button
       >
       {#if rooms.connection !== 'connected' && !rooms.loading}
-        <span class="badge" role="status">{rooms.connection}</span>
+        <span class="badge" role="status">{t(CONNECTION[rooms.connection])}</span>
       {/if}
       <button
         type="button"
         class="icon"
-        aria-label={mutedHere ? 'Unmute this room on this device' : 'Mute this room on this device'}
-        title={mutedHere ? 'Muted on this device' : 'Mute on this device'}
+        aria-label={mutedHere ? t('rooms.mute.unmute') : t('rooms.mute.mute')}
+        title={mutedHere ? t('rooms.mute.on') : t('rooms.mute.off')}
         aria-pressed={mutedHere}
         onclick={() => (muted = setMuted(rooms.currentId, !mutedHere))}
         >{#if mutedHere}<BellOff size={18} />{:else}<Bell size={18} />{/if}</button
@@ -529,8 +548,8 @@
         <button
           type="button"
           class="icon"
-          aria-label={current.archivedAt ? 'Unarchive' : 'Archive'}
-          title={current.archivedAt ? 'Unarchive' : 'Archive'}
+          aria-label={current.archivedAt ? t('rooms.action.unarchive') : t('rooms.action.archive')}
+          title={current.archivedAt ? t('rooms.action.unarchive') : t('rooms.action.archive')}
           onclick={() => rooms.setArchived(current.id, !current.archivedAt)}
           >{#if current.archivedAt}<ArchiveRestore size={18} />{:else}<Archive
               size={18}
@@ -538,8 +557,8 @@
         >
       {/if}
       {#if current && !current.archivedAt && otherRooms.length}
-        <select aria-label="Continue in another room" bind:value={moveTarget} onchange={moveHere}>
-          <option value="">Continue in…</option>
+        <select aria-label={t('rooms.move.label')} bind:value={moveTarget} onchange={moveHere}>
+          <option value="">{t('rooms.move.placeholder')}</option>
           {#each otherRooms as room (room.id)}
             <option value={room.id}>#{room.name}</option>
           {/each}
@@ -548,9 +567,9 @@
     </header>
 
     {#if rooms.pinned.length}
-      <div class="pinned" aria-label="Pinned">
+      <div class="pinned" aria-label={t('common.pinned')}>
         {#each rooms.pinned as message (message.id)}
-          <span class="pinned-item">📌 {message.body.text ?? 'attachment'}</span>
+          <span class="pinned-item">📌 {message.body.text ?? t('rooms.pinned.attachment')}</span>
         {/each}
       </div>
     {/if}
@@ -560,7 +579,7 @@
       class="messages"
       role="log"
       aria-live="off"
-      aria-label="Messages in #{current?.name ?? rooms.currentId}"
+      aria-label={t('rooms.log.label', { room: current?.name ?? rooms.currentId })}
       tabindex="0"
       use:listFocus={{ selector: '[data-row]' }}
       bind:this={scroller}
@@ -569,7 +588,7 @@
       {#if rooms.error}
         <p class="error" role="alert">{rooms.error}</p>
       {:else if !rooms.loading && !rooms.messages.length}
-        <p class="empty">Nothing here yet. Say something.</p>
+        <p class="empty">{t('rooms.log.empty')}</p>
       {/if}
       {#each rooms.messages as message, index (message.id)}
         <RoomMessageRow
@@ -588,19 +607,29 @@
     {#if asking}
       <div class="asking" role="status">
         <span
-          >{faceName(asking.speaker.replace(/^face:/, ''))} is waiting for your answer{askingTitle
-            ? ': ' + askingTitle
-            : ''}</span
+          >{askingTitle
+            ? t('rooms.asking.withTitle', {
+                name: faceName(asking.speaker.replace(/^face:/, '')),
+                title: askingTitle,
+              })
+            : t('rooms.asking.waiting', {
+                name: faceName(asking.speaker.replace(/^face:/, '')),
+              })}</span
         >
-        <button type="button" class="link" onclick={() => jumpTo(asking.id)}>Show</button>
+        <button type="button" class="link" onclick={() => jumpTo(asking.id)}
+          >{t('common.show')}</button
+        >
       </div>
     {/if}
 
     <p class="sr-only" role="status" aria-live="polite">{announcement}</p>
     <div class="typing" aria-live="polite">
-      {#if thinkingNow.length}{thinkingNow.join(', ')} is thinking…{/if}
-      {#if typingNow.length}{typingNow.join(', ')}
-        {typingNow.length === 1 ? 'is' : 'are'} typing…{/if}
+      {#if thinkingNow.length}{t('rooms.typing.thinking', {
+          names: thinkingNow.join(', '),
+        })}{/if}
+      {#if typingNow.length}{typingNow.length === 1
+          ? t('rooms.typing.one', { names: typingNow.join(', ') })
+          : t('rooms.typing.many', { names: typingNow.join(', ') })}{/if}
     </div>
 
     {#if current && !current.archivedAt}
@@ -619,7 +648,7 @@
                 <button
                   type="button"
                   class="icon"
-                  aria-label="Remove {file.name}"
+                  aria-label={t('common.removeNamed', { name: file.name })}
                   onclick={() => (files = files.filter((_, at) => at !== index))}
                   ><X size={14} /></button
                 >
@@ -628,7 +657,7 @@
           </ul>
         {/if}
         {#if matches.length}
-          <ul class="mentions" role="listbox" aria-label="Faces">
+          <ul class="mentions" role="listbox" aria-label={t('rooms.mentions.label')}>
             {#each matches as face, index (face.id)}
               <li role="option" aria-selected={index === choice}>
                 <button
@@ -646,8 +675,8 @@
           <button
             type="button"
             class="icon"
-            aria-label="Attach files"
-            title="Attach files"
+            aria-label={t('rooms.composer.attach')}
+            title={t('rooms.composer.attach')}
             onclick={() => fileInput?.click()}><Paperclip size={18} /></button
           >
           <input
@@ -661,8 +690,8 @@
             }}
           />
           <textarea
-            aria-label="Message #{current.name}"
-            placeholder="Message #{current.name}"
+            aria-label={t('rooms.composer.message', { room: current.name })}
+            placeholder={t('rooms.composer.message', { room: current.name })}
             rows="1"
             bind:value={draft}
             bind:this={textarea}
@@ -680,8 +709,8 @@
           <button
             type="submit"
             class="icon send"
-            aria-label="Send"
-            title="Send (Enter) · Send now (⌘/Ctrl+Enter)"
+            aria-label={t('rooms.composer.send')}
+            title={t('rooms.composer.sendTitle')}
             aria-busy={sending}
             disabled={!draft.trim() && !files.length}><SendHorizontal size={18} /></button
           >
@@ -689,7 +718,7 @@
         {#if sendError}<p class="error" role="alert">{sendError}</p>{/if}
       </form>
     {:else if current?.archivedAt}
-      <p class="archived-note">This room is archived. Unarchive it to write here.</p>
+      <p class="archived-note">{t('rooms.archived.note')}</p>
     {/if}
   </main>
   {#if !rooms.threadId && shownFace}
@@ -846,7 +875,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--ink);
+    background: var(--danger);
   }
   .waiting {
     padding: 1px 6px;
@@ -881,6 +910,7 @@
     flex-direction: column;
     min-width: 0;
     min-height: 0;
+    background: var(--bg-room);
   }
   .room-head {
     display: flex;
@@ -936,26 +966,6 @@
     gap: 6px;
     font-size: 13px;
     color: var(--muted);
-  }
-  .presence-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--success);
-  }
-  .presence.thinking .presence-dot {
-    background: var(--accent);
-    animation: thinking 1.2s ease-in-out infinite;
-  }
-  @keyframes thinking {
-    50% {
-      opacity: 0.3;
-    }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .presence.thinking .presence-dot {
-      animation: none;
-    }
   }
   .asking {
     display: flex;

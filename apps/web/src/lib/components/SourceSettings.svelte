@@ -6,6 +6,7 @@
    */
   import { onMount } from 'svelte';
   import { ApiError } from '../http';
+  import { t } from '../i18n';
   import {
     KIND_LABELS,
     describeSource,
@@ -54,7 +55,7 @@
   let workspace = $state('');
 
   const message = (cause: unknown) =>
-    cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
+    cause instanceof ApiError ? cause.message : t('settings.gateway.unreachable');
 
   async function load() {
     try {
@@ -154,7 +155,10 @@
         : (await sourcesApi.create({ kind, name: name.trim(), ...input() })).test;
       form = undefined;
       password = '';
-      return said ? `${editing ? 'Saved' : 'Added'}: ${said}` : 'Saved.';
+      if (!said) return t('settings.sources.savedPlain');
+      return editing
+        ? t('settings.sources.saved', { test: said })
+        : t('settings.sources.added', { test: said });
     });
   }
 
@@ -168,9 +172,13 @@
     await act(source.id, async () => {
       const result = await sourcesApi.poll(source.id);
       if (result.error) throw new ApiError(result.error.message, 502);
-      if (result.baseline) return `${source.name}: read for the first time.`;
+      if (result.baseline) return t('settings.sources.firstRead', { name: source.name });
       const count = result.changed.length;
-      return `${source.name}: ${count ? `${count} new or changed` : 'nothing new'}${result.wake ? ', and pirc woke up for it' : ''}.`;
+      const change = count
+        ? t('settings.sources.changed', { count })
+        : t('settings.sources.nothingNew');
+      const woke = result.wake ? t('settings.sources.wokeUp') : '';
+      return `${source.name}: ${change}${woke}.`;
     });
     if (items[source.id]) await showItems(source);
   }
@@ -183,7 +191,7 @@
     confirmRemove = '';
     await act(source.id, async () => {
       await sourcesApi.remove(source.id);
-      return `Removed ${source.name}.`;
+      return t('settings.sources.removed', { name: source.name });
     });
   }
 
@@ -198,17 +206,13 @@
 </script>
 
 <section class="settings-section source-settings" aria-labelledby="sources-title">
-  <h3 id="sources-title">Sources</h3>
-  <p>
-    What pirc can read beyond the rooms: a mailbox, a calendar, Moodle, a workspace's commits. All
-    read-only. Credentials stay on the gateway and are never shown again. pirc wakes for something
-    new only when a room follows the source, or when it touches an open loop.
-  </p>
+  <h3 id="sources-title">{t('settings.sources.title')}</h3>
+  <p>{t('settings.sources.intro')}</p>
 
   {#if disabled}
-    <p role="status">Sources are unavailable in demo mode.</p>
+    <p role="status">{t('settings.sources.demo')}</p>
   {:else if loading}
-    <p role="status">Loading sources…</p>
+    <p role="status">{t('settings.sources.loading')}</p>
   {:else}
     {#if error}<p class="source-error" role="alert">{error}</p>{/if}
     {#if notice}<p class="source-notice" role="status">{notice}</p>{/if}
@@ -220,17 +224,19 @@
         <small>{KIND_LABELS[source.kind]} · {describeSource(source)}</small>
         <small class="tone-{status.tone}"
           >{status.text}{#if source.lastPolledAt && !source.pausedAt}
-            · last read {ago(source.lastPolledAt)}{/if}</small
+            · {t('settings.sources.lastRead', { ago: ago(source.lastPolledAt) })}{/if}</small
         >
         {#if source.rooms.length}<small
-            >Followed in {source.rooms.map((room) => `#${room}`).join(', ')}</small
+            >{t('settings.sources.followedIn', {
+              rooms: source.rooms.map((room) => `#${room}`).join(', '),
+            })}</small
           >{/if}
         <div class="source-actions">
           {#if !source.pausedAt}<button
               class="button ghost small"
               type="button"
               disabled={!!busy}
-              onclick={() => poll(source)}>Read now</button
+              onclick={() => poll(source)}>{t('settings.sources.readNow')}</button
             >{/if}
           <button
             class="button ghost small"
@@ -240,7 +246,7 @@
               act(
                 source.id,
                 async () => `${source.name}: ${(await sourcesApi.test(source.id)).test}`,
-              )}>Test</button
+              )}>{t('settings.sources.test')}</button
           >
           <button
             class="button ghost small"
@@ -251,20 +257,23 @@
                 await (source.pausedAt
                   ? sourcesApi.resume(source.id)
                   : sourcesApi.pause(source.id));
-              })}>{source.pausedAt ? 'Resume' : 'Pause'}</button
+              })}
+            >{source.pausedAt ? t('settings.sources.resume') : t('settings.sources.pause')}</button
           >
           {#if source.kind !== 'workspace'}<button
               class="button ghost small"
               type="button"
               disabled={!!busy || !!form}
-              onclick={() => open(source)}>Sign in again</button
+              onclick={() => open(source)}>{t('settings.sources.signInAgain')}</button
             >{/if}
           <button
             class="button ghost small"
             type="button"
             disabled={!!busy}
             onclick={() => remove(source)}
-            >{confirmRemove === source.id ? `Remove ${source.name}?` : 'Remove'}</button
+            >{confirmRemove === source.id
+              ? t('settings.sources.removeConfirm', { name: source.name })
+              : t('common.remove')}</button
           >
         </div>
         <details
@@ -272,7 +281,7 @@
             if ((event.currentTarget as HTMLDetailsElement).open) void showItems(source);
           }}
         >
-          <summary>What it saw</summary>
+          <summary>{t('settings.sources.whatItSaw')}</summary>
           {#if items[source.id]?.length}
             <ul>
               {#each items[source.id] ?? [] as item (item.id)}
@@ -280,7 +289,7 @@
               {/each}
             </ul>
           {:else if items[source.id]}
-            <p>Nothing yet.</p>
+            <p>{t('settings.sources.nothingYet')}</p>
           {/if}
         </details>
       </div>
@@ -288,10 +297,14 @@
 
     {#if form}
       <form class="source-form" onsubmit={save}>
-        <h4>{form.editing ? `Sign in to ${form.editing.name} again` : 'Add a source'}</h4>
+        <h4>
+          {form.editing
+            ? t('settings.sources.signInAgainTitle', { name: form.editing.name })
+            : t('settings.sources.addTitle')}
+        </h4>
         {#if !form.editing}
           <label
-            ><span>Kind</span><select bind:value={kind}
+            ><span>{t('settings.sources.kind')}</span><select bind:value={kind}
               >{#each Object.entries(KIND_LABELS) as [value, label] (value)}<option {value}
                   >{label}</option
                 >{/each}</select
@@ -299,30 +312,37 @@
           >
         {/if}
         <label
-          ><span>Name</span><input
+          ><span>{t('settings.sources.name')}</span><input
             bind:value={name}
             maxlength="100"
-            placeholder={kind === 'email' ? 'Gmail (school)' : KIND_LABELS[kind]}
+            placeholder={kind === 'email'
+              ? t('settings.sources.namePlaceholder')
+              : KIND_LABELS[kind]}
             required={!form.editing}
           /></label
         >
 
         {#if kind === 'email'}
           <label
-            ><span>Mail server</span><select bind:value={provider}
-              ><option value="gmail">Gmail</option><option value="other">Other (IMAP)</option
+            ><span>{t('settings.sources.mailServer')}</span><select bind:value={provider}
+              ><option value="gmail">{t('settings.sources.gmail')}</option><option value="other"
+                >{t('settings.sources.otherImap')}</option
               ></select
             ></label
           >
           <label
-            ><span>Email address</span><input
+            ><span>{t('settings.sources.emailLabel')}</span><input
               bind:value={username}
               autocomplete="off"
               required
             /></label
           >
           <label
-            ><span>{provider === 'gmail' ? 'App password' : 'Password'}</span><input
+            ><span
+              >{provider === 'gmail'
+                ? t('settings.sources.appPassword')
+                : t('settings.sources.password')}</span
+            ><input
               type="password"
               bind:value={password}
               autocomplete="new-password"
@@ -331,26 +351,38 @@
           >
           {#if provider === 'gmail'}
             <p class="hint">
-              Gmail needs an app password (with 2-Step Verification on): create one at
+              {t('settings.sources.gmailHintLead')}
               <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer"
                 >myaccount.google.com/apppasswords</a
-              >. pirc only reads; nothing is marked read.
+              >{t('settings.sources.gmailHintRest')}
             </p>
           {:else}
-            <label><span>IMAP host</span><input bind:value={host} required /></label>
-            <label><span>Port (TLS)</span><input bind:value={port} inputmode="numeric" /></label>
-            <label><span>Mailbox</span><input bind:value={mailbox} /></label>
+            <label
+              ><span>{t('settings.sources.imapHost')}</span><input
+                bind:value={host}
+                required
+              /></label
+            >
+            <label
+              ><span>{t('settings.sources.portTls')}</span><input
+                bind:value={port}
+                inputmode="numeric"
+              /></label
+            >
+            <label><span>{t('settings.sources.mailbox')}</span><input bind:value={mailbox} /></label
+            >
           {/if}
         {:else if kind === 'calendar'}
           <label
-            ><span>Calendar</span><select bind:value={calendarMode}
-              ><option value="ics">An ICS address</option><option value="caldav">CalDAV</option
+            ><span>{t('settings.sources.calendar')}</span><select bind:value={calendarMode}
+              ><option value="ics">{t('settings.sources.icsChoice')}</option><option value="caldav"
+                >{t('settings.sources.caldav')}</option
               ></select
             ></label
           >
           {#if calendarMode === 'ics'}
             <label
-              ><span>ICS address</span><input
+              ><span>{t('settings.sources.icsAddress')}</span><input
                 type="password"
                 bind:value={address}
                 autocomplete="off"
@@ -358,21 +390,23 @@
                 required
               /></label
             >
-            <p class="hint">
-              Google Calendar: Settings → the calendar → "Secret address in iCal format". Moodle:
-              Calendar → Export calendar → the URL. The address is a secret and is kept as one.
-            </p>
+            <p class="hint">{t('settings.sources.icsHint')}</p>
           {:else}
             <label
-              ><span>Calendar address</span><input
+              ><span>{t('settings.sources.calendarAddress')}</span><input
                 bind:value={address}
                 placeholder="https://…/calendars/me/personal/"
                 required
               /></label
             >
-            <label><span>User name</span><input bind:value={username} required /></label>
             <label
-              ><span>Password</span><input
+              ><span>{t('settings.sources.userName')}</span><input
+                bind:value={username}
+                required
+              /></label
+            >
+            <label
+              ><span>{t('settings.sources.password')}</span><input
                 type="password"
                 bind:value={password}
                 autocomplete="new-password"
@@ -382,49 +416,53 @@
           {/if}
         {:else if kind === 'moodle'}
           <label
-            ><span>Moodle address</span><input
+            ><span>{t('settings.sources.moodleAddress')}</span><input
               bind:value={address}
               placeholder="https://moodle.school.edu"
               required
             /></label
           >
           <label
-            ><span>Sign in with</span><select bind:value={moodleLogin}
-              ><option value="password">User name and password</option><option value="app"
-                >My school signs in on another page (SSO)</option
+            ><span>{t('settings.sources.signInWith')}</span><select bind:value={moodleLogin}
+              ><option value="password">{t('settings.sources.userNamePassword')}</option><option
+                value="app">{t('settings.sources.sso')}</option
               ></select
             ></label
           >
           {#if moodleLogin === 'password'}
-            <label><span>User name</span><input bind:value={username} required /></label>
             <label
-              ><span>Password</span><input
+              ><span>{t('settings.sources.userName')}</span><input
+                bind:value={username}
+                required
+              /></label
+            >
+            <label
+              ><span>{t('settings.sources.password')}</span><input
                 type="password"
                 bind:value={password}
                 autocomplete="new-password"
                 required
               /></label
             >
-            <p class="hint">
-              As the Moodle app signs in. Only the token Moodle gives back is kept, never the
-              password.
-            </p>
+            <p class="hint">{t('settings.sources.moodleHint')}</p>
           {:else}
             <button
               class="button ghost small"
               type="button"
               disabled={!!busy || !address.trim()}
-              onclick={startAppLogin}>Start the app login</button
+              onclick={startAppLogin}>{t('settings.sources.startAppLogin')}</button
             >
             {#if launchUrl}
               <p class="hint">
-                <a href={launchUrl} target="_blank" rel="noreferrer">Open the Moodle login</a>
-                and sign in. It ends at an address starting with <code>moodlemobile://token=</code>,
-                which the browser cannot open: copy it (from the address bar, or the developer
-                tools' Network tab) and paste it here within 30 minutes.
+                <a href={launchUrl} target="_blank" rel="noreferrer"
+                  >{t('settings.sources.launchLink')}</a
+                >
+                {t('settings.sources.launchMiddle')} <code>moodlemobile://token=</code>{t(
+                  'settings.sources.launchTail',
+                )}
               </p>
               <label
-                ><span>Where it ended</span><input
+                ><span>{t('settings.sources.whereItEnded')}</span><input
                   bind:value={pasted}
                   autocomplete="off"
                   placeholder="moodlemobile://token=…"
@@ -435,27 +473,29 @@
           {/if}
         {:else}
           <label
-            ><span>Workspace id</span><input
+            ><span>{t('settings.sources.workspaceId')}</span><input
               bind:value={workspace}
               placeholder="node:workspace"
               required
             /></label
           >
-          <p class="hint">Its node is asked for new commits once a day, while it is online.</p>
+          <p class="hint">{t('settings.sources.workspaceHint')}</p>
         {/if}
 
         <div class="source-actions">
           <button class="button" type="submit" disabled={!!busy}
-            >{busy === 'new' || busy === form.editing?.id ? 'Trying it…' : 'Try and save'}</button
+            >{busy === 'new' || busy === form.editing?.id
+              ? t('settings.sources.trying')
+              : t('settings.sources.trySave')}</button
           >
           <button class="button ghost" type="button" onclick={() => (form = undefined)}
-            >Cancel</button
+            >{t('common.cancel')}</button
           >
         </div>
       </form>
     {:else}
       <button class="button ghost" type="button" disabled={!!busy} onclick={() => open()}
-        >Add source</button
+        >{t('settings.sources.add')}</button
       >
     {/if}
   {/if}

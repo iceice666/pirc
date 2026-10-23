@@ -1,7 +1,9 @@
 <script lang="ts">
   import { SquareTerminal, Square, X } from '@lucide/svelte';
+  import StatusGlyph, { glyphOf } from '../StatusGlyph.svelte';
   import { listFocus } from '../../a11y';
   import { ApiError } from '../../http';
+  import { locale, t } from '../../i18n';
   import { engineLink } from '../../routes';
   import {
     questionOutcome,
@@ -52,7 +54,7 @@
     try {
       await run();
     } catch (cause) {
-      actionError = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+      actionError = cause instanceof ApiError ? cause.message : t('rooms.error.gateway');
     } finally {
       busy = false;
     }
@@ -73,22 +75,24 @@
   }
 
   const time = (at: number) =>
-    new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(at);
+    new Intl.DateTimeFormat(locale(), { hour: '2-digit', minute: '2-digit' }).format(at);
 </script>
 
-<aside class="thread" aria-label="Thread">
+<aside class="thread" aria-label={t('thread.title')}>
   <header>
     <div class="title">
-      <strong>{latest?.title ?? 'Thread'}</strong>
+      <strong>{latest?.title ?? t('thread.title')}</strong>
       {#if latest}
         <span class="status {latest.status}" role="status"
-          ><span class="dot" aria-hidden="true"></span>{statusLabel(
+          ><StatusGlyph state={glyphOf(latest.status)} />{statusLabel(
             latest.status,
             speakers.length,
-          )}{latest.readOnly ? ' · read-only' : ''}</span
+          )}{latest.readOnly ? ` · ${t('thread.readOnly')}` : ''}</span
         >
         <span class="where"
-          >{latest.workspace}{latest.note ? ` · waits for ${latest.note}` : ''}</span
+          >{latest.workspace}{latest.note
+            ? ` · ${t('rooms.worker.waitsFor', { note: latest.note })}`
+            : ''}</span
         >
       {/if}
     </div>
@@ -96,8 +100,8 @@
       <a
         class="icon"
         href={engineLink({ session: latest.targetSessionId })}
-        aria-label="Its session in the engine"
-        title="Its session in the engine"><SquareTerminal size={16} /></a
+        aria-label={t('thread.session')}
+        title={t('thread.session')}><SquareTerminal size={16} /></a
       >
     {/if}
     {#if latest && mine && stoppable(latest.status)}
@@ -105,16 +109,17 @@
         type="button"
         class="stop"
         disabled={busy}
-        onclick={() => act(() => workersApi.stop(latest.id))}><Square size={12} />Stop</button
+        onclick={() => act(() => workersApi.stop(latest.id))}
+        ><Square size={12} />{t('rooms.worker.stop')}</button
       >
     {/if}
-    <button type="button" class="icon" aria-label="Close the thread" onclick={onclose}
+    <button type="button" class="icon" aria-label={t('thread.close')} onclick={onclose}
       ><X size={16} /></button
     >
   </header>
 
   {#if speakers.length}
-    <ul class="workers" aria-label="Workers">
+    <ul class="workers" aria-label={t('thread.workers')}>
       {#each speakers as worker (worker.speaker)}
         <li class:child={worker.depth === 1}>
           <span class="name">{speakerName({ speaker: worker.speaker, user: null })}</span>
@@ -128,7 +133,7 @@
   <ol
     class="messages"
     role="log"
-    aria-label="The thread's messages"
+    aria-label={t('thread.messages')}
     tabindex="0"
     use:listFocus={{ selector: 'li.item' }}
   >
@@ -140,7 +145,9 @@
           <code>{message.body.summary ?? message.body.tool}</code>
         {:else if message.kind === 'question'}
           <div class="question">
-            <p>{message.body.request?.title ?? message.body.request?.message ?? 'A question'}</p>
+            <p>
+              {message.body.request?.title ?? message.body.request?.message ?? t('thread.question')}
+            </p>
             {#if message.body.request?.title && message.body.request?.message}
               <p class="more">{message.body.request.message}</p>
             {/if}
@@ -153,28 +160,32 @@
                 })}
               </p>
             {:else if !mine}
-              <p class="more">Waiting for {latest?.for ?? 'whom it works for'}.</p>
+              <p class="more">
+                {t('thread.waitingFor', {
+                  name: latest?.for ?? t('thread.whomItWorksFor'),
+                })}
+              </p>
             {:else if message.body.kind === 'confirm'}
               <div class="choices">
                 <button
                   type="button"
                   disabled={busy}
                   onclick={() => answer(message, { confirmed: true })}
-                  >{message.body.request?.confirmLabel ?? 'Yes'}</button
+                  >{message.body.request?.confirmLabel ?? t('common.yes')}</button
                 >
                 {#if message.body.request?.allowAgain}
                   <button
                     type="button"
                     disabled={busy}
                     onclick={() => answer(message, { confirmed: true, again: true })}
-                    >Allow again this session</button
+                    >{t('rooms.question.allowAgain')}</button
                   >
                 {/if}
                 <button
                   type="button"
                   disabled={busy}
                   onclick={() => answer(message, { confirmed: false })}
-                  >{message.body.request?.cancelLabel ?? 'No'}</button
+                  >{message.body.request?.cancelLabel ?? t('common.no')}</button
                 >
               </div>
             {:else if message.body.kind === 'select' && message.body.request?.options?.length}
@@ -197,11 +208,11 @@
                 }}
               >
                 <input
-                  aria-label="Your answer"
-                  placeholder={message.body.request?.placeholder ?? 'Your answer'}
+                  aria-label={t('thread.answer.label')}
+                  placeholder={message.body.request?.placeholder ?? t('thread.answer.label')}
                   bind:value={answers[message.id]}
                 />
-                <button type="submit" disabled={busy}>Answer</button>
+                <button type="submit" disabled={busy}>{t('thread.answer.send')}</button>
               </form>
             {/if}
           </div>
@@ -213,7 +224,7 @@
         {/if}
         {#if message.body.context}
           <details>
-            <summary>What it was given</summary>
+            <summary>{t('thread.given')}</summary>
             <pre>{message.body.context}</pre>
           </details>
         {/if}
@@ -226,11 +237,11 @@
   {#if latest && mine}
     <form class="composer" onsubmit={say}>
       <input
-        aria-label="Say something to the worker"
-        placeholder={stoppable(latest.status) ? 'Tell the worker…' : 'Give it more to do…'}
+        aria-label={t('thread.say.label')}
+        placeholder={stoppable(latest.status) ? t('thread.say.tell') : t('thread.say.more')}
         bind:value={draft}
       />
-      <button type="submit" disabled={busy || !draft.trim()}>Send</button>
+      <button type="submit" disabled={busy || !draft.trim()}>{t('rooms.composer.send')}</button>
     </form>
   {/if}
 </aside>
@@ -266,22 +277,6 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-  }
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--muted);
-  }
-  .running .dot,
-  .waiting_input .dot {
-    background: var(--accent);
-  }
-  .completed .dot {
-    background: var(--success, #2e9d5b);
-  }
-  .failed .dot {
-    background: var(--danger);
   }
   button {
     font: inherit;

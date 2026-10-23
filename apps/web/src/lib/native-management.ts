@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { request } from './http';
 
 export type NativeManagementStatus =
@@ -61,7 +62,7 @@ function nativeManagementRequest(value: unknown): NativeManagementRequest {
   return {
     id: raw.id,
     status: raw.status as NativeManagementStatus,
-    deviceName: (raw.deviceName as string | undefined)?.trim() || 'A device',
+    deviceName: (raw.deviceName as string | undefined)?.trim() || t('settings.native.someDevice'),
     capabilities: raw.capabilities as NativeManagementCapability[],
     expiresAt,
     serverNow,

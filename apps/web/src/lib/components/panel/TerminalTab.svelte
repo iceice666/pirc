@@ -2,6 +2,7 @@
   import { Plus, SquareTerminal, X } from '@lucide/svelte';
   import { rovingFocus } from '../../a11y';
   import { errorMessage } from '../../errors';
+  import { t } from '../../i18n';
   import { Loader } from '../../loader.svelte';
   import { panelApi, type TerminalInfo } from '../../panel-api';
   import { watch } from '../../watch.svelte';
@@ -27,7 +28,7 @@
     const id = sessionId;
     const result = await listLoader.run(
       (signal) => panelApi.terminals(id, signal),
-      'Terminals are unavailable.',
+      t('panel.terminal.unavailable'),
     );
     if (!result || id !== sessionId) return;
     terminals = result.terminals;
@@ -37,7 +38,7 @@
 
   async function create() {
     if (!hasControl || generation === undefined) {
-      error = 'Take control of the session to open a terminal.';
+      error = t('panel.terminal.needControlOpen');
       return;
     }
     busy = true;
@@ -47,7 +48,7 @@
       terminals = [...terminals.filter((t) => !t.exited), terminal];
       current = terminal.id;
     } catch (cause) {
-      error = errorMessage(cause, 'Unable to open a terminal.');
+      error = errorMessage(cause, t('panel.terminal.couldNotOpen'));
     } finally {
       busy = false;
     }
@@ -56,14 +57,14 @@
   async function close(terminal: TerminalInfo) {
     if (!terminal.exited) {
       if (!hasControl || generation === undefined) {
-        error = 'Take control of the session to close a terminal.';
+        error = t('panel.terminal.needControlClose');
         return;
       }
       try {
         await panelApi.closeTerminal(sessionId, terminal.id, generation);
       } catch (cause) {
         if (!(cause instanceof Error && /not found/i.test(cause.message))) {
-          error = errorMessage(cause, 'Unable to close the terminal.');
+          error = errorMessage(cause, t('panel.terminal.couldNotClose'));
           return;
         }
       }
@@ -93,7 +94,7 @@
   <div
     class="terminal-strip"
     role="tablist"
-    aria-label="Terminals"
+    aria-label={t('panel.terminal.title')}
     use:rovingFocus={{ selector: '[role="tab"]', activate: true }}
   >
     {#each terminals as terminal, index (terminal.id)}
@@ -109,7 +110,7 @@
           aria-controls="terminal-panel-{terminal.id}"
           aria-selected={terminal.id === current}
           tabindex={terminal.id === current ? 0 : -1}
-          title="Delete closes this terminal"
+          title={t('panel.terminal.deleteHint')}
           onclick={() => (current = terminal.id)}
           onkeydown={(event) => {
             if (event.key === 'Delete') {
@@ -125,7 +126,7 @@
           type="button"
           class="chip-close"
           tabindex="-1"
-          aria-label="Close terminal {index + 1}"
+          aria-label={t('panel.terminal.closeNumbered', { count: index + 1 })}
           onclick={() => close(terminal)}><X size={12} /></button
         >
       </div>
@@ -133,9 +134,9 @@
     <button
       class="icon-button small"
       type="button"
-      aria-label="New terminal"
+      aria-label={t('panel.terminal.new')}
       disabled={busy || !hasControl}
-      title={hasControl ? 'New terminal' : 'Take control to open a terminal'}
+      title={hasControl ? t('panel.terminal.new') : t('panel.terminal.newHint')}
       onclick={create}><Plus size={15} /></button
     >
   </div>
@@ -143,14 +144,11 @@
   {#if !terminals.length}
     <div class="terminal-empty">
       <SquareTerminal size={22} />
-      <p>
-        Run commands in this workspace. The shell runs as the gateway’s account, just like the
-        agent’s own tools.
-      </p>
+      <p>{t('panel.terminal.empty')}</p>
       <button class="button primary" type="button" disabled={busy || !hasControl} onclick={create}
-        >Open terminal</button
+        >{t('panel.terminal.open')}</button
       >
-      {#if !hasControl}<p class="muted">Take control of the session to open one.</p>{/if}
+      {#if !hasControl}<p class="muted">{t('panel.terminal.needControlOne')}</p>{/if}
     </div>
   {/if}
   {#each terminals as terminal (terminal.id)}

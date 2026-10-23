@@ -5,8 +5,10 @@
    */
   import { onMount } from 'svelte';
   import { ApiError } from '../../http';
+  import { t } from '../../i18n';
   import { sourcesApi, type Source } from '../../sources';
   import { ago } from '../../time';
+  import StatusGlyph from '../StatusGlyph.svelte';
 
   interface Props {
     roomNames: Record<string, string>;
@@ -28,46 +30,55 @@
       .list()
       .then((list) => (sources = list.sources))
       .catch((cause) => {
-        error = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+        error = cause instanceof ApiError ? cause.message : t('engine.error.gateway');
       })
       .finally(() => (loading = false));
   });
 
   function health(source: Source): { label: string; tone: 'ok' | 'paused' | 'failing' } {
-    if (source.pausedAt) return { label: 'Paused', tone: 'paused' };
+    if (source.pausedAt) return { label: t('common.status.paused'), tone: 'paused' };
     if (source.failures > 0)
-      return { label: `Failing (${source.failures} in a row)`, tone: 'failing' };
-    return { label: 'Fine', tone: 'ok' };
+      return {
+        label: t('engine.sources.failing', { count: source.failures }),
+        tone: 'failing',
+      };
+    return { label: t('engine.sources.fine'), tone: 'ok' };
   }
 </script>
 
 <section class="settings-section" aria-labelledby="sources-status-title">
-  <h3 id="sources-status-title">Sources</h3>
+  <h3 id="sources-status-title">{t('engine.section.sources')}</h3>
   {#if disabled}
-    <p class="muted">Not available in demo mode.</p>
+    <p class="muted">{t('engine.demoUnavailable')}</p>
   {:else if loading}
-    <p class="muted" role="status">Loading…</p>
+    <p class="muted" role="status">{t('common.loading')}</p>
   {:else if error}
     <p class="error" role="alert">{error}</p>
   {:else if !sources.length}
-    <p class="muted">No sources yet. Add mail, calendars or Moodle in Settings.</p>
+    <p class="muted">{t('engine.sources.empty')}</p>
   {:else}
     <ul>
       {#each sources as source (source.id)}
         {@const now = health(source)}
         <li>
           <div class="row">
-            <span class="dot {now.tone}" aria-hidden="true"></span>
+            <StatusGlyph
+              state={now.tone === 'failing' ? 'error' : now.tone === 'paused' ? 'idle' : 'working'}
+            />
             <strong>{source.name}</strong>
             <span class="muted">{source.kind}</span>
             <span class="state">{now.label}</span>
           </div>
           <div class="muted small">
-            {source.lastPolledAt ? `Read ${ago(source.lastPolledAt)}` : 'Not read yet'}
+            {source.lastPolledAt
+              ? t('engine.source.read', { when: ago(source.lastPolledAt) })
+              : t('engine.source.notRead')}
             {#if source.rooms.length}
-              · followed in {source.rooms.map((id) => `#${roomNames[id] ?? id}`).join(', ')}
+              · {t('engine.sources.followed', {
+                rooms: source.rooms.map((id) => `#${roomNames[id] ?? id}`).join(', '),
+              })}
             {:else}
-              · no room follows it
+              · {t('engine.sources.noFollower')}
             {/if}
           </div>
           {#if source.lastError && source.failures > 0}
@@ -97,18 +108,6 @@
   .state {
     margin-left: auto;
     font-size: 13px;
-  }
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--success);
-  }
-  .dot.paused {
-    background: var(--muted);
-  }
-  .dot.failing {
-    background: var(--danger);
   }
   .small {
     font-size: 12px;

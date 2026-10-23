@@ -126,17 +126,28 @@ export function roomFace(faces: Face[], roomId: string): Face | undefined {
   );
 }
 
+/** The words a presence needs, and the line it is working on (i18n adds the translation). */
+export interface PresenceLabel {
+  word:
+    | 'common.status.thinking'
+    | 'common.status.working'
+    | 'common.status.waiting'
+    | 'common.status.here';
+  /** What it works on, or what a worker of its asks. */
+  line?: string;
+}
+
 /** What a presence says, in a few words. */
-export function presenceLabel(presence: FacePresence | undefined): string {
+export function presenceLabel(presence: FacePresence | undefined): PresenceLabel {
   switch (presence?.state) {
     case 'thinking':
-      return 'Thinking';
+      return { word: 'common.status.thinking' };
     case 'working':
-      return presence.line ? `Working on ${presence.line}` : 'Working';
+      return { word: 'common.status.working', line: presence.line };
     case 'waiting':
-      return presence.line ?? 'Waiting for you';
+      return { word: 'common.status.waiting', line: presence.line };
     default:
-      return 'Here';
+      return { word: 'common.status.here' };
   }
 }
 

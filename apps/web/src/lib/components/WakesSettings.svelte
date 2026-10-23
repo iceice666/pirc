@@ -6,6 +6,7 @@
    */
   import { onMount } from 'svelte';
   import { ApiError } from '../http';
+  import { t } from '../i18n';
   import { ago } from '../time';
   import { watch } from '../watch.svelte';
   import { describeOutcome, describeTrigger, wakesApi, type Wake } from '../wakes';
@@ -33,7 +34,7 @@
 
   const roomName = (id: string) => `#${roomNames[id] ?? id}`;
   const message = (cause: unknown) =>
-    cause instanceof ApiError ? cause.message : 'Unable to reach the gateway. Try again.';
+    cause instanceof ApiError ? cause.message : t('settings.gateway.unreachable');
 
   async function load() {
     try {
@@ -81,22 +82,20 @@
 </script>
 
 <section class="settings-section" aria-labelledby="wakes-title">
-  <h3 id="wakes-title">Wakes</h3>
-  <p>
-    pirc wakes up on its own when an open loop's time comes, the day before a deadline, or when it
-    said it would come back to something. Awake, it only reads and remembers; it speaks in the room
-    only when something is worth saying. At most {today.limit} a day.
-  </p>
+  <h3 id="wakes-title">{t('settings.wakes.title')}</h3>
+  <p>{t('settings.wakes.intro', { limit: today.limit })}</p>
 
   {#if disabled}
-    <p role="status">Wakes are unavailable in demo mode.</p>
+    <p role="status">{t('settings.wakes.demo')}</p>
   {:else if loading}
-    <p role="status">Loading wakes…</p>
+    <p role="status">{t('settings.wakes.loading')}</p>
   {:else}
     {#if error}<p class="wakes-error" role="alert">{error}</p>{/if}
-    <p class="wakes-today">Today: {today.used} of {today.limit}</p>
+    <p class="wakes-today">
+      {t('settings.wakes.today', { used: today.used, limit: today.limit })}
+    </p>
     {#if coming.length}
-      <ul class="wakes-list" aria-label="Coming wakes">
+      <ul class="wakes-list" aria-label={t('settings.wakes.comingAria')}>
         {#each coming as wake (wake.id)}
           <li>
             <div class="wakes-row">
@@ -109,7 +108,7 @@
                   class="button ghost small"
                   type="button"
                   disabled={!!busy}
-                  onclick={() => cancel(wake)}>Cancel</button
+                  onclick={() => cancel(wake)}>{t('common.cancel')}</button
                 >
               {/if}
             </div>
@@ -117,15 +116,13 @@
         {/each}
       </ul>
     {:else}
-      <p>
-        Nothing coming. pirc wakes for open loops with a time, and when it says it will come back.
-      </p>
+      <p>{t('settings.wakes.empty')}</p>
     {/if}
 
     {#if ended.length}
       <details class="wakes-ended">
-        <summary>Recent wakes · {ended.length}</summary>
-        <ul class="wakes-list" aria-label="Recent wakes">
+        <summary>{t('settings.wakes.recent', { count: ended.length })}</summary>
+        <ul class="wakes-list" aria-label={t('settings.wakes.recentAria')}>
           {#each ended as wake (wake.id)}
             <li>
               <div class="wakes-text">

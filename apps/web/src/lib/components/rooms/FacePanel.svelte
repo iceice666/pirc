@@ -12,7 +12,6 @@
     facesApi,
     hueOf,
     initialOf,
-    presenceLabel,
     type BrainPrompt,
     type Face,
     type FaceActivity,
@@ -21,6 +20,8 @@
     type Territory,
   } from '../../faces';
   import { ApiError } from '../../http';
+  import { presenceText, t } from '../../i18n';
+  import type { MessageKey } from '../../i18n/messages';
   import { describeAnchor } from '../../loops';
   import type { RoomView } from '../../rooms';
   import { sourcesApi, type Source } from '../../sources';
@@ -155,7 +156,7 @@
       await run();
       saved = true;
     } catch (cause) {
-      error = cause instanceof ApiError ? cause.message : 'Unable to reach the gateway.';
+      error = cause instanceof ApiError ? cause.message : t('rooms.error.gateway');
     } finally {
       busy = false;
     }
@@ -184,20 +185,21 @@
 
   const readOnly = (prompt: BrainPrompt) =>
     prompt.reason === 'nix-store'
-      ? 'Managed by Nix'
+      ? t('face.readOnly.nix')
       : prompt.reason === 'symlink'
-        ? 'A symlink: change it where it points'
-        : 'Not writable';
+        ? t('face.readOnly.symlink')
+        : t('face.readOnly.notWritable');
   const topicRooms = $derived(rooms.filter((room) => room.kind !== 'general'));
+  /** The files a host's page edits, their names, and what each is for. */
   const PROMPTS = [
-    ['soul', 'SOUL.md', 'Its persona, for every face'],
-    ['chat', 'CHAT.md', 'House rules for talking'],
-  ] as const;
+    ['soul', 'SOUL.md', 'face.prompt.soul'],
+    ['chat', 'CHAT.md', 'face.prompt.chat'],
+  ] as const satisfies readonly (readonly [string, string, MessageKey])[];
 </script>
 
-<aside class="face-page" aria-label="{face.name}'s page">
+<aside class="face-page" aria-label={t('face.page', { name: face.name })}>
   <header>
-    <button type="button" class="icon" aria-label="Back to the members" onclick={onback}
+    <button type="button" class="icon" aria-label={t('face.back')} onclick={onback}
       ><ArrowLeft size={16} /></button
     >
     <span
@@ -209,44 +211,54 @@
     <div class="title">
       <h2>{face.name}</h2>
       <span class="state"
-        >{face.archivedAt ? 'Archived' : presenceLabel(presence)}{#if face.isHost}
-          · the host{/if}</span
+        >{face.archivedAt ? t('common.archived') : presenceText(presence)}{#if face.isHost}
+          · {t('face.theHost')}{/if}</span
       >
     </div>
-    <button type="button" class="icon" aria-label="Close" onclick={onclose}><X size={16} /></button>
+    <button type="button" class="icon" aria-label={t('common.close')} onclick={onclose}
+      ><X size={16} /></button
+    >
   </header>
 
   <div class="body">
     <form onsubmit={save}>
-      <label>Name<input bind:value={name} maxlength="40" required /></label>
-      <label>Who it is<textarea bind:value={bio} rows="2" maxlength="500"></textarea></label>
-      <label>How it talks<input bind:value={tone} maxlength="300" /></label>
+      <label>{t('face.name')}<input bind:value={name} maxlength="40" required /></label>
+      <label>{t('face.bio')}<textarea bind:value={bio} rows="2" maxlength="500"></textarea></label>
+      <label>{t('face.tone')}<input bind:value={tone} maxlength="300" /></label>
       <div class="pair">
-        <label>Avatar<input bind:value={avatar} maxlength="16" placeholder="An emoji" /></label>
         <label
-          >Color<span class="color"
-            ><input type="color" bind:value={color} aria-label="Color" />{#if color}<button
-                type="button"
-                class="small"
-                onclick={() => (color = '')}>Clear</button
+          >{t('face.avatar')}<input
+            bind:value={avatar}
+            maxlength="16"
+            placeholder={t('face.avatar.placeholder')}
+          /></label
+        >
+        <label
+          >{t('face.color')}<span class="color"
+            ><input
+              type="color"
+              bind:value={color}
+              aria-label={t('face.color')}
+            />{#if color}<button type="button" class="small" onclick={() => (color = '')}
+                >{t('face.color.clear')}</button
               >{/if}</span
           ></label
         >
       </div>
       <label
-        >What it does<textarea
+        >{t('face.role')}<textarea
           bind:value={roleMd}
           rows="5"
-          placeholder="Its instructions, in Markdown"
+          placeholder={t('face.role.placeholder')}
         ></textarea></label
       >
 
       <fieldset>
-        <legend>Territory</legend>
+        <legend>{t('face.territory')}</legend>
         {#if face.isHost}
-          <p class="note">Answers in #general and in every room no other face has.</p>
+          <p class="note">{t('face.territory.hostNote')}</p>
         {:else}
-          <p class="group">Rooms it answers in</p>
+          <p class="group">{t('face.territory.rooms')}</p>
           {#each topicRooms as room (room.id)}
             {@const owner = ownerOf(room.id)}
             <label class="check" class:taken={!!owner}>
@@ -255,12 +267,14 @@
                 checked={territory.rooms.includes(room.id)}
                 disabled={!!owner}
                 onchange={(event) => toggle('rooms', room.id, event.currentTarget.checked)}
-              />#{room.name}{#if owner}<span class="note"> · {owner.name}'s</span>{/if}
+              />#{room.name}{#if owner}<span class="note">
+                  · {t('face.territory.ownedBy', { name: owner.name })}</span
+                >{/if}
             </label>
           {:else}
-            <p class="note">No rooms besides #general yet.</p>
+            <p class="note">{t('face.territory.noRooms')}</p>
           {/each}
-          <p class="group">Workspaces it is about</p>
+          <p class="group">{t('face.territory.workspaces')}</p>
           {#each workspaces as workspace (workspace.id)}
             <label class="check">
               <input
@@ -271,9 +285,9 @@
               />{workspace.displayName}<span class="note"> · {workspace.hostId}</span>
             </label>
           {:else}
-            <p class="note">No workspaces.</p>
+            <p class="note">{t('face.territory.noWorkspaces')}</p>
           {/each}
-          <p class="group">Sources it watches</p>
+          <p class="group">{t('face.territory.sources')}</p>
           {#each sources as source (source.id)}
             <label class="check">
               <input
@@ -283,33 +297,33 @@
               />{source.name}
             </label>
           {:else}
-            <p class="note">No sources.</p>
+            <p class="note">{t('face.territory.noSources')}</p>
           {/each}
         {/if}
       </fieldset>
 
       <div class="actions">
-        <button type="submit" class="primary" disabled={!dirty || busy}>Save</button>
+        <button type="submit" class="primary" disabled={!dirty || busy}>{t('common.save')}</button>
         {#if !face.isHost}
           <button
             type="button"
             disabled={busy}
             onclick={() => act(() => onsave({ archived: !face.archivedAt }))}
-            >{face.archivedAt ? 'Unarchive' : 'Archive'}</button
+            >{face.archivedAt ? t('rooms.action.unarchive') : t('rooms.action.archive')}</button
           >
         {/if}
-        {#if saved && !dirty}<span class="note" role="status">Saved; from its next turn.</span>{/if}
+        {#if saved && !dirty}<span class="note" role="status">{t('face.saved')}</span>{/if}
       </div>
       {#if error}<p class="error" role="alert">{error}</p>{/if}
     </form>
 
     {#if face.isHost && prompts}
       <section>
-        <h3>Who pirc is</h3>
+        <h3>{t('face.prompts')}</h3>
         {#each PROMPTS as [which, file, what] (which)}
           {@const prompt = prompts[which]}
           <label
-            >{file} <span class="note">{what}</span>
+            >{file} <span class="note">{t(what)}</span>
             {#if which === 'soul'}
               <textarea
                 bind:value={soul}
@@ -330,7 +344,7 @@
             <button
               type="button"
               disabled={busy || (which === 'soul' ? soul : chat) === prompt.text}
-              onclick={() => savePrompt(which)}>Save {file}</button
+              onclick={() => savePrompt(which)}>{t('face.prompt.save', { file })}</button
             >
           {:else}
             <p class="note">{readOnly(prompt)} ({prompt.path}).</p>
@@ -340,11 +354,11 @@
     {/if}
 
     <section>
-      <h3>Loops it holds</h3>
+      <h3>{t('face.loops')}</h3>
       {#if !activity}
-        <p class="note">Loading…</p>
+        <p class="note">{t('common.loading')}</p>
       {:else if !activity.loops.length}
-        <p class="note">None open.</p>
+        <p class="note">{t('face.loops.none')}</p>
       {:else}
         <ul>
           {#each activity.loops as open (open.id)}
@@ -357,9 +371,9 @@
     </section>
 
     <section>
-      <h3>Lately</h3>
+      <h3>{t('face.lately')}</h3>
       {#if activity && !activity.workers.length && !activity.wakes.length}
-        <p class="note">Nothing yet.</p>
+        <p class="note">{t('face.lately.none')}</p>
       {:else if activity}
         <ul>
           {#each activity.workers as worker (worker.id)}
@@ -371,8 +385,10 @@
           {/each}
           {#each activity.wakes as wake (wake.id)}
             <li>
-              Woke up ({wake.trigger.why ?? wake.trigger.name ?? wake.kind})<span class="note">
-                · {wake.outcome ?? 'waiting'} · {ago(wake.createdAt)}</span
+              {t('face.lately.woke', {
+                why: wake.trigger.why ?? wake.trigger.name ?? wake.kind,
+              })}<span class="note">
+                · {wake.outcome ?? t('face.wake.waiting')} · {ago(wake.createdAt)}</span
               >
             </li>
           {/each}
@@ -382,7 +398,7 @@
 
     {#if face.isHost}
       <section class="preferences">
-        <h3>What it keeps in mind</h3>
+        <h3>{t('face.memory')}</h3>
         <MemorySettings />
       </section>
     {/if}
