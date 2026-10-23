@@ -4,6 +4,8 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-10-23
+
 ### Added
 
 - Web and Android calendars with month/week/day views, ordinary events, reminders and confirmed Agent proposals.
@@ -17,7 +19,6 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 ### Fixed
 
 - Avoid memory activation deadlocks between concurrent agents and support large repository histories without exhausting the shared parse cache. Memory panels report activation state explicitly.
-
 - Update Rust TLS verification dependencies for distrusted emSign certificate paths (RUSTSEC-2026-0382 and RUSTSEC-2026-0383); rebuild and restart the gateway and all chat/coding nodes.
 - Android native HTML documents handle modal dialogs, backdrop dismissal, authored dialog positions and partial document roots; scripted focus reveals off-screen controls again.
 

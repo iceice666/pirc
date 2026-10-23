@@ -1,9 +1,10 @@
-# 0.9.3 local readiness review
+# 0.9.3 release readiness review
 
 Reviewed 2026-10-23 in `flutter-web-parity`, based on local `a2ad0c64`
 and integrated `origin/main` at `1846dfde`. Fetching origin found no newer main
-commit. This record does not authorize a remote push or release. Product
-manifests remain at 0.9.2; the next release commit will bump them together.
+commit. The user authorized publishing 0.9.3 on 2026-10-23. A fresh
+`git pull --rebase origin main` found no additional commits or conflicts.
+Product manifests are synchronized at 0.9.3, with Android build 77.
 
 ## Changes reviewed
 
@@ -50,7 +51,7 @@ manifests remain at 0.9.2; the next release commit will bump them together.
 | macOS sandbox and same-account registry | 23 passed                                                                                                                                                                                     |
 | TLS distrust/control cases              | 3 passed                                                                                                                                                                                      |
 | Real-process API/Agent integration      | 59 distinct scenarios passed across 22 suites, including required native checkpoint execution                                                                                                 |
-| Web                                     | 412 distinct tests passed across the full suite and final targeted rerun; Svelte check and production build passed                                                                            |
+| Web                                     | 412 passed in the full post-bump run; Svelte check and production build passed                                                                                                                |
 | Flutter                                 | Full run: 8,207 passed, one obsolete Calendar label failed; that test passed after correction. Final focused reruns and the new App approval regression passed (8,209 distinct tests covered) |
 | Android native JVM                      | 348 passed                                                                                                                                                                                    |
 | Static/build checks                     | All-target workspace Clippy with warnings denied, Flutter analysis, repository formatting, diff checks, synchronized version check and pinned model catalog check passed                      |
@@ -58,6 +59,11 @@ manifests remain at 0.9.2; the next release commit will bump them together.
 The production Web build still reports its existing large-bundle advisory;
 there is no build error. Disposable Rust targets, Android test/build intermediates
 and Web build caches are removed after verification. Existing APKs are retained.
+
+After the version bump, all 18 release/tooling script tests passed with pinned
+Bun 1.4.2. Version, catalog, browser-asset, formatting and diff checks passed.
+The updated cargoHash reproduced the previous baseline exactly before hashing
+the new lockfile; third-party package versions did not change.
 
 ## Remaining release gates and known limits
 
@@ -71,6 +77,7 @@ that every platform or deployment is verified.
 - Browser automation and deployed hosts were not exercised in this pass. TLS
   unit fixtures do not verify OS CA updates or curl/Git trust stores.
 - Existing memory ledgers were not activated and no deployment state was changed.
-- When publication is authorized: make the 0.9.3 release commit, increment Android
-  build number, refresh version-dependent Nix hashes, run the exact-commit CI
-  gates, then tag and review the signed draft assets. Do not reuse 0.9.2 assets.
+- Publication requires successful Check and Android workflows on the exact main
+  commit, followed by the annotated v0.9.3 tag and a successful Release workflow.
+  Verify the new draft assets, checksums and existing Android release signing
+  identity before publishing. Do not reuse 0.9.2 assets.
