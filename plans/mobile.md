@@ -148,6 +148,15 @@ submit messages. The 57 related keyboard/browser/form/focus/i18n tests and chang
 analysis passed locally. Physical OEM/CJK keyboard acceptance is still open;
 this fix does not certify modal Tab sentinel traversal.
 
+Terminal close errors now match the untranslated backend `not found` pattern,
+like frozen Web revision `bd3d909`; Traditional Chinese no longer leaves a
+missing terminal selected. English/Traditional Chinese tests verify permission
+failures preserve tabs, missing terminals are removed, selection moves to the
+remaining tab and closing state is cleared. The 26 related terminal/timeline
+tests and changed-file analysis passed locally. The write-block parser's backend
+pattern also no longer passes through translation lookup; its existing Chinese
+catalog entry was identical, so no separate observed failure is claimed.
+
 Title-only system notices now use the remaining row width, instead of sharing it
 with an empty spacer. The reported `Stopped after 200 turns` text is checked
 with Roboto at 320/390/768 CSS px, light/dark themes and 1/1.3 font scale. The old

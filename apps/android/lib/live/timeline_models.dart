@@ -188,9 +188,7 @@ List<Json> effectiveTools(List<Json> tools) {
 ({String path, String holderName})? writeBlock(Json t) {
   if (t['status'] != 'failed') return null;
   final match = RegExp(
-    tr(
-      "(\\S+) is being written by session \"(.+?)\" \\([^)]*\\); wait until its run finishes",
-    ),
+    "(\\S+) is being written by session \"(.+?)\" \\([^)]*\\); wait until its run finishes",
   ).firstMatch(value(t, 'output'));
   return match == null ? null : (path: match[1]!, holderName: match[2]!);
 }

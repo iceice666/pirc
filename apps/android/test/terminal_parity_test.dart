@@ -5,6 +5,7 @@ import 'package:flutter/semantics.dart' show SemanticsNode;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/live/gateway.dart';
+import 'package:pirc_mobile/l10n/app_i18n.dart';
 import 'package:pirc_mobile/live/terminal_state.dart';
 import 'package:pirc_mobile/live/terminal_pane.dart';
 import 'package:xterm/xterm.dart';
@@ -64,29 +65,40 @@ void main() {
     c.dispose();
     await g.stream.close();
   });
-  testWidgets('terminal close errors and not-found removal', (t) async {
-    final g = FakeGateway(),
-        c = LiveController(g)
-          ..sessionId = 's'
-          ..control = {'held': true, 'generation': 3};
-    g.handler = (_, _) async => {
-      'terminals': [terminalInfo('a')],
-    };
-    final s = TerminalPaneState(c);
-    await t.pump();
-    g.handler = (_, _) async =>
-        throw PlatformException(code: 'bad', message: 'Permission denied');
-    await s.close(s.terminals.first);
-    expect(s.terminals.length, 1);
-    expect(s.error, 'Permission denied');
-    g.handler = (_, _) async =>
-        throw PlatformException(code: '404', message: 'Terminal not found');
-    await s.close(s.terminals.first);
-    expect(s.terminals, isEmpty);
-    s.dispose();
-    c.dispose();
-    await g.stream.close();
-  });
+  for (final language in ['en', 'zh-TW']) {
+    testWidgets('terminal close errors and not-found removal in $language', (
+      t,
+    ) async {
+      AppI18n.instance.setLanguage(language);
+      addTearDown(() => AppI18n.instance.setLanguage('en'));
+      final g = FakeGateway();
+      final c = LiveController(g)
+        ..sessionId = 's'
+        ..control = {'held': true, 'generation': 3};
+      g.handler = (_, _) async => {
+        'terminals': [terminalInfo('a'), terminalInfo('b')],
+      };
+      final s = TerminalPaneState(c);
+      await t.pump();
+      expect(s.current, 'b');
+      g.handler = (_, _) async =>
+          throw PlatformException(code: 'bad', message: 'Permission denied');
+      await s.close(s.terminals.last);
+      expect(s.terminals.map((v) => v['id']), ['a', 'b']);
+      expect(s.current, 'b');
+      expect(s.error, 'Permission denied');
+      expect(s.closing, isEmpty);
+      g.handler = (_, _) async =>
+          throw PlatformException(code: '404', message: 'Terminal not found');
+      await s.close(s.terminals.last);
+      expect(s.terminals.map((v) => v['id']), ['a']);
+      expect(s.current, 'a');
+      expect(s.closing, isEmpty);
+      s.dispose();
+      c.dispose();
+      await g.stream.close();
+    });
+  }
   testWidgets(
     'PTY replay resets ANSI state, control gates and debounced visible resize',
     (t) async {

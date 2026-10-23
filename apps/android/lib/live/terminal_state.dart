@@ -138,7 +138,7 @@ class TerminalPaneState extends ChangeNotifier {
     } catch (e2) {
       if (!valid(e)) return;
       final message = terminalError(e2, tr("Unable to close the terminal."));
-      if (!RegExp(tr("not found"), caseSensitive: false).hasMatch(message)) {
+      if (!RegExp('not found', caseSensitive: false).hasMatch(message)) {
         error = message;
         emit();
         return;
