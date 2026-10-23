@@ -30,7 +30,7 @@ pub use engine::*;
 /// files numbered their schemas 1 to 1005.
 const APPLICATION_ID: i32 = 0x7069_7263;
 /// `PRAGMA user_version` of `schema.sql`.
-pub const SCHEMA_VERSION: i64 = 9;
+pub const SCHEMA_VERSION: i64 = 10;
 const SCHEMA: &str = include_str!("schema.sql");
 /// Each migration takes a database from the version before it to its own;
 /// `schema.sql` is always the newest whole.
@@ -43,6 +43,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (7, include_str!("migrations/7-sources.sql")),
     (8, include_str!("migrations/8-faces.sql")),
     (9, include_str!("migrations/9-worker-attachments.sql")),
+    (10, include_str!("migrations/10-worker-reports.sql")),
 ];
 
 /// The database file in a state directory when `PIRC_DATABASE_PATH` does
@@ -446,6 +447,7 @@ mod tests {
         ALTER TABLE delegations DROP COLUMN read_only;
         ALTER TABLE delegations DROP COLUMN context_json;
         ALTER TABLE delegations DROP COLUMN attachments_json;
+        ALTER TABLE delegations DROP COLUMN reported_at;
         ALTER TABLE delegations DROP COLUMN wake_id;
         ALTER TABLE delegations DROP COLUMN note;
         ALTER TABLE delegations RENAME COLUMN room_id TO assistant_session_id;

@@ -78,7 +78,9 @@
             <td
               >{turn.kind === 'wake'
                 ? 'Came back on its own'
-                : `${turn.messageIds.length} message${turn.messageIds.length === 1 ? '' : 's'}`}</td
+                : turn.kind === 'report'
+                  ? 'A worker ended'
+                  : `${turn.messageIds.length} message${turn.messageIds.length === 1 ? '' : 's'}`}</td
             >
             <td>
               {turnOutcome(turn)}

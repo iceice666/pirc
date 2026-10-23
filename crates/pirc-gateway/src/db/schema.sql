@@ -95,7 +95,10 @@ CREATE TABLE delegations (
   -- What the brain handed it besides the task: {facts, loops} as given.
   -- attachments_json: the files people sent with the request it answers, as
   -- the room's uploads carried them; copied to the worker's node session.
-  context_json TEXT, wake_id TEXT, note TEXT, attachments_json TEXT
+  context_json TEXT, wake_id TEXT, note TEXT, attachments_json TEXT,
+  -- When the room was told how it ended (the brain's own words, or its
+  -- report as it was when the brain could not); NULL until then.
+  reported_at INTEGER
 );
 CREATE INDEX delegations_owner ON delegations(owner_user, status);
 CREATE INDEX delegations_follows ON delegations(follows);
@@ -266,13 +269,14 @@ CREATE TABLE room_uploads (
 CREATE INDEX room_uploads_room ON room_uploads(room_id);
 
 -- The brain's turns (plans/rewrite/02-brain-host.md), newest last per room:
--- kind 'user' answers what people said, 'wake' is the brain's own (plan 05).
+-- kind 'user' answers what people said, 'wake' is the brain's own (plan 05),
+-- 'report' tells a room how its workers ended (plan 06).
 -- message_ids_json: the user messages it took, steered-in ones included.
 -- outcome is NULL while it runs; a turn still open at startup is
 -- 'interrupted'. usage_json sums the model calls' token usage.
 CREATE TABLE brain_turns (
   id TEXT PRIMARY KEY, room_id TEXT NOT NULL REFERENCES rooms(id),
-  kind TEXT NOT NULL CHECK (kind IN ('user', 'wake')),
+  kind TEXT NOT NULL CHECK (kind IN ('user', 'wake', 'report')),
   message_ids_json TEXT NOT NULL DEFAULT '[]',
   started_at INTEGER NOT NULL, ended_at INTEGER,
   outcome TEXT CHECK (outcome IN ('done', 'failed', 'aborted', 'timeout', 'preempted', 'interrupted')),

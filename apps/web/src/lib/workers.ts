@@ -2,7 +2,7 @@
  * Workers (plans/rewrite/06-workers.md): pirc hands work to a coding agent in
  * one of the household's workspaces without asking. The room shows a message
  * about it (its anchor) with a thread under it, where the worker's progress,
- * its team's talk and its questions go; how it ended comes back to the room.
+ * its team's talk and its questions go; how it ended comes back to the room, told by the brain.
  * This is the thread's API and the words the room uses for a worker.
  */
 import { request } from './http';

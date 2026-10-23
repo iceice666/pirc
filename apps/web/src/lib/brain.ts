@@ -7,8 +7,8 @@ import { request } from './http';
 export interface BrainTurn {
   id: string;
   roomId: string;
-  /** `user`: people spoke; `wake`: it came back on its own. */
-  kind: 'user' | 'wake';
+  /** `user`: people spoke; `wake`: it came back on its own; `report`: it told the room how its workers ended. */
+  kind: 'user' | 'wake' | 'report';
   messageIds: string[];
   startedAt: number;
   endedAt: number | null;

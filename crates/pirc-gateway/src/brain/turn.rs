@@ -50,6 +50,11 @@ pub struct Progress {
     pub wake: RefCell<Option<crate::wake::Wake>>,
     /// The wake said something in the room.
     pub spoke: Cell<bool>,
+    /// The turn wrote a reply in the room.
+    pub wrote: Cell<bool>,
+    /// A report turn's `body.worker`: its replies say how that worker
+    /// ended, and the room links them to its thread.
+    pub report: RefCell<Option<Value>>,
     /// Wakes whoever waits on the fields above.
     pub changed: Notify,
 }
@@ -60,6 +65,8 @@ impl Progress {
         self.last_stop.set(None);
         self.last_error.borrow_mut().take();
         self.usage.borrow_mut().take();
+        self.wrote.set(false);
+        self.report.borrow_mut().take();
     }
 }
 
@@ -290,11 +297,14 @@ impl Reply {
 
     fn write(&mut self, streaming: bool) {
         self.written_at = now_ms();
-        let body = if streaming {
+        let mut body = if streaming {
             json!({ "text": self.text, "streaming": true })
         } else {
             json!({ "text": self.text })
         };
+        if let Some(worker) = self.progress.report.borrow().as_ref() {
+            body["worker"] = worker.clone();
+        }
         let result = {
             let db = self.app.db.lock();
             match &self.message_id {
@@ -313,6 +323,7 @@ impl Reply {
         };
         match result {
             Ok((message, true)) => {
+                self.progress.wrote.set(true);
                 self.message_id = Some(message.id.clone());
                 self.memory
                     .add_turn_messages(std::slice::from_ref(&message.id));

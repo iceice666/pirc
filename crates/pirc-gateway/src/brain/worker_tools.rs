@@ -93,8 +93,8 @@ pub fn section(app: &App, waking: bool, face_id: &str) -> PromptSection {
          It starts at once, without asking anyone; at most 4 run at a time and the others wait their turn. \
          It knows nothing of the people or of what you remember: write the task in full, hand it the facts and loops that bear on it \
          (`context`, by id), and when a person asked for it, `quote` their own words so it may act on their request. \
-         The room is shown your message about it, with a thread under it where its progress shows; when it ends, its report is said in the room \
-         and you hear of it at your next turn here. Give a finished worker more to do with `follows`; look at them with `worker_status`. \
+         The room is shown your message about it, with a thread under it where its progress shows; when it ends, you are handed its report \
+         (at once when nobody speaks here first) and tell the room what came of it in your own words. Give a finished worker more to do with `follows`; look at them with `worker_status`. \
          Work that belongs to no repository goes to `scratch`, a fresh directory on a machine that fits (`node_hint`, `gpu`); \
          to only look at a repository, `workspace_read` it yourself instead. \
          Files people sent with the request are handed to the worker with the task (its node puts them in its workspace, and its copy of the task lists where); \

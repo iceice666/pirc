@@ -9,9 +9,15 @@
 //! own room are steered into it (one steer per scheduling pass), and other
 //! rooms wait for it to end.
 //!
+//! A room whose workers ended hears it from the brain (a `report` turn,
+//! plans/rewrite/06-workers.md) when no batch is ready and nothing runs:
+//! it reads their reports and tells the room in its own words; when that
+//! turn fails before it said anything, the room is shown the reports as
+//! they are. A turn of people in that room takes the reports along instead.
+//!
 //! Wakes (plans/rewrite/05-self-wake.md, `crate::wake`) come behind
-//! people: one starts only when no batch is ready and nothing runs, within
-//! the day's quota. A batch that becomes ready while a wake runs stops it
+//! people and reports: one starts only when no batch is ready and nothing
+//! runs, within the day's quota. A batch that becomes ready while a wake runs stops it
 //! (`preempted`), and the wake is put back behind that turn, once; taken
 //! over again, it ends `silent`. One that already spoke has done its job.
 //!
@@ -28,6 +34,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use pirc_agent::agent::Delivery;
+use pirc_agent::context::PromptSection;
 use pirc_agent::stream::StreamFn;
 use pirc_agent::tools::Tool;
 use pirc_protocol::StopReason;
@@ -43,6 +50,7 @@ use super::{
 };
 use crate::app::AppState;
 use crate::db::rooms::{Pending, RoomInputStore, RoomStore};
+use crate::delegations::Delegation;
 use crate::rooms::TYPING_TTL_MS;
 use crate::util::now_ms;
 use crate::wake::{self, Wake, quota};
@@ -244,6 +252,28 @@ impl Scheduler {
             // Other rooms' batches wait for this turn.
             return plan.next_at;
         }
+        // Nothing from people: a room whose workers ended hears of it.
+        let unreported = crate::delegations::unreported_rooms(&self.app.db.lock());
+        match unreported {
+            Ok(rooms) => {
+                for room_id in rooms {
+                    let open = self
+                        .app
+                        .db
+                        .lock()
+                        .get_room(&room_id)
+                        .is_ok_and(|room| room.archived_at.is_none());
+                    // An archived room hears of them once unarchived.
+                    if open && self.start_report(&room_id).await {
+                        return plan.next_at;
+                    }
+                }
+            }
+            Err(error) => crate::log::warn(&format!(
+                "brain: cannot read the workers that ended: {}",
+                error.message
+            )),
+        }
         // Nothing from people: a wake that is due.
         loop {
             let next = wake::next(&self.app.db.lock(), now_ms());
@@ -378,31 +408,19 @@ impl Scheduler {
                 .unwrap_or_default()
                 .into_iter()
                 .map(|delegation| {
-                    let note = Delivery {
-                        custom_type: crate::delegations::REPORT_TYPE.to_owned(),
-                        content: crate::delegations::update_message(&conn, &delegation),
-                        display: false,
-                        details: Some(json!({
-                            "delegationId": delegation.id,
-                            "status": delegation.status,
-                        })),
-                    };
+                    let note = report_note(&conn, &delegation);
                     (delegation, note)
                 })
                 .collect::<Vec<_>>()
         };
         let notes = reports.iter().map(|(_, note)| note.clone()).collect();
         self.hand_over(&room, text, batches, notes);
-        for (delegation, _) in &reports {
-            if let Err(error) = crate::delegations::told(&self.app.db.lock(), delegation) {
-                crate::log::warn(&format!("brain: cannot note a report: {}", error.message));
-            }
-        }
+        let reports = told(&self.app, reports);
         let task = tokio::task::spawn_local(finish(
             self.app.clone(),
             room.clone(),
-            room_id.to_owned(),
-            turn.id.clone(),
+            (room_id.to_owned(), turn.id.clone(), false),
+            reports,
             Duration::from_millis(self.app.config.brain_turn_timeout_ms),
         ));
         self.running = Some(Running {
@@ -412,6 +430,178 @@ impl Scheduler {
             task,
             preempted: None,
         });
+    }
+
+    /// Tell a room how its workers ended, when nobody spoke there first: a
+    /// turn of its own, as the face that called the first of them, that
+    /// reads their reports and says what came of them. When it cannot
+    /// start, the room is shown the reports as they are. Whether it started.
+    async fn start_report(&mut self, room_id: &str) -> bool {
+        let (ended, room_row) = {
+            let conn = self.app.db.lock();
+            (
+                crate::delegations::untold(&conn, room_id),
+                conn.get_room(room_id),
+            )
+        };
+        let ended = match ended {
+            Ok(ended) if !ended.is_empty() => ended,
+            Ok(_) => return false,
+            Err(error) => {
+                crate::log::warn(&format!(
+                    "brain: cannot read {room_id}'s workers: {}",
+                    error.message
+                ));
+                return false;
+            }
+        };
+        // Those whose room has not heard of them (the others were shown
+        // their report before the brain told reports).
+        let Some(first) = ended
+            .iter()
+            .find(|delegation| delegation.reported_at.is_none())
+        else {
+            return false;
+        };
+        let as_is = |app: &AppState| {
+            for delegation in ended.iter().filter(|d| d.reported_at.is_none()) {
+                crate::delegations::report(app, delegation);
+            }
+        };
+        let Ok(room_row) = room_row else {
+            as_is(&self.app);
+            return false;
+        };
+        let room = match self.room(room_id).await {
+            Ok(room) => room,
+            Err(error) => {
+                crate::log::warn(&format!("brain: cannot open {room_id}: {error}"));
+                as_is(&self.app);
+                return false;
+            }
+        };
+        let route = {
+            let conn = self.app.db.lock();
+            faces::report_face(&conn, first.face(), room_id).map(|face| {
+                let route = faces::Route {
+                    face,
+                    why: faces::Why::Reported,
+                    mentioned: Vec::new(),
+                };
+                (faces::sections(&conn, &route), route)
+            })
+        };
+        let (face_sections, route) = match route {
+            Ok(route) => route,
+            Err(error) => {
+                crate::log::warn(&format!("brain: cannot read the faces: {}", error.message));
+                as_is(&self.app);
+                return false;
+            }
+        };
+        // Whom they worked for, in the order they were called.
+        let mut speakers: Vec<String> = Vec::new();
+        for delegation in &ended {
+            if !speakers.contains(&delegation.owner_user) {
+                speakers.push(delegation.owner_user.clone());
+            }
+        }
+        let about = ended
+            .iter()
+            .map(|delegation| delegation.title.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let mut prompt = identity::sections(&self.config_dir, &room_row);
+        // Who it is and what this turn is for, before the house rules.
+        let at = 2.min(prompt.len());
+        let mut inserted = face_sections;
+        inserted.push(report_section(ended.len()));
+        prompt.splice(at..at, inserted);
+        let (open_loops, loops_about) = loops::section(&self.app, &route.face.id);
+        let mut remembered =
+            memory::sections(&self.app, &speakers, &format!("{about}\n{loops_about}"));
+        remembered.insert(1.min(remembered.len()), open_loops);
+        prompt.extend(remembered);
+        prompt.push(worker_tools::section(&self.app, false, &route.face.id));
+        prompt.extend(source_tools::section(&self.app, room_id));
+        room.memory.set_speakers(speakers);
+        room.memory.start_turn(&route.face.id);
+        room.agent.set_base_prompt(prompt);
+        let mut hidden: Vec<String> = ONLY_IN_WAKES
+            .iter()
+            .map(|name| (*name).to_owned())
+            .collect();
+        hidden.extend(crate::sources::tools::unused(&self.app));
+        room.agent.set_hidden_tools(hidden);
+        room.agent.refresh_models().await;
+        let turn = match self.app.db.lock().start_turn(room_id, "report", &[]) {
+            Ok(turn) => turn,
+            Err(error) => {
+                crate::log::warn(&format!("brain: cannot record a turn: {}", error.message));
+                as_is(&self.app);
+                return false;
+            }
+        };
+        presence(&self.app, room_id, Some(&route.face.id));
+        room.progress.reset_turn();
+        *room.progress.report.borrow_mut() = Some(first.report_note());
+        // All of them in one run: the earlier ones recorded, the last one
+        // starts it.
+        let notes: Vec<Delivery> = {
+            let conn = self.app.db.lock();
+            ended
+                .iter()
+                .map(|delegation| report_note(&conn, delegation))
+                .collect()
+        };
+        let last = notes.len() - 1;
+        let mut delivered = Ok(());
+        for (index, note) in notes.into_iter().enumerate() {
+            delivered = room.agent.deliver(note, index == last, false);
+            if delivered.is_err() {
+                break;
+            }
+        }
+        if let Err(error) = delivered {
+            crate::log::warn(&format!("brain: cannot hand over a report: {error}"));
+            room.progress.report.borrow_mut().take();
+            if let Err(error) =
+                self.app
+                    .db
+                    .lock()
+                    .end_turn(&turn.id, Outcome::Failed, Some(&error), &json!(null))
+            {
+                crate::log::warn(&format!(
+                    "brain: cannot record a turn's end: {}",
+                    error.message
+                ));
+            }
+            presence(&self.app, room_id, None);
+            as_is(&self.app);
+            return false;
+        }
+        let reports = told(
+            &self.app,
+            ended
+                .into_iter()
+                .map(|delegation| (delegation, ()))
+                .collect(),
+        );
+        let task = tokio::task::spawn_local(finish(
+            self.app.clone(),
+            room.clone(),
+            (room_id.to_owned(), turn.id.clone(), true),
+            reports,
+            Duration::from_millis(self.app.config.brain_turn_timeout_ms),
+        ));
+        self.running = Some(Running {
+            room_id: room_id.to_owned(),
+            turn_id: turn.id,
+            room,
+            task,
+            preempted: None,
+        });
+        true
     }
 
     /// Start a wake that is due, unless its room is gone or archived or
@@ -632,6 +822,54 @@ impl Scheduler {
     }
 }
 
+/// The brain's custom message about a worker that ended.
+fn report_note(conn: &rusqlite::Connection, delegation: &Delegation) -> Delivery {
+    Delivery {
+        custom_type: crate::delegations::REPORT_TYPE.to_owned(),
+        content: crate::delegations::update_message(conn, delegation),
+        display: false,
+        details: Some(json!({
+            "delegationId": delegation.id,
+            "status": delegation.status,
+        })),
+    }
+}
+
+/// The brain was told how these workers ended; those whose room had not
+/// heard of it yet, which it is to tell now.
+fn told<T>(app: &AppState, reports: Vec<(Delegation, T)>) -> Vec<Delegation> {
+    let mut untold = Vec::new();
+    for (delegation, _) in reports {
+        if let Err(error) = crate::delegations::told(&app.db.lock(), &delegation) {
+            crate::log::warn(&format!("brain: cannot note a report: {}", error.message));
+        }
+        if delegation.reported_at.is_none() {
+            untold.push(delegation);
+        }
+    }
+    untold
+}
+
+/// What a report turn is for (plans/rewrite/06-workers.md).
+fn report_section(count: usize) -> PromptSection {
+    let what = if count == 1 {
+        "a worker you called has ended"
+    } else {
+        "workers you called have ended"
+    };
+    PromptSection::new(
+        "worker-reports",
+        "Worker reports",
+        "built-in",
+        format!(
+            "## Worker reports\n\n\
+             Nobody spoke: {what}, and the room has not been told. Read what follows, then tell the people here in one message, \
+             in your own words and as briefly as it allows, what came of it; do not paste a report. \
+             The whole of each report is in its worker's thread."
+        ),
+    )
+}
+
 /// The people of a turn, in the order of their batches.
 fn speakers(batches: &[Pending]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
@@ -693,11 +931,13 @@ async fn admit(
 }
 
 /// Run the turn to its end, within the time limit, and record how it went.
+/// The workers it was to tell its room of (`reports`; a report turn is for
+/// them alone) are shown there as they are when it said nothing.
 async fn finish(
     app: AppState,
     room: Rc<RoomAgent>,
-    room_id: String,
-    turn_id: String,
+    (room_id, turn_id, reporting): (String, String, bool),
+    reports: Vec<Delegation>,
     timeout: Duration,
 ) {
     let timed_out = tokio::select! {
@@ -730,7 +970,12 @@ async fn finish(
         ),
         _ => None,
     };
+    // The room hears how its workers ended either way.
+    let as_is = !reports.is_empty() && !progress.wrote.get();
+    progress.report.borrow_mut().take();
     match outcome {
+        // A report turn's failure is said by the reports themselves.
+        Outcome::Failed | Outcome::Timeout if reporting && as_is => {}
         Outcome::Failed => post_line(&app, &room_id, FAILED_LINE),
         Outcome::Timeout => post_line(
             &app,
@@ -741,6 +986,11 @@ async fn finish(
             ),
         ),
         _ => {}
+    }
+    if as_is {
+        for delegation in &reports {
+            crate::delegations::report(&app, delegation);
+        }
     }
     let usage = progress
         .usage

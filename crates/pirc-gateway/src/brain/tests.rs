@@ -1499,3 +1499,137 @@ async fn the_brain_changes_a_face_when_asked() {
         lines(&h.app, GENERAL_ROOM_ID)
     );
 }
+
+/// A worker of #general that ended with `status` and `result`.
+fn ended_worker(app: &AppState, id: &str, status: &str, result: &str) {
+    app.db
+        .lock()
+        .execute(
+            "INSERT INTO delegations (id,owner_user,room_id,workspace_id,title,task,status,result,thread_id,expires_at,created_at,updated_at)
+             VALUES (?1,?2,?3,'work:repo',?4,'x',?5,?6,?7,0,0,0)",
+            rusqlite::params![
+                id,
+                ME,
+                GENERAL_ROOM_ID,
+                format!("Task {id}"),
+                status,
+                result,
+                format!("thread_{id}")
+            ],
+        )
+        .unwrap();
+}
+
+fn unreported(app: &AppState) -> Vec<String> {
+    crate::delegations::unreported_rooms(&app.db.lock()).unwrap()
+}
+
+#[tokio::test]
+async fn the_brain_tells_the_room_how_its_workers_ended() {
+    let h = harness();
+    ended_worker(
+        &h.app,
+        "d1",
+        "completed",
+        "All 42 tests pass; clippy is clean.",
+    );
+    ended_worker(&h.app, "d2", "failed", "The run cancelled");
+    let model = Scripted::new(vec![Answer::Words(
+        "The tests pass; the other run was stopped.",
+    )]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    until("the report turn", || finished(&h.app)).await;
+    let turn = &turns(&h.app)[0];
+    assert_eq!(
+        (turn.kind.as_str(), turn.outcome.as_deref()),
+        ("report", Some("done"))
+    );
+    // One model call has both reports, and says what the turn is for.
+    let asked = model.asked();
+    assert_eq!(asked.len(), 1);
+    assert!(asked[0].system_prompt.contains("## Worker reports"));
+    assert!(
+        asked[0]
+            .system_prompt
+            .contains("It called the worker that reported back.")
+    );
+    assert!(asked[0].messages.contains("All 42 tests pass"));
+    assert!(asked[0].messages.contains("The run cancelled"));
+    assert!(asked[0].messages.contains("the room has not been told"));
+    // The room hears it in the brain's words, linked to the first thread.
+    let replies = host_messages(&h.app);
+    assert_eq!(replies.len(), 1, "{replies:?}");
+    assert_eq!(
+        replies[0].body,
+        json!({ "text": "The tests pass; the other run was stopped.", "worker": {
+            "delegationId": "d1", "threadId": "thread_d1", "status": "completed", "report": true,
+        } })
+    );
+    assert!(unreported(&h.app).is_empty());
+    assert!(
+        crate::delegations::untold(&h.app.db.lock(), GENERAL_ROOM_ID)
+            .unwrap()
+            .is_empty()
+    );
+    // Not again, and people's next turn is theirs.
+    say(&h.app, "thanks", true);
+    until("the next turn", || {
+        turns(&h.app).len() == 2 && finished(&h.app)
+    })
+    .await;
+    assert_eq!(turns(&h.app)[0].kind, "user");
+    assert_eq!(model.asked().len(), 2);
+    assert!(!host_messages(&h.app)[1].body.get("worker").is_some());
+}
+
+#[tokio::test]
+async fn a_report_turn_that_fails_shows_the_report_as_it_is() {
+    let h = harness();
+    ended_worker(&h.app, "d1", "completed", "All 42 tests pass.");
+    let model = Scripted::new(vec![Answer::Fail]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    until("the report turn", || finished(&h.app)).await;
+    until("the report", || !host_messages(&h.app).is_empty()).await;
+    assert_eq!(turns(&h.app)[0].outcome.as_deref(), Some("failed"));
+    let shown = host_messages(&h.app);
+    assert_eq!(shown.len(), 1, "the report, without the failure line");
+    assert_eq!(
+        shown[0].body,
+        json!({ "text": "All 42 tests pass.", "worker": {
+            "delegationId": "d1", "threadId": "thread_d1", "status": "completed", "report": true,
+        } })
+    );
+    assert!(unreported(&h.app).is_empty());
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(turns(&h.app).len(), 1, "no retry");
+}
+
+#[tokio::test]
+async fn people_who_speak_first_hear_of_their_worker_in_their_turn() {
+    let h = harness();
+    ended_worker(&h.app, "d1", "completed", "All 42 tests pass.");
+    h.app
+        .db
+        .lock()
+        .send_user_message(GENERAL_ROOM_ID, ME, "how did it go?", &[], true)
+        .unwrap();
+    let model = Scripted::new(vec![Answer::Words("It went well: every test passes.")]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    until("the turn", || finished(&h.app)).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let all = turns(&h.app);
+    assert_eq!(all.len(), 1, "no report turn after it");
+    assert_eq!(all[0].kind, "user");
+    let asked = model.asked();
+    assert!(asked[0].messages.contains("how did it go?"));
+    assert!(asked[0].messages.contains("All 42 tests pass."));
+    assert!(!asked[0].system_prompt.contains("## Worker reports"));
+    assert_eq!(
+        host_messages(&h.app)
+            .iter()
+            .map(|message| message.body["text"].as_str().unwrap_or_default())
+            .collect::<Vec<_>>(),
+        ["It went well: every test passes."]
+    );
+    assert!(unreported(&h.app).is_empty());
+}

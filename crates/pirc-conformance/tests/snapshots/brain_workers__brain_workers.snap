@@ -19,7 +19,7 @@ expression: stable(t.into_value())
       },
       {
         "payload": {
-          "content": "Task from the household's assistant, started without a separate approval (worker <worker:1>):\n\nRun the test suite of the repository and report what fails.\n\nWork on it here. When you are done, end with a short summary of what you did and anything left over: it is shown to the people who asked.",
+          "content": "Task from the household's assistant, started without a separate approval (worker <worker:1>):\n\nRun the test suite of the repository and report what fails.\n\nWork on it here. When you are done, end with a short summary of what you did and anything left over: the assistant reads it and tells the people who asked.",
           "customType": "assistant-delegation",
           "details": {
             "delegationId": "<worker:1>",
@@ -542,6 +542,16 @@ expression: stable(t.into_value())
     "step": "the room: four calls, one waiting"
   },
   {
+    "observed": {
+      "calls": 2,
+      "report": true,
+      "result": true,
+      "turn": true,
+      "untold": true
+    },
+    "step": "the brain is told at once"
+  },
+  {
     "observed": [
       [
         "Run the tests",
@@ -575,7 +585,19 @@ expression: stable(t.into_value())
     "observed": [
       {
         "body": {
-          "text": "All 42 tests pass; clippy is clean.",
+          "memory": {
+            "id": "<fact:1>",
+            "kind": "fact",
+            "origin": "tool:delegation",
+            "user": "test@example.com"
+          },
+          "text": "Noted: The Repo test suite passes (42 tests)."
+        },
+        "kind": "line"
+      },
+      {
+        "body": {
+          "text": "Good news: every test in Repo passes, and clippy is clean.",
           "worker": {
             "delegationId": "<worker:1>",
             "report": true,
@@ -586,7 +608,7 @@ expression: stable(t.into_value())
         "kind": "text"
       }
     ],
-    "step": "the room: the report"
+    "step": "the room: the brain's report, kept from the delegation"
   },
   {
     "observed": [
@@ -702,33 +724,20 @@ expression: stable(t.into_value())
   },
   {
     "observed": {
-      "report": true,
-      "result": true
+      "turn": false
     },
-    "step": "the brain is told"
+    "step": "not told again"
   },
   {
     "observed": [
       {
         "body": {
-          "memory": {
-            "id": "<fact:1>",
-            "kind": "fact",
-            "origin": "tool:delegation",
-            "user": "test@example.com"
-          },
-          "text": "Noted: The Repo test suite passes (42 tests)."
-        },
-        "kind": "line"
-      },
-      {
-        "body": {
-          "text": "Good news."
+          "text": "You're welcome."
         },
         "kind": "text"
       }
     ],
-    "step": "kept, from the delegation"
+    "step": "the brain's reply"
   },
   {
     "body": {
@@ -753,7 +762,7 @@ expression: stable(t.into_value())
     "observed": [
       {
         "body": {
-          "text": "The worker could not finish “Suite A”: The run cancelled",
+          "text": "Suite A was stopped before it finished; say if you want it run again.",
           "worker": {
             "delegationId": "<worker:2>",
             "report": true,

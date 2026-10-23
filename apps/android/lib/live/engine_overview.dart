@@ -533,7 +533,11 @@ class _BrainPageState extends _LoadingPageState<_BrainPage> {
         final ended = turn['endedAt'] as num?;
         return engineItem(
           colors,
-          turn['kind'] == 'wake' ? 'Came back on its own' : 'People spoke',
+          turn['kind'] == 'wake'
+              ? 'Came back on its own'
+              : turn['kind'] == 'report'
+              ? 'A worker ended'
+              : 'People spoke',
           [
             '${turnOutcome(turn)} · ${agoMs(started)}'
                 '${started != null && ended != null ? ' · ${((ended - started) / 1000).toStringAsFixed(1)} s' : ''}'

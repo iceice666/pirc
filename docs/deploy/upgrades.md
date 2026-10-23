@@ -130,6 +130,13 @@ refuses schema 8. The routes are `/api/faces` and below; `POST
 `face_changed` and `face_presence`, and its `ready` frame `faces`. Nothing
 changes for nodes.
 
+The brain tells a room how its workers ended in its own words, in a turn of its
+own when nobody speaks there first (plans/rewrite/06-workers.md). On first start
+`pirc.sqlite` migrates to schema 10: `delegations.reported_at` is new (workers
+that ended before are counted as told, since their room was shown their report),
+and `brain_turns.kind` also takes `report`. An older gateway refuses schema 10.
+Nothing changes for nodes.
+
 ## 0.9.0: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
 Upgrade the gateway and every node together: the node protocol moves to 13

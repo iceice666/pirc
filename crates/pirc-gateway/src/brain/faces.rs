@@ -526,6 +526,8 @@ pub enum Why {
     Host,
     /// A wake wears it.
     Woke,
+    /// It called the worker that reported back.
+    Reported,
 }
 
 /// Who answers a turn (decision #9).
@@ -601,6 +603,19 @@ pub fn wake_face(conn: &Connection, wake: &crate::wake::Wake) -> ApiResult<Face>
         return Ok(face);
     }
     if let Some(face) = room_face(conn, &wake.room_id)? {
+        return Ok(face);
+    }
+    host(conn)
+}
+
+/// The face that tells a room how a worker ended: the one that called it,
+/// else the room's, else the host.
+pub fn report_face(conn: &Connection, face_id: &str, room_id: &str) -> ApiResult<Face> {
+    let faces = active(conn)?;
+    if let Some(face) = faces.iter().find(|face| face.id == face_id) {
+        return Ok(face.clone());
+    }
+    if let Some(face) = room_face(conn, room_id)? {
         return Ok(face);
     }
     host(conn)
@@ -692,6 +707,7 @@ pub fn sections(conn: &Connection, route: &Route) -> Vec<pirc_agent::context::Pr
             Why::Room => "This is its room.".to_owned(),
             Why::Host => "Nobody else answers here.".to_owned(),
             Why::Woke => "You woke up as it.".to_owned(),
+            Why::Reported => "It called the worker that reported back.".to_owned(),
         }
     ));
     if route.mentioned.len() > 1 {

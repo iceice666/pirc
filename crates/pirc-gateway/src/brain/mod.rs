@@ -116,8 +116,15 @@ impl Brain {
         Ok(Arc::clone(&stored))
     }
 
+    /// Whether the gateway runs a brain: it tells the rooms how their
+    /// workers ended.
+    pub fn present(app: &App) -> bool {
+        app.slots.get::<Arc<Brain>>().is_some()
+    }
+
     /// Look at the pending input again (a message was sent, a room was
-    /// unarchived). Nothing when the gateway runs without a brain.
+    /// unarchived, a worker ended). Nothing when the gateway runs without a
+    /// brain.
     pub fn nudge(app: &App) {
         if let Some(brain) = app.slots.get::<Arc<Brain>>() {
             let _ = brain.commands.send(Command::Nudge);
