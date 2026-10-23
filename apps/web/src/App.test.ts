@@ -82,7 +82,12 @@ describe('the app', () => {
     await vi.waitFor(() =>
       expect(target.querySelector('.overview h1')?.textContent).toBe('Engine'),
     );
-    expect(target.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe('Wakes');
+    // The tab strip is anchors over one page: the section in view is marked.
+    expect(
+      target
+        .querySelector('nav[aria-label="Engine sections"] a[aria-current="location"]')
+        ?.textContent?.trim(),
+    ).toBe('Wakes');
     expect(target.querySelector('nav[aria-label="Rooms"]')).toBeNull();
     engine.view = 'session';
   });

@@ -16,9 +16,11 @@
     disabled?: boolean;
     /** Bumped when a loop changed somewhere: reload. */
     revision?: number;
+    /** A loop was closed or reopened here. */
+    onchanged?: () => void;
   }
 
-  let { disabled = false, revision = 0 }: Props = $props();
+  let { disabled = false, revision = 0, onchanged }: Props = $props();
 
   /** Closed loops listed at most. */
   const CLOSED_PAGE = 20;
@@ -77,6 +79,7 @@
     try {
       await run();
       await load();
+      onchanged?.();
     } catch (cause) {
       if (alive) error = message(cause);
     } finally {

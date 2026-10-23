@@ -48,8 +48,8 @@ class EngineState {
   modeCatalog = $state.raw<ModeInfo[]>([]);
   /** Bumped whenever the gateway says your memory changed; open memory views reload. */
   memoryRevision = $state(0);
-  /** The front page's tab (view `overview`), as `?open=` names it. */
-  overviewSection = $state<OverviewSection>('nodes');
+  /** The front page's section in view (view `overview`), as `?open=` names it. */
+  overviewSection = $state<OverviewSection>('overview');
   sessions = $state.raw<SessionSummary[]>([]);
   view = $state<MainView>('session');
   /** The workspace whose page is showing (view `workspace`). */
@@ -114,7 +114,7 @@ class EngineState {
       .map((session) => ({ kind: 'session' as const, id: `session:${session.id}`, session })),
   );
 
-  /** Show the engine's front page, on one of its tabs. */
+  /** Show the engine's front page, on one of its sections. */
   showOverview(section: OverviewSection = this.overviewSection) {
     this.overviewSection = section;
     this.view = 'overview';
@@ -215,7 +215,7 @@ class EngineState {
       this.view = 'workspace';
     } else if (isOverviewSection(open) || !address.has('session')) {
       // The engine opens on its front page unless the address names a session.
-      this.overviewSection = isOverviewSection(open) ? open : 'nodes';
+      this.overviewSection = isOverviewSection(open) ? open : 'overview';
       this.view = 'overview';
     }
     if (this.activeSessionId)

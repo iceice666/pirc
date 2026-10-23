@@ -14,6 +14,7 @@ export const engine = {
     'engine.header.hideSidebar': 'Hide sidebar',
     'engine.header.openWorkspace': 'Open {name}',
     'engine.header.openOriginRoom': 'Open the room pirc called this worker in',
+    'engine.header.workerChip': 'Worker · {title}',
     'engine.header.notSandboxed': 'Not sandboxed',
     'engine.header.notSandboxedReason': 'Not sandboxed: {reason}',
     'engine.header.live': 'Live',
@@ -100,8 +101,10 @@ export const engine = {
 
     // The front page and its tabs.
     'engine.title': 'Engine',
-    'engine.tagline': 'What runs behind the rooms.',
+    'engine.tagline':
+      'What runs behind the rooms. You don’t need to look here unless something goes wrong.',
     'engine.sections': 'Engine sections',
+    'engine.section.overview': 'Overview',
     'engine.section.nodes': 'Nodes',
     'engine.section.brain': 'Brain',
     'engine.section.loops': 'Open loops',
@@ -122,6 +125,30 @@ export const engine = {
     'engine.nodes.browse': 'browse',
     'engine.nodes.terminals': 'open terminals',
     'engine.nodes.agents': 'run agents',
+
+    // The dashboard: what each section shows at a glance.
+    'engine.nodes.online': '{count} online',
+    'engine.nodes.all': 'All nodes',
+    'engine.nodes.busy': 'Busy',
+    'engine.nodes.free': 'Free',
+    'engine.nodes.running': 'Running',
+    'engine.nodes.of': '{count} of {max}',
+    'engine.nodes.gpu': 'GPU',
+    'engine.nodes.noGpu': 'no GPU',
+    'engine.brain.all': 'All turns',
+    'engine.brain.note': 'one turn at a time, every room',
+    'engine.loops.inPrompt': '{count} of {limit} in prompt',
+    'engine.loops.all': 'All loops',
+    'engine.loops.noAnchor': 'no anchor',
+    'engine.loops.empty': 'Nothing is open.',
+    'engine.wakes.today': '{used} of {limit} today',
+    'engine.wakes.coming': 'Coming',
+    'engine.wakes.recent': 'Recent',
+    'engine.sources.manage': 'Manage in Settings',
+
+    // A session that waits for you in a room: the band above its panes.
+    'engine.waiting.in': 'Waiting for you in {room}',
+    'engine.waiting.answer': 'Answer in the room',
 
     // Brain turns.
     'engine.brain.title': 'Brain turns',
@@ -169,6 +196,7 @@ export const engine = {
     'engine.header.hideSidebar': '隱藏側邊欄',
     'engine.header.openWorkspace': '開啟 {name}',
     'engine.header.openOriginRoom': '開啟 pirc 呼叫這個 worker 的 room',
+    'engine.header.workerChip': 'Worker · {title}',
     'engine.header.notSandboxed': '未在沙箱中執行',
     'engine.header.notSandboxedReason': '未在沙箱中執行：{reason}',
     'engine.header.live': '即時',
@@ -253,8 +281,9 @@ export const engine = {
 
     // The front page and its tabs.
     'engine.title': 'Engine',
-    'engine.tagline': 'room 背後運作的東西。',
+    'engine.tagline': 'room 背後運作的東西。除非出事，不然你不用來看這裡。',
     'engine.sections': 'Engine 分頁',
+    'engine.section.overview': '總覽',
     'engine.section.nodes': '節點',
     'engine.section.brain': '大腦',
     'engine.section.loops': '未結案事項',
@@ -275,6 +304,30 @@ export const engine = {
     'engine.nodes.browse': '瀏覽',
     'engine.nodes.terminals': '開終端機',
     'engine.nodes.agents': '執行 agent',
+
+    // The dashboard: what each section shows at a glance.
+    'engine.nodes.online': '{count} 個在線',
+    'engine.nodes.all': '所有節點',
+    'engine.nodes.busy': '忙碌中',
+    'engine.nodes.free': '閒置',
+    'engine.nodes.running': '執行中',
+    'engine.nodes.of': '{count} / {max}',
+    'engine.nodes.gpu': 'GPU',
+    'engine.nodes.noGpu': '沒有 GPU',
+    'engine.brain.all': '所有回合',
+    'engine.brain.note': '一次只跑一個回合，所有 room 共用',
+    'engine.loops.inPrompt': '{count} / {limit} 在提示中',
+    'engine.loops.all': '所有未結案事項',
+    'engine.loops.noAnchor': '沒有時間錨點',
+    'engine.loops.empty': '目前沒有未結案事項。',
+    'engine.wakes.today': '今天 {used} / {limit}',
+    'engine.wakes.coming': '即將到來',
+    'engine.wakes.recent': '最近',
+    'engine.sources.manage': '在設定中管理',
+
+    // A session that waits for you in a room: the band above its panes.
+    'engine.waiting.in': '在 {room} 等你',
+    'engine.waiting.answer': '到 room 回答',
 
     // Brain turns.
     'engine.brain.title': '大腦回合',

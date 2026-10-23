@@ -93,12 +93,18 @@
 <style>
   ul {
     margin: 0;
-    padding: 0;
+    padding: 4px 12px;
     list-style: none;
+    border-radius: var(--radius-lg);
+    background: var(--bg-sidebar);
+    box-shadow: inset 0 0 0 1px var(--line);
   }
   li {
-    padding: 8px 0;
+    padding: 10px 0;
     border-bottom: 1px solid var(--line);
+  }
+  li:last-child {
+    border-bottom: 0;
   }
   .row {
     display: flex;

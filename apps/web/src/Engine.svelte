@@ -10,6 +10,7 @@
     Forward,
     Download,
     PanelLeftOpen,
+    Pencil,
     Radio,
     RefreshCw,
     ShieldCheck,
@@ -17,13 +18,14 @@
     Sparkles,
     X,
   } from '@lucide/svelte';
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { fade } from 'svelte/transition';
   import { engine } from './lib/engine.svelte';
   import JobsMenu from './lib/components/JobsMenu.svelte';
   import MobileTabs, { type MobileTab, type MobileTabId } from './lib/components/MobileTabs.svelte';
   import WorkspaceDetail from './lib/components/engine/WorkspaceDetail.svelte';
   import EngineOverview from './lib/components/engine/EngineOverview.svelte';
+  import WaitingBand from './lib/components/engine/WaitingBand.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
   import NewWorkspaceDialog from './lib/components/dialogs/NewWorkspaceDialog.svelte';
   import SettingsDialog, { type SettingsTab } from './lib/components/dialogs/SettingsDialog.svelte';
@@ -158,7 +160,30 @@
 
   function showOverview() {
     sidebarOpen = false;
-    engine.showOverview();
+    engine.showOverview('overview');
+  }
+
+  /* ── Renaming the open session from its title ── */
+  let renaming = $state(false);
+  let renameDraft = $state('');
+  let renameInput: HTMLInputElement | undefined = $state();
+
+  async function startRename() {
+    if (!engine.sessionState) return;
+    renaming = true;
+    renameDraft = engine.sessionState.session.name;
+    await tick();
+    renameInput?.focus();
+    renameInput?.select();
+  }
+
+  function finishRename(commit: boolean) {
+    if (!renaming) return;
+    renaming = false;
+    const id = engine.sessionState?.session.id;
+    const name = renameDraft.trim();
+    if (commit && id && name && name !== engine.sessionState?.session.name)
+      void engine.renameSession(id, name);
   }
 
   function openWorkspace(id: string) {
@@ -216,6 +241,10 @@
         nodes={engine.nodes}
         memoryRevision={engine.memoryRevision}
         disabled={engine.usingDemo}
+        onsettings={() => {
+          settingsTab = 'models';
+          settingsOpen = true;
+        }}
       />
     {:else if pageWorkspace}
       <WorkspaceDetail
@@ -251,30 +280,66 @@
                 })}
                 onclick={() => openWorkspace(engine.activeWorkspace!.id)}
                 >{engine.activeWorkspace.displayName}</button
-              >{:else}<span>{t('engine.workspace.title')}</span>{/if}<span>/</span><span
-              >{sessionState.session.name}</span
-            >
+              >{:else}<span class="crumb">{t('engine.workspace.title')}</span>{/if}<span
+              class="sep"
+              aria-hidden="true">/</span
+            ><span>{sessionState.session.name}</span>
           </div>
-          <h1>{sessionState.session.name}</h1>
-          {#if origin?.kind === 'delegation'}
-            <a
-              class="origin-chip"
-              href="/?room={encodeURIComponent(origin.roomId)}"
-              title={t('engine.header.openOriginRoom')}
-              ><Forward size={13} /><span>Worker · {origin.title}</span></a
-            >
-          {/if}
-          {#if sessionState.sandbox && !sessionState.sandbox.active}
-            <!-- Stays while this agent runs. -->
-            <span
-              class="origin-chip unsandboxed"
-              role="status"
-              title={sessionState.sandbox.reason
-                ? t('engine.header.notSandboxedReason', { reason: sessionState.sandbox.reason })
-                : t('engine.header.notSandboxed')}
-              ><ShieldOff size={13} /><span>{t('engine.header.notSandboxed')}</span></span
-            >
-          {/if}
+          <div class="title-row">
+            {#if renaming}
+              <form
+                class="rename-form"
+                onsubmit={(event) => {
+                  event.preventDefault();
+                  finishRename(true);
+                }}
+              >
+                <input
+                  bind:this={renameInput}
+                  bind:value={renameDraft}
+                  maxlength="200"
+                  aria-label={t('engine.session.nameLabel')}
+                  onkeydown={(event) => {
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      finishRename(false);
+                    }
+                  }}
+                  onblur={() => finishRename(true)}
+                />
+              </form>
+            {:else}
+              <h1>{sessionState.session.name}</h1>
+              <button
+                class="icon-button small rename"
+                type="button"
+                aria-label={t('engine.session.renameName', { name: sessionState.session.name })}
+                title={t('engine.session.renameTitle')}
+                onclick={() => void startRename()}><Pencil size={14} /></button
+              >
+            {/if}
+            {#if origin?.kind === 'delegation'}
+              <a
+                class="worker-chip"
+                href="/?room={encodeURIComponent(origin.roomId)}"
+                title={t('engine.header.openOriginRoom')}
+                ><Forward size={13} /><span
+                  >{t('engine.header.workerChip', { title: origin.title })}</span
+                ></a
+              >
+            {/if}
+            {#if sessionState.sandbox && !sessionState.sandbox.active}
+              <!-- Stays while this agent runs. -->
+              <span
+                class="origin-chip unsandboxed"
+                role="status"
+                title={sessionState.sandbox.reason
+                  ? t('engine.header.notSandboxedReason', { reason: sessionState.sandbox.reason })
+                  : t('engine.header.notSandboxed')}
+                ><ShieldOff size={13} /><span>{t('engine.header.notSandboxed')}</span></span
+              >
+            {/if}
+          </div>
         </div>
         <div class="topbar-actions">
           <JobsMenu />
@@ -308,6 +373,9 @@
             onclick={() => (engine.pageError = '')}><X size={15} /></button
           >
         </div>
+      {/if}
+      {#if engine.runStatus === 'waiting_input' && origin?.kind === 'delegation'}
+        <WaitingBand roomId={origin.roomId} />
       {/if}
       {#if !hasControl}
         <div class="viewer-banner">
@@ -378,6 +446,9 @@
     font-size: 14px;
     display: grid;
     grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    /* One definite row: a page's column scrolls inside it instead of growing the
+       shell (which clips), so a long dashboard or session list can scroll. */
+    grid-template-rows: minmax(0, 1fr);
     overflow: hidden;
     background: var(--bg);
     transition: grid-template-columns var(--layout-duration) var(--ease);
@@ -397,61 +468,109 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    background: var(--bg);
+    background: var(--bg-room);
   }
+  /* The design's session header: breadcrumb, title and chips in 10/16px. */
   .topbar {
     min-width: 0;
     /* Installed on iOS with viewport-fit=cover, the status bar overlaps the top. */
-    flex: 0 0 calc(56px + env(safe-area-inset-top));
+    flex: none;
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 12px;
-    padding: env(safe-area-inset-top) 12px 0 20px;
-    background: var(--bg);
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px 20px;
+    border-bottom: 1px solid var(--line);
+    background: var(--bg-room);
   }
   .title-block {
     min-width: 0;
-    flex: 1;
+    flex: 1 1 320px;
     display: flex;
-    align-items: baseline;
-    gap: 10px;
+    flex-direction: column;
+    gap: 2px;
   }
   .breadcrumb {
-    order: 2;
     display: flex;
     gap: 4px;
     overflow: hidden;
-    color: var(--muted);
+    color: var(--faint);
     font-size: 12px;
     white-space: nowrap;
-  }
-  .breadcrumb > :nth-child(n + 2) {
-    display: none;
   }
   .crumb {
     padding: 0;
     border: 0;
-    color: inherit;
+    color: var(--muted);
     background: transparent;
+    font-family: var(--font-mono);
     font-size: inherit;
   }
   .crumb:hover {
     color: var(--ink);
     text-decoration: underline;
   }
-  .title-block h1 {
+  .title-row {
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .title-row h1 {
     margin: 0;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .rename {
+    flex: none;
+    color: var(--faint);
+  }
+  .rename-form {
+    min-width: 0;
+    flex: 1 1 240px;
+  }
+  .rename-form input {
+    width: 100%;
+    height: 28px;
+    min-width: 0;
+    padding: 0 8px;
+    border: 1px solid var(--line-dark);
+    border-radius: var(--radius-sm);
+    background: var(--input);
+    color: var(--ink);
+    font: inherit;
     font-size: 15px;
     font-weight: 600;
+  }
+  .worker-chip {
+    min-width: 0;
+    max-width: 280px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    color: var(--worker-ink);
+    background: color-mix(in srgb, var(--worker) 12%, transparent);
+    font-size: 12px;
+    text-decoration: none;
+  }
+  .worker-chip span,
+  .origin-chip span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .worker-chip:hover {
+    background: color-mix(in srgb, var(--worker) 20%, transparent);
   }
   .origin-chip {
     min-width: 0;
     max-width: 280px;
-    align-self: center;
-    order: 3;
     height: 24px;
     display: inline-flex;
     align-items: center;
@@ -463,15 +582,6 @@
     background: var(--bg-subtle);
     font-size: 12px;
     text-decoration: none;
-  }
-  .origin-chip span {
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
-  }
-  .origin-chip:hover:not(:disabled) {
-    color: var(--ink);
-    background: var(--bg-hover);
   }
   .origin-chip.unsandboxed,
   .origin-chip.unsandboxed:hover {
@@ -638,15 +748,21 @@
       display: none;
     }
     .topbar {
-      padding-right: 6px;
-      padding-left: 50px;
+      padding: calc(8px + env(safe-area-inset-top)) 6px 8px 50px;
       gap: 4px;
     }
     .breadcrumb {
       display: none;
     }
-    .title-block h1 {
-      font-size: 15px;
+    .title-block {
+      flex: 1 1 auto;
+    }
+    .title-row h1 {
+      font-size: 16px;
+    }
+    .worker-chip {
+      max-width: 60%;
+      padding: 1px 7px;
     }
     .origin-chip {
       max-width: 40%;

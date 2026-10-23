@@ -17,9 +17,11 @@
     revision?: number;
     /** Room names by id; a room not in it shows its id. */
     roomNames?: Record<string, string>;
+    /** A wake was cancelled here. */
+    onchanged?: () => void;
   }
 
-  let { disabled = false, revision = 0, roomNames = {} }: Props = $props();
+  let { disabled = false, revision = 0, roomNames = {}, onchanged }: Props = $props();
 
   /** Ended wakes listed at most. */
   const ENDED_PAGE = 30;
@@ -58,6 +60,7 @@
     try {
       await wakesApi.cancel(wake.id);
       await load();
+      onchanged?.();
     } catch (cause) {
       if (alive) error = message(cause);
     } finally {

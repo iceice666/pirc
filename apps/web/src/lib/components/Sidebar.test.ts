@@ -190,7 +190,7 @@ describe('Sidebar', () => {
 
   it('opens settings from the footer', () => {
     render();
-    target.querySelector<HTMLButtonElement>('.settings-entry')!.click();
+    target.querySelector<HTMLButtonElement>('button.settings-entry')!.click();
     expect(handlers.onsettings).toHaveBeenCalled();
   });
 

@@ -11,8 +11,13 @@ export function isEnginePath(pathname: string): boolean {
   return pathname === ENGINE_PATH || pathname.startsWith(`${ENGINE_PATH}/`);
 }
 
-/** The engine's front page, a tab each (`/engine?open=<id>`); `key` names its title. */
+/**
+ * The engine's front page, a section each (`/engine?open=<id>`; the tab strip
+ * links to `#<id>`). **Overview** first is the dashboard; the others are the
+ * sections it summarises, stacked below it on the same page.
+ */
 export const OVERVIEW_SECTIONS = [
+  { id: 'overview', key: 'engine.section.overview' },
   { id: 'nodes', key: 'engine.section.nodes' },
   { id: 'brain', key: 'engine.section.brain' },
   { id: 'loops', key: 'engine.section.loops' },

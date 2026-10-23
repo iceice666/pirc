@@ -5,9 +5,11 @@
   interface Props {
     diff: string;
     truncated?: boolean;
+    /** Drawn inside a card that brings its own frame and surface. */
+    flush?: boolean;
   }
 
-  let { diff, truncated = false }: Props = $props();
+  let { diff, truncated = false, flush = false }: Props = $props();
 
   type Line = {
     kind: 'file' | 'meta' | 'hunk' | 'add' | 'del' | 'ctx';
@@ -62,7 +64,7 @@
 {:else}
   <!-- A scrollable region (keyboard-scrollable via tabindex); lines read as plain text. -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <div class="diff" role="region" aria-label={t('panel.diff.region')} tabindex="0">
+  <div class:flush class="diff" role="region" aria-label={t('panel.diff.region')} tabindex="0">
     {#each shown as line, index (index)}
       {#if line.kind === 'file'}
         <div class="diff-file">{line.text}</div>
@@ -104,6 +106,10 @@
     background: var(--code-bg);
     box-shadow: 0 0 0 1px var(--line);
     font: 12px/1.55 var(--font-mono);
+  }
+  .diff.flush {
+    border-radius: 0;
+    box-shadow: none;
   }
   .diff-file {
     position: sticky;

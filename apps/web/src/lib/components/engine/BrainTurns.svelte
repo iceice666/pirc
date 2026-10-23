@@ -68,40 +68,42 @@
   {:else if !turns.length}
     <p class="muted">{t('engine.brain.empty')}</p>
   {:else}
-    <table>
-      <thead>
-        <tr>
-          <th>{t('engine.brain.started')}</th><th>{t('engine.brain.why')}</th><th
-            >{t('engine.brain.outcome')}</th
-          ><th>{t('engine.brain.took')}</th><th>{t('engine.brain.used')}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {#each turns as turn (turn.id)}
-          <tr class:failed={!!turn.error || turn.outcome === 'failed'}>
-            <td>{at(turn.startedAt)}</td>
-            <td
-              >{turn.kind === 'wake'
-                ? t('engine.brain.kindWake')
-                : turn.kind === 'report'
-                  ? t('engine.brain.kindReport')
-                  : t(
-                      turn.messageIds.length === 1
-                        ? 'engine.brain.message'
-                        : 'engine.brain.messages',
-                      { count: turn.messageIds.length },
-                    )}</td
-            >
-            <td>
-              {turnOutcome(turn)}
-              {#if turn.error}<small class="error">{turn.error}</small>{/if}
-            </td>
-            <td>{turn.endedAt ? duration(turn.startedAt, turn.endedAt) : '…'}</td>
-            <td>{turn.usage ? tokens(turn.usage.totalTokens) : ''}</td>
+    <div class="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th>{t('engine.brain.started')}</th><th>{t('engine.brain.why')}</th><th
+              >{t('engine.brain.outcome')}</th
+            ><th>{t('engine.brain.took')}</th><th>{t('engine.brain.used')}</th>
           </tr>
-        {/each}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {#each turns as turn (turn.id)}
+            <tr class:failed={!!turn.error || turn.outcome === 'failed'}>
+              <td>{at(turn.startedAt)}</td>
+              <td
+                >{turn.kind === 'wake'
+                  ? t('engine.brain.kindWake')
+                  : turn.kind === 'report'
+                    ? t('engine.brain.kindReport')
+                    : t(
+                        turn.messageIds.length === 1
+                          ? 'engine.brain.message'
+                          : 'engine.brain.messages',
+                        { count: turn.messageIds.length },
+                      )}</td
+              >
+              <td>
+                {turnOutcome(turn)}
+                {#if turn.error}<small class="error">{turn.error}</small>{/if}
+              </td>
+              <td>{turn.endedAt ? duration(turn.startedAt, turn.endedAt) : '…'}</td>
+              <td>{turn.usage ? tokens(turn.usage.totalTokens) : ''}</td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
   {/if}
 </section>
 
@@ -122,8 +124,15 @@
     color: var(--ink);
     font: inherit;
   }
+  .table-card {
+    overflow-x: auto;
+    border-radius: var(--radius-lg);
+    background: var(--bg-sidebar);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
   table {
     width: 100%;
+    min-width: 560px;
     border-collapse: collapse;
     font-size: 13px;
   }

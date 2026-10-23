@@ -6,6 +6,7 @@
     Folder,
     Forward,
     Gauge,
+    Hash,
     Lock,
     PanelLeftClose,
     Pencil,
@@ -247,6 +248,10 @@
   </div>
 
   <div class="sidebar-footer">
+    <a class="settings-entry rooms-entry" href="/">
+      <Hash size={17} />
+      <span>{t('common.tab.rooms')}</span>
+    </a>
     <button class="settings-entry" type="button" onclick={onsettings}>
       <Settings size={17} />
       <span>{t('common.tab.settings')}</span>
@@ -496,26 +501,32 @@
   .mobile-menu {
     display: none;
   }
+  /* The design's first row: 36px, ink when current, no accent pill. */
   .overview-entry {
     flex: none;
-    margin: 0 12px 8px;
-    height: 40px;
+    margin: 0 8px 8px;
+    height: 36px;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 0 14px;
-    color: var(--accent);
+    padding: 0 8px;
+    color: var(--muted);
     border: 0;
-    border-radius: var(--radius-md);
-    background: var(--accent-soft);
+    border-radius: var(--radius-sm);
+    background: transparent;
     font-size: 14px;
     font-weight: 500;
     text-align: left;
-    transition: filter var(--ease) 0.15s;
+    transition: background var(--ease) 0.15s;
   }
-  .overview-entry:hover,
+  .overview-entry:hover {
+    color: var(--ink);
+    background: var(--bg-hover);
+  }
   .overview-entry.current {
-    filter: brightness(0.94);
+    color: var(--ink);
+    background: var(--bg-hover);
+    font-weight: 600;
   }
   .search {
     flex: none;
@@ -1014,6 +1025,7 @@
     background: transparent;
     font-size: 14px;
     text-align: left;
+    text-decoration: none;
   }
   .settings-entry:hover {
     color: var(--ink);

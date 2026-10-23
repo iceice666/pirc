@@ -116,7 +116,7 @@
         title={t(item.label)}
         onclick={() => (tab = item.id)}
       >
-        <item.icon size={16} />
+        <item.icon size={15} />
         <span class="tab-label">{t(item.label)}</span>
         {#if badge[item.id]}<span class="tab-dot" aria-hidden="true"></span><span class="sr-only"
             >{t('panel.tab.activity')}</span
@@ -180,12 +180,13 @@
     overflow: hidden;
     container: session-panes / inline-size;
   }
+  /* The design's pane tabs: 15px icons, 13px labels, a full-width underline. */
   .panel-tabs {
     flex: none;
     display: flex;
     align-items: center;
     gap: 2px;
-    padding: 4px 16px 6px;
+    padding: 0 12px;
     overflow-x: auto;
     border-bottom: 1px solid var(--line);
     scrollbar-width: none;
@@ -193,31 +194,33 @@
   .panel-tabs > button[role='tab'] {
     position: relative;
     flex: none;
-    height: 30px;
+    height: 40px;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    padding: 0 9px;
+    margin-bottom: -1px;
+    padding: 10px;
     border: 0;
-    border-radius: var(--radius-sm);
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
     color: var(--muted);
     background: transparent;
-    font-size: 12.5px;
+    font-size: 13px;
     font-weight: 500;
   }
   @media (hover: none) {
     .panel-tabs > button[role='tab'] {
-      height: 40px;
+      height: 44px;
       padding: 0 12px;
     }
   }
   .panel-tabs > button[role='tab']:hover {
     color: var(--ink);
-    background: var(--bg-hover);
   }
   .panel-tabs > button[role='tab'].active {
+    border-bottom-color: var(--accent);
     color: var(--ink);
-    background: var(--bg-active);
+    font-weight: 600;
   }
   @container session-panes (max-width: 459px) {
     .panel-tabs > button[role='tab']:not(.active) .tab-label {
@@ -226,7 +229,7 @@
   }
   .tab-dot {
     position: absolute;
-    top: 5px;
+    top: 8px;
     right: 5px;
     width: 6px;
     height: 6px;

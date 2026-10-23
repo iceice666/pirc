@@ -86,17 +86,17 @@
 <style>
   .cards {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
     gap: 12px;
     margin: 0;
     padding: 0;
     list-style: none;
   }
   .card {
-    padding: 12px 14px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-md);
-    background: var(--bg);
+    padding: 14px 16px;
+    border-radius: var(--radius-lg);
+    background: var(--bg-sidebar);
+    box-shadow: inset 0 0 0 1px var(--line);
   }
   header {
     display: flex;

@@ -1,7 +1,14 @@
 <script lang="ts">
-  import { ArrowLeft, GitBranch, GitCommitHorizontal, RefreshCw } from '@lucide/svelte';
+  /**
+   * The Git pane (design screen 6): two columns. The left holds the branch, the
+   * uncommitted changes and the history; the right shows the diff of whatever
+   * is selected — a changed file or a commit, the newest commit by default.
+   * Every action the old Changes/History view had stays here: refresh, loading
+   * more history, opening a changed file in Files, and the staged/unstaged
+   * split each file's diff is taken from.
+   */
+  import { GitBranch, GitCommitHorizontal, RefreshCw } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
-  import { rovingFocus } from '../../a11y';
   import { engine } from '../../engine.svelte';
   import { locale, t } from '../../i18n';
   import type { MessageKey } from '../../i18n/messages';
@@ -26,12 +33,12 @@
 
   let { sessionId, active = true, onopenfile = () => {} }: Props = $props();
 
-  let view: 'changes' | 'history' = $state('changes');
   let status: GitStatus | undefined = $state.raw();
-  let selected: { file: GitFile; staged: boolean } | undefined = $state.raw();
-  let diff: { diff: string; truncated: boolean } | undefined = $state.raw();
+  let selectedFile: { file: GitFile; staged: boolean } | undefined = $state.raw();
+  let fileDiff: { diff: string; truncated: boolean } | undefined = $state.raw();
   let commits: Commit[] = $state.raw([]);
   let more = $state(false);
+  let selectedSha: string | undefined = $state.raw();
   let commit: CommitDetail | undefined = $state.raw();
   /** A change arrived while the tab was hidden; reload when it is shown. */
   let stale = false;
@@ -71,8 +78,13 @@
     );
     if (!next || id !== sessionId) return;
     status = next;
-    if (view === 'history' && next.repo) void refreshHistory();
-    if (selected) void openDiff(selected.file, selected.staged, false);
+    if (next.repo) {
+      if (commits.length) void refreshHistory();
+      else void loadHistory(true);
+    }
+    // Keep the diff on screen current, and show the newest commit by default.
+    if (selectedFile) void openDiff(selectedFile.file, selectedFile.staged, false);
+    else if (selectedSha) void openCommit(selectedSha, false);
   }
 
   const HISTORY_PAGE = 50;
@@ -87,6 +99,8 @@
     if (!page || id !== sessionId) return;
     commits = reset ? page.commits : [...commits, ...page.commits];
     more = page.more;
+    // The design opens on the newest commit's diff.
+    if (reset && commits.length && !selectedFile && !selectedSha) void openCommit(commits[0]!.sha);
   }
 
   /**
@@ -109,8 +123,11 @@
   }
 
   async function openDiff(file: GitFile, isStaged: boolean, reset = true) {
-    selected = { file, staged: isStaged };
-    if (reset) diff = undefined;
+    selectedSha = undefined;
+    commit = undefined;
+    commitLoader.abort();
+    selectedFile = { file, staged: isStaged };
+    if (reset) fileDiff = undefined;
     const id = sessionId;
     const result = await diffLoader.run(
       (signal) =>
@@ -121,30 +138,21 @@
         ),
       t('panel.git.couldNotDiff'),
     );
-    if (result && id === sessionId) diff = result;
+    if (result && id === sessionId) fileDiff = result;
   }
 
-  async function openCommit(item: Commit) {
-    commit = undefined;
+  async function openCommit(sha: string, reset = true) {
+    diffLoader.abort();
+    selectedFile = undefined;
+    fileDiff = undefined;
+    selectedSha = sha;
+    if (reset) commit = undefined;
     const id = sessionId;
     const result = await commitLoader.run(
-      (signal) => panelApi.gitShow(id, item.sha, signal),
+      (signal) => panelApi.gitShow(id, sha, signal),
       t('panel.git.couldNotCommit'),
     );
     if (result && id === sessionId) commit = result;
-  }
-
-  function back() {
-    diffLoader.abort();
-    commitLoader.abort();
-    selected = undefined;
-    commit = undefined;
-  }
-
-  async function switchView(next: 'changes' | 'history') {
-    view = next;
-    back();
-    if (next === 'history' && status?.repo && !commits.length) await loadHistory(true);
   }
 
   const base = (path: string) => path.slice(path.lastIndexOf('/') + 1);
@@ -155,6 +163,32 @@
     const key = stateKeys[code(file, isStaged)];
     return key ? t(key) : '';
   };
+  const letter = (file: GitFile, isStaged: boolean) => {
+    const value = code(file, isStaged);
+    return value === '?' ? 'U' : value;
+  };
+  const isSelectedFile = (file: GitFile, isStaged: boolean) =>
+    selectedFile?.file.path === file.path && selectedFile.staged === isStaged;
+
+  /** `+2` and `−4` for the diff on screen, counted from its hunks. */
+  function stats(diff: string | undefined): { add: number; del: number } {
+    let add = 0;
+    let del = 0;
+    let inHunk = false;
+    for (const line of (diff ?? '').split('\n')) {
+      if (line.startsWith('@@')) {
+        inHunk = true;
+      } else if (inHunk && line.startsWith('+')) add++;
+      else if (inHunk && line.startsWith('-')) del++;
+    }
+    return { add, del };
+  }
+  const shown = $derived(stats(commit?.diff ?? fileDiff?.diff));
+  const subject = (message: string) => message.split('\n')[0] ?? '';
+  /** The design's history line says HEAD for the ref the branch is on. */
+  const refLabel = (ref: string) => (ref.startsWith('HEAD -> ') ? 'HEAD' : ref);
+  const dateOf = (time: number) =>
+    new Intl.DateTimeFormat(locale(), { dateStyle: 'medium', timeStyle: 'short' }).format(time);
 
   watch(
     () => sessionId,
@@ -164,8 +198,9 @@
       commits = [];
       more = false;
       commit = undefined;
-      selected = undefined;
-      diff = undefined;
+      selectedFile = undefined;
+      selectedSha = undefined;
+      fileDiff = undefined;
       void load();
     },
     { immediate: true },
@@ -180,232 +215,300 @@
   );
   watch(
     () => active,
-    (shown) => {
-      if (shown && stale) void load();
+    (shownTab) => {
+      if (shownTab && stale) void load();
     },
   );
 </script>
 
-<div class="tab-body">
-  {#if selected}
-    <div class="drill-head">
-      <button class="icon-button small" type="button" aria-label={t('common.back')} onclick={back}
-        ><ArrowLeft size={16} /></button
-      >
-      <button
-        class="drill-title linkish"
-        type="button"
-        title={t('panel.git.openFile')}
-        onclick={() => selected && onopenfile(selected.file.path)}
-      >
-        {selected.file.path}
-      </button>
-      <span class="chip"
-        >{selected.staged
-          ? t('panel.git.staged')
-          : stateLabel(selected.file, false) || t('panel.git.changed')}</span
-      >
-    </div>
-    {#if diffLoader.error}<p class="panel-error">{diffLoader.error}</p>
-    {:else if diff}<DiffView diff={diff.diff} truncated={diff.truncated} />{:else}<p
-        class="panel-empty"
-      >
-        {t('panel.git.loadingDiff')}
-      </p>{/if}
-  {:else if commit}
-    <div class="drill-head">
-      <button class="icon-button small" type="button" aria-label={t('common.back')} onclick={back}
-        ><ArrowLeft size={16} /></button
-      >
-      <span class="drill-title mono">{commit.sha.slice(0, 10)}</span>
-    </div>
-    <div class="commit-card">
-      <pre class="commit-message">{commit.message}</pre>
-      <p class="commit-meta">
-        {commit.author} · {new Date(commit.time).toLocaleString(locale())}
-      </p>
-      {#if commit.refs.length}<p class="refs">
-          {#each commit.refs as ref}<span class="chip">{ref}</span>{/each}
-        </p>{/if}
-    </div>
-    <DiffView diff={commit.diff} truncated={commit.truncated} />
-  {:else}
-    <div class="toolbar">
-      <div
-        class="segmented"
-        role="tablist"
-        aria-label={t('panel.git.view')}
-        use:rovingFocus={{ selector: '[role="tab"]', activate: true }}
-      >
-        <button
-          role="tab"
-          type="button"
-          id="git-view-changes"
-          aria-controls="git-view-panel"
-          class:active={view === 'changes'}
-          aria-selected={view === 'changes'}
-          tabindex={view === 'changes' ? 0 : -1}
-          onclick={() => switchView('changes')}
-          >{t('panel.git.changes')}{#if files.length}<span class="count">{files.length}</span
-            >{/if}</button
-        >
-        <button
-          role="tab"
-          type="button"
-          id="git-view-history"
-          aria-controls="git-view-panel"
-          class:active={view === 'history'}
-          aria-selected={view === 'history'}
-          tabindex={view === 'history' ? 0 : -1}
-          onclick={() => switchView('history')}>{t('panel.git.history')}</button
-        >
-      </div>
-      <button
-        class="icon-button small"
-        type="button"
-        aria-label={t('common.refresh')}
-        onclick={load}
-        disabled={statusLoader.loading}
-        ><RefreshCw class={statusLoader.loading ? 'spin' : ''} size={15} /></button
-      >
-    </div>
-    <div class="tab-view" role="tabpanel" id="git-view-panel" aria-labelledby="git-view-{view}">
-      {#if listError}<p class="panel-error">{listError}</p>{/if}
-      {#if status && !status.repo}
-        <p class="panel-empty">{t('panel.git.notRepo')}</p>
-      {:else if status?.repo}
-        <div class="branch-line">
-          <GitBranch size={14} />
-          <strong>{status.branch ?? t('panel.git.detached')}</strong>
-          {#if status.upstream}<span class="muted">→ {status.upstream}</span>{/if}
-          {#if status.ahead}<span class="chip">↑{status.ahead}</span>{/if}
-          {#if status.behind}<span class="chip">↓{status.behind}</span>{/if}
-        </div>
-        {#if view === 'changes'}
-          {#if !files.length}
-            <p class="panel-empty">{t('panel.git.clean')}</p>
-          {:else}
-            {#each groups as group}
-              {#if group.list.length}
-                <div class="group-title">
-                  {t(group.title)}<span>{group.list.length}</span>
-                </div>
-                <ul class="file-list">
-                  {#each group.list as file (file.path + group.isStaged)}
-                    <li>
-                      <button
-                        type="button"
-                        class="file-row"
-                        onclick={() => openDiff(file, group.isStaged)}
-                      >
-                        <span
-                          class="status-code s-{code(file, group.isStaged) === '?'
-                            ? 'U'
-                            : code(file, group.isStaged)}"
-                          title={stateLabel(file, group.isStaged)}
-                          >{code(file, group.isStaged) === '?'
-                            ? 'U'
-                            : code(file, group.isStaged)}</span
-                        >
-                        <span class="file-name">{base(file.path)}</span>
-                        <span class="file-dir"
-                          >{file.origPath ? `${file.origPath} →` : dir(file.path)}</span
-                        >
-                      </button>
-                    </li>
-                  {/each}
-                </ul>
+<div class="tab-body git-pane">
+  {#if listError}<p class="panel-error">{listError}</p>{/if}
+  {#if status && !status.repo}
+    <p class="panel-empty">{t('panel.git.notRepo')}</p>
+  {:else if status?.repo || statusLoader.loading}
+    <div class="columns">
+      <section class="side" aria-label={t('panel.git.branchAndHistory')}>
+        {#if status?.repo}
+          <div class="branch-card">
+            <div class="branch-row">
+              <GitBranch size={14} />
+              <code class="branch">{status.branch ?? t('panel.git.detached')}</code>
+              {#if status.ahead}
+                <span class="chip warn">
+                  {#if status.upstream}
+                    {t('panel.git.ahead', { count: status.ahead })}
+                  {:else}
+                    {t('panel.git.ahead', { count: status.ahead })} · {t('panel.git.notPushed')}
+                  {/if}
+                </span>
               {/if}
-            {/each}
-            {#if status.truncated}<p class="panel-empty">{t('panel.git.truncated')}</p>{/if}
-          {/if}
-        {:else if !commits.length}
-          <p class="panel-empty">{t('panel.git.noCommits')}</p>
-        {:else}
-          <ul class="commit-list">
-            {#each commits as item (item.sha)}
-              <li>
-                <button type="button" class="commit-row" onclick={() => openCommit(item)}>
-                  <GitCommitHorizontal size={15} />
-                  <span class="commit-text">
-                    <span class="commit-subject">{item.subject}</span>
-                    <span class="commit-sub"
-                      ><span class="mono">{item.short}</span> · {item.author} · {ago(
-                        item.time,
-                      )}{#each item.refs.slice(0, 2) as ref}
-                        <span class="chip">{ref.replace('HEAD -> ', '')}</span>{/each}</span
+              {#if status.behind}
+                <span class="chip">{t('panel.git.behind', { count: status.behind })}</span>
+              {/if}
+            </div>
+            <span class="tree">
+              {files.length
+                ? t('panel.git.uncommitted', { count: files.length })
+                : t('panel.git.clean')}
+            </span>
+          </div>
+          {#each groups as group (group.title)}
+            {#if group.list.length}
+              <div class="group-title">
+                {t(group.title)}<span>{group.list.length}</span>
+              </div>
+              <ul class="file-list">
+                {#each group.list as file (file.path + group.isStaged)}
+                  <li>
+                    <button
+                      type="button"
+                      class="file-row"
+                      aria-pressed={isSelectedFile(file, group.isStaged)}
+                      onclick={() => void openDiff(file, group.isStaged)}
                     >
-                  </span>
-                </button>
-              </li>
-            {/each}
-          </ul>
-          {#if more}<button
-              class="load-more"
+                      <span
+                        class="status-code s-{letter(file, group.isStaged)}"
+                        title={stateLabel(file, group.isStaged)}
+                        >{letter(file, group.isStaged)}</span
+                      >
+                      <span class="file-name">{base(file.path)}</span>
+                      <span class="file-dir"
+                        >{file.origPath ? `${file.origPath} →` : dir(file.path)}</span
+                      >
+                    </button>
+                  </li>
+                {/each}
+              </ul>
+            {/if}
+          {/each}
+          {#if status.truncated}<p class="panel-empty">{t('panel.git.truncated')}</p>{/if}
+          <div class="group-title history-title">
+            {t('panel.git.history')}
+            <button
+              class="icon-button small"
               type="button"
-              disabled={historyLoader.loading}
-              onclick={() => loadHistory(false)}>{t('panel.git.loadMore')}</button
-            >{/if}
+              aria-label={t('common.refresh')}
+              title={t('common.refresh')}
+              disabled={statusLoader.loading}
+              onclick={() => void load()}
+              ><RefreshCw class={statusLoader.loading ? 'spin' : ''} size={14} /></button
+            >
+          </div>
+          {#if !commits.length}
+            <p class="panel-empty">
+              {historyLoader.loading ? t('common.loading') : t('panel.git.noCommits')}
+            </p>
+          {:else}
+            <ul class="commit-list">
+              {#each commits as item (item.sha)}
+                <li>
+                  <button
+                    type="button"
+                    class="commit-row"
+                    aria-pressed={selectedSha === item.sha}
+                    onclick={() => void openCommit(item.sha)}
+                  >
+                    <span class="commit-line">
+                      <code class="sha">{item.short}</code>
+                      <span class="subject">{item.subject}</span>
+                    </span>
+                    <span class="commit-sub">
+                      {item.author} · {ago(item.time)}{#each item.refs.slice(0, 2) as ref}
+                        <span class="chip">{refLabel(ref)}</span>{/each}
+                    </span>
+                  </button>
+                </li>
+              {/each}
+            </ul>
+            {#if more}<button
+                class="load-more"
+                type="button"
+                disabled={historyLoader.loading}
+                onclick={() => void loadHistory(false)}>{t('panel.git.loadMore')}</button
+              >{/if}
+          {/if}
+        {:else}
+          <p class="panel-empty">{t('common.loading')}</p>
         {/if}
-      {:else if statusLoader.loading}
-        <p class="panel-empty">{t('common.loading')}</p>
-      {/if}
+      </section>
+
+      <section
+        class="main"
+        aria-label={commit
+          ? t('panel.git.diffOf', { name: commit.sha.slice(0, 7) })
+          : selectedFile
+            ? t('panel.git.diffOf', { name: selectedFile.file.path })
+            : t('panel.git.history')}
+      >
+        <div class="diff-card">
+          <header class="diff-head">
+            {#if commit}
+              <GitCommitHorizontal size={14} />
+              <code class="path">{commit.sha.slice(0, 7)}</code>
+              <span class="head-subject">{subject(commit.message)}</span>
+            {:else if selectedFile}
+              <button
+                class="path linkish"
+                type="button"
+                title={t('panel.git.openFile')}
+                onclick={() => selectedFile && onopenfile(selectedFile.file.path)}
+                >{selectedFile.file.path}</button
+              >
+              <span class="chip"
+                >{selectedFile.staged
+                  ? t('panel.git.staged')
+                  : stateLabel(selectedFile.file, false) || t('panel.git.changed')}</span
+              >
+            {:else}
+              <span class="head-subject muted">{t('panel.git.select')}</span>
+            {/if}
+            {#if shown.add}<span class="count add">+{shown.add}</span>{/if}
+            {#if shown.del}<span class="count del">−{shown.del}</span>{/if}
+          </header>
+          {#if commit}
+            <p class="commit-meta">
+              {commit.author} · {dateOf(commit.time)}
+              {#each commit.refs as ref}<span class="chip">{refLabel(ref)}</span>{/each}
+            </p>
+            {#if commitLoader.error}<p class="panel-error">{commitLoader.error}</p>
+            {:else if commit}<DiffView flush diff={commit.diff} truncated={commit.truncated} />{/if}
+          {:else if selectedFile}
+            {#if diffLoader.error}<p class="panel-error">{diffLoader.error}</p>
+            {:else if fileDiff}<DiffView
+                flush
+                diff={fileDiff.diff}
+                truncated={fileDiff.truncated}
+              />{:else}<p class="panel-empty">{t('panel.git.loadingDiff')}</p>{/if}
+          {:else if commitLoader.loading || diffLoader.loading}
+            <p class="panel-empty">{t('common.loading')}</p>
+          {:else}
+            <p class="panel-empty">{t('panel.git.select')}</p>
+          {/if}
+        </div>
+      </section>
     </div>
+  {:else if statusLoader.loading}
+    <p class="panel-empty">{t('common.loading')}</p>
   {/if}
 </div>
 
 <style>
-  .tab-view {
-    display: grid;
-    align-content: start;
+  .git-pane {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 100%;
+  }
+  .columns {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  .side {
+    flex: 1 1 280px;
+    min-width: 0;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
     gap: 8px;
   }
-  .segmented .count {
-    color: var(--muted);
-    font-size: 11px;
-  }
-  .branch-line {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+  .main {
+    flex: 999 1 460px;
     min-width: 0;
-    color: var(--text-2);
-    font-size: 13px;
   }
-  .branch-line strong {
+  .branch-card {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 12px 14px;
+    border-radius: var(--radius-lg);
+    background: var(--bg-sidebar);
+    box-shadow: inset 0 0 0 1px var(--line);
+  }
+  .branch-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--muted);
+  }
+  .branch {
     overflow: hidden;
     color: var(--ink);
-    font-weight: 600;
+    font: 500 13px var(--font-mono);
     white-space: nowrap;
     text-overflow: ellipsis;
   }
+  .tree {
+    color: var(--faint);
+    font-size: 12px;
+  }
+  .chip {
+    padding: 0 6px;
+    border-radius: 4px;
+    background: var(--bg-hover);
+    color: var(--text-2);
+    font-size: 11px;
+    line-height: 18px;
+  }
+  .chip.warn {
+    background: color-mix(in srgb, var(--warning) 15%, transparent);
+    color: color-mix(in srgb, var(--warning) 60%, var(--ink));
+    font-weight: 600;
+  }
+  .group-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--faint);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .group-title > span {
+    letter-spacing: 0;
+  }
+  .group-title.history-title {
+    margin-top: 4px;
+  }
+  .group-title.history-title .icon-button {
+    margin-left: auto;
+  }
+  .file-list,
   .commit-list {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 1px;
     margin: 0;
     padding: 0;
     list-style: none;
   }
+  .file-row,
   .commit-row {
     width: 100%;
     min-width: 0;
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 8px;
+    padding: 6px 10px;
     border: 0;
     border-radius: var(--radius-sm);
-    color: var(--ink);
+    color: var(--text-2);
     background: transparent;
     font-size: 13px;
     text-align: left;
   }
+  .file-row:hover,
   .commit-row:hover {
     background: var(--bg-hover);
   }
-  .commit-row :global(svg) {
-    flex: none;
-    color: var(--muted);
+  .file-row[aria-pressed='true'],
+  .commit-row[aria-pressed='true'] {
+    background: var(--bg-active);
+    color: var(--ink);
   }
   .status-code {
     flex: none;
@@ -429,70 +532,136 @@
   .status-code.s-C {
     color: var(--accent);
   }
-  .commit-row {
-    align-items: flex-start;
-  }
-  .commit-row :global(svg) {
-    margin-top: 2px;
-  }
-  .commit-text {
-    min-width: 0;
-    flex: 1;
-    display: grid;
-    gap: 2px;
-  }
-  .commit-subject {
+  .file-name {
+    flex: none;
+    max-width: 60%;
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+  }
+  .file-dir {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    color: var(--faint);
+    font-size: 12px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .commit-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: 8px 10px;
+  }
+  .commit-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .sha {
+    flex: none;
+    color: var(--ink);
+    font: 12px var(--font-mono);
+  }
+  .subject {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--ink);
   }
   .commit-sub {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 4px;
-    color: var(--muted);
-    font-size: 11.5px;
+    color: var(--faint);
+    font-size: 12px;
   }
   .load-more {
     justify-self: center;
+    align-self: flex-start;
     padding: 6px 12px;
     border: 0;
     border-radius: 999px;
-    color: var(--accent);
+    color: var(--accent-ink);
     background: transparent;
     font-size: 12.5px;
   }
   .load-more:hover {
     background: var(--accent-soft);
   }
-  .commit-card {
-    display: grid;
-    gap: 4px;
-    padding: 10px 12px;
-    border-radius: var(--radius-md);
-    background: var(--bg-layer);
-    box-shadow: 0 0 0 1px var(--line);
+  .diff-card {
+    min-width: 0;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    background: var(--code-bg);
+    box-shadow: inset 0 0 0 1px var(--line);
   }
-  .commit-message {
-    margin: 0;
+  .diff-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--line);
+    color: var(--text-2);
+    font-size: 12px;
+  }
+  .path {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--text-2);
+    font: 12px var(--font-mono);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  button.path {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+  }
+  button.path:hover {
     color: var(--ink);
-    font-family: inherit;
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 1.5;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
+    text-decoration: underline;
   }
-  .commit-meta {
-    margin: 0;
+  .head-subject {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    color: var(--ink);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .head-subject.muted {
     color: var(--muted);
     font-size: 12px;
   }
-  .refs {
+  .count {
+    flex: none;
+  }
+  .count.add {
+    color: color-mix(in srgb, var(--success) 75%, var(--ink));
+  }
+  .count.del {
+    color: color-mix(in srgb, var(--danger) 60%, var(--ink));
+  }
+  .commit-meta {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
-    margin: 2px 0 0;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--line);
+    color: var(--faint);
+    font-size: 12px;
+  }
+  .muted {
+    color: var(--muted);
   }
 </style>

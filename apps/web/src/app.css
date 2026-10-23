@@ -71,6 +71,9 @@
   --warning-soft: rgb(240 178 50 / 10%);
   --danger: #e5534b;
   --danger-soft: rgb(229 83 75 / 14%);
+  /* A worker's own colour, for the chip that says which worker a session is. */
+  --worker: #f0a35e;
+  --worker-ink: #f6c08f;
   /* Code and inset wells. */
   --code-bg: #111113;
   --code-ink: #dbdee1;
@@ -119,6 +122,8 @@
   --warning-soft: rgb(253 246 228);
   --danger: rgb(220 50 50);
   --danger-soft: rgb(254 238 238);
+  --worker: rgb(190 106 30);
+  --worker-ink: rgb(122 62 12);
   --code-bg: rgb(246 247 249);
   --code-ink: rgb(36 41 47);
   --code-head: rgb(129 133 140);

@@ -58,6 +58,13 @@ export const panel = {
     'panel.git.truncated': 'Showing the first 5,000 files.',
     'panel.git.noCommits': 'No commits yet.',
     'panel.git.loadMore': 'Load more',
+    'panel.git.branchAndHistory': 'Branch and history',
+    'panel.git.ahead': '{count} ahead',
+    'panel.git.behind': '{count} behind',
+    'panel.git.notPushed': 'not pushed',
+    'panel.git.uncommitted': '{count} uncommitted',
+    'panel.git.select': 'Select a commit or a change to see its diff.',
+    'panel.git.diffOf': 'Diff of {name}',
 
     // Diffs.
     'panel.diff.empty': 'No changes.',
@@ -265,6 +272,13 @@ export const panel = {
     'panel.git.truncated': '只顯示前 5,000 個檔案。',
     'panel.git.noCommits': '還沒有 commit。',
     'panel.git.loadMore': '載入更多',
+    'panel.git.branchAndHistory': '分支與歷史',
+    'panel.git.ahead': '前面有 {count} 個提交',
+    'panel.git.behind': '落後 {count} 個提交',
+    'panel.git.notPushed': '尚未推送',
+    'panel.git.uncommitted': '{count} 個未提交變更',
+    'panel.git.select': '選一個 commit 或變更來看差異。',
+    'panel.git.diffOf': '{name} 的差異',
 
     'panel.diff.empty': '沒有變更。',
     'panel.diff.region': '差異',

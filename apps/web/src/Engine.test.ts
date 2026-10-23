@@ -185,6 +185,97 @@ describe('Engine unread sessions', () => {
   });
 });
 
+describe('Engine session waiting', () => {
+  /** Make the open session a delegated worker that is asking something. */
+  function waitInRoom(roomId = 'general') {
+    const state = engine.sessionState!;
+    const origin = {
+      kind: 'delegation' as const,
+      delegationId: 'dlg-1',
+      title: 'Fix the lint job',
+      roomId,
+      status: 'waiting_input' as const,
+    };
+    engine.sessions = engine.sessions.map((item) =>
+      item.id === state.session.id ? { ...item, origin } : item,
+    );
+    engine.sessionState = {
+      ...state,
+      session: { ...state.session, origin },
+      run: { ...state.run!, status: 'waiting_input' },
+    };
+  }
+
+  it('names the room a waiting worker is in, and links there', async () => {
+    await start();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = new URL(input, 'http://localhost');
+        if (url.pathname === '/api/rooms')
+          return new Response(
+            JSON.stringify({
+              user: 'me',
+              rooms: [{ id: 'general', name: 'SlimeOS', archivedAt: null }],
+            }),
+          );
+        return new Response(JSON.stringify({}));
+      }),
+    );
+    waitInRoom();
+    flushSync();
+    await vi.waitFor(() => expect(target.querySelector('.waiting-band')).not.toBeNull());
+    const band = target.querySelector<HTMLElement>('.waiting-band')!;
+    expect(band.getAttribute('role')).toBe('status');
+    expect(band.textContent).toContain('Waiting for you in # SlimeOS');
+    const answer = band.querySelector<HTMLAnchorElement>('a')!;
+    expect(answer.textContent).toBe('Answer in the room');
+    expect(answer.getAttribute('href')).toBe('/?room=general');
+    // The topbar says which worker it is.
+    expect(target.querySelector('.worker-chip')?.textContent).toContain(
+      'Worker · Fix the lint job',
+    );
+    // Not waiting any more: no band.
+    engine.sessionState = {
+      ...engine.sessionState!,
+      run: { ...engine.sessionState!.run!, status: 'running' },
+    } as never;
+    flushSync();
+    expect(target.querySelector('.waiting-band')).toBeNull();
+  });
+
+  it('leaves the band out when no room is known', async () => {
+    await start();
+    const base = engine.sessionState!;
+    engine.sessionState = {
+      ...base,
+      session: { ...base.session, origin: undefined },
+      run: { ...base.run!, status: 'waiting_input' },
+    } as never;
+    flushSync();
+    expect(target.querySelector('.waiting-band')).toBeNull();
+  });
+
+  it('renames the session from its title', async () => {
+    await start();
+    const rename = vi.spyOn(engine, 'renameSession').mockResolvedValue();
+    const id = engine.sessionState!.session.id;
+    target.querySelector<HTMLButtonElement>('.rename')!.click();
+    await tick();
+    flushSync();
+    const input = target.querySelector<HTMLInputElement>('.rename-form input')!;
+    expect(input.value).toBe(engine.sessionState!.session.name);
+    input.value = 'Fix the lint job';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    target
+      .querySelector('form.rename-form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    flushSync();
+    expect(rename).toHaveBeenCalledWith(id, 'Fix the lint job');
+    expect(target.querySelector('.rename-form')).toBeNull();
+  });
+});
+
 describe('Engine native management link', () => {
   it('keeps normal bootstrap and the other query parameters while showing consent without approving', async () => {
     HTMLDialogElement.prototype.showModal = function () {
