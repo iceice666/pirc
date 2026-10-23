@@ -139,6 +139,15 @@ Provider model catalogs were refreshed without replacing stored account configur
 
 ## Current local verification additions
 
+Native document keyboard metadata and browser takeover key messages now retain
+standard protocol names regardless of client language. The prior Traditional
+Chinese path emitted translated Enter/Tab/Escape/Backspace/Control names and
+could zero legacy key codes. English/Traditional Chinese gates now cover DOM
+key/code/legacy values and real browser-pane hardware keys, IME deletion and
+submit messages. The 57 related keyboard/browser/form/focus/i18n tests and changed-file
+analysis passed locally. Physical OEM/CJK keyboard acceptance is still open;
+this fix does not certify modal Tab sentinel traversal.
+
 Title-only system notices now use the remaining row width, instead of sharing it
 with an empty spacer. The reported `Stopped after 200 turns` text is checked
 with Roboto at 320/390/768 CSS px, light/dark themes and 1/1.3 font scale. The old

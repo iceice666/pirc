@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/live/gateway.dart';
+import 'package:pirc_mobile/l10n/app_i18n.dart';
 import 'package:pirc_mobile/live/browser_state.dart';
 import 'package:pirc_mobile/live/browser_pane.dart';
 import 'package:pirc_mobile/live/recording_player.dart';
@@ -21,6 +22,82 @@ void browserFrame(FakeGateway g, String tag, Json frame) => g.stream.add({
   'data': {'tag': tag, 'frame': frame},
 });
 void main() {
+  for (final language in ['en', 'zh-TW']) {
+    testWidgets('browser keyboard protocol stays standard in $language', (
+      t,
+    ) async {
+      AppI18n.instance.setLanguage(language);
+      addTearDown(() => AppI18n.instance.setLanguage('en'));
+      t.view.devicePixelRatio = 1;
+      t.view.physicalSize = const Size(390, 1000);
+      addTearDown(t.view.reset);
+      final g = FakeGateway();
+      final c = LiveController(g)
+        ..sessionId = 's'
+        ..control = {'held': true, 'generation': 2};
+      g.handler = (_, _) async => null;
+      await t.pumpWidget(
+        MaterialApp(
+          theme: theme.build(Brightness.light),
+          home: Scaffold(body: BrowserPane(controller: c)),
+        ),
+      );
+      await t.pumpAndSettle();
+      final tag =
+          g.calls.lastWhere((x) => x.$1 == 'socketOpen').$2['tag'] as String;
+      browserFrame(g, tag, {
+        'type': 'state',
+        'state': {...obj(browserFixture['state']), 'mode': 'user'},
+      });
+      browserFrame(g, tag, {
+        'type': 'frame',
+        'data': browserFixture['image'],
+        'width': 640,
+        'height': 400,
+      });
+      await t.pumpAndSettle();
+      await t.tapAt(
+        t.getCenter(find.byKey(const ValueKey('browser-live-screen'))),
+      );
+      await t.pump();
+      final input = find.byWidgetPredicate(
+        (w) =>
+            w is TextField &&
+            w.decoration?.labelText == tr('Type into the browser'),
+      );
+      final field = t.widget<TextField>(input);
+      final before = g.calls.length;
+      for (final key in [
+        LogicalKeyboardKey.enter,
+        LogicalKeyboardKey.tab,
+        LogicalKeyboardKey.escape,
+        LogicalKeyboardKey.backspace,
+      ]) {
+        await t.sendKeyEvent(key);
+        await t.pump();
+      }
+      field.controller!.value = const TextEditingValue(
+        text: '',
+        selection: TextSelection.collapsed(offset: 0),
+      );
+      await t.pump();
+      await t.testTextInput.receiveAction(TextInputAction.done);
+      await t.pump();
+      expect(
+        g.calls
+            .skip(before)
+            .where((x) => x.$1 == 'socketSend' && x.$2['data']['type'] == 'key')
+            .map((x) => x.$2['data']['key'])
+            .toList(),
+        ['Enter', 'Tab', 'Escape', 'Backspace', 'Backspace', 'Enter'],
+      );
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+      c.dispose();
+      await g.stream.close();
+      await t.pump();
+    });
+  }
   testWidgets('old media menu cannot download a replacement recording', (
     t,
   ) async {

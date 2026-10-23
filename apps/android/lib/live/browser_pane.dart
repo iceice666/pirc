@@ -81,7 +81,7 @@ class _BrowserPaneState extends State<BrowserPane> with WidgetsBindingObserver {
     final value = keys.text;
     if (value == '\u200b') return;
     if (value.isEmpty) {
-      unawaited(state.send({'type': 'key', 'key': tr("Backspace")}));
+      unawaited(state.send({'type': 'key', 'key': 'Backspace'}));
     } else {
       final text = value.startsWith('\u200b') ? value.substring(1) : value;
       if (text.isNotEmpty) {
@@ -104,17 +104,17 @@ class _BrowserPaneState extends State<BrowserPane> with WidgetsBindingObserver {
     }
     final key = event.logicalKey, keyboard = HardwareKeyboard.instance;
     final special = <LogicalKeyboardKey, String>{
-      LogicalKeyboardKey.enter: tr("Enter"),
-      LogicalKeyboardKey.tab: tr("Tab"),
-      LogicalKeyboardKey.backspace: tr("Backspace"),
-      LogicalKeyboardKey.delete: tr("Delete"),
-      LogicalKeyboardKey.escape: tr("Escape"),
+      LogicalKeyboardKey.enter: 'Enter',
+      LogicalKeyboardKey.tab: 'Tab',
+      LogicalKeyboardKey.backspace: 'Backspace',
+      LogicalKeyboardKey.delete: 'Delete',
+      LogicalKeyboardKey.escape: 'Escape',
       LogicalKeyboardKey.arrowUp: 'ArrowUp',
       LogicalKeyboardKey.arrowDown: 'ArrowDown',
       LogicalKeyboardKey.arrowLeft: 'ArrowLeft',
       LogicalKeyboardKey.arrowRight: 'ArrowRight',
-      LogicalKeyboardKey.home: tr("Home"),
-      LogicalKeyboardKey.end: tr("End"),
+      LogicalKeyboardKey.home: 'Home',
+      LogicalKeyboardKey.end: 'End',
       LogicalKeyboardKey.pageUp: 'PageUp',
       LogicalKeyboardKey.pageDown: 'PageDown',
       for (final (i, k) in [
@@ -731,7 +731,7 @@ class _BrowserPaneState extends State<BrowserPane> with WidgetsBindingObserver {
                             textInputAction: TextInputAction.done,
                             onSubmitted: (_) {
                               if (state.canDrive) {
-                                state.send({'type': 'key', 'key': tr("Enter")});
+                                state.send({'type': 'key', 'key': 'Enter'});
                               }
                             },
                             decoration: InputDecoration(

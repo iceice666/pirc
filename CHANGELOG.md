@@ -6,6 +6,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Fixed
 
+- Android keeps standard keyboard event names and key codes in Traditional Chinese, restoring native document shortcuts and remote browser Enter/Tab/Escape, deletion and IME submit.
 - Android native modal dialogs with author `inset:auto` position independently of their former DOM parent layout, keeping controls aligned with their hit targets.
 
 ## [0.9.3] - 2026-10-23
