@@ -40,6 +40,7 @@ void main() {
           'handoff': {'snapshots': 2, 'legacyAncestry': 'old-summary'},
         },
         'workspaceMemory': {
+          'writeState': 'cutover_required',
           'pendingMutations': 1,
           'errors': {'extract': 'Source permission revoked'},
         },
@@ -51,6 +52,14 @@ void main() {
         ),
       );
       await t.pumpAndSettle();
+      expect(
+        find.textContaining('Repository memory writing is not activated.'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('/om:workspace cold --writers-stopped'),
+        findsOneWidget,
+      );
       expect(find.textContaining('Session handoffs: 2.'), findsOneWidget);
       expect(
         find.textContaining('mutation is awaiting confirmation'),
@@ -66,6 +75,10 @@ void main() {
       c.panelData.value = {
         ...c.panelData.value!,
         'memory': {...obj(c.panelData.value!['memory']), 'enabled': false},
+        'workspaceMemory': {
+          ...obj(c.panelData.value!['workspaceMemory']),
+          'writeState': 'active',
+        },
       };
       c.panelData.notifyListeners();
       await t.pumpAndSettle();
@@ -75,6 +88,10 @@ void main() {
         findsOneWidget,
       );
 
+      expect(
+        find.textContaining('Repository memory writing is not activated.'),
+        findsNothing,
+      );
       expect(t.takeException(), isNull);
       await t.pumpWidget(const SizedBox());
       c.dispose();

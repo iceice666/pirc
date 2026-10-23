@@ -2440,5 +2440,6 @@
   "Repository memory mutation is awaiting confirmation; earlier notes are withheld.": "Repository memory mutation is awaiting confirmation; earlier notes are withheld.",
   "Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.": "Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.",
   "Inherited legacy summary: its earlier coverage has not been revalidated.": "Inherited legacy summary: its earlier coverage has not been revalidated.",
-  "Legacy memory archive": "Legacy memory archive"
+  "Legacy memory archive": "Legacy memory archive",
+  "Repository memory writing is not activated. Existing notes are read-only. Stop all old node, standalone and child writers before running /om:workspace cold --writers-stopped.": "Repository memory writing is not activated. Existing notes are read-only. Stop all old node, standalone and child writers before running /om:workspace cold --writers-stopped."
 }

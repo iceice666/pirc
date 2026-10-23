@@ -21,7 +21,11 @@ for (const language of ['en', 'zh-TW']) {
     app.panel.value = {
       agentRunning: false,
       memoryRuntime: null,
-      workspaceMemory: { pendingMutations: 1, errors: { extract: 'Source revoked' } },
+      workspaceMemory: {
+        writeState: 'cutover_required',
+        pendingMutations: 1,
+        errors: { extract: 'Source revoked' },
+      },
       memory: {
         enabled: true,
         architecture: 'handoff',
@@ -36,6 +40,10 @@ for (const language of ['en', 'zh-TW']) {
     document.body.append(target);
     component = mount(MemoryTab, { target, props: { active: false } });
     flushSync();
+    expect(target.textContent).toContain(
+      language === 'en' ? 'Repository memory writing is not activated.' : '專案記憶尚未啟用寫入',
+    );
+    expect(target.textContent).toContain('/om:workspace cold --writers-stopped');
     expect(target.textContent).toContain('extract: Source revoked');
     expect(target.textContent).toContain(
       language === 'en' ? 'Session handoffs: 2.' : '對話交接摘要：2 份',
@@ -48,6 +56,12 @@ for (const language of ['en', 'zh-TW']) {
     );
     expect(target.textContent).toContain(language === 'en' ? 'Next compaction' : '下次整理');
     expect(target.textContent).not.toContain('Next observation');
+    app.panel.value = {
+      ...app.panel.value!,
+      workspaceMemory: { ...app.panel.value!.workspaceMemory!, writeState: 'active' },
+    };
+    flushSync();
+    expect(target.querySelector('[role="status"]')).toBeNull();
     // Repository memory can be explicitly enabled while legacy OM is off.
     app.panel.value = {
       ...app.panel.value!,

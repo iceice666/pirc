@@ -151,6 +151,7 @@ struct Workspace {
     extraction: RefCell<Option<AbortController>>,
     errors: RefCell<BTreeMap<String, String>>,
     cooldowns: RefCell<BTreeMap<String, u64>>,
+    write_state: Cell<&'static str>,
 }
 /// Dropping an aborted extraction releases only the transient RPC gate; its
 /// unknown durable outcome remains in `pending` until the host proves it.
@@ -172,6 +173,7 @@ pub fn feature() -> Rc<dyn Feature> {
         extraction: RefCell::new(None),
         errors: RefCell::new(BTreeMap::new()),
         cooldowns: RefCell::new(BTreeMap::new()),
+        write_state: Cell::new("unknown"),
     })
 }
 impl Workspace {
@@ -280,13 +282,21 @@ impl Workspace {
         }
         let value = request("workspace.context", args, signal)
             .await
-            .map_err(|e| e.message().to_owned())?;
+            .map_err(|e| {
+                self.write_state.set("unknown");
+                e.message().to_owned()
+            })?;
         if signal.aborted() {
             return Err("Aborted".into());
         }
         if inflight || self.inflight.get() || self.mutation_revision.get() != revision {
             return Err("Repository memory changed while reading; retry the query".into());
         }
+        self.write_state.set(match value["legacy"].as_bool() {
+            Some(true) => "cutover_required",
+            Some(false) => "active",
+            None => "unknown",
+        });
         let mut settled = false;
         for result in value["jobs"].as_array().into_iter().flatten() {
             if (result["proof"]["status"] == "committed" || result["proof"]["status"] == "failed")
@@ -429,7 +439,8 @@ impl Workspace {
             let job = match request("workspace.next", json!({"catchup":catchup}), signal).await {
                 Ok(job) => job,
                 Err(e) if e.code() == Some("workspace_cold_cutover_required") => {
-                    return Ok(completed);
+                    self.write_state.set("cutover_required");
+                    return Err("Repository memory writing is not activated. Stop all old node, standalone and child writers, then run /om:workspace cold --writers-stopped. Existing notes remain read-only; use catchup explicitly for old history after activation.".into());
                 }
                 Err(e) => return Err(e.message().to_owned()),
             };
@@ -711,7 +722,7 @@ impl Feature for Workspace {
                 old.args
             } else {
                 let c = self
-                    .context(agent, &signal, json!({"preparingCutover":action=="cold"}))
+                    .context(agent, &signal, json!({"preparingCutover":action=="cold","includeBoundaries":action=="clear"}))
                     .await?;
                 if !self.pending.borrow().is_empty() {
                     return Err("Resolve the original memory mutation first".into());
@@ -719,14 +730,18 @@ impl Feature for Workspace {
                 json!({"jobId":format!("j_{}",crate::journal::digest(format!("{}:{}:{action}:{id:?}",agent.session_id(),crate::now_ms()).as_bytes())),"epoch":c["control"]["epoch"],"generation":c["control"]["generation"],"revision":c["control"]["revision"].as_u64().unwrap_or(0),"boundaries":c["boundaries"],"id":id,"writersStopped":action=="cold"})
             };
             self.mutate(agent, &op, args, &signal).await?;
+            if action == "cold" {
+                self.write_state.set("active");
+                self.errors.borrow_mut().remove("extraction");
+            }
             agent
                 .ui()
                 .notify("Repository memory transaction committed", NotifyLevel::Info);
             Ok(())
         })
     }
-    fn panel(&self, _agent: &Rc<Agent>) -> Option<Map<String, Value>> {
-        Some(json!({"workspaceMemory":{"errors":self.errors.borrow().clone(),"pendingMutations":self.pending.borrow().len(),"extracting":self.extraction.borrow().is_some()}}).as_object().unwrap().clone())
+    fn panel(&self, agent: &Rc<Agent>) -> Option<Map<String, Value>> {
+        Some(json!({"workspaceMemory":{"writeState":if self.enabled(agent){self.write_state.get()}else{"disabled"},"errors":self.errors.borrow().clone(),"pendingMutations":self.pending.borrow().len(),"extracting":self.extraction.borrow().is_some()}}).as_object().unwrap().clone())
     }
 }
 

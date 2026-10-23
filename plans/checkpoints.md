@@ -842,3 +842,31 @@ with the user; Linux runtime and Nix builds are not claimed by this macOS run.
   no retroactively invented checkpoints.
 - Retention/quotas above are proposed defaults, with explicit disk reservation
   and visible suspension when protection cannot be maintained.
+
+### 2026-10-23 memory integration regression follow-up (local only)
+
+- Cold cutover now conservatively refuses busy or starting peer runners without
+  waiting on either the runner manager or peer lifecycle mutex. A deterministic
+  two-runner barrier test holds both lifecycle locks concurrently, confirms both
+  requests reject, then confirms activation succeeds after the peer stops.
+- Repository history scanning uses an evicting request-local branch cache and
+  retains fingerprints after eviction. A 69 MiB, three-session fixture verifies
+  cold cutover, independent extraction/commits, context, clear, and rejection of
+  a concurrent change to an evicted source. Routine context requests read only
+  authorized headers for control metadata; boundary capture is explicit.
+- Web/Android show an additive repository write-activation status, independently
+  of the legacy OM switch. Manual sync/catchup before activation reports the
+  required stopped-writer cutover, not a successful zero-result extraction.
+- Native checkpoint continuation still reports repository memory disabled and
+  rejects its authority, while preserving source workspaces and later writes.
+
+Acceptance on macOS: **1,110** workspace Rust library/binary tests passed
+(three existing subprocess helper tests remain ignored), **74** checkpoint
+integration tests, **15** real-process memory/handoff/checkpoint tests,
+**14** Web tests and **30** Flutter widget/state/catalog tests. Workspace
+all-target Clippy with warnings denied, Svelte checking, Flutter analysis,
+formatting and diff checks passed. Existing APKs are preserved; this follow-up
+requires no new database migration, protocol bump, deployment or remote push.
+Per-file journal and extraction limits remain; aggregate history no longer has
+an artificial 64 MiB request failure. Android hardware and Linux runtime were
+not re-tested in this local follow-up; Nix validation remains waived.

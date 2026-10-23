@@ -3,16 +3,16 @@ use crate::services::Services;
 use pirc_agent::session_store::SessionStore;
 use pirc_config::{Env, NodeConfig};
 use pirc_protocol::{AssistantMessage, NodeRole, UserContent};
-struct Fixture {
+pub(crate) struct Fixture {
     _dir: tempfile::TempDir,
-    node: Node,
-    current: String,
-    mode: pirc_protocol::Mode,
-    scope: Scope,
-    dir: PathBuf,
+    pub(crate) node: Node,
+    pub(crate) current: String,
+    pub(crate) mode: pirc_protocol::Mode,
+    pub(crate) scope: Scope,
+    pub(crate) dir: PathBuf,
 }
 impl Fixture {
-    async fn new() -> Self {
+    pub(crate) async fn new() -> Self {
         let temp = tempfile::Builder::new()
             .prefix("pirc-w-")
             .tempdir_in("/tmp")
@@ -81,7 +81,12 @@ impl Fixture {
         View::new(&self.node, &self.scope, true).unwrap()
     }
     fn context(&self) -> Value {
-        execute(&self.view(), "workspace.context", &json!({})).unwrap()
+        execute(
+            &self.view(),
+            "workspace.context",
+            &json!({"includeBoundaries":true}),
+        )
+        .unwrap()
     }
     fn mutate(&self, op: &str, extra: Value) -> ApiResult<Value> {
         let context = self.context();
@@ -1477,6 +1482,150 @@ async fn unbounded_ptc_ambiguity_reports_blocked_without_starving_other_authoriz
             .unwrap_err()
             .code,
         "workspace_source_blocked"
+    );
+    f.node.close().await;
+}
+
+#[tokio::test]
+async fn large_repository_history_streams_across_sources_and_preserves_evicted_evidence() {
+    let mut f = Fixture::new().await;
+    let mut dirs = vec![f.dir.clone()];
+    for i in 1..3 {
+        let dir = f._dir.path().join(format!("large-source-{i}"));
+        SessionStore::open(dir.clone(), "/").unwrap();
+        f.node
+            .db
+            .lock()
+            .create_session("repo", dir.to_str().unwrap(), "alice")
+            .unwrap();
+        dirs.push(dir);
+    }
+    // Three independently valid journals exceed the former 64 MiB request cap.
+    // Custom archived payload is private state, never extraction evidence.
+    for dir in &dirs {
+        let mut store = SessionStore::open(dir.clone(), "/").unwrap();
+        store
+            .append(EntryData::Custom {
+                custom_type: "archived-test-payload".into(),
+                data: json!({"padding":"x".repeat(23 * 1024 * 1024)}),
+            })
+            .unwrap();
+    }
+    let total: u64 = dirs
+        .iter()
+        .map(|d| {
+            std::fs::metadata(d.join(session_store::SESSION_FILE))
+                .unwrap()
+                .len()
+        })
+        .sum();
+    assert!(total > pirc_agent::journal::MAX_BYTES);
+    f.mutate("workspace.cold", json!({})).unwrap();
+    // Routine refresh reads identities only, without parsing unrelated bodies.
+    let lean = f.view();
+    let context = execute(&lean, "workspace.context", &json!({})).unwrap();
+    assert!(context["boundaries"].is_null());
+    assert!(lean.cache.borrow().is_empty());
+    for (i, dir) in dirs.iter().enumerate() {
+        f.dir = dir.clone();
+        f.turn(&format!("Durable repository convention {i}"));
+        let job = execute(&f.view(), "workspace.next", &json!({})).unwrap();
+        assert!(!job.is_null());
+        let mut args = job.as_object().unwrap().clone();
+        for k in ["epoch", "generation", "revision"] {
+            args.insert(k.into(), job["control"][k].clone());
+        }
+        args.insert("items".into(), json!([{"content":format!("Convention {i}"),"sources":[{"sessionId":job["sessionId"],"entryId":job["sources"][0]["entryId"]}]}]));
+        execute(&f.view(), "workspace.commit", &Value::Object(args)).unwrap();
+    }
+    let mut captured = f.view();
+    let notes = execute(&captured, "workspace.context", &json!({})).unwrap();
+    assert_eq!(notes["items"].as_array().unwrap().len(), 3);
+    assert!(captured.bytes.get() <= pirc_agent::journal::MAX_BYTES);
+    assert_eq!(captured.fingerprints.borrow().len(), 3);
+    assert!(
+        captured.cache.borrow().len() < 3,
+        "parsed branches must be evicted"
+    );
+    captured.revalidate(true).unwrap();
+    assert!(
+        execute(&f.view(), "workspace.next", &json!({}))
+            .unwrap()
+            .is_null()
+    );
+    let evicted = captured
+        .rows
+        .iter()
+        .find(|row| !captured.cache.borrow().contains_key(&row.id))
+        .unwrap()
+        .clone();
+    // A later append to an evicted source still invalidates the request.
+    SessionStore::open(PathBuf::from(&evicted.private_session_path), "/")
+        .unwrap()
+        .append(EntryData::Custom {
+            custom_type: "concurrent-change".into(),
+            data: json!({}),
+        })
+        .unwrap();
+    assert_eq!(
+        captured.revalidate(true).unwrap_err().code,
+        "source_changed"
+    );
+    assert_eq!(
+        captured.source(&evicted).unwrap_err().code,
+        "source_changed"
+    );
+    f.mutate("workspace.clear", json!({})).unwrap();
+    assert!(f.context()["items"].as_array().unwrap().is_empty());
+    assert!(
+        execute(&f.view(), "workspace.next", &json!({}))
+            .unwrap()
+            .is_null()
+    );
+    f.node.close().await;
+}
+
+#[tokio::test]
+async fn control_identity_checks_reject_replaced_headers_and_source_symlinks() {
+    let f = Fixture::new().await;
+    f.mutate("workspace.cold", json!({})).unwrap();
+    let row = f.node.db.lock().get_session(&f.current).unwrap();
+    let mut view = f.view();
+    let id = view.source_id(&row).unwrap();
+    f.node
+        .db
+        .lock()
+        .execute(
+            "UPDATE sessions SET pi_session_id=? WHERE id=?",
+            [&id, &f.current],
+        )
+        .unwrap();
+    let path = f.dir.join(session_store::SESSION_FILE);
+    let mut header: Value = serde_json::from_str(
+        std::fs::read_to_string(&path)
+            .unwrap()
+            .lines()
+            .next()
+            .unwrap(),
+    )
+    .unwrap();
+    header["sessionId"] = json!("replacement-session");
+    std::fs::write(&path, format!("{header}\n")).unwrap();
+    assert!(view.revalidate(true).is_err());
+    assert_eq!(
+        execute(&f.view(), "workspace.context", &json!({}))
+            .unwrap_err()
+            .code,
+        "source_identity_changed"
+    );
+    let moved = path.with_extension("original");
+    std::fs::rename(&path, &moved).unwrap();
+    std::os::unix::fs::symlink(&moved, &path).unwrap();
+    assert_eq!(
+        execute(&f.view(), "workspace.context", &json!({}))
+            .unwrap_err()
+            .code,
+        "source_unavailable"
     );
     f.node.close().await;
 }

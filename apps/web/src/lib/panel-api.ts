@@ -301,6 +301,7 @@ export interface PanelState {
   memory: MemoryPanel | null;
   memoryRuntime: MemoryRuntime | null;
   workspaceMemory?: {
+    writeState?: 'unknown' | 'disabled' | 'cutover_required' | 'active';
     errors: Record<string, string>;
     pendingMutations: number;
     extracting: boolean;

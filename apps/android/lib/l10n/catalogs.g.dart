@@ -3259,6 +3259,7 @@ const englishMessages = <String, String>{
   "Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.": "Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.",
   "Inherited legacy summary: its earlier coverage has not been revalidated.": "Inherited legacy summary: its earlier coverage has not been revalidated.",
   "Legacy memory archive": "Legacy memory archive",
+  "Repository memory writing is not activated. Existing notes are read-only. Stop all old node, standalone and child writers before running /om:workspace cold --writers-stopped.": "Repository memory writing is not activated. Existing notes are read-only. Stop all old node, standalone and child writers before running /om:workspace cold --writers-stopped.",
 };
 const traditionalChineseMessages = <String, String>{
   "無法確認最新狀態，請重試": "無法確認最新狀態，請重試",
@@ -6007,4 +6008,5 @@ const traditionalChineseMessages = <String, String>{
   "Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.": "對話交接摘要：{0} 份。先前的原始內容仍可搜尋。專案知識與個人記憶會在每回合開始時各自更新。",
   "Inherited legacy summary: its earlier coverage has not been revalidated.": "繼承的舊版摘要：尚未重新驗證其涵蓋的先前內容。",
   "Legacy memory archive": "舊版記憶封存",
+  "Repository memory writing is not activated. Existing notes are read-only. Stop all old node, standalone and child writers before running /om:workspace cold --writers-stopped.": "專案記憶尚未啟用寫入，現有記憶維持唯讀。請先停止所有舊版 Node、獨立 Agent 與子 Agent 寫入程序，再執行 /om:workspace cold --writers-stopped。",
 };

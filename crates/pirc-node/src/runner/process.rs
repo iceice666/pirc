@@ -124,6 +124,17 @@ impl Runner {
         !self.lock().closed
     }
 
+    /// Conservative, nonblocking lifecycle check while another runner is locked.
+    /// Contention (including teardown) must refuse cold cutover, never wait on
+    /// a peer that may itself be checking this runner.
+    pub(super) fn may_be_alive(&self) -> bool {
+        match self.inner.try_lock() {
+            Ok(inner) => !inner.closed,
+            Err(std::sync::TryLockError::Poisoned(inner)) => !inner.into_inner().closed,
+            Err(std::sync::TryLockError::WouldBlock) => true,
+        }
+    }
+
     /// For snapshots: `{active: true}` (a runner exists only inside the sandbox).
     pub fn sandbox_status(&self) -> Value {
         json!({ "active": true })
@@ -1142,4 +1153,133 @@ async fn wait_exit(
         Err(_) => (None, None),
     };
     runner.exit(code, signal);
+}
+
+#[cfg(test)]
+mod memory_concurrency_tests {
+    use super::*;
+    use crate::workspace_memory::{self as memory, tests::Fixture};
+
+    fn register(f: &Fixture, row: SessionRow) -> Arc<Runner> {
+        let runner = Arc::new(Runner {
+            node: Arc::downgrade(&f.node),
+            session_id: row.id.clone(),
+            workspace: f.node.db.lock().get_workspace(&row.workspace_id).unwrap(),
+            mode: f.mode.clone(),
+            epoch: row.runner_epoch,
+            pid: None,
+            prepared: Prepared::new(
+                PathBuf::new(),
+                vec![],
+                vec![],
+                Default::default(),
+                vec![],
+                None,
+                || {},
+            ),
+            persistence: None,
+            stdin: mpsc::unbounded_channel().0,
+            inner: Mutex::default(),
+            view: Mutex::default(),
+            reaped: AtomicBool::new(true),
+            exited: watch::channel(false).0,
+        });
+        f.node.runners.lock().runners.insert(row.id, runner.clone());
+        runner
+    }
+
+    #[tokio::test]
+    async fn concurrent_cold_cutovers_refuse_peer_writers_without_locking_each_other() {
+        let f = Fixture::new().await;
+        let second = f.dir.with_file_name("peer");
+        pirc_agent::session_store::SessionStore::open(second.clone(), "/").unwrap();
+        let first = f.node.db.lock().get_session(&f.current).unwrap();
+        let second = f
+            .node
+            .db
+            .lock()
+            .create_session("repo", second.to_str().unwrap(), "alice")
+            .unwrap();
+        let rows = [first, second];
+        let runners = rows
+            .into_iter()
+            .map(|row| register(&f, row))
+            .collect::<Vec<_>>();
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+        let (send, receive) = std::sync::mpsc::channel();
+        let mut threads = vec![];
+        for runner in &runners {
+            let runner = runner.clone();
+            let node = f.node.clone();
+            let barrier = barrier.clone();
+            let send = send.clone();
+            threads.push(std::thread::spawn(move || {
+                let held = runner.lock();
+                // Both requests hold their own actual lifecycle mutex, exactly
+                // as memory_operation does before executing the host operation.
+                barrier.wait();
+                let scope =
+                    memory::scope(&node, &runner.session_id, &runner.mode, 0, true).unwrap();
+                let view = memory::View::new(&node, &scope, true).unwrap();
+                let result = memory::execute(
+                    &view,
+                    "workspace.cold",
+                    &json!({"jobId":format!("cold_{}",runner.session_id),"writersStopped":true}),
+                );
+                send.send(result.map_err(|e| e.code.into_owned())).unwrap();
+                drop(held);
+            }));
+        }
+        for _ in 0..2 {
+            assert_eq!(
+                receive
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("cutover deadlocked"),
+                Err("workspace_writers_active".into())
+            );
+        }
+        for thread in threads {
+            thread.join().unwrap();
+        }
+        assert!(
+            memory::snapshot(&f.node, &f.scope)
+                .unwrap()
+                .control
+                .is_none()
+        );
+        // Manager contention is also conservative, and cannot recreate the
+        // manager -> runner / runner -> manager lock inversion.
+        {
+            let held = f.node.runners.lock();
+            assert!(f.node.runners.may_be_alive(&runners[1].session_id));
+            drop(held);
+        }
+        assert!(f.node.runners.may_be_alive(&runners[1].session_id));
+        runners[1].lock().closed = true;
+        assert!(!f.node.runners.may_be_alive(&runners[1].session_id));
+        f.node
+            .runners
+            .lock()
+            .starting
+            .insert(runners[1].session_id.clone(), watch::channel(None).1);
+        assert!(f.node.runners.may_be_alive(&runners[1].session_id));
+        f.node.runners.lock().starting.clear();
+        let view = memory::View::new(&f.node, &f.scope, true).unwrap();
+        memory::execute(
+            &view,
+            "workspace.cold",
+            &json!({"jobId":"cold_retry","writersStopped":true}),
+        )
+        .unwrap();
+        assert!(
+            memory::snapshot(&f.node, &f.scope)
+                .unwrap()
+                .control
+                .is_some()
+        );
+        // Synthetic runners have no process tasks; remove them before normal
+        // service shutdown rather than waiting for a nonexistent exit signal.
+        f.node.runners.lock().runners.clear();
+        f.node.close().await;
+    }
 }

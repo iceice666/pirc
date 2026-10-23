@@ -95,6 +95,13 @@
 </script>
 
 <div class="tab-body">
+  {#if app.panel.value?.workspaceMemory?.writeState === 'cutover_required'}
+    <p class="panel-error" role="status">
+      {tr(
+        'Repository memory writing is not activated. Existing notes are read-only. Stop all old node, standalone and child writers before running /om:workspace cold --writers-stopped.',
+      )}
+    </p>
+  {/if}
   {#if app.panel.value?.workspaceMemory?.pendingMutations}<p class="panel-error">
       {tr('Repository memory mutation is awaiting confirmation; earlier notes are withheld.')}
     </p>{/if}

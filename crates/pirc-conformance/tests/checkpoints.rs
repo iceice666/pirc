@@ -514,6 +514,7 @@ async fn native_recovery_preserves_dirty_git_and_continues_once_across_devices_a
         200,
     );
     assert_eq!(panel["memory"]["architecture"], "handoff");
+    assert_eq!(panel["workspaceMemory"]["writeState"], "disabled");
     assert_eq!(panel["workspaceMemory"]["pendingMutations"], 0);
     assert_eq!(panel["workspaceMemory"]["errors"], json!({}));
     for request in cluster.llm.requests().into_iter().skip(requests_before) {

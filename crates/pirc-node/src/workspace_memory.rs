@@ -14,7 +14,7 @@ use pirc_protocol::{Message, StopReason};
 use serde_json::{Value, json};
 use std::{
     collections::HashSet,
-    io::Read,
+    io::{BufRead, BufReader, Read},
     os::unix::fs::{MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
 };
@@ -104,7 +104,7 @@ pub fn scope(
         mode,
     })
 }
-fn read_source(row: &SessionRow) -> ApiResult<(std::sync::Arc<Vec<SessionEntry>>, Fingerprint)> {
+fn source_file(row: &SessionRow) -> ApiResult<(std::fs::File, std::fs::Metadata, PathBuf)> {
     let dir = safe_dir(Path::new(&row.private_session_path))?;
     let path = dir.join(session_store::SESSION_FILE);
     let f = std::fs::OpenOptions::new()
@@ -118,26 +118,23 @@ fn read_source(row: &SessionRow) -> ApiResult<(std::sync::Arc<Vec<SessionEntry>>
     if !before.is_file() || before.nlink() != 1 || before.len() > pirc_agent::journal::MAX_BYTES {
         return Err(unavailable("source_unavailable"));
     }
+    Ok((f, before, path))
+}
+fn verify_file(path: &Path, before: &std::fs::Metadata) -> ApiResult<()> {
+    let after = std::fs::symlink_metadata(path).map_err(|_| unavailable("source_changed"))?;
+    if !after.is_file() || after.nlink() != 1 || Fingerprint::of(before) != Fingerprint::of(&after)
+    {
+        return Err(unavailable("source_changed"));
+    }
+    Ok(())
+}
+fn read_source(row: &SessionRow) -> ApiResult<(std::sync::Arc<Vec<SessionEntry>>, Fingerprint)> {
+    let (f, before, path) = source_file(row)?;
     let mut raw = Vec::new();
     f.take(pirc_agent::journal::MAX_BYTES + 1)
         .read_to_end(&mut raw)
         .map_err(|_| unavailable("source_unavailable"))?;
-    let after = std::fs::metadata(&path).map_err(|_| unavailable("source_changed"))?;
-    if (
-        before.dev(),
-        before.ino(),
-        before.len(),
-        before.mtime(),
-        before.mtime_nsec(),
-    ) != (
-        after.dev(),
-        after.ino(),
-        after.len(),
-        after.mtime(),
-        after.mtime_nsec(),
-    ) {
-        return Err(unavailable("source_changed"));
-    }
+    verify_file(&path, &before)?;
     let p = pirc_agent::journal::parse(&raw).map_err(err)?;
     if p.incomplete {
         return Err(unavailable("source_incomplete"));
@@ -234,6 +231,9 @@ pub struct View {
     state: Snapshot,
     cache: std::cell::RefCell<std::collections::HashMap<String, CachedSource>>,
     bytes: std::cell::Cell<u64>,
+    // Retain validation evidence even after a parsed branch is evicted.
+    fingerprints: std::cell::RefCell<std::collections::HashMap<String, Fingerprint>>,
+    identities: std::cell::RefCell<std::collections::HashMap<String, String>>,
 }
 fn registry(rows: &[SessionRow]) -> Value {
     json!(
@@ -265,6 +265,8 @@ impl View {
             },
             cache: Default::default(),
             bytes: std::cell::Cell::new(0),
+            fingerprints: Default::default(),
+            identities: Default::default(),
         })
     }
     fn source(&self, row: &SessionRow) -> ApiResult<std::sync::Arc<Vec<SessionEntry>>> {
@@ -272,15 +274,62 @@ impl View {
             return Ok(branch.clone());
         }
         let (branch, fingerprint) = read_source(row)?;
-        let bytes = self.bytes.get().saturating_add(fingerprint.len);
-        if bytes > 64 * 1024 * 1024 {
-            return Err(unavailable("workspace_scan_budget"));
+        self.remember(row, fingerprint.clone())?;
+        if self.bytes.get().saturating_add(fingerprint.len) > pirc_agent::journal::MAX_BYTES {
+            self.cache.borrow_mut().clear();
+            self.bytes.set(0);
         }
-        self.bytes.set(bytes);
+        self.bytes.set(self.bytes.get() + fingerprint.len);
         self.cache
             .borrow_mut()
             .insert(row.id.clone(), (branch.clone(), fingerprint));
         Ok(branch)
+    }
+    fn remember(&self, row: &SessionRow, fingerprint: Fingerprint) -> ApiResult<()> {
+        let mut seen = self.fingerprints.borrow_mut();
+        if seen.get(&row.id).is_some_and(|old| old != &fingerprint) {
+            return Err(unavailable("source_changed"));
+        }
+        seen.insert(row.id.clone(), fingerprint);
+        Ok(())
+    }
+    /// Control metadata needs an authorized session identity, not its message
+    /// bodies. Actual notes, jobs and mutation boundaries still validate the
+    /// entire active branch. Never trust an agent-supplied session ID here.
+    fn source_id(&self, row: &SessionRow) -> ApiResult<String> {
+        if let Some(id) = self.identities.borrow().get(&row.id) {
+            return Ok(id.clone());
+        }
+        let id = if let Some((branch, _)) = self.cache.borrow().get(&row.id) {
+            history::header_id(branch).map_err(err)?
+        } else {
+            let (file, before, path) = source_file(row)?;
+            let mut header = String::new();
+            BufReader::new(file.take(1024 * 1024))
+                .read_line(&mut header)
+                .map_err(|_| unavailable("source_unavailable"))?;
+            if !header.ends_with('\n') {
+                return Err(unavailable("invalid_session_header"));
+            }
+            let entries = session_store::parse_entries(&header).map_err(err)?;
+            let id = history::header_id(&entries).map_err(err)?;
+            if entries.len() != 1
+                || entries[0].parent_id.is_some()
+                || row
+                    .pi_session_id
+                    .as_ref()
+                    .is_some_and(|registered| registered != &id)
+            {
+                return Err(unavailable("source_identity_changed"));
+            }
+            verify_file(&path, &before)?;
+            self.remember(row, Fingerprint::of(&before))?;
+            id
+        };
+        self.identities
+            .borrow_mut()
+            .insert(row.id.clone(), id.clone());
+        Ok(id)
     }
     pub fn revalidate(&mut self, work: bool) -> ApiResult<()> {
         self.verify_sources(work)?;
@@ -311,7 +360,7 @@ impl View {
             ));
         }
         for row in &self.rows {
-            if let Some((_, before)) = self.cache.borrow().get(&row.id) {
+            if let Some(before) = self.fingerprints.borrow().get(&row.id) {
                 let m = std::fs::symlink_metadata(
                     Path::new(&row.private_session_path).join(session_store::SESSION_FILE),
                 )
@@ -474,7 +523,7 @@ fn context(view: &View, args: &Value, state: &Snapshot) -> ApiResult<Value> {
         })
         .collect();
     Ok(
-        json!({"control":public_control(view,state)?,"items":result,"total":items.len(),"cursor":if paged&&end<items.len(){json!({"fingerprint":inventory,"offset":end})}else{Value::Null},"boundaries":boundaries(view)?,"jobs":jobs,"snapshot":state.hash,"legacy":state.control.is_none()}),
+        json!({"control":public_control(view,state)?,"items":result,"total":items.len(),"cursor":if paged&&end<items.len(){json!({"fingerprint":inventory,"offset":end})}else{Value::Null},"boundaries":if args["includeBoundaries"]==true {Some(boundaries(view)?)}else{None},"jobs":jobs,"snapshot":state.hash,"legacy":state.control.is_none()}),
     )
 }
 fn next_job(view: &View, state: &Snapshot, catchup: bool) -> ApiResult<Value> {
@@ -708,9 +757,7 @@ fn mutation(view: &View, args: &Value, state: &Snapshot, action: &str) -> ApiRes
                 if key == s.key && root == s.root {
                     let sessions = node.db.lock().workspace_sessions(&workspace.id)?;
                     for row in sessions {
-                        if row.id != s.caller
-                            && node.runners.get(&row.id).is_some_and(|r| r.alive())
-                        {
+                        if row.id != s.caller && node.runners.may_be_alive(&row.id) {
                             return Err(unavailable("workspace_writers_active"));
                         }
                     }
@@ -1036,7 +1083,7 @@ fn public_control(view: &View, state: &Snapshot) -> ApiResult<Value> {
     }
     let mut ids = HashSet::new();
     for row in &view.rows {
-        ids.insert(history::header_id(&view.source(row)?).map_err(err)?);
+        ids.insert(view.source_id(row)?);
     }
     for key in ["cutover", "clearCutoffs", "receipts"] {
         if let Some(a) = control[key].as_array_mut() {
@@ -1047,4 +1094,4 @@ fn public_control(view: &View, state: &Snapshot) -> ApiResult<Value> {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

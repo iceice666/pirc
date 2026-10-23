@@ -325,3 +325,74 @@ async fn blocked_sources_are_visible_without_claiming_extraction_or_starting_ret
     );
     agent.finish().await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn cold_cutover_state_is_visible_and_manual_sync_never_claims_success_before_activation() {
+    let Some(mut agent) = AgentRun::start(
+        AgentOptions {
+            env: vec![("PIRC_GATEWAY".into(), "1".into())],
+            ..Default::default()
+        }
+        .features("workspace-memory"),
+    )
+    .await
+    else {
+        return;
+    };
+    {
+        let mut answers = agent.answers.lock().unwrap();
+        answers.gateway.insert(
+            "workspace.context".into(),
+            json!({"ok":true,"result":{"legacy":true,"items":[]}}),
+        );
+        answers.gateway.insert("workspace.next".into(), json!({"ok":false,"error":{"code":"workspace_cold_cutover_required","message":"Cold cutover required","status":409}}));
+    }
+    turn(&mut agent, "First ordinary conversation before activation").await;
+    let panel = agent.call(json!({"type":"get_panel_state"})).await;
+    assert_eq!(
+        panel["data"]["workspaceMemory"]["writeState"],
+        "cutover_required"
+    );
+    for action in ["sync", "catchup"] {
+        agent
+            .command(json!({"type":"prompt","message":format!("/om:workspace {action}")}))
+            .await;
+        let events = agent.drain(Duration::from_millis(300)).await;
+        assert!(
+            events.iter().any(|e| e["method"] == "notify"
+                && e["message"]
+                    .as_str()
+                    .is_some_and(|s| s.contains("writing is not activated")
+                        && s.contains("--writers-stopped"))),
+            "{events:?}"
+        );
+        assert!(!events.iter().any(|e| {
+            e["message"]
+                .as_str()
+                .is_some_and(|s| s.contains("0 complete interactions committed"))
+        }));
+        assert!(
+            !events
+                .iter()
+                .any(|e| e["op"] == "workspace.commit" || e["op"] == "workspace.cold")
+        );
+    }
+    {
+        let mut answers = agent.answers.lock().unwrap();
+        answers.gateway.insert(
+            "workspace.context".into(),
+            json!({"ok":true,"result":{"legacy":false,"items":[]}}),
+        );
+        answers
+            .gateway
+            .insert("workspace.next".into(), json!({"ok":true,"result":null}));
+    }
+    turn(
+        &mut agent,
+        "After an administrator activated this repository",
+    )
+    .await;
+    let panel = agent.call(json!({"type":"get_panel_state"})).await;
+    assert_eq!(panel["data"]["workspaceMemory"]["writeState"], "active");
+    assert_eq!(panel["data"]["workspaceMemory"]["errors"], json!({}));
+}

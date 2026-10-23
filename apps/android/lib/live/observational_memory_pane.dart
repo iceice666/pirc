@@ -537,6 +537,14 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
           state.runtime['rateLimited'],
         ).where((r) => (r['until'] as num? ?? 0) > now);
         final children = <Widget>[
+          if (workspaceMemory['writeState'] == 'cutover_required')
+            errors([
+              Text(
+                tr(
+                  'Repository memory writing is not activated. Existing notes are read-only. Stop all old node, standalone and child writers before running /om:workspace cold --writers-stopped.',
+                ),
+              ),
+            ]),
           if ((workspaceMemory['pendingMutations'] as num? ?? 0) > 0)
             errors([
               Text(
