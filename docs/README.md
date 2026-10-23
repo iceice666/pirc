@@ -5,6 +5,7 @@ Start with the [project README](../README.md) for the security model, requiremen
 | I want to…                                 | Start here                                                                  |
 | ------------------------------------------ | --------------------------------------------------------------------------- |
 | Talk with pirc in the rooms                | [Rooms, faces, memory, workers and sources](guides/rooms-and-memory.md)     |
+| Change the language, theme or status marks | [Web interface](guides/web-interface.md)                                    |
 | Configure or use an agent                  | [User guides](guides/README.md)                                             |
 | Deploy, upgrade or recover an installation | [Deployment guide](deploy/README.md)                                        |
 | Understand implementation boundaries       | [Architecture references](architecture/README.md)                           |
@@ -15,7 +16,7 @@ Start with the [project README](../README.md) for the security model, requiremen
 ## Development and package references
 
 - [Gateway and node development/API](development/gateway-and-node.md)
-- [Web client](../apps/web/README.md)
+- [Web client](../apps/web/README.md) and its [UI recipe](development/web-ui.md)
 - [Android client](../apps/android/README.md)
 - [Nix packaging and module](../nix/README.md)
 - [Timeline fixtures](../fixtures/timeline/README.md)

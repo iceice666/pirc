@@ -602,3 +602,65 @@ file alone are the fonts (must be added), the icons (must be matched), the missi
 copy (must be decided), and the one genuinely new structure: the engine overview as a single
 dashboard instead of a tabbed panel. Screens 3, 4 and 6 are sparse enough that building from them
 without answers to the questions above would mean inventing behavior.
+
+## Decisions
+
+The person answered four of the questions above in conversation (2026-10-23). Quoted as
+he wrote them, with what each one settles:
+
+1. **Engine overview (Q15):** "動" — the overview becomes one scrolling dashboard. The
+   seven tabs survive as anchors over it, **Overview** first. A later phase.
+2. **Theme (Q19):** "先照著做深色" — dark first. The design's dark palette is now what
+   the web client ships, on every device and regardless of the operating system's
+   preference. The light tokens are kept under `:root[data-theme='light']` but nothing
+   sets that attribute, so light no longer ships. The type scale is the drawn one: rooms
+   at 15px, the engine at 14px, 12px/0.04em uppercase section labels, JetBrains Mono for
+   identifiers.
+3. **Face details (Q10):** "就在成員列表點他就能顯示詳細資料" — clicking a face in the
+   members list shows its detail page. Creating, archiving and editing a face stay where
+   they are today (the add control and the hide/show controls in the members column; the
+   host's page keeps SOUL.md, CHAT.md and the remembered preferences). There is no new
+   "+" in the members column and no Engine Faces section until he says otherwise.
+4. **Copy (Q20):** "做i18n" — real internationalisation. Every user-visible string goes
+   through a message catalogue; `zh-TW` (Traditional Chinese, the default) and `en`
+   ship. Product words (Engine, room, thread, face, worker) stay English in both
+   languages. "hands" is gone: the word for machines is 節點/nodes.
+
+### Defaults adopted for the questions he did not answer
+
+These follow the review's own proposal, written out so the next phase can build from
+them. None of them is a new decision by the person; each can be revisited.
+
+| #   | Question              | Default adopted                                                                                                                                                                   |
+| --- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Loading, reconnecting | Keep today's words and shapes: the empty log line, the engine's "Connecting to your sessions…", the connection pill. No skeleton screens.                                         |
+| 2   | Empty room            | Keep "Nothing here yet. Say something." (translated). No on-ramp cards in this design round.                                                                                      |
+| 3   | Errors                | Shown where they happen: a failed send under the composer, a refused archive beside its button, a failed thread load in the thread, a failing source in its row. No toast system. |
+| 4   | Archived rooms        | The archived room keeps a read-only banner; it moves into the room header with the new layout. The list keeps the "Archived · N" fold.                                            |
+| 5   | Long messages         | The message column keeps its width and Markdown; code stays in the `#111113` well. The 48px right inset arrives with the layout.                                                  |
+| 6   | Uploads               | The composer shows at most three thumbnails and a "+N" for the rest; a list holds the names.                                                                                      |
+| 7   | Presence, typing      | "X is thinking…" stays at the bottom of the log; the header loses its presence pill in the layout phase.                                                                          |
+| 8   | Threads, pins         | Threads and Pinned open right-column panels. The pinned strip stops being a strip above the log.                                                                                  |
+| 9   | Search                | Room search is client-side over the messages already loaded.                                                                                                                      |
+| 10  | Faces                 | As answered above: the detail page comes from the members list; creation, hiding, archiving and editing stay where they are; no Engine Faces section for now.                     |
+| 11  | Mention in room       | Opens the room with `@face ` prefilled in the composer and does not send.                                                                                                         |
+| 12  | Phone questions       | The phone question card gets "Allow again this session" too, the same answers as the desktop card.                                                                                |
+| 13  | "or just reply"       | A free-text answer goes through the thread; the copy may promise that.                                                                                                            |
+| 14  | Unread                | The red count, the "NEW" divider and "Your turn" all come from the same `waiting`/`unread` fields; opening a room still marks it read.                                            |
+| 15  | Engine tabs           | Seven anchors over one scrolling dashboard, Overview first.                                                                                                                       |
+| 16  | "All …" links         | Each points at the matching engine tab (nodes, turns, loops) or the matching Settings section ("Manage in Settings" opens Settings → Models & sources).                           |
+| 17  | Git pane              | Two columns: branch card, the uncommitted changes and history on the left, the diff on the right. Selecting a commit still drills into its diff.                                  |
+| 18  | Read-only sessions    | The narrow viewer banner stays and the waiting band ("Waiting for you in #room · request") joins it; Take control stays.                                                          |
+| 19  | Theme and density     | Dark only, as answered: rooms 15px, engine 14px, as drawn for a 1440-wide desktop. Light tokens are kept, unused.                                                                 |
+| 20  | Copy                  | Product nouns (Engine, room, thread, face, worker) stay English; ordinary UI words ("Your turn", "ASKS YOU", "Waiting for you") are translated. No "hands".                       |
+
+### What this round changes
+
+The foundation only, with the current layouts kept: the design's dark palette and type
+scale as CSS custom properties, the three typefaces self-hosted, one status vocabulary,
+and every string routed through the new message catalogue (`apps/web/src/lib/i18n`,
+`zh-TW` default, `en`, chosen from the browser's language, remembered per device, and
+switchable from the Settings header). The room list, message anatomy, thread, face page,
+phone layout and engine dashboard keep their present structure; they are the next
+phases, in that order of risk: room desktop layout, thread, face page, phone, engine
+dashboard.

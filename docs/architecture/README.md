@@ -9,6 +9,7 @@
 | [Prompt and Context contracts](prompt-context.md)    | The brain's and the workers' prompts, node-local snapshots and authorized relays           |
 
 - [Memory, open loops, wakes and workers](memory.md): the brain's three layers of memory, origins and forgetting, open loops, waking up, repository identity and the brain's workers.
+- [Web client theme, status and messages](web-client.md): the palette and type tokens, the four status marks, the i18n catalogue and its parity checks.
 - [Direction](direction.md): the direction the rewrite implemented (2026-10-19, in Chinese), kept as written.
 - [PTC runtime contracts](ptc.md): discovery, per-operation authority, attachments and execution lifecycle.
 - [Security decisions and accepted limits](security-decisions.md): current trust boundaries and accepted risks.

@@ -5,6 +5,7 @@
 | Guide                                                                        | Covers                                                                                                                |
 | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | [Rooms, faces, memory, open loops, workers and sources](rooms-and-memory.md) | Who answers, what pirc keeps between conversations, when it speaks up, its workers, what it reads, and how to undo it |
+| [Web interface](web-interface.md)                                            | Choosing the language, the dark theme and type scale, and what the four status marks mean                             |
 | [Agent configuration](agent.md)                                              | Node/project configuration, sandbox boundaries, skills, recap and hooks                                               |
 | [Tools and workflows](tools.md)                                              | Direct tools and PTC, goals, background jobs, teams, roles and auto mode                                              |
 | [Model backends and logins](model-backends.md)                               | Gateway backend sources, precedence, reloads, subscription logins and credentials                                     |

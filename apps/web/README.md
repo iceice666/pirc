@@ -27,6 +27,13 @@ The two states never import each other (`src/lib/boundaries.test.ts`); links car
 
 Keyboard: arrows move through the room list; the message log and a thread are tab stops whose arrows (Home/End) go through their messages; Alt+ArrowUp/Down opens the previous/next room; Escape closes the thread or the side column. Finished messages from others are announced once from a separate live region.
 
+## Theme, type and languages
+
+- **Dark only.** `src/app.css` holds the design's palette (surfaces `#0f0f11`/`#17171a`/`#1d1d20`/`#26262b`, ink steps, `#5686fe` accent, `#3fbf86` status colours) as CSS custom properties. It is what ships on every device; the light palette is kept under `:root[data-theme='light']` and nothing sets the attribute. `src/lib/theme.ts` is the one place that answers "is it dark" for the terminal and Mermaid.
+- **Type.** IBM Plex Sans (15px in the rooms, 14px in the engine), JetBrains Mono for identifiers and Noto Sans TC for Chinese, self-hosted from the `@fontsource-variable` packages (OFL) with unicode-range slices, so nothing loads from fonts.gstatic.com and only the slices a page needs are fetched. Section labels are 12px, uppercase, `0.04em`.
+- **Status.** One vocabulary everywhere (`src/lib/components/StatusGlyph.svelte`): green dot working, hollow ring idle or done, yellow square waiting for you, red failure.
+- **Languages.** `src/lib/i18n` is a typed message catalogue (`messages/<area>.ts`, one flat `en` and `zh` table per area) and a small reactive `t(key, vars)`; `i18n.test.ts` fails if the two languages disagree on a key, an empty message or a placeholder. Locales are `zh-TW` (default) and `en`: the starting locale comes from the browser's languages, a person's choice is kept in local storage (`relay.layout.locale`) and the selector lives in the Settings header, the one dialog both pages open. Product words (Engine, room, thread, face, worker) stay English in both languages. Add a string to the area's file, in both languages; never leave one in a component.
+
 ## Runtime behavior
 
 - Fetch requests include forward-auth cookies with `credentials: include`.
