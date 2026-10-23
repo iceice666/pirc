@@ -644,7 +644,14 @@ mod tests {
             let helper = if cfg!(target_os = "linux") {
                 let helper = std::env::var_os("PIRC_CONFORMANCE_BIN_DIR")
                     .map(PathBuf::from)
-                    .map(|dir| dir.join("pirc-node"))
+                    // Match conformance's repository-relative directory, not
+                    // libtest's crate-specific current working directory.
+                    .map(|dir| {
+                        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                            .join("../..")
+                            .join(dir)
+                            .join("pirc-node")
+                    })
                     .and_then(|path| path.canonicalize().ok())
                     .filter(|path| path.is_file());
                 let available = helper.is_some()
