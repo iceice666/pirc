@@ -28,6 +28,59 @@ Json memoryView(String view) {
 }
 
 void main() {
+  testWidgets(
+    'handoff panel exposes pending memory mutations and source failures',
+    (t) async {
+      final g = FakeGateway(), c = LiveController(g)..sessionId = 's';
+      g.handler = (_, _) async => {
+        ...memoryView('active'),
+        'memory': {
+          ...obj(memoryView('active')['memory']),
+          'architecture': 'handoff',
+          'handoff': {'snapshots': 2, 'legacyAncestry': 'old-summary'},
+        },
+        'workspaceMemory': {
+          'pendingMutations': 1,
+          'errors': {'extract': 'Source permission revoked'},
+        },
+      };
+      await t.pumpWidget(
+        MaterialApp(
+          theme: theme.build(Brightness.light),
+          home: Scaffold(body: ObservationalMemoryPane(controller: c)),
+        ),
+      );
+      await t.pumpAndSettle();
+      expect(find.textContaining('Session handoffs: 2.'), findsOneWidget);
+      expect(
+        find.textContaining('mutation is awaiting confirmation'),
+        findsOneWidget,
+      );
+      expect(find.text('extract: Source permission revoked'), findsOneWidget);
+      expect(find.textContaining('Inherited legacy summary:'), findsOneWidget);
+      expect(find.text('LEGACY MEMORY ARCHIVE'), findsOneWidget);
+      expect(find.text('Next observation'), findsNothing);
+      expect(find.text('Next reflection'), findsNothing);
+      expect(find.text('Active observation pool'), findsNothing);
+      expect(find.text('Next compaction'), findsOneWidget);
+      c.panelData.value = {
+        ...c.panelData.value!,
+        'memory': {...obj(c.panelData.value!['memory']), 'enabled': false},
+      };
+      c.panelData.notifyListeners();
+      await t.pumpAndSettle();
+      expect(find.text('extract: Source permission revoked'), findsOneWidget);
+      expect(
+        find.textContaining('mutation is awaiting confirmation'),
+        findsOneWidget,
+      );
+
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+      c.dispose();
+      await g.stream.close();
+    },
+  );
   test('token labels preserve web rounding boundaries', () {
     expect([0, 999, 1000, 1250, 9999, 10000, 10500].map(memoryTokens), [
       '0',

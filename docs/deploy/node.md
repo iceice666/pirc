@@ -72,10 +72,14 @@ and later edits are never overwritten by retries. The origin link returns to
 the source conversation. Repeated confirmation opens the same new conversation.
 
 Gateway and Node must both use Node protocol **14** for private recovery workspace
-registration. Node main database schema is 2002, Gateway schema is 1007;
+registration. Node main database schema is 2002, Gateway schema is 1008;
 checkpoint journal schema remains 2. Older peers fail version checks; older schema-1 nodes refuse this journal.
 Retain a private backup before a deliberate downgrade. Recovery workspaces are
-owner-private, including after reconnect. Memory integration remains deferred.
+owner-private, including after reconnect. The new memory pipeline is integrated:
+recovery conversations can use their own history/handoffs, while repository
+memory remains disabled for recovery workspaces to protect the original ledger.
+Upgrades preserve both published memory schema 1006 and unpublished local
+calendar/checkpoint schema 1006/1007 data.
 
 Copy limits default to 256 MiB and 20,000 entries, with a separate 1 GiB logical
 reservation ceiling and 64 MiB free-space headroom. Retained current/candidate

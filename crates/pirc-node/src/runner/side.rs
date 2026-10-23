@@ -251,7 +251,6 @@ impl Runner {
                     Err(error) => {
                         runner.gateway_fail(&id, 409, "checkpoint_unavailable", &error, None)
                     }
-
                 }
                 runner.lock().gateway_requests -= 1;
                 return;

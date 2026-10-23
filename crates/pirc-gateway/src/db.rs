@@ -21,7 +21,7 @@ use crate::util::{new_id, now_ms, safe_json};
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1007;
+pub const SCHEMA_VERSION: i64 = 1008;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = concat!(
@@ -92,7 +92,6 @@ const MIGRATIONS: &[(i64, &str)] = &[
            owner_user TEXT
          );",
     ),
-
 ];
 
 /// Placeholder name of a new session until the agent's title replaces it.
@@ -298,8 +297,28 @@ fn apply_schema(connection: &Connection, path: &Path) -> Result<(), String> {
 /// Bring an older Rust schema up to date, inside [`create_schema`]'s
 /// transaction.
 fn migrate(connection: &Connection, from: i64) -> rusqlite::Result<()> {
+    // Unpublished calendar/checkpoint builds used 1006/1007 before upstream
+    // assigned 1006 to the memory digest. Preserve their data while joining
+    // the upstream sequence, under create_schema's single write transaction.
+    if (1006..=1007).contains(&from) {
+        let digest: bool = connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('memory_mirrors') WHERE name='digest')",
+            [],
+            |row| row.get(0),
+        )?;
+        if !digest {
+            connection.execute_batch("ALTER TABLE memory_mirrors ADD COLUMN digest TEXT;")?;
+        }
+    }
     for (version, sql) in MIGRATIONS.iter().filter(|(version, _)| *version > from) {
-        connection.execute_batch(&format!("{sql}\nPRAGMA user_version = {version};"))?;
+        let calendar_exists: bool = connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='calendar_events')",
+            [], |row| row.get(0),
+        )?;
+        if *version != 1007 || !calendar_exists {
+            connection.execute_batch(sql)?;
+        }
+        connection.pragma_update(None, "user_version", version)?;
     }
     Ok(())
 }
@@ -1897,6 +1916,78 @@ mod tests {
         drop(db);
         // And it stays at the new version when opened again.
         drop(Db::open(&path).unwrap());
+    }
+
+    #[test]
+    fn reconciles_upstream_memory_and_local_calendar_checkpoint_schemas() {
+        for (version, calendar, checkpoints, digest) in [
+            (1006, false, false, true), // published memory update
+            (1006, true, false, false), // local calendar build
+            (1007, true, true, false),  // local checkpoint build
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("gateway.sqlite");
+            let conn = Connection::open(&path).unwrap();
+            let mut schema = SCHEMA.to_owned();
+            if !calendar {
+                schema = schema.replace(include_str!("calendar/schema.sql"), "");
+            }
+            if !digest {
+                schema = schema.replace(", digest TEXT", "");
+            }
+            conn.execute_batch(&schema).unwrap();
+            if !checkpoints {
+                conn.execute_batch("DROP TABLE checkpoint_workspace_owners;")
+                    .unwrap();
+            }
+            conn.execute_batch("INSERT INTO memory_mirrors (node_id,ledger_key,watermark,updated_at) VALUES ('node','ledger',42,1);").unwrap();
+            if digest {
+                conn.execute_batch("UPDATE memory_mirrors SET digest='preserved-proof';")
+                    .unwrap();
+            }
+            if calendar {
+                conn.execute_batch("INSERT INTO calendar_permissions VALUES ('owner',1,1);")
+                    .unwrap();
+            }
+            if checkpoints {
+                conn.execute_batch("INSERT INTO workspaces (id,host_id,display_name,canonical_path,defaults_json,created_at) VALUES ('n:recovery','n','Recovery','node://n/recovery','{}',0);
+                    INSERT INTO checkpoint_workspace_owners VALUES ('n:recovery','owner');").unwrap();
+            }
+            conn.pragma_update(None, "user_version", version).unwrap();
+            drop(conn);
+            for _ in 0..2 {
+                let db = Db::open(&path).unwrap();
+                let conn = db.lock();
+                assert_eq!(columns(&conn), columns(&Db::memory().lock()));
+                assert_eq!(
+                    conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                        .unwrap(),
+                    SCHEMA_VERSION
+                );
+                let row = conn
+                    .query_row(
+                        "SELECT watermark,digest FROM memory_mirrors WHERE node_id='node'",
+                        [],
+                        |r| Ok((r.get::<_, i64>(0)?, r.get::<_, Option<String>>(1)?)),
+                    )
+                    .unwrap();
+                assert_eq!(row, (42, digest.then(|| "preserved-proof".into())));
+                if checkpoints {
+                    assert_eq!(conn.query_row("SELECT owner_user FROM checkpoint_workspace_owners WHERE workspace_id='n:recovery'", [], |r|r.get::<_,String>(0)).unwrap(), "owner");
+                }
+                if calendar {
+                    assert_eq!(
+                        conn.query_row(
+                            "SELECT allow_read FROM calendar_permissions WHERE owner_user='owner'",
+                            [],
+                            |r| r.get::<_, i64>(0)
+                        )
+                        .unwrap(),
+                        1
+                    );
+                }
+            }
+        }
     }
 
     #[test]

@@ -578,7 +578,7 @@ fn migration_from_previous_version_preserves_existing_schedules() {
     let c = Connection::open(&path).unwrap();
     c.execute_batch(include_str!("../schema.sql")).unwrap();
     schedule(&c, "0 9 * * *");
-    c.pragma_update(None, "user_version", 1005).unwrap();
+    c.pragma_update(None, "user_version", 1006).unwrap();
     drop(c);
     let db = Db::open(&path).unwrap();
     let c = db.lock();

@@ -8,8 +8,8 @@ operations, Web/native Flutter Android review and durable continuation. Phase 5
 local macOS integration/crash/client acceptance is complete; real Android and
 Linux runtime acceptance remain. Multiple agents and preservation of both existing and later user
 changes are hard requirements. Keep work local; no deployment, remote push or
-Release is authorized. Integrate the independent memory update last, after the
-user requests rebasing onto its published changes.
+Release is authorized. The published memory update was integrated locally on
+2026-10-23 at the user’s request; see the memory integration acceptance below.
 
 ## Product decision
 
@@ -785,6 +785,49 @@ Implementation stays local until explicitly authorized otherwise. Each phase
 gets its own reviewable commit. Remove disposable test/build/copy outputs after
 verification, keeping user recovery workspaces, pinned checkpoints, deliverable
 APKs and necessary review artifacts.
+
+## Memory integration acceptance (2026-10-23)
+
+Rebased all 20 local commits onto `origin/main` at `1846dfde`, including the Rust
+handoff/repository-memory port and its hardening. No deployment or push. The
+independent memory checkout was not modified.
+
+- Memory RPCs (`workspace.*`, `history.*`) and checkpoint RPCs retain their
+  separate Node-local handlers. Recovery retains a new blank conversation;
+  its own history/handoff machinery works, while repository-memory authority
+  remains disabled for the recovery root. It neither replays source memory nor
+  writes facts from the recovery into the original repository ledger. Enabling
+  an independent recovery ledger would require a separate product decision.
+- Gateway schema is now **1008**: upstream memory digest 1006, calendar 1007,
+  private recovery owners 1008. Transactional upgrade also recognizes the
+  unpublished local 1006 calendar and 1007 checkpoint layouts, preserves their
+  data/ownership, and adds the missing digest. Reopening is idempotent.
+- Android now renders the handoff summary, legacy archive, pending mutations
+  and repository-memory errors. Both clients keep repository errors visible
+  when legacy OM is disabled but repository memory is independently enabled.
+  New strings have English and Traditional Chinese catalogs.
+- Nix `cargoHash` is recalculated from the merged lockfile and 348 checksum-verified
+  crate archives. The original TLS commit’s staging NAR hash was reproduced
+  exactly before calculating the new value. This is not a Nix build validation;
+  Nix validation remains waived by the user. TLS distrust dependency versions
+  and rejection tests remain intact.
+- Native checkpoint process scenarios now explicitly enable the new memory
+  features. Restart, conflicting edits, cross-device continuation and owner
+  isolation still pass. The Node scope regression denies direct recovery
+  `workspace.*` authority while permitting its own-session history scope.
+
+Local acceptance: 1,107 Rust workspace library/binary tests (3 ignored, including
+one crash helper explicitly invoked by its parent), 74 checkpoint file-safety
+integration tests, 3 TLS rejection/control tests, 32 distinct real-process
+memory/checkpoint scenarios, 19 Web tests and 34 Flutter tests. Full-workspace
+Clippy, Svelte type checking and Flutter analysis pass. The side-channel run
+transcript uses a fixture-private temp parent so macOS’s fake-srt warning does
+not change the Linux golden event count; no golden snapshots were updated.
+
+Disposable outputs are removed after verification. Existing ledgers are not
+activated, cold-cut over or migrated by running tests; the deployed memory
+activation procedure remains an operator action. Actual Android testing remains
+with the user; Linux runtime and Nix builds are not claimed by this macOS run.
 
 ## Proposed defaults for review
 

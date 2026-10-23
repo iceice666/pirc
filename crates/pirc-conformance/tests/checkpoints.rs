@@ -38,10 +38,14 @@ async fn cluster() -> Option<Cluster> {
         return None;
     }
     Cluster::start_with(GatewayOptions {
-        agent_core_only: true,
+        agent_core_only: false,
         env: vec![("PIRC_ALLOWED_USERS", format!("{USER},other@example.com"))],
         node_env: vec![
             ("PIRC_SANDBOX_SRT", String::new()),
+            (
+                "PIRC_AGENT_FEATURES",
+                "observational-memory,workspace-memory".into(),
+            ),
             ("PIRC_CHECKPOINT_WORKSPACES", r#"["test"]"#.into()),
             ("PIRC_ALLOWED_USERS", format!("{USER},other@example.com")),
         ],
@@ -499,6 +503,19 @@ async fn native_recovery_preserves_dirty_git_and_continues_once_across_devices_a
         b"user later recovery edit\n"
     );
     assert_eq!(tree(&source), before_restarts);
+    let panel = ok(
+        api.send(
+            "GET",
+            &format!("/api/sessions/{next}/panel/state"),
+            &phone,
+            None,
+        )
+        .await,
+        200,
+    );
+    assert_eq!(panel["memory"]["architecture"], "handoff");
+    assert_eq!(panel["workspaceMemory"]["pendingMutations"], 0);
+    assert_eq!(panel["workspaceMemory"]["errors"], json!({}));
     for request in cluster.llm.requests().into_iter().skip(requests_before) {
         assert!(
             !request.to_string().contains("SOURCE_ONLY_PRIVATE_PROMPT"),

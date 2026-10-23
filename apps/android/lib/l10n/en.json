@@ -2436,5 +2436,9 @@
   "Stale": "Stale",
   "Interrupted": "Interrupted",
   "This recovery conversation is linked to its original session and checkpoint.": "This recovery conversation is linked to its original session and checkpoint.",
-  "Open original session": "Open original session"
+  "Open original session": "Open original session",
+  "Repository memory mutation is awaiting confirmation; earlier notes are withheld.": "Repository memory mutation is awaiting confirmation; earlier notes are withheld.",
+  "Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.": "Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.",
+  "Inherited legacy summary: its earlier coverage has not been revalidated.": "Inherited legacy summary: its earlier coverage has not been revalidated.",
+  "Legacy memory archive": "Legacy memory archive"
 }

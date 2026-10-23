@@ -3255,6 +3255,10 @@ const englishMessages = <String, String>{
   "Interrupted": "Interrupted",
   "This recovery conversation is linked to its original session and checkpoint.": "This recovery conversation is linked to its original session and checkpoint.",
   "Open original session": "Open original session",
+  "Repository memory mutation is awaiting confirmation; earlier notes are withheld.": "Repository memory mutation is awaiting confirmation; earlier notes are withheld.",
+  "Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.": "Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.",
+  "Inherited legacy summary: its earlier coverage has not been revalidated.": "Inherited legacy summary: its earlier coverage has not been revalidated.",
+  "Legacy memory archive": "Legacy memory archive",
 };
 const traditionalChineseMessages = <String, String>{
   "無法確認最新狀態，請重試": "無法確認最新狀態，請重試",
@@ -5999,4 +6003,8 @@ const traditionalChineseMessages = <String, String>{
   "Interrupted": "已中斷",
   "This recovery conversation is linked to its original session and checkpoint.": "此復原對話已連結至原始對話與檢查點。",
   "Open original session": "開啟原始對話",
+  "Repository memory mutation is awaiting confirmation; earlier notes are withheld.": "專案記憶變更正在等待確認；暫不顯示先前的記憶。",
+  "Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.": "對話交接摘要：{0} 份。先前的原始內容仍可搜尋。專案知識與個人記憶會在每回合開始時各自更新。",
+  "Inherited legacy summary: its earlier coverage has not been revalidated.": "繼承的舊版摘要：尚未重新驗證其涵蓋的先前內容。",
+  "Legacy memory archive": "舊版記憶封存",
 };

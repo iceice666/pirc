@@ -827,7 +827,38 @@ mod tests {
             b"agent edit\n"
         );
         assert!(f.node.checkpoints.as_ref().unwrap().enabled(&workspace.id));
-        assert!(!f.node.workspace_mode(&workspace).unwrap().workspace_memory);
+        let recovery_mode = f.node.workspace_mode(&workspace).unwrap();
+        assert!(!recovery_mode.workspace_memory);
+        let recovery_session = f
+            .node
+            .db
+            .lock()
+            .get_session(first["session"]["id"].as_str().unwrap())
+            .unwrap();
+        // The new host-authorized memory path must obey the recovery mode,
+        // even if an agent calls workspace RPCs directly instead of its tools.
+        let denied = crate::workspace_memory::scope(
+            &f.node,
+            &recovery_session.id,
+            &recovery_mode,
+            recovery_session.runner_epoch,
+            true,
+        )
+        .err()
+        .expect("recovery must not acquire repository memory authority");
+        assert_eq!(denied.code, "forbidden");
+        assert_eq!(denied.message, "This mode cannot access repository memory");
+        // Own-session history remains available to handoff compression/search.
+        let history = crate::workspace_memory::scope(
+            &f.node,
+            &recovery_session.id,
+            &recovery_mode,
+            recovery_session.runner_epoch,
+            false,
+        )
+        .unwrap();
+        assert_eq!(history.caller, recovery_session.id);
+        assert!(history.key.is_empty());
         assert!(
             f.node
                 .db

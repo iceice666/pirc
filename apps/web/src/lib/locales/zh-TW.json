@@ -1191,7 +1191,6 @@
   "Observational review": "觀察記錄審查",
   "Conflict · keep current": "衝突 · 保留目前內容",
   "Excluded · keep current": "已排除 · 保留目前內容",
-  "Unavailable": "無法使用",
   "Absent": "不存在",
   "Unknown reason": "原因不明",
   "Executable": "可執行",
@@ -1216,7 +1215,6 @@
   "Closed runs": "已結束的執行",
   "No closed checkpoint runs are available.": "目前沒有可用的已結束檢查點執行。",
   "{0} operations": "{0} 項操作",
-  "Pinned": "已釘選",
   "Run is still open": "執行尚未結束",
   "Coverage has gaps; some file changes may not be represented.": "涵蓋範圍有缺漏；部分檔案變更可能未被記錄。",
   "Run": "執行",
@@ -1257,5 +1255,9 @@
   "Continue in recovery workspace": "在復原工作區繼續",
   "This recovery is no longer available. Refresh checkpoints and choose it again.": "此復原資料已無法使用。請重新整理檢查點並重新選取。",
   "Only the first 100 operations are listed. This operation list is incomplete.": "目前僅列出前 100 項操作，清單並不完整。",
-  "Open recovery conversation": "開啟復原對話"
+  "Open recovery conversation": "開啟復原對話",
+  "Repository memory mutation is awaiting confirmation; earlier notes are withheld.": "專案記憶變更正在等待確認；暫不顯示先前的記憶。",
+  "Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.": "對話交接摘要：{0} 份。先前的原始內容仍可搜尋。專案知識與個人記憶會在每回合開始時各自更新。",
+  "Inherited legacy summary: its earlier coverage has not been revalidated.": "繼承的舊版摘要：尚未重新驗證其涵蓋的先前內容。",
+  "Legacy memory archive": "舊版記憶封存"
 }

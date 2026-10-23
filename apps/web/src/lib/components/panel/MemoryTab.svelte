@@ -95,6 +95,15 @@
 </script>
 
 <div class="tab-body">
+  {#if app.panel.value?.workspaceMemory?.pendingMutations}<p class="panel-error">
+      {tr('Repository memory mutation is awaiting confirmation; earlier notes are withheld.')}
+    </p>{/if}
+  {#each Object.entries(app.panel.value?.workspaceMemory?.errors ?? {}) as [phase, message]}<p
+      class="panel-error"
+    >
+      {phase}: {message}
+    </p>{/each}
+
   {#if app.panel.error && !app.panel.value}
     <p class="panel-error">{app.panel.error}</p>
   {:else if !app.panel.value}
@@ -104,14 +113,6 @@
   {:else if !memory.enabled}
     <p class="panel-empty">{tr('Observational memory is disabled in this workspace’s config.')}</p>
   {:else}
-    {#if app.panel.value?.workspaceMemory?.pendingMutations}<p class="panel-error">
-        Repository memory mutation is awaiting confirmation; earlier notes are withheld.
-      </p>{/if}
-    {#each Object.entries(app.panel.value?.workspaceMemory?.errors ?? {}) as [phase, message]}<p
-        class="panel-error"
-      >
-        {phase}: {message}
-      </p>{/each}
     <div class="memory-status">
       {#if runtime?.phase}
         <span class="chip working"
@@ -130,13 +131,15 @@
 
     {#if memory.architecture === 'handoff'}
       <p class="muted">
-        Session handoffs: {memory.handoff?.snapshots ?? 0}. Earlier source text remains searchable.
-        Repository knowledge and personal memory refresh independently at turn boundaries.
+        {tr(
+          'Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.',
+          [memory.handoff?.snapshots ?? 0],
+        )}
       </p>
       {#if memory.handoff?.legacyAncestry}<p class="muted">
-          Inherited legacy summary: its earlier coverage has not been revalidated.
+          {tr('Inherited legacy summary: its earlier coverage has not been revalidated.')}
         </p>{/if}
-      <div class="group-title">Legacy memory archive</div>
+      <div class="group-title">{tr('Legacy memory archive')}</div>
     {/if}
     <div class="stat-grid">
       <div><strong>{memory.counts.reflections}</strong><span>{tr('Reflections')}</span></div>

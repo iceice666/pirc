@@ -391,7 +391,16 @@ fn recap_request(start: &Value) -> Value {
 #[tokio::test(flavor = "multi_thread")]
 async fn node_link_side_runs() {
     let server = FakeGateway::bind().await;
-    let Some(node) = LoneNode::start(server.port()) else {
+    // This transcript checks run events, not the platform-specific warning
+    // about srt's shared /tmp. Keep its temp parent in the fixture's private
+    // /var/tmp root so macOS and Linux exercise the same warning-free layout.
+    let Some(node) = LoneNode::start_with(
+        server.port(),
+        NodeOptions {
+            env: vec![("TMPDIR", "{run_dir}".into())],
+            ..Default::default()
+        },
+    ) else {
         return;
     };
     let mut t = Transcript::new(node.volatile());

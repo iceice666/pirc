@@ -1191,7 +1191,6 @@
   "Observational review": "Observational review",
   "Conflict · keep current": "Conflict · keep current",
   "Excluded · keep current": "Excluded · keep current",
-  "Unavailable": "Unavailable",
   "Absent": "Absent",
   "Unknown reason": "Unknown reason",
   "Executable": "Executable",
@@ -1216,7 +1215,6 @@
   "Closed runs": "Closed runs",
   "No closed checkpoint runs are available.": "No closed checkpoint runs are available.",
   "{0} operations": "{0} operations",
-  "Pinned": "Pinned",
   "Run is still open": "Run is still open",
   "Coverage has gaps; some file changes may not be represented.": "Coverage has gaps; some file changes may not be represented.",
   "Run": "Run",
@@ -1257,5 +1255,9 @@
   "Continue in recovery workspace": "Continue in recovery workspace",
   "This recovery is no longer available. Refresh checkpoints and choose it again.": "This recovery is no longer available. Refresh checkpoints and choose it again.",
   "Only the first 100 operations are listed. This operation list is incomplete.": "Only the first 100 operations are listed. This operation list is incomplete.",
-  "Open recovery conversation": "Open recovery conversation"
+  "Open recovery conversation": "Open recovery conversation",
+  "Repository memory mutation is awaiting confirmation; earlier notes are withheld.": "Repository memory mutation is awaiting confirmation; earlier notes are withheld.",
+  "Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.": "Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.",
+  "Inherited legacy summary: its earlier coverage has not been revalidated.": "Inherited legacy summary: its earlier coverage has not been revalidated.",
+  "Legacy memory archive": "Legacy memory archive"
 }

@@ -211,10 +211,13 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
       child: Column(
         children: [
           for (final (index, item) in [
-            ('observation', tr("Next observation")),
-            ('reflection', tr("Next reflection")),
+            if (state.memory?['architecture'] != 'handoff') ...[
+              ('observation', tr("Next observation")),
+              ('reflection', tr("Next reflection")),
+            ],
             ('compaction', tr("Next compaction")),
-            ('activePool', tr("Active observation pool")),
+            if (state.memory?['architecture'] != 'handoff')
+              ('activePool', tr("Active observation pool")),
           ].indexed) ...[
             if (index > 0) const SizedBox(height: 8),
             meter(item.$2, obj(thresholds[item.$1])),
@@ -527,11 +530,27 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
         final panel = widget.controller.panelData, memory = state.memory;
         final now =
             (widget.clock?.call() ?? DateTime.now()).millisecondsSinceEpoch;
+        final workspaceMemory = obj(panel.value?['workspaceMemory']);
+        final workspaceErrors = obj(workspaceMemory['errors']);
         final lastErrors = obj(state.runtime['lastErrors']);
         final limited = rows(
           state.runtime['rateLimited'],
         ).where((r) => (r['until'] as num? ?? 0) > now);
         final children = <Widget>[
+          if ((workspaceMemory['pendingMutations'] as num? ?? 0) > 0)
+            errors([
+              Text(
+                tr(
+                  'Repository memory mutation is awaiting confirmation; earlier notes are withheld.',
+                ),
+              ),
+            ]),
+          if (workspaceErrors.isNotEmpty)
+            errors([
+              for (final error in workspaceErrors.entries)
+                Text('${error.key}: ${error.value}'),
+            ]),
+
           if (panel.error != null && panel.value == null)
             errors([Text(panel.error!)])
           else if (panel.value == null)
@@ -546,6 +565,21 @@ class _ObservationalMemoryPaneState extends State<ObservationalMemoryPane> {
             )
           else ...[
             status(),
+            if (memory['architecture'] == 'handoff') ...[
+              empty(
+                tr(
+                  'Session handoffs: {0}. Earlier source text remains searchable. Repository knowledge and personal memory refresh independently at turn boundaries.',
+                  [obj(memory['handoff'])['snapshots'] ?? 0],
+                ),
+              ),
+              if (obj(memory['handoff'])['legacyAncestry'] != null)
+                empty(
+                  tr(
+                    'Inherited legacy summary: its earlier coverage has not been revalidated.',
+                  ),
+                ),
+              group(tr('Legacy memory archive'), const SizedBox.shrink()),
+            ],
             stats(),
             meters(),
             if (lastErrors.isNotEmpty || limited.isNotEmpty)
