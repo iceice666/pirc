@@ -61,7 +61,7 @@ The desktop room is the design's three columns
   Members toggles, a 180×30 search field (`--code-bg`, client-side over the
   messages already loaded: words, a question's request and attachment names;
   Escape clears it) and a room menu holding the controls the comp drops —
-  sources, archive and "Continue in…". The connection state sits in the subtitle
+  sources and archive. The connection state sits in the subtitle
   while it is not connected.
 - **Log**: 40px avatars, 16px gap, 48px right inset, face names in their colour
   with a HOST/PROJECT badge, mention chips for plain-text messages
@@ -175,9 +175,9 @@ Below 650px the rooms are one column (`Rooms.svelte`'s media query,
 
 - A 56px header with a 44px menu button that opens the room list, the 20px
   hash, the room's name at 17px and a 44px mute button. The comp draws nothing
-  else; the room's threads, pins, search, sources, archive and "Continue in…"
-  moved into the room menu button so nothing became unreachable, and members
-  live in the bottom navigation (as the comp draws).
+  else; the room's threads, pins, search, sources and archive moved into the
+  room menu button so nothing became unreachable, and members live in the
+  bottom navigation (as the comp draws).
 - The log is bottom-aligned when it is short (`margin-top: auto` on its first
   row) and scrolls as usual when it is not, with 36px avatars, 12px gaps and
   10px between messages; the question card's answers stack full width at 44px

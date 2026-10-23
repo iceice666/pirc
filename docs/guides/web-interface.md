@@ -50,7 +50,7 @@ On a desktop the room has three columns.
 - **The room**, in the middle: its name and kind, the face that answers there,
   and—while it lasts—the connection state. Four buttons open **Threads**,
   **Pinned messages**, **mute** and the **members** column; the menu beside them
-  holds the room's sources, archiving and "Continue in…". The search box filters
+  holds the room's sources and archiving. The search box filters
   the messages already on screen; Escape clears it. A line at the top of the
   log marks today (or another day), and a red **New** line marks where unread
   messages began. A question from a worker is an amber card: answer Yes, No,

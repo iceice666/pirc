@@ -38,8 +38,6 @@ export const rooms = {
     'rooms.mute.off': 'Mute on this device',
     'rooms.action.archive': 'Archive',
     'rooms.action.unarchive': 'Unarchive',
-    'rooms.move.label': 'Continue in another room',
-    'rooms.move.placeholder': 'Continue in…',
 
     'rooms.log.label': 'Messages in #{room}',
     'rooms.log.empty': 'Nothing here yet. Say something.',
@@ -155,8 +153,6 @@ export const rooms = {
     'rooms.mute.off': '在這個裝置上靜音',
     'rooms.action.archive': '封存',
     'rooms.action.unarchive': '取消封存',
-    'rooms.move.label': '移到另一個 room 繼續',
-    'rooms.move.placeholder': '移到…',
 
     'rooms.log.label': '#{room} 的訊息',
     'rooms.log.empty': '這裡還沒有訊息。說點什麼吧。',

@@ -280,6 +280,12 @@ export class RoomsState {
     this.#merge(room);
   }
 
+  /**
+   * Move this room's loops to another room (POST /api/rooms/:id/move). The
+   * gateway still does this — the brain's `move_room` tool and the old room's
+   * "Continued in" line — but the web has no button for it since the person
+   * found "Continue in another room" useless, so nothing in the UI calls this.
+   */
   async moveTo(toRoomId: string) {
     await roomsApi.move(this.currentId, toRoomId);
     await this.open(toRoomId);

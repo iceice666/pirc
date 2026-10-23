@@ -184,34 +184,6 @@ class RoomsPageState extends State<RoomsPage> {
     if (showArchived) await rooms.loadArchived();
   }
 
-  Future<void> _continueIn() async {
-    final others = rooms.rooms
-        .where((room) => room['id'] != rooms.currentId)
-        .toList();
-    final target = await showModalBottomSheet<String>(
-      context: context,
-      useSafeArea: true,
-      builder: (context) => ListView(
-        shrinkWrap: true,
-        children: [
-          const ListTile(
-            title: Text(
-              'Continue in…',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-          for (final room in others)
-            ListTile(
-              leading: const Icon(LucideIcons.hash, size: 18),
-              title: Text('${room['name']}'),
-              onTap: () => Navigator.pop(context, '${room['id']}'),
-            ),
-        ],
-      ),
-    );
-    if (target != null) await rooms.moveTo(target);
-  }
-
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, size) {
@@ -617,21 +589,10 @@ class RoomsPageState extends State<RoomsPage> {
                   tooltip: 'Room actions',
                   icon: const Icon(LucideIcons.ellipsisVertical, size: 20),
                   onSelected: (action) {
-                    switch (action) {
-                      case 'move':
-                        unawaited(_continueIn());
-                      case 'archive':
-                        unawaited(
-                          rooms.setArchived(rooms.currentId, !archived),
-                        );
-                    }
+                    if (action != 'archive') return;
+                    unawaited(rooms.setArchived(rooms.currentId, !archived));
                   },
                   itemBuilder: (context) => [
-                    if (!archived && rooms.rooms.length > 1)
-                      const PopupMenuItem(
-                        value: 'move',
-                        child: Text('Continue in…'),
-                      ),
                     if (current != null && current['kind'] != 'general')
                       PopupMenuItem(
                         value: 'archive',

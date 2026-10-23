@@ -78,7 +78,6 @@
   let refused = $state(false);
   let newRoomName = $state('');
   let creating = $state(false);
-  let moveTarget = $state('');
   /** The room search: client-side, over the messages already loaded. */
   let search = $state('');
   /** Phone: the room list covers the room. */
@@ -342,7 +341,6 @@
     textarea?.focus();
     textarea?.setSelectionRange(done.caret, done.caret);
   }
-  const otherRooms = $derived(rooms.rooms.filter((room) => room.id !== rooms.currentId));
 
   /** The list's second line: how many faces there are, when it knows. */
   const faceCount = $derived(rooms.faces.filter((face) => !face.archivedAt).length);
@@ -559,13 +557,6 @@
     } catch (error) {
       rooms.error = error instanceof Error ? error.message : t('rooms.newRoom.couldNot');
     }
-  }
-
-  async function moveHere() {
-    if (!moveTarget) return;
-    const target = moveTarget;
-    moveTarget = '';
-    await rooms.moveTo(target);
   }
 
   async function unarchive() {
@@ -790,7 +781,7 @@
                   roomMenuOpen = false;
                 }}><Pin size={16} aria-hidden="true" />{t('rooms.header.pinned')}</button
               >
-              <label class="move">
+              <label class="menu-field">
                 <span class="section-label"
                   >{t('rooms.header.search', { room: current?.name ?? '' })}</span
                 >
@@ -819,21 +810,6 @@
                     >{t('rooms.action.unarchive')}</span
                   >{:else}<Archive size={16} /><span>{t('rooms.action.archive')}</span>{/if}</button
               >
-            {/if}
-            {#if current && !current.archivedAt && otherRooms.length}
-              <label class="move">
-                <span class="section-label">{t('rooms.move.label')}</span>
-                <select
-                  aria-label={t('rooms.move.label')}
-                  bind:value={moveTarget}
-                  onchange={moveHere}
-                >
-                  <option value="">{t('rooms.move.placeholder')}</option>
-                  {#each otherRooms as room (room.id)}
-                    <option value={room.id}>#{room.name}</option>
-                  {/each}
-                </select>
-              </label>
             {/if}
           </div>
         </details>
@@ -1492,7 +1468,7 @@
     width: 260px;
     padding: 8px;
   }
-  .move {
+  .menu-field {
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -1797,14 +1773,6 @@
   .read-only span {
     flex: 1;
     min-width: 0;
-  }
-  select {
-    padding: 6px 8px;
-    border: 1px solid var(--line-dark);
-    border-radius: var(--radius-sm);
-    background: var(--input);
-    color: var(--ink);
-    font: inherit;
   }
   /*
    * The phone (design screen 4): a 56px header with the room-list menu, the

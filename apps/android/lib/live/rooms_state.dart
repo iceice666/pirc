@@ -467,6 +467,9 @@ class RoomsController extends ChangeNotifier {
     'roomId': roomId,
     'patch': {'name': name},
   });
+  /// Moves this room's loops to another room. The gateway still does this (its
+  /// move_room tool leaves a "Continued in" row behind); no screen calls it
+  /// since "Continue in…" was removed from the room menu.
   Future<void> moveTo(String toRoomId, {String? topic}) =>
       _call('roomsMove', {'toRoomId': toRoomId, 'topic': ?topic});
   Future<void> pin(Json message, bool pinned) => _call('roomsPin', {

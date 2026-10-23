@@ -1301,6 +1301,16 @@ describe('rooms page', () => {
     expect(head.hasAttribute('open')).toBe(false);
   });
 
+  it('keeps no "Continue in another room" control in the room menu', async () => {
+    // The menu carried a move select until the person found it useless. The
+    // gateway still moves a room's loops (its move_room tool, "Continued in"
+    // rows); only the manual control is gone.
+    await show();
+    const head = target.querySelector<HTMLElement>('.head-menu')!;
+    expect(head.querySelector('select')).toBeNull();
+    expect(head.textContent).not.toContain('Continue in');
+  });
+
   it('takes files dropped on the composer, and highlights where they land', async () => {
     await show();
     const form = target.querySelector<HTMLFormElement>('.composer')!;
