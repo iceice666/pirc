@@ -690,3 +690,62 @@ interpreted rather than invented:
   the person's decision keeps creating and hiding faces where they were; they
   moved into the column's own header menu so the rows stay the design's, and
   nothing became unreachable.
+
+### What the thread, face and phone round built
+
+The rest of the design is now in the web client: the thread column
+(screen 2) at 420px, the face page (screen 3) at 360px, and the phone layout
+(screen 4). The nth-degree details are in
+[architecture/web-client.md](../architecture/web-client.md#the-workers-thread).
+
+Where the comps or the data left a gap, these were the calls made, rather than
+silently deviating:
+
+- **The thread's status and its Stop.** The comp's thread header has no status
+  (it lives on the card in the log) and no Stop (Stop sits on the room's line
+  about the worker). The header keeps a status line because the person asked
+  for "the thread header with its anchor message and status"; Stop stays on the
+  card in the room, still reachable a few pixels to the left, rather than a
+  second copy in the header that pushed the header past its 52px.
+- **A tool call's exit status.** The comp's chip ends in "exit 101" or a green
+  "running". A thread message carries a tool's name and its one-line summary
+  and nothing else (no output, no exit code), so the chip draws those two and
+  stops there.
+- **"Done · committed 4f2a9c1".** The worker's own state comes from the
+  gateway (`Worker.status`), but a teammate is not a worker record: its state
+  is drawn only when the data settles it (a pending question → waiting, a team
+  `result`/`error` → done/failed) and is otherwise the idle ring. No "committed
+  <sha>" line is invented.
+- **"from SlimeOS PM · slimeos on arch-desktop".** Workspaces and nodes are
+  engine state the rooms page may not load, so the line is the face and the
+  workspace, as in the room header.
+- **The reply box.** The comp always shows it; the gateway lets only whom the
+  worker works for add to its thread. It is always drawn, and for anyone else
+  it is disabled and names who it waits for, instead of promising a send that
+  would be refused.
+- **The face's 80px avatar** shows the name's first letter (the app's
+  `initialOf`), not the comp's two-letter initials.
+- **The host's page.** The comp omits SOUL.md, CHAT.md and the remembered
+  preferences; the person asked that nothing disappear, so they stay below the
+  profile's cards (and in the Edit view) rather than behind Edit alone.
+- **"Mention in room"** opens the room the face answers in — the first room of
+  its territory, else the open room — with `@name ` in the composer's draft,
+  and sends nothing.
+- **"See all in Engine"** points at the engine's brain section, because the
+  "Recently" card mixes workers and wakes and no single tab holds both.
+- **The phone's header.** The comp draws a menu button and mute only. The
+  room's threads, pins, search, sources, archive and "Continue in…" moved into
+  the menu button beside mute (a third control the comp does not draw) and
+  members moved to the bottom navigation, so nothing became unreachable.
+- **The phone's question card** stacks all three answers full width at 44px in
+  DOM order. The comp draws two side by side; "Allow again this session" was
+  kept on the phone (decision #12), and stacking keeps the tab order and the
+  drawn order the same instead of reordering the buttons in CSS.
+- **The phone's side panels** (members, a face, threads, pins, a thread) are
+  full-screen above the tabs, not sheets.
+- **A long log on a phone** is bottom-aligned with an auto top margin on its
+  first row rather than `justify-content: flex-end`, which would clip the top
+  of a log that overflows.
+- **Narrower desktops.** The thread's 420px is exact from 1100px up; below that
+  the column may give way to 300px so the log stays readable. The face page's
+  360px track applies only while a face is open; members stay at 248px.

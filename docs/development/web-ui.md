@@ -33,6 +33,14 @@ The desktop room is split by responsibility, so a change lands in one place:
   avatars, face badges, mention chips, the worker thread card, attachments.
 - `components/rooms/MembersPanel.svelte`, `ThreadsPanel.svelte`,
   `PinnedPanel.svelte` — the columns beside the room.
+- `components/rooms/ThreadPanel.svelte` — a worker's thread: header, worker
+  tree (`workerTree()` in `lib/workers.ts`), tool chips, reply box and its
+  loading/empty/error states.
+- `components/rooms/FacePanel.svelte` — a face's profile, the form behind
+  **Edit**, and the host's SOUL.md/CHAT.md and preferences.
+- `components/MobileTabs.svelte` and the `@media (max-width: 650px)` block at
+  the foot of `Rooms.svelte` — the phone: 56px header, bottom-aligned log,
+  pill composer, 64px tabs and full-screen side panels.
 - `lib/rooms.svelte.ts` — store state; `unreadMark` is the room's `readSeq`
   when it opened, which is what the log's "New" divider uses (opening a room
   marks it read at once).
@@ -40,7 +48,9 @@ The desktop room is split by responsibility, so a change lands in one place:
 Sizes and colours come from the tokens in `app.css`; the design's numbers are
 in [the review](../design/pirc-rooms-ui-review.md) (240px list, 52px headers,
 36px list rows, 44px member rows, 40px avatars, 16px gap, 48px right inset,
-72px line inset, 180×30 search, 240×135 images). New strings go into
+72px line inset, 180×30 search, 240×135 images, a 420px thread column, a 360px
+face panel with a 104px hero and an 80px avatar, and a phone with a 56px
+header, 36px avatars, a 48px pill composer and 64px tabs). New strings go into
 `messages/rooms.ts` in both languages. The room tests are the "rooms page"
 cases in `src/lib/rooms.svelte.test.ts`, which mount the real component against
 a fake `fetch` and a fake socket; add a case there for new behaviour.

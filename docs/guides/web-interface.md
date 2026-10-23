@@ -63,6 +63,32 @@ On a desktop the room has three columns.
 **Threads** lists a room's worker threads with their status and last word;
 **Pinned** lists what is pinned and jumps to it.
 
+Open a thread and it takes the right-hand column: the worker's title, where it
+came from and its status, the team under it (the worker, then its helpers
+indented, each with a dot and its last word), the messages with a tool call as
+a chip, a helper's reply marked "↳" its parent, and a reply box — "Jump in — the
+workers will see it" — for whoever the worker works for. The worker's card in
+the log is ringed while its thread is open; Escape closes it. Stop stays on the
+card in the room.
+
+A face's page is a profile: its colour across the top, its big avatar, name and
+badge, its bio, a strip when it is waiting for you, **Mention in room** and
+**Edit**, then what it does, what it looks after, the loops it holds and what it
+did lately. **Edit** opens the fields (name, bio, tone, avatar, colour, role,
+whose rooms and workspaces it covers, Save, Archive). "Mention in room" opens
+the room it answers in with `@name ` ready in the box, unsent. The host's page
+also keeps SOUL.md, CHAT.md and what pirc remembers about you.
+
+## On a phone
+
+The room is one column. The header has a menu button that opens the room list,
+the room's name, and mute; the room's threads, pins, search and other controls
+are in the menu button beside mute, and members are the second bottom tab. The
+log sits at the bottom of the screen when it is short, with smaller avatars; the
+composer is a rounded pill with a round send; the four tabs at the foot are a
+little taller, with the count on Rooms. Members, a face's page, threads, pins
+and an open thread fill the screen above those tabs.
+
 The composer takes files with the round **+**, by pasting a picture, or by
 dragging them onto it; up to three show as tiles and the rest as "+N". When a
 face asks you something, its bar sits on top of the composer and **Show** takes
