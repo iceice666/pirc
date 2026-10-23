@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, it } from 'vitest';
-import StatusGlyph, { glyphOf } from './StatusGlyph.svelte';
+import StatusGlyph, { glyphOf, type GlyphState } from './StatusGlyph.svelte';
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement | undefined;
@@ -13,7 +13,7 @@ afterEach(async () => {
   target = undefined;
 });
 
-function render(props: Record<string, unknown> = {}) {
+function render(props: { state: GlyphState; label?: string }) {
   target = document.createElement('div');
   document.body.append(target);
   component = mount(StatusGlyph, { target, props });
