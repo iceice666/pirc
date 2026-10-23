@@ -272,6 +272,11 @@ async fn native_recovery_preserves_dirty_git_and_continues_once_across_devices_a
     git(&source, &["add", "main.txt"]);
     fs::write(source.join("untracked.txt"), "user untracked\n").unwrap();
     let git_before = tree(&source.join(".git"));
+    // Capture user files before Linux creates its temporary deny-path mount
+    // points. A node restart legitimately removes those recorded placeholders;
+    // the user's own empty protected file must still survive unchanged.
+    fs::write(source.join(".bashrc"), b"").unwrap();
+    let mut expected_source = tree(&source);
     let id = create(&api, &web, WORKSPACE_ID).await;
     let generation = control(&api, &web, &id, "web").await;
     run_write(
@@ -428,7 +433,10 @@ async fn native_recovery_preserves_dirty_git_and_continues_once_across_devices_a
     let candidate = root(&cluster, &job);
     fs::write(candidate.join("main.txt"), "user later recovery edit\n").unwrap();
     fs::write(source.join("main.txt"), "user later original edit\n").unwrap();
-    let before_restarts = tree(&source);
+    expected_source.insert(
+        PathBuf::from("main.txt"),
+        b"user later original edit\n".to_vec(),
+    );
     let mut other = browser_headers();
     other.retain(|(k, _)| *k != "x-pirc-user");
     other.push(("x-pirc-user", "other@example.com".into()));
@@ -464,7 +472,7 @@ async fn native_recovery_preserves_dirty_git_and_continues_once_across_devices_a
     );
     assert_eq!(repeated["session"]["id"], next);
     assert_eq!(list(&api, &phone, &next).await["origin"]["sessionId"], id);
-    assert_eq!(tree(&source), before_restarts);
+    assert_eq!(tree(&source), expected_source);
     assert_eq!(
         fs::read(candidate.join("main.txt")).unwrap(),
         b"user later recovery edit\n"
@@ -502,7 +510,7 @@ async fn native_recovery_preserves_dirty_git_and_continues_once_across_devices_a
         fs::read(candidate.join("main.txt")).unwrap(),
         b"user later recovery edit\n"
     );
-    assert_eq!(tree(&source), before_restarts);
+    assert_eq!(tree(&source), expected_source);
     let panel = ok(
         api.send(
             "GET",
@@ -560,7 +568,7 @@ async fn native_recovery_preserves_dirty_git_and_continues_once_across_devices_a
         200,
     );
     assert_eq!(reopened["session"]["id"], next);
-    assert_eq!(tree(&source), before_restarts);
+    assert_eq!(tree(&source), expected_source);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

@@ -44,17 +44,17 @@ Product manifests are synchronized at 0.9.3, with Android build 77.
 
 ## Local verification
 
-| Area                                    | Result                                                                                                                                                                                        |
-| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rust workspace library/binary tests     | 1,110 passed; 3 existing subprocess helpers ignored by the ordinary runner                                                                                                                    |
-| Checkpoint file/recovery safety         | 74 passed                                                                                                                                                                                     |
-| macOS sandbox and same-account registry | 23 passed                                                                                                                                                                                     |
-| TLS distrust/control cases              | 3 passed                                                                                                                                                                                      |
-| Real-process API/Agent integration      | 59 distinct scenarios passed across 22 suites, including required native checkpoint execution                                                                                                 |
-| Web                                     | 412 passed in the full post-bump run; Svelte check and production build passed                                                                                                                |
-| Flutter                                 | Full run: 8,207 passed, one obsolete Calendar label failed; that test passed after correction. Final focused reruns and the new App approval regression passed (8,209 distinct tests covered) |
-| Android native JVM                      | 348 passed                                                                                                                                                                                    |
-| Static/build checks                     | All-target workspace Clippy with warnings denied, Flutter analysis, repository formatting, diff checks, synchronized version check and pinned model catalog check passed                      |
+| Area                                    | Result                                                                                                                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Rust workspace library/binary tests     | 1,110 passed; 3 existing subprocess helpers ignored by the ordinary runner                                                                                               |
+| Checkpoint file/recovery safety         | 74 passed                                                                                                                                                                |
+| macOS sandbox and same-account registry | 23 passed                                                                                                                                                                |
+| TLS distrust/control cases              | 3 passed                                                                                                                                                                 |
+| Real-process API/Agent integration      | 59 distinct scenarios passed across 22 suites, including required native checkpoint execution                                                                            |
+| Web                                     | 412 passed in the full post-bump run; Svelte check and production build passed                                                                                           |
+| Flutter                                 | 8,209 passed in the complete post-bump run                                                                                                                               |
+| Android native JVM                      | 348 passed                                                                                                                                                               |
+| Static/build checks                     | All-target workspace Clippy with warnings denied, Flutter analysis, repository formatting, diff checks, synchronized version check and pinned model catalog check passed |
 
 The production Web build still reports its existing large-bundle advisory;
 there is no build error. Disposable Rust targets, Android test/build intermediates
@@ -64,6 +64,12 @@ After the version bump, all 18 release/tooling script tests passed with pinned
 Bun 1.4.2. Version, catalog, browser-asset, formatting and diff checks passed.
 The updated cargoHash reproduced the previous baseline exactly before hashing
 the new lockfile; third-party package versions did not change.
+
+The first Linux CI run passed the sandbox security tests, Nix evaluation and
+hashes, and executable-size checks. Its checkpoint restart assertion compared
+user files with Linux's temporary deny-path mount points. The test now captures
+its expected source before sandbox startup, preserves an original empty protected
+file, and still compares the whole original tree after recovery/restart.
 
 ## Remaining release gates and known limits
 
