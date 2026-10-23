@@ -749,3 +749,66 @@ silently deviating:
 - **Narrower desktops.** The thread's 420px is exact from 1100px up; below that
   the column may give way to 300px so the log stays readable. The face page's
   360px track applies only while a face is open; members stay at 248px.
+
+### What the engine round built
+
+The last two screens are in: the engine's front page is one scrolling dashboard
+(screen 5) inside a 1040px column, and a session's page has the design's header,
+waiting band, pane tabs and two-column Git (screen 6). The contract is in
+[architecture/web-client.md](../architecture/web-client.md#the-engine-dashboard)
+and [its session page](../architecture/web-client.md#a-workers-session-page).
+
+Where the comps or the data left a gap, these were the calls made, rather than
+silently deviating:
+
+- **"Hands · 2 online."** There is no count of hands: the word is gone
+  everywhere (the person's copy decision), and the Hands heading is
+  "Nodes · N online" over the nodes that are actually connected. The card's
+  health is the node's own `load.running` (Busy / Free), not a new field.
+- **`[GPU MODEL]`, `connected 3 d ago`, "1 of 4", `[sha]`, "3.1k tokens".**
+  All are real fields on this side — `capabilities.gpus` (vendor, model,
+  count), `connectedAt`, `load.running`/`load.max`, `Commit.short` and
+  `usage.totalTokens` — so the comp's placeholders are filled with them. The
+  GPU chip drops the VRAM the card has no room for; the Nodes section keeps it.
+- **Worker initials.** The dashboard draws none (the comp's `w1`/`rv` are
+  labels, not avatars); no worker is named on it at all.
+- **Where the tabs go.** The seven tabs are anchors, Overview first, and each
+  lands on a full section _below_ the dashboard. That is what gives "All nodes",
+  "All turns" and "All loops" somewhere real to point (the per-node details, the
+  per-room table with its room selector, the loops editor with its close and
+  reopen actions); the cards above stay read-only apart from a wake's **Cancel**,
+  which is the one action the comp draws in a card. "Manage in Settings" opens
+  Settings → Models & sources, as the defaults table set out, and the face
+  page's "See all in Engine" still opens the brain section.
+- **Two loop lists, two wakes lists.** The dashboard's cards preview four loops
+  and two coming wakes; the sections hold the full lists and the editors. That
+  is the duplication anchors-over-one-page implies, and it keeps every control
+  that existed (close, reopen, cancel, recently closed) where it was.
+- **The waiting band's request.** A session's snapshot carries its run's state
+  (`waiting_input`), not the question's text, and the engine deliberately shows
+  no conversation; the gateway has no route that returns a pending
+  interaction's content. The band therefore says "Waiting for you in #room" and
+  links to the room, and does not print the comp's
+  `git push origin fix-lint`. For the same reason a session that is _not_ a
+  delegation has no band: no room is known for it, so the band is left out
+  rather than pointed at a guess.
+- **The rename pencil.** The client can rename a session (`engine.renameSession`,
+  already the sidebar's double-click and F2), so the topbar's pencil is real: it
+  turns the title into a field, Enter or leaving it commits, Escape does not.
+- **Read-only.** The comp's title says read-only and draws no banner; the
+  person's decision keeps the narrow viewer banner, so it stays where it was,
+  above the panes, and the waiting band sits above it as a full-width row.
+- **Git's "1 ahead · not pushed".** The gateway reports `ahead`/`behind` and
+  `upstream`; "not pushed" is the absence of an upstream, so the chip says
+  "1 ahead · not pushed" only then, and "N ahead"/"N behind" otherwise.
+- **Git's uncommitted changes.** The comp's left column shows a branch card and
+  history only. The uncommitted changes keep a home there (the staged and
+  unstaged groups the Changes view had), because their diffs are what a person
+  opens the pane for; the newest commit is selected on arrival so the right
+  column is never empty.
+- **The sidebar.** The Overview row takes the design's 36px shape and the footer
+  gains **Rooms** beside Settings. The rest of the sidebar (workspace rows with
+  their unread and running counts, the session filter, the "Needs you" rows)
+  stays as the earlier rounds built it: the comp's mono workspace labels,
+  "1 / 4" node load counts and "behind the rooms" header were not part of this
+  round's changes, and the rows still do more than the comp draws.

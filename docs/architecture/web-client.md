@@ -193,6 +193,83 @@ Below 650px the rooms are one column (`Rooms.svelte`'s media query,
   each with its own close button. The document stays exactly 390px wide at
   390×844.
 
+## The engine dashboard
+
+The engine's front page is the design's one scrolling dashboard
+(`src/lib/components/engine/EngineOverview.svelte`), in a column of at most
+1040px on the design's `--bg-room` surface. Above the dashboard the strip that
+used to swap panels is now **anchors**: Overview, Nodes, Brain, Open loops,
+Wakes, Memory and Sources are links to `#overview`, `#nodes`, … (and
+`?open=<id>`, which `engineOverview` reads on load and scrolls to). Overview is
+the dashboard itself; each other anchor lands on its full section below.
+
+- **Overview** is the design's stack. **Nodes** is a card per connected node
+  with its id in mono, `linux · x86_64 · connected 3 m ago`, the state word
+  (Busy / Free — `load.running`), a segmented load meter (`load.max`
+  segments, the running ones lit), capability chips (each GPU as
+  `GPU · 2× nvidia RTX 4090`, browse, terminals, `bwrap · ready`) and its
+  workspaces. **Brain** is the newest turns of every room in one table —
+  Started, Room, Why, Outcome, Took, Used — with the "one turn at a time, every
+  room" note; it asks each room for its latest four and merges them. The three
+  cards are Open loops (`N of limit in prompt`, the first four loops with their
+  anchor, room and the raw `user` / `tool:<source>` origin chip), Wakes
+  (today's count against the allowance with a progress bar, two coming wakes
+  with **Cancel**, two recent ones) and Sources (a row per source, the failing
+  one tinted red with its last error, the paused one muted).
+- **The sections** keep the full lists and the editors the anchors name:
+  Nodes is each machine's detail (machine, GPU with VRAM, what it can do, its
+  sandbox, load, workspaces), Brain is one room at a time with the room
+  selector, Open loops and Wakes are the editors (close, reopen, cancel,
+  recently closed), Memory is the preferences and facts view, and Sources is
+  the list with when each was read and who follows it.
+- **The "All …" links** go where the decision put them: `All nodes` →
+  `#nodes`, `All turns` → `#brain`, `All loops` → `#loops`, and
+  `Manage in Settings` opens Settings on **Models & sources**. The face page's
+  `See all in Engine` still opens `#brain`.
+- Data the comp draws that the client does not have: there is no "hands online"
+  count (the heading counts connected **nodes**), no worker initials anywhere in
+  the dashboard, and the comp's `[GPU MODEL]`, `[sha]` and illustrative
+  counts are the real `capabilities.gpus`, the real commit shas and the real
+  `usage.totalTokens` here. A card's own action (a wake's Cancel) bumps a
+  revision so the section below reloads with it.
+
+## A worker's session page
+
+The session page (`Engine.svelte` + `components/panel/`) is the design's
+screen 6:
+
+- **Topbar**, 10px 16px: the breadcrumb (workspace in mono, a slash, the
+  session's name), then the 17px title with a 28px rename pencil
+  (`engine.renameSession`, the same call the sidebar's F2 makes), the
+  orange **Worker · <title>** chip (its `--worker` tint is the comp's) linking
+  to the room it was called in, and the "Not sandboxed" chip when it applies.
+  On the right: Jobs, the Live/Offline/Reconnecting pill and Take control.
+- **Waiting band**, full width under the topbar, amber (`--warning-soft`):
+  "Waiting for you in #SlimeOS" and **Answer in the room**
+  (`components/engine/WaitingBand.svelte`). It appears only when the open
+  session's run is `waiting_input` **and** it was delegated into a room
+  (`origin.roomId`), whose name comes from `/api/rooms`; the request itself is
+  not in the engine's data (a session snapshot carries its run's state, not the
+  question's text), so the band stops at the room. The narrow viewer banner
+  stays above the panes beside it, as the decision asked.
+- **Pane tabs** are the design's: 15px icons, 13px labels and a 2px accent
+  underline on a full-width hairline (44px rows on touch, a dot for a busy tab).
+- **Git** is two columns (`GitTab.svelte`): the left holds the branch card
+  (`fix-lint` in mono, `1 ahead · not pushed` when there is no upstream and
+  `N ahead`/`N behind` when there is, then `N uncommitted` or the clean
+  line), the staged and unstaged changes and the history (sha, subject,
+  `author · 10m ago`, the `HEAD`/`origin/…` refs, **Load more**); the right
+  is the diff card — the newest commit by default, with its message, author,
+  date and refs above the hunk lines, `+2`/`−4` counted from the hunks, and a
+  changed file's own diff when one is selected. Refresh sits in the History
+  header, and a changed file's path still opens it in Files. The
+  Changes/History segmented control and its drill-down are gone; they offered
+  no staging or committing (the panel API has neither), so nothing became
+  unreachable.
+- The engine's shell has one definite grid row, so the main column's pages
+  scroll inside it (the dashboard's column, a session's panes) instead of
+  growing the shell, which clips.
+
 ## Messages
 
 `src/lib/i18n/` holds the two catalogues:

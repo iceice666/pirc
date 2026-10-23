@@ -79,6 +79,42 @@ whose rooms and workspaces it covers, Save, Archive). "Mention in room" opens
 the room it answers in with `@name ` ready in the box, unsent. The host's page
 also keeps SOUL.md, CHAT.md and what pirc remembers about you.
 
+## The engine
+
+Open **Engine** (the footer of the rooms sidebar, or `/engine`). Its front page is
+one page you scroll, not one section at a time.
+
+- At the top, everything the sections below hold, at a glance: a card per
+  connected node with its state (Busy or Free), how full it is, what it can do
+  and which workspaces live there; the newest brain turns of **every** room in
+  one table, with the room each happened in (only one turn runs at a time,
+  whichever room it came from); and three cards — **open loops** with how many
+  of the allowance are in the prompt, **wakes** with today's count, a progress
+  bar, what is coming (which you can cancel) and what just happened, and
+  **sources**, with a failing one tinted red and its last error.
+- The strip under the title — Overview, Nodes, Brain, Open loops, Wakes, Memory,
+  Sources — jumps to that part of the page, and the address keeps it
+  (`/engine?open=loops`), so a link from a face's page or a notification comes
+  back to the same place.
+- **All nodes**, **All turns** and **All loops** go to the full lists in the
+  sections below, where the nodes' details are, a room's turns can be picked and
+  a loop can be closed or opened again; **Manage in Settings** opens Settings on
+  Models & sources. Closing a loop and cancelling a wake happen in the sections,
+  so the cards stay quiet.
+
+A session's page is what runs one worker:
+
+- Its title says which worker it is (an amber **Worker · …** chip opens the room
+  it was called in), and the pencil beside the title renames it. If it is asking
+  you something in its room, an amber band under the title says which room and
+  takes you there to answer; if another device is driving it, the line about that
+  stays above the panes.
+- The panes (Files, Git, Memory, Context, Tasks, Terminal, Browser) show one at a
+  time. **Git** shows the branch and its history on the left, with what is
+  uncommitted and a way to load more, and the diff of the newest commit (or of a
+  file, or of any commit you pick) on the right, with the lines added and removed
+  counted above it.
+
 ## On a phone
 
 The room is one column. The header has a menu button that opens the room list,
