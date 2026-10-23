@@ -16,10 +16,12 @@ bool processOnly(Json m) =>
 bool toolsOnly(Json m) => processOnly(m) && rows(m['tools']).isNotEmpty;
 
 class TimelineItem {
-  const TimelineItem(this.messages);
+  const TimelineItem(this.messages, {this.run = false, this.anchor});
   final List<Json> messages;
-  bool get run => messages.length > 1;
-  String get id => '${run ? 'run:' : ''}${messages.first['id']}';
+  final bool run;
+  final String? anchor;
+  String get id =>
+      run ? 'run:${anchor ?? messages.first['id']}' : '${messages.first['id']}';
   List<Json> get tools => messages.expand((m) => rows(m['tools'])).toList();
 }
 
@@ -38,39 +40,71 @@ bool toolHasPendingInteraction(Json tool, List<Json> interactions) =>
       tool['operations'],
     ).any((operation) => toolHasPendingInteraction(operation, interactions));
 
-bool timelineHasTool(List<Json> messages, dynamic toolCallId) {
-  if (toolCallId is! String || toolCallId.isEmpty) return false;
-  bool contains(Json tool) =>
-      tool['id'] == toolCallId || rows(tool['operations']).any(contains);
-  return messages.any((message) => rows(message['tools']).any(contains));
-}
-
-List<Json> timelineInteractionsNotEmbedded(
-  List<Json> messages,
-  List<Json> interactions,
-) => interactions
-    .where(
-      (interaction) => !timelineHasTool(messages, interaction['toolCallId']),
-    )
-    .toList();
-
 List<TimelineItem> timelineItems(List<Json> messages) {
   final result = <TimelineItem>[], run = <Json>[];
+  String? anchor;
   void flush() {
-    if (run.isNotEmpty) result.add(TimelineItem(List.of(run)));
+    if (run.isNotEmpty) {
+      result.add(TimelineItem(List.of(run), run: true, anchor: anchor));
+    }
     run.clear();
   }
 
   for (final m in messages) {
-    if (toolsOnly(m)) {
-      run.add(m);
-    } else {
+    if (m['role'] == 'user' ||
+        m['systemKind'] == 'bash' ||
+        m['systemKind'] == 'branch') {
       flush();
       result.add(TimelineItem([m]));
+      anchor = value(m, 'id');
+    } else {
+      run.add(m);
     }
   }
   flush();
   return result;
+}
+
+({List<Json> activity, List<Json> visible}) responseParts(List<Json> messages) {
+  final activity = <Json>[], visible = <Json>[];
+  for (final m in messages) {
+    if (m['role'] == 'assistant') {
+      final tools = rows(m['tools']).isNotEmpty;
+      if (value(m, 'thinking').isNotEmpty ||
+          m['thinkingRedacted'] == true ||
+          tools) {
+        activity.add({
+          ...m,
+          'content': tools ? m['content'] : '',
+          'images': <Json>[],
+          'stopReason': null,
+          'errorMessage': null,
+          'error': null,
+        });
+      }
+      if ((!tools &&
+              (value(m, 'content').isNotEmpty ||
+                  (partial(m) &&
+                      value(m, 'thinking').isEmpty &&
+                      m['thinkingRedacted'] != true))) ||
+          rows(m['images']).isNotEmpty ||
+          value(m, 'stopReason').isNotEmpty ||
+          messageError(m).isNotEmpty) {
+        visible.add({
+          ...m,
+          'thinking': null,
+          'thinkingRedacted': false,
+          'tools': <Json>[],
+          'content': tools ? '' : m['content'],
+        });
+      }
+    } else if (m['level'] == 'warning' || m['level'] == 'error') {
+      visible.add(m);
+    } else {
+      activity.add(m);
+    }
+  }
+  return (activity: activity, visible: visible);
 }
 
 DateTime? instant(dynamic v) => v is num

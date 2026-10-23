@@ -40,16 +40,36 @@ also exercises the platform verifier; on macOS and Windows it exercises WebPKI
 rather than the native OS trust service. This test does not validate the
 deployed host's CA updates or any external command-line tool's trust store.
 
-## Unreleased: calendar, gateway schema 1006
+## Unreleased: memory, calendar and checkpoints
 
-The calendar adds user-owned events, recurrence exceptions, independent agent
-grants, confirmation proposals and reminder delivery attempts. The Gateway
-automatically migrates schemas 1000–1005 to 1006; existing schedules and runs
-remain intact. New run records distinguish manual and automatic origins, while
-legacy origins remain unknown. Back up the Gateway database before upgrading:
-older Gateways refuse schema 1006. Node schemas/protocol are unchanged. See
-[Calendar](../guides/calendar.md) for behavior and limits. This local change has
-not been published as a release.
+Upgrade the Gateway and every chat/coding Node together: **node protocol 14**
+adds private checkpoint workspace registration. Mixed protocol versions are
+refused. Back up both Gateway and Node state directories before upgrading;
+these migrations are not reversible by installing an older binary.
+
+The Gateway migrates to **schema 1008**: 1006 records memory digests, 1007 adds
+calendar events, grants, proposals and reminders, and 1008 adds private recovery
+workspace ownership. Earlier local preview databases that used 1006 for calendar
+or 1007 for checkpoints are recognized and brought to the same schema without
+removing schedules, events or recovery ownership. Nodes migrate to **schema 2002**
+for checkpoint workspace/session adoption. Older binaries refuse the new schemas.
+
+Repository memory now has a versioned journal separate from session handoffs.
+Legacy records remain readable; existing ledgers stay read-only until explicit
+cold activation with all older writers stopped. Deploying these binaries does
+not activate memory automatically. Review [memory activation](../architecture/observational-memory.md)
+and the panel's activation status before synchronizing. Isolated recovery
+sessions do not inherit the source workspace's memory or enable its writers.
+
+The calendar adds user-owned events, recurrence exceptions, independent Agent
+grants, confirmation proposals and reminder delivery attempts. Existing schedules
+and runs remain intact; legacy run origins remain unknown. See
+[Calendar](../guides/calendar.md) for behavior and limits. Checkpoint recovery
+creates a separate workspace and requires review before continuing; it does not
+restore files into the original directory or undo external side effects.
+
+These changes have not yet been published as a release. The TLS rebuild/restart
+and host trust-store instructions above still apply.
 
 ## 0.9.0 / 0.9.1: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 

@@ -73,6 +73,7 @@ fn conversation(request: &Value) -> Value {
 /// The node's agent process: the one started with `--mode rpc
 /// --session-dir <node-state>/sessions/…`. One session per test runs an
 /// agent, so it is that session's.
+#[cfg(not(target_os = "macos"))]
 fn agent_pid(root: &Path) -> Option<i32> {
     let sessions = root.join("node-state/sessions");
     let sessions = sessions.to_str().unwrap();
@@ -92,6 +93,31 @@ fn agent_pid(root: &Path) -> Option<i32> {
             .any(|pair| pair[0] == "--session-dir" && pair[1].starts_with(sessions));
         if named && args.iter().any(|arg| arg == "rpc") {
             return Some(pid);
+        }
+    }
+    None
+}
+
+// macOS has no /proc. Only match this fixture's private session path and
+// the RPC agent arguments; never terminate an unrelated user process.
+#[cfg(target_os = "macos")]
+fn agent_pid(root: &Path) -> Option<i32> {
+    let sessions = root.join("node-state/sessions");
+    let output = std::process::Command::new("/bin/ps")
+        .args(["-axo", "pid=,command="])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let args: Vec<_> = line.split_whitespace().collect();
+        if args
+            .windows(2)
+            .any(|pair| pair[0] == "--session-dir" && Path::new(pair[1]).starts_with(&sessions))
+            && args.windows(2).any(|pair| pair == ["--mode", "rpc"])
+        {
+            return args.first()?.parse().ok();
         }
     }
     None

@@ -27,7 +27,6 @@ import 'conversation_timeline.dart';
 import 'delegations_strip.dart';
 import 'conversation_jump_latest.dart';
 import 'conversation_earlier_messages.dart';
-import 'timeline_models.dart';
 import 'side_panel.dart';
 import 'document_navigation_state.dart';
 import 'document_navigation.dart';
@@ -1699,11 +1698,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
                                           highlightedMessage:
                                               highlightedMessage,
                                         ),
-                                        for (final q
-                                            in timelineInteractionsNotEmbedded(
-                                              c.visibleMessages,
-                                              c.questions,
-                                            ))
+                                        for (final q in c.questions)
                                           QuestionSheet(
                                             key: ValueKey(
                                               '${c.sessionId}:${q['id']}:${q['epoch']}',

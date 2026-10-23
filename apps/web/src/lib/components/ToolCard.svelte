@@ -1,7 +1,6 @@
 <script lang="ts">
   import { tr } from '../i18n.svelte';
 
-  import { untrack } from 'svelte';
   import {
     BookOpen,
     Check,
@@ -36,7 +35,6 @@
 
   let { tool, nested = false }: Props = $props();
   let open = $state(false);
-  let userToggled = $state(false);
 
   /** Primary argument shown next to the tool name, like a terminal prompt. */
   function describe(name: string, input: Record<string, any>): string {
@@ -94,17 +92,11 @@
   }
 
   function toggle() {
-    userToggled = true;
     open = !open;
   }
 
   // Highlighting only runs for an expanded card, and re-runs once the lazily
   // loaded highlighter arrives (`$rendererTick`).
-  // Failures open by default so errors are never hidden behind a click.
-  $effect.pre(() => {
-    const failed = tool.status === 'failed';
-    if (!untrack(() => userToggled)) open = failed;
-  });
   let args = $derived(
     (tool.input && typeof tool.input === 'object' ? tool.input : {}) as Record<string, any>,
   );
@@ -250,7 +242,7 @@
       {/if}
     </div>
   {/if}
-  {#if tool.recording && recordingSession}
+  {#if open && tool.recording && recordingSession}
     <!-- A browser recording (browser_record), always visible so it can be reviewed. -->
     <div class="tool-recording">
       <!-- svelte-ignore a11y_media_has_caption -->
@@ -261,7 +253,7 @@
       ></video>
     </div>
   {/if}
-  {#if tool.operations?.length}
+  {#if open && tool.operations?.length}
     <!-- What the script ran, each a call of its own. -->
     <div class="tool-operations" role="list" aria-label={tr('Operations')}>
       {#each tool.operations as operation (operation.id)}<div role="listitem">

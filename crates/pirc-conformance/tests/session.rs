@@ -6,7 +6,9 @@
 //! agent's own event stream (widgets, panels, deltas) is recorded separately
 //! in `session_agent_events`, the parity target of the agent port.
 
-use pirc_conformance::{Cluster, Normalizer, Reply, Transcript, WORKSPACE_ID, browser_headers};
+use pirc_conformance::{
+    Cluster, GatewayOptions, Normalizer, Reply, Transcript, WORKSPACE_ID, browser_headers,
+};
 use std::collections::BTreeSet;
 
 use serde_json::{Value, json};
@@ -21,7 +23,12 @@ fn cursor(watermark: &Value) -> String {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn session_lifecycle() {
-    let Some(cluster) = Cluster::start().await else {
+    let Some(cluster) = Cluster::start_with(GatewayOptions {
+        node_env: vec![("TMPDIR", "{run_dir}".into())],
+        ..Default::default()
+    })
+    .await
+    else {
         return;
     };
     let api = cluster.api();

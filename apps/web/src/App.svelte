@@ -29,7 +29,7 @@
   import JobsMenu from './lib/components/JobsMenu.svelte';
   import Message from './lib/components/Message.svelte';
   import MobileTabs from './lib/components/MobileTabs.svelte';
-  import RunCard from './lib/components/RunCard.svelte';
+  import Response from './lib/components/Response.svelte';
   import SchedulesPage from './lib/components/SchedulesPage.svelte';
   import WorkspacePage from './lib/components/WorkspacePage.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
@@ -205,7 +205,7 @@
       ? sessionState.messages.slice(Math.min(app.hiddenMessages, sessionState.messages.length))
       : [],
   );
-  /** Consecutive tool-only turns fold into one run card. */
+  /** One disclosure per response; answers and pending interactions remain visible. */
   let visibleItems = $derived(timelineItems(visibleMessages));
 
   async function showEarlier() {
@@ -641,12 +641,7 @@
               {/if}
               {#each visibleItems as item (item.kind === 'run' ? item.id : item.message.id)}
                 {#if item.kind === 'run'}
-                  <RunCard tools={item.messages.flatMap((message) => message.tools ?? [])}>
-                    {#each item.messages as message (message.id)}<Message
-                        {message}
-                        grouped
-                      />{/each}
-                  </RunCard>
+                  <Response messages={item.messages} />
                 {:else}<Message
                     message={item.message}
                     branchDisabled={!app.canChangeBranch}

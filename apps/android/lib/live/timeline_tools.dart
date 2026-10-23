@@ -95,7 +95,7 @@ class _TimelineRunState extends State<TimelineRun> {
   Widget build(BuildContext context) {
     AppI18n.watch(context);
     final summary = RunSummary(widget.tools), p = palette(context);
-    if (!toggled) open = summary.status == 'failed' || widget.forceOpen;
+    if (!toggled) open = widget.forceOpen;
     if (widget.forceOpen) {
       open = true;
       toggled = true;
@@ -325,8 +325,14 @@ class _TimelineRunState extends State<TimelineRun> {
 }
 
 class TimelineTool extends StatefulWidget {
-  const TimelineTool({super.key, required this.tool, required this.controller});
+  const TimelineTool({
+    super.key,
+    required this.tool,
+    required this.controller,
+    this.embedInteractions = true,
+  });
   final Json tool;
+  final bool embedInteractions;
   final LiveController controller;
   @override
   State<TimelineTool> createState() => _TimelineToolState();
@@ -406,11 +412,13 @@ class _TimelineToolState extends State<TimelineTool> {
         p = palette(context),
         c = widget.controller;
     final operations = rows(t['operations']);
-    final question = pendingInteractionForTool(t, c.questions);
-    final waitingForReview = toolHasPendingInteraction(t, c.questions);
-    final hasDiff = value(t, 'diff').isNotEmpty;
+    final question = widget.embedInteractions
+        ? pendingInteractionForTool(t, c.questions)
+        : null;
+    final waitingForReview =
+        widget.embedInteractions && toolHasPendingInteraction(t, c.questions);
     if (!toggled) {
-      open = t['status'] == 'failed' || waitingForReview || hasDiff;
+      open = waitingForReview;
     }
     if (waitingForReview) {
       open = true;
@@ -471,6 +479,7 @@ class _TimelineToolState extends State<TimelineTool> {
                         key: ValueKey(operation['id']),
                         tool: operation,
                         controller: c,
+                        embedInteractions: widget.embedInteractions,
                       ),
                     ],
                   ],

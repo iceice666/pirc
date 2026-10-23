@@ -2,7 +2,6 @@
   import { tr } from '../i18n.svelte';
 
   import type { Snippet } from 'svelte';
-  import { untrack } from 'svelte';
   import { Check, ChevronRight, CircleAlert, LoaderCircle, Lock } from '@lucide/svelte';
   import type { ToolCall } from '../types';
   import { effectiveTools, summarizeRun, writeBlock } from '../work';
@@ -42,12 +41,6 @@
   );
 
   let open = $state(false);
-  let userToggled = $state(false);
-  // Like a tool card: a failure opens it so errors are never hidden behind a click.
-  $effect.pre(() => {
-    const failed = summary.status === 'failed';
-    if (!untrack(() => userToggled)) open = failed;
-  });
 </script>
 
 <div class="run-card" class:failed={summary.status === 'failed'} class:open>
@@ -56,7 +49,6 @@
     type="button"
     aria-expanded={open}
     onclick={() => {
-      userToggled = true;
       open = !open;
     }}
   >

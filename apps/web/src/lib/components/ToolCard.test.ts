@@ -54,15 +54,17 @@ describe('ToolCard', () => {
     expect(target.querySelector('.tool-diff')).toBeNull();
   });
 
-  it('opens a failed call by default so the error is visible', () => {
-    const { summary } = render({
+  it('keeps failed output collapsed until requested', () => {
+    const { summary, toggle } = render({
       id: 't2',
       name: 'bash',
       status: 'failed',
       input: { command: 'false' },
       output: 'exit code 1',
     });
-    expect(summary.getAttribute('aria-expanded')).toBe('true');
+    expect(summary.getAttribute('aria-expanded')).toBe('false');
+    expect(target.textContent).not.toContain('exit code 1');
+    toggle();
     expect(target.textContent).toContain('exit code 1');
   });
 
@@ -103,18 +105,16 @@ describe('ToolCard', () => {
     expect(summary.textContent).toContain('Script');
     expect(summary.textContent).toContain('read ×2, edit');
     expect(summary.textContent).not.toContain('tools.read');
+    expect(target.querySelector('.tool-operations')).toBeNull();
+    toggle();
     const operations = [...target.querySelectorAll('.tool-operations .tool-card')];
     expect(operations.map((card) => card.getAttribute('data-tool'))).toEqual([
       'read',
       'read',
       'edit',
     ]);
-    // The failed operation opens by itself; the script does not.
-    expect(target.textContent).toContain('oldText not found');
-    expect(target.querySelector('.tool-content pre code')?.textContent ?? '').not.toContain(
-      'tools.read',
-    );
-    toggle();
+    // Nested failures also remain collapsed.
+    expect(target.textContent).not.toContain('oldText not found');
     expect(target.textContent).toContain('Script');
     expect(target.textContent).toContain('tools.read({ path: "a.ts" })');
     expect(target.textContent).toContain('Result');
@@ -129,7 +129,7 @@ describe('ToolCard', () => {
     );
     app.sessionState = fromSnapshot(snapshotFromRaw(fixture.snapshot, null));
     const script = app.sessionState.messages.find((message) => message.tools?.length)!.tools![0]!;
-    render(script);
+    render(script).toggle();
     const cards = [...target.querySelectorAll('.tool-operations .tool-card')];
     expect(cards.map((card) => card.getAttribute('data-tool'))).toEqual(['read', 'edit']);
     expect(cards[0]!.querySelector('.tool-waiting')).toBeNull();

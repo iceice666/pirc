@@ -111,7 +111,7 @@ void main() {
     );
   });
   testWidgets(
-    'failures auto-expand until the user chooses, including an incoming failure',
+    'incoming failures keep both activity and tool output collapsed',
     (t) async {
       final g = FakeGateway(), c = LiveController(g);
       c.state = {
@@ -149,6 +149,13 @@ void main() {
       };
       c.changed();
       await t.pumpAndSettle();
+      expect(find.text('Command'), findsNothing);
+      expect(find.textContaining('1 failed'), findsOneWidget);
+      await t.tap(find.textContaining('Completed 1 operations'));
+      await t.pumpAndSettle();
+      expect(find.text('Command'), findsNothing);
+      await t.tap(find.text('bash'));
+      await t.pumpAndSettle();
       expect(find.text('Command'), findsOneWidget);
       expect(find.text('Error'), findsOneWidget);
       await t.tap(find.text('bash'));
@@ -163,7 +170,7 @@ void main() {
     },
   );
   testWidgets(
-    'tool grouping opens, thought follows streaming, copy preserves source',
+    'activity and thoughts open only on request, copy preserves source',
     (t) async {
       t.view.devicePixelRatio = 1;
       t.view.physicalSize = const Size(390, 1400);
@@ -188,9 +195,9 @@ void main() {
       );
       await t.pumpWidget(shell(c));
       await t.pumpAndSettle();
-      expect(find.byType(TimelineRun), findsOneWidget);
+      expect(find.byType(ResponseActivity), findsOneWidget);
       expect(find.text('read'), findsNothing);
-      await t.tap(find.text('Ran commands'));
+      await t.tap(find.textContaining('Completed '));
       await t.pumpAndSettle();
       expect(find.text('read'), findsOneWidget);
       await t.tap(find.text('Thought'));
@@ -214,14 +221,20 @@ void main() {
         ],
       };
       c.changed();
-      await t.pumpAndSettle();
+      await t.pump(const Duration(milliseconds: 350));
       expect(find.text('Thinking…'), findsOneWidget);
       expect(
         find.textContaining('Keep reasoning visible', findRichText: true),
-        findsOneWidget,
+        findsNothing,
       );
       await t.tap(find.text('Thinking…'));
-      await t.pumpAndSettle();
+      await t.pump(const Duration(milliseconds: 350));
+      expect(
+        find.textContaining('Keep reasoning visible', findRichText: true),
+        findsNothing,
+      );
+      await t.tap(find.text('Thinking…').last);
+      await t.pump(const Duration(milliseconds: 350));
       expect(
         find.textContaining('Keep reasoning visible', findRichText: true),
         findsOneWidget,
@@ -329,7 +342,7 @@ void main() {
       expect(t.takeException(), isNull);
       final summaryToggle = find
           .ancestor(
-            of: find.text('Ran commands'),
+            of: find.textContaining('Completed '),
             matching: find.byType(InkWell),
           )
           .first;

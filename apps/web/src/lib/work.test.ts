@@ -112,7 +112,7 @@ describe('run cards', () => {
     ...extra,
   });
 
-  it('groups two or more consecutive tool-only turns', () => {
+  it('groups a response including its tools and answer', () => {
     const items = timelineItems([
       turn('a'),
       turn('b'),
@@ -122,7 +122,7 @@ describe('run cards', () => {
     ]);
     expect(
       items.map((item) => (item.kind === 'run' ? item.messages.map((m) => m.id) : item.message.id)),
-    ).toEqual([['a', 'b'], 'text', 'c', 'd']);
+    ).toEqual([['a', 'b', 'text', 'c', 'd']]);
   });
 
   it('summarizes status, duration and file names', () => {

@@ -270,6 +270,11 @@ pub async fn held_cluster(
     options
         .env
         .push(("PIRC_MODELS_FILE", models.display().to_string()));
+    // These transcripts exercise commands, not the platform-specific warning
+    // about srt's shared /tmp. Keep test temporary files inside the fixture.
+    if !options.node_env.iter().any(|(name, _)| *name == "TMPDIR") {
+        options.node_env.push(("TMPDIR", "{run_dir}".into()));
+    }
     Cluster::start_with(options).await
 }
 

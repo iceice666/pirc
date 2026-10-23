@@ -12,7 +12,7 @@ remote publication is not.
 ## Implementation record (2026-10-21)
 
 - [x] Approved month/week/day Web and native App design.
-- [x] Gateway schema 1006, owner-scoped CRUD, bounded/paginated projection,
+- [x] Gateway calendar migration 1007 (renumbered after memory integration; current schema 1008), owner-scoped CRUD, bounded/paginated projection,
       daily/weekly/monthly/yearly recurrence, exceptions and atomic series splits.
 - [x] Revision conflicts, idempotent creation, actual/forecast run identity,
       independent default-deny calendar grants and human-confirmed agent proposals.

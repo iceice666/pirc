@@ -153,37 +153,13 @@
         },
         {
           "kind": "run",
-          "id": "run:a1",
+          "id": "run:u",
           "messages": [
             "a1",
-            "a2"
-          ]
-        },
-        {
-          "kind": "message",
-          "id": "a3",
-          "messages": [
-            "a3"
-          ]
-        },
-        {
-          "kind": "message",
-          "id": "n",
-          "messages": [
-            "n"
-          ]
-        },
-        {
-          "kind": "message",
-          "id": "a4",
-          "messages": [
-            "a4"
-          ]
-        },
-        {
-          "kind": "message",
-          "id": "a5",
-          "messages": [
+            "a2",
+            "a3",
+            "n",
+            "a4",
             "a5"
           ]
         }
@@ -341,23 +317,11 @@
       ],
       "items": [
         {
-          "kind": "message",
-          "id": "a",
+          "kind": "run",
+          "id": "run:a",
           "messages": [
-            "a"
-          ]
-        },
-        {
-          "kind": "message",
-          "id": "n",
-          "messages": [
-            "n"
-          ]
-        },
-        {
-          "kind": "message",
-          "id": "b",
-          "messages": [
+            "a",
+            "n",
             "b"
           ]
         }
@@ -426,16 +390,10 @@
       ],
       "items": [
         {
-          "kind": "message",
-          "id": "a",
+          "kind": "run",
+          "id": "run:a",
           "messages": [
-            "a"
-          ]
-        },
-        {
-          "kind": "message",
-          "id": "b",
-          "messages": [
+            "a",
             "b"
           ]
         }
@@ -508,16 +466,10 @@
       ],
       "items": [
         {
-          "kind": "message",
-          "id": "a",
+          "kind": "run",
+          "id": "run:a",
           "messages": [
-            "a"
-          ]
-        },
-        {
-          "kind": "message",
-          "id": "b",
-          "messages": [
+            "a",
             "b"
           ]
         }

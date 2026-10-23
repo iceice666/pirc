@@ -80,11 +80,9 @@
                 : Info
             : Puzzle,
   );
-  // Short system entries read fine inline; long summaries/outputs collapse.
+  // Execution details stay collapsed until explicitly requested.
   let runtimeEvent = $derived(kind === 'team' || kind === 'background');
-  let collapsible = $derived(
-    kind === 'compaction' || kind === 'branch' || kind === 'bash' || runtimeEvent,
-  );
+  let collapsible = $derived(kind !== 'notice');
   // Notices read like a tool row: "Source: detail" splits into name + summary,
   // and only the first line shows until expanded.
   let noticeFirstLine = $derived(message.content.split('\n', 1)[0]!.trim());
@@ -95,7 +93,7 @@
     kind === 'notice' && (message.content.trim().includes('\n') || noticeFirstLine.length > 80),
   );
   let streamingThinking = $derived(!!message.isPartial && !message.content && !!message.thinking);
-  let thinkingVisible = $derived(thinkingOpen || streamingThinking);
+  let thinkingVisible = $derived(thinkingOpen);
   // Tool/thinking-only assistant turns stack tightly, like one process log.
   let processOnly = $derived(
     message.role === 'assistant' &&
@@ -160,18 +158,20 @@
       <button
         class="system-line"
         type="button"
-        disabled={!collapsible || (!message.content && !message.tools?.length)}
+        disabled={!collapsible ||
+          (!message.content && !message.tools?.length && !message.images?.length)}
         aria-expanded={collapsible ? systemOpen : undefined}
         onclick={() => (systemOpen = !systemOpen)}
       >
         <span class="system-icon" aria-hidden="true"><SystemIcon size={14} /></span>
         <span class="system-title">
-          {#if kind === 'bash'}<code>$ {message.label}</code>{:else}<strong>{message.label}</strong
+          {#if kind === 'bash'}<code>$ {message.label}</code>{:else}<strong
+              >{message.label || tr('System message')}</strong
             >{/if}
           {#if message.meta}<span>{message.meta}</span>{/if}
         </span>
         <time datetime={message.createdAt}>{time(message.createdAt)}</time>
-        {#if collapsible && message.content}<ChevronRight
+        {#if collapsible && (message.content || message.tools?.length || message.images?.length)}<ChevronRight
             class={systemOpen ? 'rotated' : ''}
             size={14}
             aria-hidden="true"
@@ -185,7 +185,7 @@
             />{/if}
         </div>
       {/if}
-      {#if message.images?.length}
+      {#if systemOpen && message.images?.length}
         <div class="message-images">
           {#each message.images as image, index (`${index}:${image.url}`)}<img
               src={image.url}
@@ -194,7 +194,7 @@
             />{/each}
         </div>
       {/if}
-      {#if message.tools?.length}
+      {#if systemOpen && message.tools?.length}
         <div class="tool-stack">
           {#each message.tools as tool (tool.id)}<ToolCard {tool} />{/each}
         </div>

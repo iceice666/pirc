@@ -119,27 +119,88 @@ export const toolsOnly = (message: ConversationMessage) =>
 
 export type TimelineItem =
   | { kind: 'message'; message: ConversationMessage }
-  /** Consecutive tool-only assistant turns, shown as one run card. */
+  /** One assistant response, with execution details disclosed separately. */
   | { kind: 'run'; id: string; messages: ConversationMessage[] };
 
-/** Group consecutive tool-only turns (two or more) into run cards. */
+/** One response group per user turn; notices never split an ongoing response. */
 export function timelineItems(messages: ConversationMessage[]): TimelineItem[] {
   const items: TimelineItem[] = [];
   let run: ConversationMessage[] = [];
+  let anchor = '';
   const flush = () => {
-    if (run.length > 1) items.push({ kind: 'run', id: `run:${run[0]!.id}`, messages: run });
-    else if (run.length) items.push({ kind: 'message', message: run[0]! });
+    if (run.length) items.push({ kind: 'run', id: `run:${anchor || run[0]!.id}`, messages: run });
     run = [];
   };
   for (const message of messages) {
-    if (toolsOnly(message)) run.push(message);
-    else {
+    if (
+      message.role === 'user' ||
+      message.systemKind === 'bash' ||
+      message.systemKind === 'branch'
+    ) {
       flush();
       items.push({ kind: 'message', message });
-    }
+      anchor = message.id;
+    } else run.push(message);
   }
   flush();
   return items;
+}
+
+/** Keep answers and alerts visible; put only execution details in the disclosure. */
+export function responseParts(messages: ConversationMessage[]) {
+  const activity: ConversationMessage[] = [];
+  const visible: ConversationMessage[] = [];
+  for (const m of messages) {
+    if (m.role === 'assistant') {
+      if (m.thinking || m.thinkingRedacted || m.tools?.length)
+        activity.push({
+          ...m,
+          content: m.tools?.length ? m.content : '',
+          images: [],
+          stopReason: undefined,
+          errorMessage: undefined,
+        });
+      if (
+        (!m.tools?.length && (m.content || (m.isPartial && !m.thinking && !m.thinkingRedacted))) ||
+        m.images?.length ||
+        m.stopReason ||
+        m.errorMessage
+      )
+        visible.push({
+          ...m,
+          thinking: undefined,
+          thinkingRedacted: false,
+          tools: [],
+          content: m.tools?.length ? '' : m.content,
+        });
+    } else if (m.level === 'warning' || m.level === 'error') visible.push(m);
+    else activity.push(m);
+  }
+  return { activity, visible };
+}
+
+/** Latest active operation, including nested scripts; never print raw arguments. */
+export function responseSummary(messages: ConversationMessage[]) {
+  const tools = messages.flatMap((m) => m.tools ?? []);
+  const calls = effectiveTools(tools);
+  const running = [...calls].reverse().find((t) => t.status === 'running');
+  const failed = calls.filter((t) => t.status === 'failed');
+  const latest = running ?? calls[calls.length - 1];
+  const thinking = messages.some(
+    (m) => m.isPartial && !m.content && !!(m.thinking || m.thinkingRedacted),
+  );
+  return {
+    count: calls.length,
+    failed: Math.max(failed.length, tools.some((t) => t.status === 'failed') ? 1 : 0),
+    latest,
+    status:
+      running || tools.some((t) => t.status === 'running') || thinking
+        ? 'running'
+        : failed.length || tools.some((t) => t.status === 'failed')
+          ? 'failed'
+          : 'succeeded',
+    thinking: thinking && !running,
+  };
 }
 
 export interface RunSummary {
@@ -159,7 +220,11 @@ const FILE_TOOLS = new Set(['read', 'edit', 'write']);
  */
 export function effectiveTools(tools: ToolCall[]): ToolCall[] {
   const calls = tools.flatMap((tool) =>
-    tool.name === 'ptc_docs' ? [] : tool.operations?.length ? tool.operations : [tool],
+    tool.name === 'ptc_docs'
+      ? []
+      : tool.operations?.length
+        ? effectiveTools(tool.operations)
+        : [tool],
   );
   return calls.length ? calls : tools;
 }

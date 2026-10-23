@@ -28,27 +28,12 @@ class ConversationTimeline extends StatelessWidget {
       children: [
         for (final (index, item) in items.indexed)
           if (item.run)
-            TimelineRun(
+            ResponseActivity(
               key: ValueKey(item.id),
-              tools: item.tools,
-              forceOpen: item.tools.any(
-                (tool) => toolHasPendingInteraction(tool, controller.questions),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  for (final (i, m) in item.messages.indexed)
-                    TimelineMessage(
-                      key: ValueKey(m['id']),
-                      message: m,
-                      controller: controller,
-                      onFile: onFile,
-                      grouped: true,
-                      lastProcess: i == item.messages.length - 1,
-                      highlighted: highlightedMessage == m['id'],
-                    ),
-                ],
-              ),
+              messages: item.messages,
+              controller: controller,
+              onFile: onFile,
+              highlightedMessage: highlightedMessage,
             )
           else
             TimelineMessage(
@@ -69,6 +54,141 @@ class ConversationTimeline extends StatelessWidget {
   }
 }
 
+/// One disclosure for a response. Pending approvals live outside the history.
+class ResponseActivity extends StatefulWidget {
+  const ResponseActivity({
+    super.key,
+    required this.messages,
+    required this.controller,
+    this.onFile,
+    this.highlightedMessage,
+  });
+  final List<Json> messages;
+  final LiveController controller;
+  final void Function(String)? onFile;
+  final String? highlightedMessage;
+  @override
+  State<ResponseActivity> createState() => _ResponseActivityState();
+}
+
+class _ResponseActivityState extends State<ResponseActivity> {
+  bool open = false;
+  @override
+  Widget build(BuildContext context) {
+    AppI18n.watch(context);
+    final parts = responseParts(widget.messages);
+    final tools = widget.messages.expand((m) => rows(m['tools'])).toList();
+    final calls = effectiveTools(tools);
+    final running = calls.reversed
+        .where((t) => t['status'] == 'running')
+        .firstOrNull;
+    final failed = math.max(
+      calls.where((t) => t['status'] == 'failed').length,
+      tools.any((t) => t['status'] == 'failed') ? 1 : 0,
+    );
+    final latest = running ?? calls.lastOrNull;
+    final thinking = widget.messages.any(
+      (m) =>
+          partial(m) &&
+          value(m, 'content').isEmpty &&
+          (value(m, 'thinking').isNotEmpty || m['thinkingRedacted'] == true),
+    );
+    final status =
+        running != null ||
+            tools.any((t) => t['status'] == 'running') ||
+            thinking
+        ? 'running'
+        : failed > 0
+        ? 'failed'
+        : 'succeeded';
+    final label = thinking && running == null
+        ? tr('Thinking…')
+        : status == 'running'
+        ? tr('Running: {0}', [latest?['name'] ?? tr('Working…')])
+        : calls.isNotEmpty
+        ? tr('Completed {0} operations', [calls.length])
+        : tr('Activity details');
+    Widget message(Json m, {bool activity = false}) => TimelineMessage(
+      key: ValueKey(m['id']),
+      message: m,
+      controller: widget.controller,
+      grouped: activity,
+      embedInteractions: false,
+      onFile: widget.onFile,
+      highlighted: widget.highlightedMessage == m['id'],
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (parts.activity.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(top: 4, bottom: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Semantics(
+                  expanded: open,
+                  child: InkWell(
+                    onTap: () => setState(() => open = !open),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      constraints: const BoxConstraints(minHeight: 36),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: palette(context)['web.bg-subtle'],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            open
+                                ? LucideIcons.chevronDown
+                                : LucideIcons.chevronRight,
+                            size: 14,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '$label${failed > 0 ? ' · ${tr('{0} failed', [failed])}' : ''}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: webText(
+                                context,
+                                size: 13,
+                                color: 'text.secondary',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          TimelineStatus(status),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                if (open)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, top: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final m in parts.activity)
+                          message(m, activity: true),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        for (final m in parts.visible) message(m),
+      ],
+    );
+  }
+}
+
 class TimelineMessage extends StatefulWidget {
   const TimelineMessage({
     super.key,
@@ -76,13 +196,14 @@ class TimelineMessage extends StatefulWidget {
     required this.controller,
     this.onFile,
     this.grouped = false,
+    this.embedInteractions = true,
     this.lastProcess = true,
     this.highlighted = false,
   });
   final Json message;
   final LiveController controller;
   final void Function(String)? onFile;
-  final bool grouped, lastProcess, highlighted;
+  final bool grouped, lastProcess, highlighted, embedInteractions;
   @override
   State<TimelineMessage> createState() => _TimelineMessageState();
 }
@@ -231,6 +352,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
             key: ValueKey(t['id']),
             tool: t,
             controller: widget.controller,
+            embedInteractions: widget.embedInteractions,
           ),
         ],
       ],
@@ -273,7 +395,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
         process = processOnly(m),
         tools = rows(m['tools']);
     final streamingThinking = isPartial && text.isEmpty && thinking.isNotEmpty;
-    final thinkingVisible = thinkingOpen || streamingThinking;
+    final thinkingVisible = thinkingOpen;
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: user
@@ -638,24 +760,23 @@ class _TimelineMessageState extends State<TimelineMessage> {
         runtime = kind == 'team' || kind == 'background',
         text = value(m, 'content'),
         tools = rows(m['tools']);
-    final collapsible = [
-      'compaction',
-      'branch',
-      'bash',
-      'team',
-      'background',
-    ].contains(kind);
+    final collapsible = !notice;
     final first = text.split('\n').first.trim(),
         parts = RegExp(
           r'^([^:]{1,40}):\s+(.+)$',
         ).firstMatch(text.split('\n').first.trim());
     final expandable = notice
         ? text.trim().contains('\n') || first.length > 80
-        : collapsible && (text.isNotEmpty || tools.isNotEmpty);
+        : collapsible &&
+              (text.isNotEmpty ||
+                  tools.isNotEmpty ||
+                  rows(m['images']).isNotEmpty);
     final name = notice
         ? (parts == null ? first : parts[1]!)
         : kind == 'bash'
         ? '\$ ${value(m, 'label')}'
+        : value(m, 'label').isEmpty
+        ? tr('System message')
         : value(m, 'label');
     final detail = notice ? (parts == null ? '' : parts[2]!) : value(m, 'meta');
     final color = notice && m['level'] == 'error'
@@ -791,7 +912,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
                   )
                 : markdown(text, compact: true),
           ),
-        if (!notice && rows(m['images']).isNotEmpty)
+        if (!notice && systemOpen && rows(m['images']).isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: TimelineImages(
@@ -799,7 +920,7 @@ class _TimelineMessageState extends State<TimelineMessage> {
               gateway: widget.controller.gateway,
             ),
           ),
-        if (!notice && tools.isNotEmpty) toolStack(tools, top: 4),
+        if (!notice && systemOpen && tools.isNotEmpty) toolStack(tools, top: 4),
       ],
     );
     return Padding(

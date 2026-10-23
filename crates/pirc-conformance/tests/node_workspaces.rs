@@ -157,7 +157,10 @@ async fn node_workspaces() {
     // The node's state inside its HOME (relative to the node's working
     // directory, the run directory), so a workspace can clash with it.
     let Some(cluster) = Cluster::start_with(GatewayOptions {
-        node_env: vec![("PIRC_STATE_DIR", "node-home/srv/state".to_owned())],
+        node_env: vec![
+            ("PIRC_STATE_DIR", "node-home/srv/state".to_owned()),
+            ("TMPDIR", "{run_dir}".into()),
+        ],
         ..Default::default()
     })
     .await

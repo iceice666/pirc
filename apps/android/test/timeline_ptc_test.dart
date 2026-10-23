@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/live/conversation_timeline.dart';
 import 'package:pirc_mobile/live/gateway.dart';
 import 'package:pirc_mobile/live/interaction_card.dart';
+import 'package:pirc_mobile/live/interaction.dart';
 import 'package:pirc_mobile/live/timeline_tools.dart';
 import 'package:pirc_mobile/live/timeline_models.dart';
 import 'live_test.dart' show FakeGateway, theme;
@@ -68,7 +69,17 @@ Widget shell(LiveController controller) => MaterialApp(
       listenable: controller,
       builder: (_, _) => SingleChildScrollView(
         padding: const EdgeInsets.all(14),
-        child: ConversationTimeline(controller: controller),
+        child: Column(
+          children: [
+            ConversationTimeline(controller: controller),
+            for (final q in controller.questions)
+              QuestionSheet(
+                controller: controller,
+                question: q,
+                embedded: true,
+              ),
+          ],
+        ),
       ),
     ),
   ),
@@ -87,31 +98,6 @@ void main() {
         ..control = {'held': true}
         ..state = stateFor(snapshot);
 
-      expect(timelineHasTool(controller.visibleMessages, 'p1x:op2'), isTrue);
-      expect(
-        timelineHasTool(controller.visibleMessages, 'unknown-ptc'),
-        isFalse,
-      );
-      expect(timelineHasTool([], 'p1x:op2'), isFalse);
-      final linkedQuestion = controller.questions.single;
-      expect(
-        timelineInteractionsNotEmbedded(
-          controller.visibleMessages,
-          controller.questions,
-        ),
-        isEmpty,
-      );
-      controller.hiddenMessages = controller.messages.length;
-      expect(
-        timelineInteractionsNotEmbedded(
-          controller.visibleMessages,
-          controller.questions,
-        ),
-        [linkedQuestion],
-        reason:
-            'A question stays visible if history truncation hides its tool.',
-      );
-      controller.hiddenMessages = 0;
       final snapshotTool = rows(
         rows(
           snapshot['messages'],
@@ -128,19 +114,37 @@ void main() {
       // Running tools have continuous loaders; wait for entry transitions
       // while retaining the live animation and every content/hit-test check.
       await tester.pump(const Duration(milliseconds: 350));
+      expect(find.text('ptc'), findsNothing);
+      expect(find.text('Allow edit?'), findsOneWidget);
+      await tester.tap(
+        find
+            .descendant(
+              of: find.byType(ResponseActivity).first,
+              matching: find.byType(InkWell),
+            )
+            .first,
+      );
+      await tester.pump(const Duration(milliseconds: 350));
       expect(find.text('ptc'), findsOneWidget);
+      expect(find.text('read'), findsNothing);
+      await tester.tap(find.text('ptc'));
+      await tester.pump(const Duration(milliseconds: 350));
       expect(find.text('read'), findsOneWidget);
       expect(find.text('edit'), findsOneWidget);
       // The fixture still carries this pending review after the tool events.
       expect(find.text('Allow edit?'), findsOneWidget);
       expect(find.text('Your input is needed'), findsOneWidget);
       expect(find.byTooltip('Running'), findsAtLeastNWidgets(1));
-      // The operation with no known PTC parent remains a normal visible tool.
+      // An orphan result keeps its own disclosure inside the activity.
+      expect(find.text('ls'), findsNothing);
+      await tester.tap(find.text('ls result'));
+      await tester.pump(const Duration(milliseconds: 350));
       expect(find.text('ls'), findsOneWidget);
 
-      await tester.tap(find.text('ptc'));
-      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.byType(NativeInteractionCard), findsOneWidget);
       expect(find.text('Allow edit?'), findsOneWidget);
+      await tester.tap(find.text('edit'));
+      await tester.pump(const Duration(milliseconds: 350));
 
       await tester.tap(find.text('read'));
       await tester.pump(const Duration(milliseconds: 350));
@@ -162,6 +166,10 @@ void main() {
       expect(find.text('Allow edit?'), findsOneWidget);
       expect(find.text('Edited a.ts (1 replacement)'), findsOneWidget);
       expect(find.text('Diff'), findsOneWidget);
+      expect(find.text('1 fail\n[exit 1]'), findsNothing);
+      await tester.ensureVisible(find.text('bash'));
+      await tester.tap(find.text('bash'));
+      await tester.pumpAndSettle();
       expect(find.text('1 fail\n[exit 1]'), findsOneWidget);
       expect(find.byTooltip('Failed'), findsAtLeastNWidgets(1));
       expect(find.text('ls'), findsOneWidget);
@@ -253,15 +261,11 @@ void main() {
             widget is TimelineTool && widget.tool['id'] == askOperationId,
       );
       final submit = find.widgetWithText(TextButton, 'Submit');
-      expect(parentTool, findsOneWidget);
-      expect(askTool, findsOneWidget);
+      expect(parentTool, findsNothing);
+      expect(askTool, findsNothing);
       expect(find.byType(NativeInteractionCard), findsOneWidget);
       expect(submit, findsOneWidget);
-      expect(
-        tester.getSize(parentTool).height,
-        greaterThan(420),
-        reason: 'The long PTC source must exceed the old nested tool viewport.',
-      );
+      expect(find.text(longCode), findsNothing);
       expect(tester.widget<TextButton>(submit).onPressed, isNotNull);
 
       await tester.ensureVisible(submit);

@@ -202,7 +202,7 @@ void main() {
   );
 
   testWidgets(
-    'Android Back closes phone navigation and restores the retained Schedules page',
+    'Android Back closes phone navigation and restores the retained Calendar page',
     (tester) async {
       _setPhone(tester);
       final (gateway, _) = await _showPhone(tester);
@@ -211,7 +211,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: find.byType(MobileTabs),
-          matching: find.text('Schedules'),
+          matching: find.text('Calendar'),
         ),
       );
       await tester.pumpAndSettle();

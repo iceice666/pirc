@@ -4,10 +4,26 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+### Added
+
+- Web and Android calendars with month/week/day views, ordinary events, reminders and confirmed Agent proposals.
+- Agent checkpoints and reviewed recovery into an isolated workspace, with Web/Android previews and continuation; the original workspace is never overwritten.
+
+### Changed
+
+- Session handoffs and repository memory use separate, provenance-checked journals. Existing repository memory requires explicit activation after stopping older writers.
+- Web and Android show one collapsed activity row per response; thoughts, scripts and tool results expand on request. Answers, confirmations and failure summaries stay visible.
+
 ### Fixed
+
+- Avoid memory activation deadlocks between concurrent agents and support large repository histories without exhausting the shared parse cache. Memory panels report activation state explicitly.
 
 - Update Rust TLS verification dependencies for distrusted emSign certificate paths (RUSTSEC-2026-0382 and RUSTSEC-2026-0383); rebuild and restart the gateway and all chat/coding nodes.
 - Android native HTML documents handle modal dialogs, backdrop dismissal, authored dialog positions and partial document roots; scripted focus reveals off-screen controls again.
+
+### Upgrade notes
+
+- Upgrade Gateway and all Nodes together (node protocol 14); back up state before Gateway schema 1008 and Node schema 2002 migrations. See [upgrades](docs/deploy/upgrades.md).
 
 ## [0.9.2] - 2026-10-20
 
