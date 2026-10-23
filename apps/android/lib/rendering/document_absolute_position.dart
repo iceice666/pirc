@@ -71,11 +71,13 @@ class NativeAbsolutePositionSpec {
     this.lengths,
     this.direction,
     this.fixedUsesViewport,
+    this.topLayer,
   );
   final Map<String, String> styles;
   final Map<String, NativeAbsoluteLength?> lengths;
   final TextDirection direction;
   final bool fixedUsesViewport;
+  final bool topLayer;
   static NativeAbsolutePositionSpec? parse(
     Map<String, String> styles, {
     required double fontSize,
@@ -150,7 +152,8 @@ class NativeAbsolutePositionSpec {
       }
       lengths[name] = length;
     }
-    if (!allowStaticPosition &&
+    if (!topLayer &&
+        !allowStaticPosition &&
         ((lengths['left'] == null && lengths['right'] == null) ||
             (lengths['top'] == null && lengths['bottom'] == null))) {
       return null;
@@ -177,6 +180,7 @@ class NativeAbsolutePositionSpec {
       lengths,
       direction,
       fixedUsesViewport,
+      topLayer,
     );
   }
 
@@ -249,7 +253,10 @@ class NativeAbsolutePositionSpec {
   bool staticAxis(String axis) =>
       lengths[axis == 'width' ? 'left' : 'top'] == null &&
       lengths[axis == 'width' ? 'right' : 'bottom'] == null;
-  bool get needsStaticPosition => staticAxis('width') || staticAxis('height');
+  // Top-layer boxes use the containing block origin as their static position,
+  // independent of where their DOM parent participates in ordinary flow.
+  bool get needsStaticPosition =>
+      !topLayer && (staticAxis('width') || staticAxis('height'));
 
   double offset(
     String axis,

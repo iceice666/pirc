@@ -25,9 +25,14 @@ are available from Git through Historical records, not repeated here.
       tested button-only case. Common author `position` overrides (`relative`,
       `static !important`, `sticky`, offset absolute/fixed) and positioned or
       transformed DOM parents now use the Chromium 153 top-layer containing
-      block in 16 phone/tablet geometry and computed-style cases. Check author
-      `inset:auto` and other untested positioning combinations, and backdrop
-      pointer/hover behavior beyond the tested gestures. Two stacked modals now
+      block in 16 phone/tablet geometry and computed-style cases. Author `inset:auto` now uses the top-layer containing-block origin instead
+      of an ordinary DOM flow marker, including positioned parents and zero
+      margins. Six added phone/tablet Chromium 153 cases failed on the previous
+      code (up to 68 CSS px horizontal offset); all 22 author-position cases
+      now check native geometry and actual button activation. The 211 targeted
+      dialog/absolute/fixed regressions and changed-file analysis passed locally. Other untested
+      positioning combinations and backdrop
+      pointer/hover behavior beyond the tested gestures remain unverified. Two stacked modals now
       paint both backdrops and ignore authored negative z-index for top-layer
       order. The phone/light gate keeps pointer and keyboard input in the upper
       dialog, rejects scripted focus on lower/background controls, exposes only
@@ -174,8 +179,8 @@ restoration still require physical acceptance.
 
 ## Deferred presentation and compatibility boundaries
 
-The local App branch is integrated with origin/main `1451e202` (0.9.1, node
-protocol 13). Its gateway-owned modes and delegation approvals are included;
+The local App branch includes published 0.9.3 (`aca6eeb6`, node protocol 14).
+Its gateway-owned modes, delegation approvals, calendar and checkpoints are included;
 those new features still need the real-account/device acceptance listed above.
 The frozen visual corpus is web revision `bd3d909`. Small visual differences,
 uncommon syntax and the legacy audit's fine-grained layout/style findings remain

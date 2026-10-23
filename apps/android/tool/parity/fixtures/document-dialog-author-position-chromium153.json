@@ -74,6 +74,76 @@
       }
     },
     {
+      "name": "auto-insets",
+      "dialogStyle": "inset:auto",
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "result": {
+        "position": "fixed",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "300.422px",
+          "bottom": "737px"
+        }
+      }
+    },
+    {
+      "name": "auto-insets-no-margins",
+      "dialogStyle": "inset:auto;margin:0",
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "result": {
+        "position": "fixed",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "300.422px",
+          "bottom": "737px"
+        }
+      }
+    },
+    {
+      "name": "auto-insets-in-positioned-parent",
+      "parentStyle": "position:relative;top:100px;left:60px",
+      "dialogStyle": "inset:auto",
+      "viewport": {
+        "width": 390,
+        "height": 796
+      },
+      "result": {
+        "position": "fixed",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "300.422px",
+          "bottom": "737px"
+        }
+      }
+    },
+    {
       "name": "static-important-centered",
       "dialogStyle": "position:static!important",
       "viewport": {
@@ -258,6 +328,76 @@
           "left": "0px",
           "right": "0px",
           "bottom": "0px"
+        }
+      }
+    },
+    {
+      "name": "auto-insets",
+      "dialogStyle": "inset:auto",
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "result": {
+        "position": "fixed",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "678.422px",
+          "bottom": "917px"
+        }
+      }
+    },
+    {
+      "name": "auto-insets-no-margins",
+      "dialogStyle": "inset:auto;margin:0",
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "result": {
+        "position": "fixed",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "678.422px",
+          "bottom": "917px"
+        }
+      }
+    },
+    {
+      "name": "auto-insets-in-positioned-parent",
+      "parentStyle": "position:relative;top:100px;left:60px",
+      "dialogStyle": "inset:auto",
+      "viewport": {
+        "width": 768,
+        "height": 976
+      },
+      "result": {
+        "position": "fixed",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 89.578125,
+          "height": 59
+        },
+        "inset": {
+          "top": "0px",
+          "left": "0px",
+          "right": "678.422px",
+          "bottom": "917px"
         }
       }
     },

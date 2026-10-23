@@ -9,6 +9,7 @@ import 'package:pirc_mobile/live/document_navigation.dart';
 import 'package:pirc_mobile/live/document_navigation_state.dart';
 import 'package:pirc_mobile/live/document_scripts.dart';
 import 'package:pirc_mobile/rendering/html_document_box.dart';
+import 'package:pirc_mobile/rendering/html_buttons.dart';
 import 'package:pirc_mobile/rendering/html_form_submission.dart';
 
 import 'document_navigation_widget_test.dart' show response;
@@ -45,7 +46,7 @@ void main() {
     ) async {
       final body =
           '''<meta name="viewport" content="width=device-width,initial-scale=1">
-<div style="${row['parentStyle'] ?? ''}"><dialog id="dialog" style="${row['dialogStyle']}"><button>Inside</button></dialog></div>
+<div style="${row['parentStyle'] ?? ''}"><dialog id="dialog" style="${row['dialogStyle']}"><button onclick="window.insideClicks=(window.insideClicks||0)+1">Inside</button></dialog></div>
 <script>document.getElementById('dialog').showModal()</script>''';
       final html = row['rootless'] == true
           ? '<!doctype html>$body'
@@ -135,6 +136,23 @@ void main() {
           rect.height,
           closeTo((expected['height'] as num).toDouble(), 2),
           reason: row['name'] as String,
+        );
+        await t.tap(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is NativeHtmlButtonWidget &&
+                widget.button.label == 'Inside',
+          ),
+        );
+        await driveDocumentVm(
+          t,
+          () => !doc.scripts!.hasPendingPublication,
+          reason: 'modal button dispatch ${row['name']}',
+        );
+        expect(
+          await t.runAsync(() => gateway.inspect('window.insideClicks')),
+          1,
+          reason: 'native hit target follows dialog geometry ${row['name']}',
         );
       } finally {
         await t.pumpWidget(const SizedBox.shrink());
