@@ -40,7 +40,7 @@ also exercises the platform verifier; on macOS and Windows it exercises WebPKI
 rather than the native OS trust service. This test does not validate the
 deployed host's CA updates or any external command-line tool's trust store.
 
-## Unreleased: memory, calendar and checkpoints
+## 0.9.3: memory, calendar and checkpoints
 
 Upgrade the Gateway and every chat/coding Node together: **node protocol 14**
 adds private checkpoint workspace registration. Mixed protocol versions are
@@ -68,8 +68,8 @@ and runs remain intact; legacy run origins remain unknown. See
 creates a separate workspace and requires review before continuing; it does not
 restore files into the original directory or undo external side effects.
 
-These changes have not yet been published as a release. The TLS rebuild/restart
-and host trust-store instructions above still apply.
+The TLS rebuild/restart and host trust-store instructions above also apply to
+0.9.3.
 
 ## 0.9.0 / 0.9.1: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
