@@ -664,3 +664,29 @@ switchable from the Settings header). The room list, message anatomy, thread, fa
 phone layout and engine dashboard keep their present structure; they are the next
 phases, in that order of risk: room desktop layout, thread, face page, phone, engine
 dashboard.
+
+### What the rooms layout round built
+
+The desktop room screen is now the design's three columns (240px list, the room,
+248px beside it): the list with its gateway line and red unread counts, the
+header with Threads/Pinned/Mute/Members and the 180×30 client-side search, the
+message anatomy (40px avatars, face badges, mention chips, thread card,
+attachment cards, day and "New" dividers), the amber question card, the waiting
+strip fused to the composer, the filled composer with three tiles and "+N", and
+members grouped by what they are doing. Threads and Pinned open columns of their
+own. The contract is in
+[architecture/web-client.md](../architecture/web-client.md#the-rooms-screen).
+
+Three comp details could not be reproduced from the app's data, so they were
+interpreted rather than invented:
+
+- **Worker initials on a thread card.** A room anchor carries how many workers
+  spoke (`WorkerAnchor.workers`), not their names; the card shows that count in
+  the 20px circle instead of `w1`/`rv`/`w2`.
+- **"slimeos on arch-desktop" in the room header.** Workspaces and nodes are
+  engine state and the rooms page may not load them (`lib/boundaries.test.ts`);
+  the subtitle shows only the room's kind and its face.
+- **Add/hide controls in the members column.** Change 11 would remove them, but
+  the person's decision keeps creating and hiding faces where they were; they
+  moved into the column's own header menu so the rows stay the design's, and
+  nothing became unreachable.

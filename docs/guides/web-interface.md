@@ -38,3 +38,33 @@ amber tint.
 Fonts are self-hosted: IBM Plex Sans for the interface, JetBrains Mono for
 identifiers and Noto Sans TC for Chinese. No font is loaded from a third-party
 site.
+
+## The room screen
+
+On a desktop the room has three columns.
+
+- **Rooms**, on the left: the server line ("gateway · 2 faces"), then every room
+  with a "Your turn" pill when a face waits for you, a red count for unread
+  messages and a rail on an unread row. Archived rooms fold at the bottom.
+  The menu at the top makes a new room; Engine and Settings sit at the foot.
+- **The room**, in the middle: its name and kind, the face that answers there,
+  and—while it lasts—the connection state. Four buttons open **Threads**,
+  **Pinned messages**, **mute** and the **members** column; the menu beside them
+  holds the room's sources, archiving and "Continue in…". The search box filters
+  the messages already on screen; Escape clears it. A line at the top of the
+  log marks today (or another day), and a red **New** line marks where unread
+  messages began. A question from a worker is an amber card: answer Yes, No,
+  "Allow again this session", in its **thread**, or just by typing in the box
+  below.
+- **Members**, on the right: faces waiting for you, faces here, and faces in
+  other rooms. Click one for its page. The column's menu adds a face and shows
+  hidden ones.
+
+**Threads** lists a room's worker threads with their status and last word;
+**Pinned** lists what is pinned and jumps to it.
+
+The composer takes files with the round **+**, by pasting a picture, or by
+dragging them onto it; up to three show as tiles and the rest as "+N". When a
+face asks you something, its bar sits on top of the composer and **Show** takes
+you to the question. If a room is archived, the composer is replaced by a line
+saying so and an **Unarchive** button.

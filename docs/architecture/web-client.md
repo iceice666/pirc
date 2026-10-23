@@ -42,6 +42,64 @@ size budgets.
 back to `idle`. The underlying state values are unchanged. An unread count stays
 a red badge and is not a status.
 
+## The rooms screen
+
+The desktop room is the design's three columns
+(`src/lib/components/rooms/Rooms.svelte`):
+
+- **Room list**, 240px: a 52px header with `pirc` and "gateway · N faces"
+  (faces, not machines: the rooms page does not load nodes — see
+  `lib/boundaries.test.ts`), a server menu holding **New room**, the ROOMS
+  eyebrow, 36px rows (hash, name, "Your turn" pill, red unread count, a 4×8px
+  rail on an unread row) and an "Archived · N" fold that loads the archived list
+  on mount for its count. The footer is the darker `--bg-footer` band with
+  Engine and Settings.
+- **Room header**, 52px: hash, name, hairline, then the subtitle — the room's
+  kind and the face whose territory it is, both real fields. The engine's
+  workspace/node names are not available here, so that part of the comp's line
+  is omitted rather than invented. On the right: Threads, Pinned, Mute and
+  Members toggles, a 180×30 search field (`--code-bg`, client-side over the
+  messages already loaded: words, a question's request and attachment names;
+  Escape clears it) and a room menu holding the controls the comp drops —
+  sources, archive and "Continue in…". The connection state sits in the subtitle
+  while it is not connected.
+- **Log**: 40px avatars, 16px gap, 48px right inset, face names in their colour
+  with a HOST/PROJECT badge, mention chips for plain-text messages
+  (`mentionParts()` in `lib/faces.ts`), a thread preview card for a worker
+  anchor (title, status glyph and count, the thread's last activity, Open
+  thread), file attachments as a card with "Download" and images at 240×135.
+  Lines (worker, loop, memory, wake, move) sit at the same 72px inset with an
+  icon and their compact actions. A "Today"/date hairline begins each day, and
+  a red "New" divider marks where the unread messages began: `RoomsState`
+  keeps `unreadMark` (the room's `readSeq` when it opened) because opening a
+  room marks it read. A question is a warning-tinted card with an "ASKS YOU"
+  badge, its request in mono, Yes / Allow again this session / No / Thread and
+  "or just reply" — the same `workersApi.answer` call as before.
+- **Composer**: a filled `--bg-composer` surface, a round 28px attach button
+  (files, paste and drag-and-drop), a one-line textarea that grows, the
+  "@ to bring in a face" placeholder, an accent 32px circular send, and at most
+  three attachment tiles plus "+N". The asking strip is fused to its top edge in
+  the asking face's colour with a yellow square and Show. A failed send is one
+  line above it; an archived room, or a send the gateway refuses with 409,
+  replaces the composer with the read-only banner and its Unarchive button.
+- **Members**, 248px: groups Waiting for you / Idle / In other rooms (a face
+  working in the room is in Idle, the comp has no fourth group), 44px rows,
+  a second line with what the face is doing via `presenceText()` and the shared
+  `StatusGlyph`. Clicking a face opens its page (the person's decision). The
+  add-face control and the hidden-faces toggle stay in this column's header
+  menu, as the person asked (the comp's "no add/hide controls" would have made
+  them unreachable); the only per-row control left is Hide/Show on an archived
+  face, as before. Threads and Pinned open their own columns
+  (`ThreadsPanel.svelte`, `PinnedPanel.svelte`), derived from the loaded
+  anchors and the pinned messages.
+
+Data the comp draws that the client does not have: the worker initials on a
+thread card (an anchor carries a worker count, not names, so the card shows the
+count), "slimeos on arch-desktop" in the room header (engine-only state), and
+the "Host · runs the rooms" second line (the face's `bio` is not a status line;
+the column shows its presence). Mention chips render for plain text and lines;
+a face's Markdown keeps its `@name` as written.
+
 ## Messages
 
 `src/lib/i18n/` holds the two catalogues:
