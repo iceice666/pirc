@@ -1352,17 +1352,13 @@ async fn reaches_the_inference_socket_inside_the_hidden_state() {
     prepared.cleanup();
 }
 
-/// A start dropped mid-await (the node shutting down during the first
-/// probe) leaves no temp directory behind: neither the session's nor the
-/// probe's.
+/// A start dropped mid-await leaves no temporary directories behind,
+/// including work still running on the blocking pool.
 #[tokio::test]
 async fn a_dropped_start_leaves_no_temp_dir() {
     let Some(f) = fixture("dropped") else {
         return;
     };
-    // The first start probes bubblewrap, which takes far longer.
-    let started = tokio::time::timeout(Duration::from_millis(1), f.try_prepare("pi_dropped")).await;
-    assert!(started.is_err(), "the start finished within 1 ms");
     let tmp = f.tmp.path();
     let left = || {
         let mut left = Vec::new();
@@ -1377,13 +1373,40 @@ async fn a_dropped_start_leaves_no_temp_dir() {
         }
         left
     };
-    // The policy is built on the blocking pool, which finishes (and drops
-    // its result, the directory with it) after the start was dropped.
-    for _ in 0..100 {
-        if left().is_empty() {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(20)).await;
+    // Observe a directory before cancelling. A fixed 1 ms timeout can
+    // expire before the blocking worker starts, letting an empty-directory
+    // check pass just before that detached worker creates its directory.
+    let mut started = Box::pin(f.try_prepare("pi_dropped"));
+    // Poll prepare once to submit its policy worker, then leave it paused
+    // at that await even if the worker finishes before the next timer tick.
+    tokio::select! {
+        biased;
+        _ = &mut started => panic!("the start finished before cancellation"),
+        _ = std::future::ready(()) => {},
     }
-    assert!(left().is_empty(), "{:?}", left());
+    tokio::time::timeout(Duration::from_secs(10), async {
+        while left().is_empty() {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
+    })
+    .await
+    .expect("the start did not create a temporary directory");
+    drop(started);
+    // The policy worker may still be finishing. Once its observed
+    // directory disappears, no cancelled prepare future can start a probe.
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if left().is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .unwrap_or_else(|_| {
+        panic!(
+            "temporary directories left after cancellation: {:?}",
+            left()
+        )
+    });
 }

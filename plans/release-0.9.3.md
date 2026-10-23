@@ -74,6 +74,13 @@ checkpoint API tests also require a native runtime: Linux runs them in the
 mandatory sandbox job with PATH and the real Node bridge supplied explicitly.
 The test-only helper selection is compiled out of product builds.
 
+Subsequent Linux runs also exercise all 74 checkpoint capture/recovery/safety
+cases in that mandatory native job; an absent bubblewrap is a failure there.
+Updated the panel snapshot for explicit memory activation and the Calendar
+capability. Fixed a cancellation-test race by observing temporary-directory
+creation before dropping the prepare future, so delayed blocking work cannot
+make an early empty-directory assertion pass before it has even started.
+
 ## Remaining release gates and known limits
 
 No unresolved blocker was found in the reviewed local paths. This is not a claim
