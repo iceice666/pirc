@@ -15,7 +15,18 @@ be remapped to `crates/` and findings reconfirmed before implementation. Complet
 security fixes, OM model policy/diagnostics, secure deletion and project hard
 deletion are not open work.
 
-## Active work, in recommended order
+## Current priority: unified conversation architecture
+
+[Unified conversations, projects and an independent App](unified-conversations.md)
+records the 2026-10-23 planning direction: merge the user-facing Chat/Work flow,
+distinguish projects, conversations, tasks and execution environments, and make
+the App independently usable. pirc may discover and suggest relevant work quietly;
+execution remains governed by user-granted authority. Flutter Web is evaluation
+only. Domain relationships and workflows come before new interface implementation.
+Only planning is authorized at this stage. Existing security/data-loss issues and
+acceptance gaps below remain valid; this does not mark mobile parity complete.
+
+## Existing work and acceptance backlog
 
 1. **Android approval acceptance (assistant 3a).** Verify multi-line USER proposal
    `confirm` bodies and their labels on Android; give delegation confirmations the

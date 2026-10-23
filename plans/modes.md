@@ -6,6 +6,16 @@ Goal: a workspace's mode (today `chat` or `directory`, shown as Chat / Work) is 
 
 This file is the work queue for the change, not authorization: phases 2 and 3 each need the user's go-ahead.
 
+## New product direction under review (2026-10-23)
+
+[Unified conversations](unified-conversations.md) proposes merging the user-facing
+Chat/Work navigation while retaining explicit environment and capability
+boundaries. The fixed tabs recorded below describe current behavior and earlier
+decisions, not a constraint on the new design. Only architecture planning is
+authorized. Do not remove forbidden combinations or widen existing sessions to
+implement the visual merge; any capability/context transition needs its own
+reviewed contract. Remaining mode work is preserved below.
+
 ## Principles
 
 - **Code asks capabilities, never kinds.** No `kind == Chat` outside the code that parses or creates a workspace.

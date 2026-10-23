@@ -8,6 +8,15 @@ transport is outside the agreed scope. Current features and reproducible test
 entrypoints belong in the app README; completed integration and renderer diaries
 are available from Git through Historical records, not repeated here.
 
+## Architecture planning priority
+
+The user requested [unified conversation and independent-App planning](unified-conversations.md)
+on 2026-10-23 before further interface expansion. That proposal prioritizes
+Chat/Work workflows, direct backend operation, native setup and shared state
+contracts. Flutter Web remains an evaluation option; iOS transport and a content
+renderer replacement are not newly authorized. The existing compatibility and
+physical-device gaps below stay open. Planning does not establish runtime fixes.
+
 ## Remaining work, in priority order
 
 - [ ] **Native dialog presentation:** dialog form closing, explicit `open`,
