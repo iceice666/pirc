@@ -368,8 +368,9 @@ fn room_changed(app: &AppState, room_id: &str) {
 
 /// What people said in a room, as one input of the brain: each message on
 /// its own line(s) as `name: text`, in the order the room got them, with
-/// attachments named (the brain cannot open them yet). Ids of messages
-/// that are gone are skipped.
+/// each attachment named and its upload id (the brain opens none of them:
+/// a worker it calls is handed the files). Ids of messages that are gone
+/// are skipped.
 pub fn compose(conn: &Connection, room_id: &str, batches: &[Pending]) -> ApiResult<String> {
     let mut messages: Vec<Message> = Vec::new();
     for id in batches.iter().flat_map(|batch| &batch.message_ids) {
@@ -408,7 +409,11 @@ pub fn compose(conn: &Connection, room_id: &str, batches: &[Pending]) -> ApiResu
                     .get("kind")
                     .and_then(Value::as_str)
                     .unwrap_or("file");
-                line.push_str(&format!(" [attached {kind}: {name}]"));
+                let id = attachment
+                    .get("id")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                line.push_str(&format!(" [attached {kind}: {name} (upload {id})]"));
             }
             line
         })
@@ -430,10 +435,36 @@ mod tests {
             conn.send_user_message(GENERAL_ROOM_ID, user, text, &[], false)
                 .unwrap();
         }
+        // What a message carried is named, with the upload a worker can be handed.
+        conn.create_upload(&crate::db::rooms::Upload {
+            id: "upload_rooms".into(),
+            room_id: GENERAL_ROOM_ID.into(),
+            user: "bob".into(),
+            kind: "file".into(),
+            filename: Some("rooms.html".into()),
+            mime_type: "text/html".into(),
+            byte_size: 1,
+            sha256: "h".into(),
+            storage_name: "room-00.bin".into(),
+            message_id: None,
+            created_at: 0,
+        })
+        .unwrap();
+        conn.send_user_message(
+            GENERAL_ROOM_ID,
+            "bob",
+            "redesign this",
+            &["upload_rooms".into()],
+            false,
+        )
+        .unwrap();
         let pending = conn.list_pending().unwrap();
         // Bob's batch is listed second but his message came between Ann's.
         let text = compose(&conn, GENERAL_ROOM_ID, &pending).unwrap();
-        assert_eq!(text, "ann: hi\nbob: hello\nthere\nann: and");
+        assert_eq!(
+            text,
+            "ann: hi\nbob: hello\nthere\nann: and\nbob: redesign this [attached file: rooms.html (upload upload_rooms)]"
+        );
         let missing = Pending {
             message_ids: vec!["msg_gone".into()],
             ..pending[0].clone()

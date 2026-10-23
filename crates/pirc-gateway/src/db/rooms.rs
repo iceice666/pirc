@@ -617,6 +617,13 @@ pub trait RoomInputStore {
     fn create_upload(&self, upload: &Upload) -> ApiResult<()>;
     /// 404 "Upload not found" unless it is in `room_id`.
     fn get_upload(&self, room_id: &str, upload_id: &str) -> ApiResult<Upload>;
+    /// The uploads attached to messages of `room_id`, in the order their
+    /// messages were sent (a delegation hands on the files of the request
+    /// it answers).
+    fn message_uploads(&self, room_id: &str, message_ids: &[String]) -> ApiResult<Vec<Upload>>;
+    /// 404 "Upload not found" unless `upload_id` is attached to a message of
+    /// `room_id`: an upload nobody sent yet stays its sender's.
+    fn attached_upload(&self, room_id: &str, upload_id: &str) -> ApiResult<Upload>;
     /// Give `user`'s unsent uploads in `room_id` to a message, in the order
     /// given; 400 for any that is not one.
     fn attach_uploads(
@@ -678,6 +685,34 @@ impl RoomInputStore for Connection {
     fn get_upload(&self, room_id: &str, upload_id: &str) -> ApiResult<Upload> {
         self.query_row(
             "SELECT * FROM room_uploads WHERE id=? AND room_id=?",
+            [upload_id, room_id],
+            Upload::from_row,
+        )
+        .optional()?
+        .ok_or_else(|| ApiError::not_found("Upload not found"))
+    }
+
+    fn message_uploads(&self, room_id: &str, message_ids: &[String]) -> ApiResult<Vec<Upload>> {
+        if message_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut statement = self.prepare(
+            "SELECT uploads.* FROM room_uploads uploads
+             JOIN room_messages messages ON messages.id = uploads.message_id
+             WHERE uploads.room_id=?1 AND messages.room_id=?1
+               AND uploads.message_id IN (SELECT value FROM json_each(?2))
+             ORDER BY messages.seq, uploads.created_at, uploads.id",
+        )?;
+        let rows = statement.query_map(
+            params![room_id, json!(message_ids).to_string()],
+            Upload::from_row,
+        )?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    fn attached_upload(&self, room_id: &str, upload_id: &str) -> ApiResult<Upload> {
+        self.query_row(
+            "SELECT * FROM room_uploads WHERE id=? AND room_id=? AND message_id IS NOT NULL",
             [upload_id, room_id],
             Upload::from_row,
         )
@@ -896,6 +931,69 @@ mod tests {
             conn.attach_uploads(GENERAL_ROOM_ID, "u", &["up1".into()], &message.id)
                 .is_err(),
             "once"
+        );
+    }
+
+    #[test]
+    fn a_room_message_hands_its_uploads_on_but_never_an_unsent_one() {
+        let db = Db::memory();
+        let conn = db.lock();
+        let upload = |id: &str, user: &str| Upload {
+            id: id.into(),
+            room_id: GENERAL_ROOM_ID.into(),
+            user: user.into(),
+            kind: "file".into(),
+            filename: Some("rooms.html".into()),
+            mime_type: "text/html".into(),
+            byte_size: 1,
+            sha256: "h".into(),
+            storage_name: format!("{id}.bin"),
+            message_id: None,
+            created_at: 0,
+        };
+        let first = say(&conn, GENERAL_ROOM_ID, "u", "one");
+        let second = say(&conn, GENERAL_ROOM_ID, "v", "two");
+        for (id, user) in [("up1", "u"), ("up2", "v"), ("up3", "u")] {
+            conn.create_upload(&upload(id, user)).unwrap();
+        }
+        conn.attach_uploads(GENERAL_ROOM_ID, "u", &["up1".into()], &first.id)
+            .unwrap();
+        conn.attach_uploads(GENERAL_ROOM_ID, "v", &["up2".into()], &second.id)
+            .unwrap();
+        // Asked for in the order the messages came, whichever order they are named in.
+        let found = conn
+            .message_uploads(GENERAL_ROOM_ID, &[second.id.clone(), first.id.clone()])
+            .unwrap();
+        assert_eq!(
+            found
+                .iter()
+                .map(|upload| upload.id.as_str())
+                .collect::<Vec<_>>(),
+            ["up1", "up2"]
+        );
+        assert_eq!(
+            conn.attached_upload(GENERAL_ROOM_ID, "up1")
+                .unwrap()
+                .message_id
+                .as_deref(),
+            Some(first.id.as_str())
+        );
+        // Nobody sent up3 yet: it is still its sender's, and another room has none of these.
+        assert_eq!(
+            conn.attached_upload(GENERAL_ROOM_ID, "up3")
+                .unwrap_err()
+                .status,
+            404
+        );
+        let other = conn.create_room("other").unwrap();
+        assert_eq!(
+            conn.attached_upload(&other.id, "up1").unwrap_err().status,
+            404
+        );
+        assert!(
+            conn.message_uploads(&other.id, &[first.id, second.id])
+                .unwrap()
+                .is_empty()
         );
     }
 

@@ -93,7 +93,9 @@ CREATE TABLE delegations (
   -- 1: it works read-only (a wake called it).
   read_only INTEGER NOT NULL DEFAULT 0,
   -- What the brain handed it besides the task: {facts, loops} as given.
-  context_json TEXT, wake_id TEXT, note TEXT
+  -- attachments_json: the files people sent with the request it answers, as
+  -- the room's uploads carried them; copied to the worker's node session.
+  context_json TEXT, wake_id TEXT, note TEXT, attachments_json TEXT
 );
 CREATE INDEX delegations_owner ON delegations(owner_user, status);
 CREATE INDEX delegations_follows ON delegations(follows);

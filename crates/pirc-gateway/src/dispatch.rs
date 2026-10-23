@@ -211,6 +211,59 @@ pub async fn deliver(
     .map(|_| ())
 }
 
+/// Store `bytes` as an upload of a node session (`POST .../uploads`), as
+/// `user`, and return the node's upload id. A room's file is copied to the
+/// worker's node this way before its task is delivered: the node puts the
+/// upload in the session workspace for the agent to read.
+pub async fn upload_bytes(
+    app: &App,
+    node_id: &str,
+    user: &str,
+    remote_session_id: &str,
+    filename: Option<&str>,
+    content_type: &str,
+    bytes: &[u8],
+) -> Result<String, NodeFailure> {
+    use base64::Engine as _;
+    let suffix = match filename.filter(|name| !name.is_empty()) {
+        Some(filename) => format!("?filename={}", urlencoding_component(filename)),
+        None => String::new(),
+    };
+    let response = app
+        .nodes
+        .request(
+            node_id,
+            NodeHttpRequest {
+                method: HttpMethod::Post,
+                url: format!(
+                    "/api/sessions/{}/uploads{suffix}",
+                    urlencoding_component(remote_session_id)
+                ),
+                user: user.to_owned(),
+                payload: None,
+                body_base64: Some(base64::engine::general_purpose::STANDARD.encode(bytes)),
+                content_type: Some(content_type.to_owned()),
+            },
+        )
+        .await
+        .map_err(|error| NodeFailure(error.message))?;
+    if response.status >= 400 {
+        let message = response
+            .body
+            .as_ref()
+            .and_then(|body| body["error"]["message"].as_str())
+            .map(str::to_owned)
+            .unwrap_or_else(|| format!("{node_id} answered {}", response.status));
+        return Err(NodeFailure(message));
+    }
+    response
+        .body
+        .as_ref()
+        .and_then(|body| body["upload"]["id"].as_str())
+        .map(str::to_owned)
+        .ok_or_else(|| NodeFailure(format!("{node_id} did not store the upload")))
+}
+
 /// Where a session stands with the custom message `is_ours` picks out.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Progress {

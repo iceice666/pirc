@@ -37,6 +37,7 @@ Planned as **0.10.0+harmony**: the rewrite on the harmony branch, which forks fr
 
 ### Fixed
 
+- **Workers get the files people send into rooms.** A file attached to a message used to reach the brain as a name only, so the worker the brain called never had it (the HTML page in a "redesign this" request, for instance). The gateway now hands the request's files to the worker with its task, copied into the worker's workspace under `.pirc/uploads` (each room upload copied to the worker's node session, its delivered copy listing the paths); files from earlier messages travel when the brain names their upload id. Only files attached to a message of that room are ever handed over, and images still stay in the room.
 - The web's rooms show what pirc and its workers write as Markdown again (emphasis, lists, code, tables, math and diagrams), while what you wrote stays exactly as typed; a workspace path reads as code there rather than as a link into a Files pane the rooms do not have.
 - The web's composer takes an image pasted into it (Ctrl/⌘+V) as an attachment, once, the same way the paperclip does; words still paste as words.
 - Android scripted dialog forms close locally and preserve return values, validation and input state across view replacement.

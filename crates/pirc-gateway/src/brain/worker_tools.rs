@@ -38,6 +38,7 @@ use super::loops;
 use super::memory::{RoomMemory, WRITING_TOOLS, object, quoted};
 use super::turn::Progress;
 use crate::app::App;
+use crate::db::rooms::RoomInputStore;
 use crate::delegations::{self, NewWorker};
 use crate::memory::text::clip;
 use crate::memory_records::person;
@@ -95,7 +96,9 @@ pub fn section(app: &App, waking: bool, face_id: &str) -> PromptSection {
          The room is shown your message about it, with a thread under it where its progress shows; when it ends, its report is said in the room \
          and you hear of it at your next turn here. Give a finished worker more to do with `follows`; look at them with `worker_status`. \
          Work that belongs to no repository goes to `scratch`, a fresh directory on a machine that fits (`node_hint`, `gpu`); \
-         to only look at a repository, `workspace_read` it yourself instead.",
+         to only look at a repository, `workspace_read` it yourself instead. \
+         Files people sent with the request are handed to the worker with the task (its node puts them in its workspace, and its copy of the task lists where); \
+         images are not passed on, so say so when one matters. Name files from earlier messages with `attachments` (the upload ids in what they said).",
     );
     if waking {
         text.push_str(" While awake, a worker you call works read-only, and you cannot stop one.");
@@ -243,6 +246,11 @@ impl WorkerTool {
                         "follows": { "type": "string", "description": "A finished worker's id: this task goes to its session, in its thread." },
                         "role": { "type": "string", "description": "A role the workspace lists, for a new worker." },
                         "quote": { "type": "string", "description": "The person's own words asking for it, exactly as they wrote them in one of their last messages." },
+                        "attachments": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Upload ids of the files it should get (the \"(upload …)\" notes in what people said). Files sent with the current request are handed over without naming them; name files from earlier messages.",
+                        },
                         "context": {
                             "type": "object",
                             "description": "What you remember that bears on it, by id: it is handed over with where each came from.",
@@ -310,6 +318,60 @@ impl WorkerTool {
         }
     }
 
+    /// The files a worker is handed: those the brain names, then those of the
+    /// messages this turn answers (a request's files need no naming), at most
+    /// [`delegations::ATTACHMENTS_MAX`]. Whether each is really a file attached
+    /// in this room is [`delegations::call`]'s to check.
+    fn files(&self, named: Option<&Value>) -> Result<Vec<String>, String> {
+        let mut files: Vec<String> = Vec::new();
+        match named {
+            None | Some(Value::Null) => {}
+            Some(Value::Array(items)) => {
+                for item in items {
+                    let id = item
+                        .as_str()
+                        .ok_or_else(|| "`attachments` lists upload ids".to_owned())?;
+                    if !files.iter().any(|known| known == id) {
+                        files.push(id.to_owned());
+                    }
+                }
+            }
+            Some(_) => return Err("`attachments` lists upload ids".to_owned()),
+        }
+        if files.len() > delegations::ATTACHMENTS_MAX {
+            return Err(format!(
+                "`attachments` names at most {} files",
+                delegations::ATTACHMENTS_MAX
+            ));
+        }
+        let messages = self.memory.turn_messages();
+        if !messages.is_empty() {
+            let found = self
+                .memory
+                .app
+                .db
+                .lock()
+                .message_uploads(&self.memory.room_id, &messages)
+                .map_err(|error| error.message)?;
+            for upload in found {
+                if upload.kind == "file" && !files.iter().any(|known| known == &upload.id) {
+                    files.push(upload.id);
+                }
+            }
+        }
+        // A batch with more files than a node takes in a message: the first
+        // ones go, and the room still has the rest.
+        if files.len() > delegations::ATTACHMENTS_MAX {
+            crate::log::warn(&format!(
+                "brain: a worker gets the first {} of {} files sent with the request",
+                delegations::ATTACHMENTS_MAX,
+                files.len()
+            ));
+            files.truncate(delegations::ATTACHMENTS_MAX);
+        }
+        Ok(files)
+    }
+
     async fn run(&self, args: Map<String, Value>) -> Result<ToolResult, String> {
         let Some(agent) = self.agent.upgrade() else {
             return Err("The room's conversation is closed".to_owned());
@@ -360,6 +422,10 @@ impl WorkerTool {
                 let Some(owner) = owner else {
                     return Ok(ToolResult::error("Nobody has said anything here yet"));
                 };
+                let files = match self.files(args.get("attachments")) {
+                    Ok(files) => files,
+                    Err(error) => return Ok(ToolResult::error(error)),
+                };
                 let context = match args.get("context") {
                     None | Some(Value::Null) => None,
                     Some(context) => match pack(&app, &owner, context) {
@@ -394,6 +460,7 @@ impl WorkerTool {
                         entry_ids,
                         origins,
                         context,
+                        attachments: files.clone(),
                         wake_id: waking.as_ref().map(|wake| wake.id.clone()),
                     },
                 );
@@ -413,8 +480,13 @@ impl WorkerTool {
                         .and_then(|fresh| delegations::brief(&conn, &fresh, false, 0))
                         .unwrap_or_default()
                 };
+                let handed = match delegation.attachments.len() {
+                    0 => String::new(),
+                    1 => " 1 file goes with it.".to_owned(),
+                    count => format!(" {count} files go with it."),
+                };
                 Ok(ToolResult::text(format!(
-                    "Called worker {} for {owner}{}: {}. The room shows it, with a thread for its progress; you will hear how it ended at your next turn here.\n{}",
+                    "Called worker {} for {owner}{}: {}.{handed} The room shows it, with a thread for its progress; you will hear how it ended at your next turn here.\n{}",
                     delegation.id,
                     if delegation.read_only {
                         " (read-only)"

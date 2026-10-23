@@ -156,6 +156,11 @@ pub enum CommandPayload {
 pub struct Delivery {
     pub custom_type: String,
     pub content: String,
+    /// Files a room message carried: the gateway copies them into this
+    /// session's uploads first, and they are put in the workspace for the
+    /// agent (with the paths appended to `content`).
+    #[serde(default)]
+    pub upload_ids: Option<Vec<String>>,
     #[serde(default)]
     pub details: Option<Map<String, Value>>,
     #[serde(default)]
@@ -196,6 +201,21 @@ impl Failure {
         match self {
             Self::Api(error) => error.message.clone(),
             Self::Other(message) => message.clone(),
+        }
+    }
+
+    /// The failure as an answer: a path or I/O detail is logged, not shown.
+    fn into_api_error(self) -> ApiError {
+        match self {
+            Self::Api(error) => error,
+            Self::Other(message) => {
+                crate::log::error(&format!("delivery: {message}"));
+                ApiError::new(
+                    500,
+                    "internal_error",
+                    "The attached file could not be put in the workspace",
+                )
+            }
         }
     }
 }
@@ -647,9 +667,25 @@ impl RunnerManager {
                 }
             }
         }
+        // Files a task comes with must be in the workspace before its agent
+        // starts: the sandbox is planned then, and a `.pirc` that is not there
+        // yet becomes the `/dev/null` placeholder a missing denied path gets.
+        // A runner already started in this session (by an earlier task) is
+        // stopped first, so its next start sees them: the gateway gives a
+        // worker more work only after it ended, and other deliveries carry no
+        // files.
+        let files = delivery
+            .upload_ids
+            .as_deref()
+            .is_some_and(|ids| !ids.is_empty());
+        if files && self.get(session_id).is_some_and(|runner| runner.alive()) {
+            self.stop_session(session_id).await?;
+        }
         let lock = self.command_lock(session_id);
         let _command = lock.lock().await;
         let node = self.node()?;
+        node.db.lock().require_session_available(session_id)?;
+        let content = delivered_content(&node, session_id, delivery)?;
         let runner = self.ensure(session_id).await?;
         node.db.lock().require_session_available(session_id)?;
         // The role first: the user's model and thinking level override the role's.
@@ -687,7 +723,7 @@ impl RunnerManager {
         }
         let mut message = Map::new();
         message.insert("customType".into(), json!(delivery.custom_type));
-        message.insert("content".into(), json!(delivery.content));
+        message.insert("content".into(), json!(content));
         if let Some(details) = &delivery.details {
             message.insert("details".into(), Value::Object(details.clone()));
         }
@@ -1028,6 +1064,34 @@ fn image_contents(
         images.push(json!({ "type": "image", "data": data, "mimeType": upload.mime_type }));
     }
     Ok((!images.is_empty()).then_some(images))
+}
+
+/// What a delivered message says: `delivery.content`, and when the task came
+/// with files, their copies in the workspace listed at the end. The copies are
+/// made here, before the agent starts (a custom message carries no images).
+fn delivered_content(node: &Node, session_id: &str, delivery: &Delivery) -> ApiResult<String> {
+    let mut content = delivery.content.clone();
+    let Some(ids) = delivery.upload_ids.as_deref().filter(|ids| !ids.is_empty()) else {
+        return Ok(content);
+    };
+    let owner = {
+        let db = node.db.lock();
+        db.get_session(session_id)?.owner_user
+    };
+    let Some(owner) = owner else {
+        return Err(ApiError::conflict(
+            "The session has no owner to hand files to",
+        ));
+    };
+    let notes = file_attachments(node, ids, &owner, session_id).map_err(Failure::into_api_error)?;
+    if !notes.is_empty() {
+        let list: Vec<String> = notes.iter().map(|path| format!("- {path}")).collect();
+        content.push_str(&format!(
+            "\n\nAttached file(s) available to read from the workspace:\n{}",
+            list.join("\n")
+        ));
+    }
+    Ok(content)
 }
 
 /// `fileAttachments`: non-image uploads are not sent to the model: each is

@@ -133,6 +133,11 @@ impl RoomMemory {
         }
     }
 
+    /// The turn's messages, as they stand (people's and the brain's own).
+    pub(super) fn turn_messages(&self) -> Vec<String> {
+        self.turn_messages.borrow().clone()
+    }
+
     pub fn set_topic(&self, topic: super::moving::Topic) {
         *self.topic.borrow_mut() = Some(topic);
     }

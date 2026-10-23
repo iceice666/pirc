@@ -669,13 +669,23 @@ fn next_agent_settings(
 fn delivery(body: &Value) -> ApiResult<Delivery> {
     // `.optional()` refuses `null`, which serde would read as `None`.
     if let Value::Object(map) = body
-        && ["details", "role", "model", "thinking", "approvalMode"]
-            .iter()
-            .any(|key| map.get(*key).is_some_and(Value::is_null))
+        && [
+            "uploadIds",
+            "details",
+            "role",
+            "model",
+            "thinking",
+            "approvalMode",
+        ]
+        .iter()
+        .any(|key| map.get(*key).is_some_and(Value::is_null))
     {
         return Err(ApiError::invalid_input());
     }
     let delivery: Delivery = parse(body)?;
+    if let Value::Object(map) = body {
+        upload_ids(map)?;
+    }
     let role_ok = delivery.role.as_deref().is_none_or(|role| {
         let mut chars = role.chars();
         chars.next().is_some_and(|c| c.is_ascii_lowercase())
@@ -774,6 +784,24 @@ async fn recall_workspace_memory(node: Node, request: Request) -> ApiResult<Resp
     Ok(Response::json(json!({ "text": text, "status": status })))
 }
 
+/// `uploadIds`: at most 16 non-empty ids (the per-message upload limit).
+fn upload_ids(map: &Map<String, Value>) -> ApiResult<Option<Vec<String>>> {
+    match map.get("uploadIds") {
+        None => Ok(None),
+        Some(Value::Array(items)) if items.len() <= 16 => items
+            .iter()
+            .map(|item| {
+                item.as_str()
+                    .filter(|id| !id.is_empty())
+                    .map(str::to_owned)
+                    .ok_or_else(ApiError::invalid_input)
+            })
+            .collect::<ApiResult<Vec<_>>>()
+            .map(Some),
+        Some(_) => Err(ApiError::invalid_input()),
+    }
+}
+
 /// `commandPayload`: the discriminated union, as zod outputs it (unknown
 /// keys dropped), with its limits.
 fn command_payload(value: &Value) -> ApiResult<CommandPayload> {
@@ -783,34 +811,19 @@ fn command_payload(value: &Value) -> ApiResult<CommandPayload> {
         .and_then(Value::as_str)
         .ok_or_else(ApiError::invalid_input)?;
     let message = || string(map, "message", false, 1, 1_000_000);
-    let upload_ids = || -> ApiResult<Option<Vec<String>>> {
-        match map.get("uploadIds") {
-            None => Ok(None),
-            Some(Value::Array(items)) if items.len() <= 16 => items
-                .iter()
-                .map(|item| {
-                    item.as_str()
-                        .filter(|id| !id.is_empty())
-                        .map(str::to_owned)
-                        .ok_or_else(ApiError::invalid_input)
-                })
-                .collect::<ApiResult<Vec<_>>>()
-                .map(Some),
-            Some(_) => Err(ApiError::invalid_input()),
-        }
-    };
+    let uploads = || upload_ids(map);
     Ok(match kind {
         "prompt" => CommandPayload::Prompt {
             message: message()?,
-            upload_ids: upload_ids()?,
+            upload_ids: uploads()?,
         },
         "steer" => CommandPayload::Steer {
             message: message()?,
-            upload_ids: upload_ids()?,
+            upload_ids: uploads()?,
         },
         "follow_up" => CommandPayload::FollowUp {
             message: message()?,
-            upload_ids: upload_ids()?,
+            upload_ids: uploads()?,
         },
         "edit_message" => CommandPayload::EditMessage {
             entry_id: string(map, "entryId", false, 1, 200)?,
@@ -1530,6 +1543,22 @@ mod tests {
             )
             .is_ok()
         );
+        // A task's files: the node's own upload ids, at most 16 of them.
+        let with = |ids: Value| {
+            delivery(
+                &json!({ "customType": "assistant-delegation", "content": "c",
+                "uploadIds": ids }),
+            )
+        };
+        assert_eq!(
+            with(json!(["upload_1", "upload_2"])).unwrap().upload_ids,
+            Some(vec!["upload_1".to_owned(), "upload_2".to_owned()])
+        );
+        assert_eq!(with(json!([])).unwrap().upload_ids, Some(Vec::new()));
+        assert!(with(json!(vec!["upload_1"; 17])).is_err(), "17 uploads");
+        assert!(with(json!([""])).is_err(), "an empty id");
+        assert!(with(json!([1])).is_err(), "not an id");
+        assert!(with(Value::Null).is_err(), "null, not absent");
         for bad in [
             json!({ "customType": "other", "content": "c" }),
             json!({ "customType": "assistant-delegation", "content": "" }),
