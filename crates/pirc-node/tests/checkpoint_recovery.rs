@@ -772,6 +772,18 @@ async fn overlapping_operation_ranges_active_runs_and_cross_owner_evidence_are_r
 
 #[tokio::test]
 async fn native_sandbox_keeps_source_private_store_and_other_recoveries_closed_and_holds_lease() {
+    let path = std::env::var("PATH").unwrap_or_default();
+    #[cfg(target_os = "linux")]
+    if pirc_node::sandbox::linux::find_bwrap(&pirc_config::Env::new([("PATH", path.as_str())], "/"))
+        .is_none()
+    {
+        assert!(
+            std::env::var_os("PIRC_CHECKPOINT_NATIVE_REQUIRED").is_none(),
+            "native recovery acceptance requires bubblewrap"
+        );
+        eprintln!("native recovery acceptance skipped: bubblewrap unavailable");
+        return;
+    }
     let mut f = Fixture::new();
     let home = f.scope.root.parent().unwrap().join("home");
     let config_dir = f.scope.root.parent().unwrap().join("config");
@@ -793,7 +805,7 @@ async fn native_sandbox_keeps_source_private_store_and_other_recoveries_closed_a
             ("PIRC_STATE_DIR", f.state.to_str().unwrap()),
             ("PIRC_CONFIG_DIR", config_dir.to_str().unwrap()),
             ("PIRC_BROWSER", "false"),
-            ("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"),
+            ("PATH", path.as_str()),
         ],
         f._dir.path(),
     );
