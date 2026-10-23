@@ -206,20 +206,46 @@ impl StreamFn for Scripted {
 }
 
 fn say(app: &AppState, text: &str, immediate: bool) {
+    say_in(app, GENERAL_ROOM_ID, text, immediate);
+}
+
+fn say_in(app: &AppState, room: &str, text: &str, immediate: bool) {
     app.db
         .lock()
-        .send_user_message(GENERAL_ROOM_ID, ME, text, &[], immediate)
+        .send_user_message(room, ME, text, &[], immediate)
         .unwrap();
     Brain::nudge(app);
 }
 
+fn messages(app: &AppState, room: &str) -> Vec<crate::db::rooms::Message> {
+    app.db.lock().list_messages(room, None, 100).unwrap()
+}
+
 fn host_messages(app: &AppState) -> Vec<crate::db::rooms::Message> {
-    app.db
-        .lock()
-        .list_messages(GENERAL_ROOM_ID, None, 100)
-        .unwrap()
+    messages(app, GENERAL_ROOM_ID)
         .into_iter()
         .filter(|message| message.speaker == "face:host")
+        .collect()
+}
+
+/// A room made from the API or by a tool: its id.
+fn room(app: &AppState, name: &str) -> String {
+    app.db.lock().create_room(name).unwrap().id
+}
+
+/// The text of the lines a face wrote in a room.
+fn lines(app: &AppState, room: &str) -> Vec<String> {
+    messages(app, room)
+        .into_iter()
+        .filter(|message| message.kind == "line")
+        .map(|message| {
+            message
+                .body
+                .get("text")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned()
+        })
         .collect()
 }
 
@@ -264,6 +290,15 @@ async fn a_turn_streams_the_reply_into_the_room() {
     let (events, _subscription) = record(&h.app);
     say(&h.app, "hi brain", true);
     until("the turn", || finished(&h.app)).await;
+    // The turn is on record before the host stops thinking: wait for both.
+    until("the host to stop thinking", || {
+        events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|event| event.kind == "face_presence" && event.data["state"] == "idle")
+    })
+    .await;
     let replies = host_messages(&h.app);
     assert_eq!(replies.len(), 1);
     assert_eq!(replies[0].body, json!({ "text": "Hello there, friend" }));
@@ -791,6 +826,21 @@ async fn a_wake_says_something_only_with_speak() {
     let asked = model.asked();
     assert!(asked[0].tools.contains(&"speak".to_owned()));
     assert!(asked[0].tools.contains(&"schedule_wake".to_owned()));
+    // What acts for people is not in a wake's tool list at all.
+    for hidden in [
+        "create_face",
+        "update_face",
+        "move_room",
+        "create_room",
+        "archive_room",
+        "topic",
+    ] {
+        assert!(
+            !asked[0].tools.iter().any(|tool| tool == hidden),
+            "a wake has no {hidden}: {:?}",
+            asked[0].tools
+        );
+    }
     let prompt = &asked[0].system_prompt;
     assert!(prompt.contains("## Waking up"), "{prompt}");
     assert!(prompt.contains("## When to speak after waking"));
@@ -1089,4 +1139,363 @@ async fn the_brain_comes_back_when_it_said_it_would() {
     let (cancelled, _) =
         crate::wake::cancel(&h.app.db.lock(), &wake.id, crate::util::now_ms()).unwrap();
     assert_eq!(cancelled.outcome.as_deref(), Some("cancelled"));
+}
+
+// ---------- the rooms and faces it looks after (plan 10) ----------
+
+/// A turn in a room other than `#general` ended.
+fn finished_in(app: &AppState, room: &str) -> bool {
+    app.db
+        .lock()
+        .list_turns(room, 10)
+        .unwrap()
+        .first()
+        .is_some_and(|turn| turn.outcome.is_some())
+}
+
+#[tokio::test]
+async fn the_brain_makes_a_room_when_asked() {
+    let h = harness();
+    let model = Scripted::new(vec![
+        Answer::Call(
+            "create_room",
+            json!({ "name": "garden", "quote": "nobody asked" }),
+        ),
+        Answer::Call(
+            "create_room",
+            json!({ "name": "garden", "quote": "let's have a room for the garden" }),
+        ),
+        Answer::Call(
+            "create_room",
+            json!({ "name": "#garden", "quote": "let's have a room for the garden" }),
+        ),
+        Answer::Call(
+            "create_room",
+            json!({ "name": "#", "quote": "let's have a room for the garden" }),
+        ),
+        Answer::Words("Made it."),
+    ]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    say(&h.app, "let's have a room for the garden", true);
+    until("the turn", || finished(&h.app)).await;
+    let asked = model.asked();
+    assert!(
+        tool_results(&asked[1]).contains("That quote is not in what anyone here said"),
+        "a made-up quote is refused: {}",
+        tool_results(&asked[1])
+    );
+    assert!(
+        tool_results(&asked[2]).contains("Made #garden"),
+        "{}",
+        tool_results(&asked[2])
+    );
+    assert!(
+        tool_results(&asked[3]).contains("There is a room called #garden already"),
+        "a room with the name, in another case: {}",
+        tool_results(&asked[3])
+    );
+    assert!(
+        tool_results(&asked[4]).contains("A room name has 1 to 80 characters"),
+        "{}",
+        tool_results(&asked[4])
+    );
+    let garden = h
+        .app
+        .db
+        .lock()
+        .list_rooms(ME, true)
+        .unwrap()
+        .into_iter()
+        .filter(|view| view.room.name == "garden")
+        .collect::<Vec<_>>();
+    assert_eq!(garden.len(), 1, "one garden");
+    assert_eq!(garden[0].room.kind, "topic");
+    // The room it was asked in says so, with the id that names it.
+    let made = format!("Made #garden ({})", garden[0].room.id);
+    assert_eq!(lines(&h.app, GENERAL_ROOM_ID), [made]);
+    assert_eq!(
+        host_messages(&h.app).last().unwrap().body["text"],
+        "Made it."
+    );
+}
+
+#[tokio::test]
+async fn the_brain_archives_a_room_but_never_the_one_it_answers_in() {
+    let h = harness();
+    let old = room(&h.app, "old garden");
+    let here = room(&h.app, "here");
+    h.app
+        .db
+        .lock()
+        .send_user_message(&old, ME, "keep me", &[], false)
+        .unwrap();
+    let model = Scripted::new(vec![
+        Answer::Call(
+            "archive_room",
+            json!({ "room": "#old garden", "quote": "archive the old garden room" }),
+        ),
+        Answer::Call(
+            "archive_room",
+            json!({ "room": "general", "quote": "archive the old garden room" }),
+        ),
+        Answer::Words("Archived."),
+        Answer::Call(
+            "archive_room",
+            json!({ "room": "#old garden", "archived": false, "quote": "bring it back" }),
+        ),
+        Answer::Words("Back."),
+        Answer::Call(
+            "archive_room",
+            json!({ "room": "#here", "quote": "archive this one" }),
+        ),
+        Answer::Words("Then archive it yourself, if you like."),
+    ]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    say(&h.app, "archive the old garden room", true);
+    until("the turn", || finished(&h.app)).await;
+    let asked = model.asked();
+    assert!(
+        tool_results(&asked[1]).contains("Nothing is deleted: its 1 messages stay"),
+        "{}",
+        tool_results(&asked[1])
+    );
+    assert!(
+        tool_results(&asked[2]).contains("#general is never archived"),
+        "{}",
+        tool_results(&asked[2])
+    );
+    assert!(
+        h.app
+            .db
+            .lock()
+            .get_room(&old)
+            .unwrap()
+            .archived_at
+            .is_some()
+    );
+    assert_eq!(messages(&h.app, &old).len(), 1, "nothing was deleted");
+    assert_eq!(
+        lines(&h.app, GENERAL_ROOM_ID),
+        ["Archived #old garden".to_owned()]
+    );
+
+    // Back, by its name (the room is archived: the name still finds it).
+    say(&h.app, "bring it back", true);
+    until("the second turn", || {
+        turns(&h.app).len() == 2 && finished(&h.app)
+    })
+    .await;
+    let asked = model.asked();
+    assert!(
+        tool_results(&asked[4]).contains("Brought #old garden"),
+        "{}",
+        tool_results(&asked[4])
+    );
+    assert!(
+        h.app
+            .db
+            .lock()
+            .get_room(&old)
+            .unwrap()
+            .archived_at
+            .is_none()
+    );
+    assert_eq!(
+        lines(&h.app, GENERAL_ROOM_ID).last().unwrap(),
+        "Brought #old garden back",
+        "the messages are all still there"
+    );
+    assert_eq!(messages(&h.app, &old).len(), 1);
+
+    // The room it is answering in: refused, so its answer has somewhere to go.
+    say_in(&h.app, &here, "archive this one", true);
+    until("the turn in it", || finished_in(&h.app, &here)).await;
+    let asked = model.asked();
+    assert!(
+        tool_results(asked.last().unwrap()).contains("This is #here itself"),
+        "{}",
+        tool_results(asked.last().unwrap())
+    );
+    assert!(
+        h.app
+            .db
+            .lock()
+            .get_room(&here)
+            .unwrap()
+            .archived_at
+            .is_none()
+    );
+    assert_eq!(
+        messages(&h.app, &here).last().unwrap().body["text"],
+        "Then archive it yourself, if you like.",
+        "the room still takes messages"
+    );
+}
+
+#[tokio::test]
+async fn the_brain_changes_a_face_when_asked() {
+    let h = harness();
+    let slimeos = room(&h.app, "slimeos");
+    let garden = room(&h.app, "garden");
+    let pm = faces::create(
+        &h.app.db.lock(),
+        &faces::NewFace {
+            name: "PM".into(),
+            tone: "dry".into(),
+            territory: faces::Territory {
+                rooms: vec![slimeos.clone()],
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    .id;
+    let model = Scripted::new(vec![
+        Answer::Call(
+            "update_face",
+            json!({ "face": "PM", "tone": "terse", "quote": "nobody asked" }),
+        ),
+        Answer::Call(
+            "update_face",
+            json!({ "face": "PM", "tone": "terse", "quote": "make PM terser" }),
+        ),
+        Answer::Call(
+            "update_face",
+            json!({ "face": "PM", "rooms": [slimeos, garden], "quote": "make PM terser" }),
+        ),
+        Answer::Call(
+            "update_face",
+            json!({ "face": "PM", "name": "pirc", "quote": "make PM terser" }),
+        ),
+        Answer::Call(
+            "update_face",
+            json!({ "face": "PM", "workspaces": ["work:none"], "quote": "make PM terser" }),
+        ),
+        Answer::Call("update_face", json!({ "face": "PM", "name": "Gardener" })),
+        Answer::Call(
+            "update_face",
+            json!({ "face": "Nope", "tone": "terse", "quote": "make PM terser" }),
+        ),
+        Answer::Call(
+            "update_face",
+            json!({ "face": "PM", "quote": "make PM terser" }),
+        ),
+        Answer::Words("Done."),
+    ]);
+    Brain::start_with(&h.app, model.factory()).unwrap();
+    say(&h.app, "make PM terser", true);
+    until("the turn", || finished(&h.app)).await;
+    let asked = model.asked();
+    assert!(
+        asked[0]
+            .system_prompt
+            .contains("A face is made only when someone asks for one"),
+        "suggest one first: {}",
+        asked[0].system_prompt
+    );
+    assert!(tool_results(&asked[1]).contains("That quote is not in what anyone here said"));
+    assert!(
+        tool_results(&asked[2]).contains(&format!("Changed PM ({pm}): tone")),
+        "{}",
+        tool_results(&asked[2])
+    );
+    assert!(
+        tool_results(&asked[3]).contains(&format!("Changed PM ({pm}): territory")),
+        "{}",
+        tool_results(&asked[3])
+    );
+    assert!(
+        tool_results(&asked[4]).contains("There is a face called pirc already"),
+        "{}",
+        tool_results(&asked[4])
+    );
+    assert!(
+        tool_results(&asked[5]).contains("No directory workspace work:none"),
+        "{}",
+        tool_results(&asked[5])
+    );
+    assert!(
+        tool_results(&asked[6]).contains("quote is required"),
+        "{}",
+        tool_results(&asked[6])
+    );
+    assert!(tool_results(&asked[7]).contains("No face Nope"));
+    assert!(tool_results(&asked[8]).contains("Nothing to change"));
+    let changed = {
+        let conn = h.app.db.lock();
+        faces::get(&conn, &pm).unwrap()
+    };
+    assert_eq!(changed.tone, "terse");
+    assert_eq!(changed.territory.rooms, [slimeos.clone(), garden.clone()]);
+    assert!(
+        lines(&h.app, GENERAL_ROOM_ID).contains(&"PM answers in #slimeos, #garden now.".to_owned()),
+        "the rooms that changed are said: {:?}",
+        lines(&h.app, GENERAL_ROOM_ID)
+    );
+
+    // Archived and back, by name, and the host is never archived.
+    {
+        let mut answers = model.answers.lock().unwrap();
+        *answers = vec![
+            Answer::Call(
+                "update_face",
+                json!({ "face": "PM", "archived": true, "quote": "archive PM" }),
+            ),
+            Answer::Words("Archived."),
+            Answer::Call(
+                "update_face",
+                json!({ "face": "PM", "archived": false, "quote": "bring PM back" }),
+            ),
+            Answer::Call(
+                "update_face",
+                json!({ "face": "host", "archived": true, "quote": "bring PM back" }),
+            ),
+            Answer::Words("Back."),
+        ];
+    }
+    say(&h.app, "archive PM", true);
+    until("the archive", || {
+        turns(&h.app).len() == 2 && finished(&h.app)
+    })
+    .await;
+    let asked = model.asked();
+    let archived = tool_results(&asked[asked.len() - 1]);
+    assert!(
+        archived.contains(&format!("Changed PM ({pm}): archived")),
+        "{archived}"
+    );
+    assert!(
+        faces::find(&h.app.db.lock(), "PM").unwrap().is_none(),
+        "an archived face answers nowhere"
+    );
+    assert!(
+        lines(&h.app, GENERAL_ROOM_ID)
+            .contains(&"PM is archived: its rooms answer as the host until it is back.".to_owned()),
+        "{:?}",
+        lines(&h.app, GENERAL_ROOM_ID)
+    );
+
+    say(&h.app, "bring PM back", true);
+    until("its return", || {
+        turns(&h.app).len() == 3 && finished(&h.app)
+    })
+    .await;
+    let asked = model.asked();
+    let back = tool_results(&asked[asked.len() - 1]);
+    assert!(
+        back.contains(&format!("Changed PM ({pm}): brought back")),
+        "{back}"
+    );
+    assert!(back.contains("The host cannot be archived"), "{back}");
+    let returned = {
+        let conn = h.app.db.lock();
+        faces::get(&conn, &pm).unwrap()
+    };
+    assert!(returned.active());
+    assert!(
+        lines(&h.app, GENERAL_ROOM_ID).contains(&"PM is back.".to_owned()),
+        "{:?}",
+        lines(&h.app, GENERAL_ROOM_ID)
+    );
 }

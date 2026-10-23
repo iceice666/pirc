@@ -45,6 +45,12 @@ holds and what it did lately. pirc's own page also holds `SOUL.md`, `CHAT.md` an
 preferences. **Archive** a face when its project is done: it stays in the list, greyed
 out, until you **Hide** it, and answers nowhere.
 
+Ask pirc and it does the same from a room, on your own words there: make a room,
+archive one or bring it back (nothing is deleted; it never archives the room it is
+answering in), and change a face's name, bio, tone, role, rooms, workspaces, sources or
+archive it. It suggests a face when a project or a topic keeps coming back, and makes
+one only once you agree.
+
 When a conversation in one room keeps going about something another room covers (15
 messages or more), pirc asks once that day whether to continue there; say yes and it moves,
 with the open loops of that conversation.

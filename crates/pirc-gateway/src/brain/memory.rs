@@ -45,7 +45,7 @@ use crate::memory_records::{self, Scopes};
 
 /// The tools that write memory or open loops: their results are not where
 /// a memory came from.
-pub(super) const WRITING_TOOLS: [&str; 14] = [
+pub(super) const WRITING_TOOLS: [&str; 17] = [
     "remember",
     "save_preference",
     "forget",
@@ -56,11 +56,14 @@ pub(super) const WRITING_TOOLS: [&str; 14] = [
     "reopen_loop",
     "call_worker",
     "stop_worker",
-    // The faces' tools (plan 10) only say what the brain did.
+    // The faces' and rooms' tools (plan 10) only say what the brain did.
     "speak_as",
     "topic",
     "create_face",
+    "update_face",
     "move_room",
+    "create_room",
+    "archive_room",
 ];
 /// What a worker reported (its report, or `worker_status`): one origin,
 /// `tool:delegation`, whichever way it came.

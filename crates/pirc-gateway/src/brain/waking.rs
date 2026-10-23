@@ -36,7 +36,10 @@ pub const NOT_IN_WAKES: &[&str] = &[
     "answer_worker_question",
     "room_sources",
     "create_face",
+    "update_face",
     "move_room",
+    "create_room",
+    "archive_room",
     "topic",
 ];
 /// Tools only a wake has.

@@ -64,7 +64,10 @@ expression: stable(t.into_value())
         "speak_as",
         "topic",
         "create_face",
-        "move_room"
+        "update_face",
+        "move_room",
+        "create_room",
+        "archive_room"
       ]
     },
     "step": "the first call: no loops yet, and the tools"

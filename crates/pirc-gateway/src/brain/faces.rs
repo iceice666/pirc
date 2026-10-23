@@ -616,6 +616,9 @@ These are the defaults; the house rules come after them and win where they diffe
 say in one short line as the face you are that you hand it over, then `speak_as` that face and answer.\n\
 - Faces never talk with each other: they only hand over and report back.\n\
 - A face named with `@` answers for itself.\n\
+- A face is made only when someone asks for one or agrees to what you suggested: when a project or a recurring topic seems to deserve \
+one, say so in a sentence and ask (say that @PM could look after the SlimeOS PRs, and whether to make it), then wait; `create_face` \
+only once they say yes, never unasked.\n\
 - Once the topic of the conversation is clear, say it with `topic` (a few words, the same name while it stays the same), \
 with the workspace or source it is about.";
 

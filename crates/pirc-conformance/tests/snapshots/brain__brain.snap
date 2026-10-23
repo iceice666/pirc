@@ -157,7 +157,10 @@ expression: t.into_value()
           "speak_as",
           "topic",
           "create_face",
-          "move_room"
+          "update_face",
+          "move_room",
+          "create_room",
+          "archive_room"
         ]
       },
       "calls": 1
@@ -260,7 +263,10 @@ expression: t.into_value()
           "speak_as",
           "topic",
           "create_face",
-          "move_room"
+          "update_face",
+          "move_room",
+          "create_room",
+          "archive_room"
         ]
       },
       "calls": 3
@@ -434,7 +440,10 @@ expression: t.into_value()
         "speak_as",
         "topic",
         "create_face",
-        "move_room"
+        "update_face",
+        "move_room",
+        "create_room",
+        "archive_room"
       ]
     },
     "step": "the latest call's context"
