@@ -674,10 +674,7 @@ impl Team {
             out.insert("tools".to_owned(), json!(tools));
         }
         if member.mode == Mode::Subagent {
-            out.insert(
-                "background".to_owned(),
-                json!(member.background),
-            );
+            out.insert("background".to_owned(), json!(member.background));
         }
         if let Some(file) = &member.session_file {
             out.insert("sessionFile".to_owned(), file.clone());
