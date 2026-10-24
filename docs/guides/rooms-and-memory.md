@@ -38,6 +38,13 @@ Who answers: the face you name with `@` (type `@` for a list), else the one that
 last in the room, else the room's own face, else pirc. The host may hand something over
 and the project's face answers in the same turn; faces never chat with each other.
 
+A workspace is its face's to work in. When you ask pirc about a project that has a face,
+it hands over: the face calls the worker or reads the repository, and reports back. (The
+brain's tools refuse to work in another face's workspace, so the hand-over always shows.)
+What no face looks after, pirc does itself, and the first time you ask it to work there it
+offers to make a face; when a node brings a repository nobody looks after, a line in
+`#general` says so once.
+
 The **Members** button beside the room lists the faces and what each is doing (thinking,
 working on something, waiting for your answer). Click one, or a face's name on a message,
 for its page: change anything there and it applies from its next reply; see the loops it
@@ -48,8 +55,8 @@ out, until you **Hide** it, and answers nowhere.
 Ask pirc and it does the same from a room, on your own words there: make a room,
 archive one or bring it back (nothing is deleted; it never archives the room it is
 answering in), and change a face's name, bio, tone, role, rooms, workspaces, sources or
-archive it. It suggests a face when a project or a topic keeps coming back, and makes
-one only once you agree.
+archive it. It suggests a face when a project or a topic keeps coming back, or when you
+first ask it to work in a repository nobody looks after, and makes one only once you agree.
 
 When a conversation in one room keeps going about something another room covers (15
 messages or more), pirc asks once that day whether to continue there; say yes and it moves,

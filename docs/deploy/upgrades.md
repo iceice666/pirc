@@ -137,6 +137,14 @@ that ended before are counted as told, since their room was shown their report),
 and `brain_turns.kind` also takes `report`. An older gateway refuses schema 10.
 Nothing changes for nodes.
 
+A workspace is its face's to work in: the brain calls a worker in a face's
+workspace (or a clone of its repository), or reads it, only as that face; as
+another face the tool refuses and names whom to `speak_as`, so the hand-over
+happens in the room. A workspace no face looks after is offered one once, in a
+line in `#general`, when its node brings it. On first start `pirc.sqlite`
+migrates to schema 11: the `face_offers` table. An older gateway refuses
+schema 11. Nothing changes for nodes.
+
 ## 0.9.0: mode tabs by capability, delegation approval, node protocol 13, gateway schema 1005
 
 Upgrade the gateway and every node together: the node protocol moves to 13

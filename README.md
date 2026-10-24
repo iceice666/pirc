@@ -89,7 +89,7 @@ The Nix gateway includes the static Web UI; the node includes native sandbox/bro
 
 ### Upgrading
 
-Upgrade the gateway and every node together: they use node protocol **15**. The rewrite (0.10.0+harmony) does not upgrade old state: the gateway starts a new database (`pirc.sqlite`, schema 8) and leaves the old `gateway.sqlite` where it is; nodes migrate to schema **2002**. Back up state and configuration first; see [Upgrades](docs/deploy/upgrades.md) for what to move and redo.
+Upgrade the gateway and every node together: they use node protocol **15**. The rewrite (0.10.0+harmony) does not upgrade old state: the gateway starts a new database (`pirc.sqlite`, schema 11) and leaves the old `gateway.sqlite` where it is; nodes migrate to schema **2002**. Back up state and configuration first; see [Upgrades](docs/deploy/upgrades.md) for what to move and redo.
 
 Upgrading from the pre-Rust **0.3.x** releases still requires fresh state: re-pair devices, re-login providers and start new sessions rather than reusing the old databases. See [migration and rollback guidance](docs/deploy/upgrades.md).
 
