@@ -36,6 +36,14 @@ questions; engineering contracts, unspecified settings and explicitly deferred
 App connection/Flutter Web decisions remain open. Code implementation is not yet
 authorized by this planning task.
 
+[Conversation execution contracts](conversation-execution-contracts.md) details the
+accepted follow-up's first three items: capability composition, foreground and
+background message/task routing, and overlapping resource permissions. The
+[main plan](unified-conversations.md#accepted-follow-up-behavior-and-detailed-contracts-2026-10-24)
+also records the accepted direction for Node switching, archive/delete/leave,
+historical content versus live file links, and task-scoped pots takeover. These
+are planning contracts and future acceptance cases, not completed implementation.
+
 ## Existing work and acceptance backlog
 
 1. **Android approval acceptance (assistant 3a).** Verify multi-line USER proposal

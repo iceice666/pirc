@@ -1,6 +1,6 @@
 # Unified conversations, projects and an independent App
 
-[Plans](README.md) · [Workspace modes](modes.md) · [Mobile](mobile.md) · [Assistant contracts](../docs/architecture/assistant-memory.md) · [Checkpoints](checkpoints.md) · [pots and Rust foundations](pots-and-library-extraction.md)
+[Plans](README.md) · [Workspace modes](modes.md) · [Mobile](mobile.md) · [Assistant contracts](../docs/architecture/assistant-memory.md) · [Checkpoints](checkpoints.md) · [pots and Rust foundations](pots-and-library-extraction.md) · [Conversation execution contracts](conversation-execution-contracts.md)
 
 Status: architecture planning baseline, updated 2026-10-24. The user accepted the
 recommendations from the specification review for inclusion in this plan. Only
@@ -48,17 +48,91 @@ Engineering detail and validation remain work to do, not evidence of implementat
 | Client consistency           | Backend-authorized commands, idempotent outcome reconciliation, revisions/cursors, separate notification/read/decision states and account-isolated local drafts/cache                              |
 | Migration and extraction     | Map existing identities and provenance, verify restart-safe migrations and compatibility; stage product changes and provider extraction separately; preserve loop event/error/cancel behavior      |
 
-Not settled by this acceptance: specific read/write defaults for extra folders,
-independent overlapping grant precedence, detailed note retention/deletion,
-spending/concurrency numbers, quiet-hour/digest defaults, final API/type names
-and first implementation authorization. App authentication/topology and Flutter
-Web remain explicitly deferred. Existing context decision A remains unchanged.
+Still unspecified: initial read/write defaults for extra folders, detailed note
+retention/deletion, spending/concurrency numbers, quiet-hour/digest defaults,
+final API/type names and first implementation authorization. The follow-up below
+settles the previously open distinction between removing a project's grants and
+blocking all folder access for a conversation. App authentication/topology and
+Flutter Web remain explicitly deferred. Decision A remains unchanged.
+
+## Accepted follow-up behavior and detailed contracts (2026-10-24)
+
+The user accepted all seven follow-up recommendations and requested detailed
+planning for items 1–3 first. [Conversation execution contracts](conversation-execution-contracts.md)
+is the detailed source for these three areas, with flows, authority boundaries,
+routing/access tables and future acceptance cases. They are adopted target
+behavior; no code, migration, deployed permission change or push is authorized.
+
+| Item                                 | Accepted direction                                                                                                                                                    | Detail status                                                            |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| 1. Chat/Work capabilities            | Compose runtime availability, conversation configuration, resource grants, approvals and readiness; no automatic global assistant/admin rights from mounting a folder | Detailed in the capability mapping and old-mode migration contract       |
+| 2. Messages during multiple tasks    | One foreground response flow; attributed parallel child/background tasks; questions, corrections, independent objectives and explicit controls have distinct routing  | Detailed in the message routing, ordering and cancellation contract      |
+| 3. Overlapping folder permissions    | Leaving removes project-derived grants and discloses retained independent grants; an explicit conversation-level folder block overrides overlapping grants            | Detailed in the effective-access rules, examples and revocation contract |
+| 4. Switching Nodes                   | Switch execution binding without automatic migration of files, processes or browser state; no automatic offline failover                                              | Direction recorded below; detailed transfer design remains later work    |
+| 5. Archive/delete/leave              | Archive organizes; deletion reconciles affected running work first; leaving changes grants; original folders and memory provenance are protected                      | Direction recorded below; full lifecycle matrix remains later work       |
+| 6. Historical content and file links | Preserve saved dialogue under decision A; distinguish conversation-owned attachments from live project file references                                                | Direction recorded below; cache/retention mechanics remain later work    |
+| 7. pots entry and takeover           | An accepted suggestion links to one canonical task; subsequent discussion stays task-linked; takeover suspends coordination only for the affected task                | Direction recorded below; detailed presentation remains later work       |
+
+### 4. Switching Nodes without implicit data transfer
+
+One attempt uses one selected Node for directly mounted resources. Switching
+preserves dialogue and results with their source locations; it does not move
+uncommitted edits, files, shell processes, development servers, credentials or
+browser profiles. Preview what remains on the old Node and what is available on
+the new one. File synchronization/copying is a separate explicitly authorized
+operation, not a side effect of selecting another server. An unavailable original
+Node does not authorize silent failover. Apply the existing live-transition and
+partial-effect rules; never replay old writes against the replacement folder.
+
+### 5. Archive, delete and leave have different effects
+
+Archiving changes organization, without automatically stopping work or schedules.
+Leaving changes project grants under item 3. Deleting a conversation/project with
+affected active work first fences new dispatch, stops affected workers and scoped
+descendants, and reconciles their outcomes before reporting deletion complete.
+An offline worker leaves
+that operation pending rather than creating an orphan that can continue writing.
+Show the affected tasks, schedules, notes, attachments and checkpoint records in
+the deletion preview; distinguish related references from records actually owned
+by the deleted entity. Do not silently delete unrelated work or user-owned folders.
+
+Keep the existing memory-origin deletion/forget rules, including other authors'
+contributions. Deletion cannot be bypassed by copying source-derived memory into
+shared notes. The full lifecycle matrix still needs to specify scheduling cleanup,
+shared-data references, managed allocations and minimal pending-operation records;
+this accepted direction does not invent a new retention duration.
+
+### 6. Retained history is distinct from fresh file access
+
+Keep already-saved dialogue and independently owned conversation attachments under
+their existing authority and lifecycle. A project file reference, preview or
+download must check current resource rights before fetching fresh bytes. Leaving
+a project removes project-derived retrieval; retained independent grants, if any,
+are disclosed under item 3. Cached text/thumbnails already obtained are not
+retroactively erased by decision A, but caches must not make new fetches using old
+authority. Separate stored attachment copies from live references with provenance;
+Web and App must use the same checks without an open Web client acting as relay.
+
+### 7. pots suggestions lead to the same task and bounded takeover
+
+Accepting a suggestion creates or links the canonical task once, subject to its
+actual execution grant. Further discussion and results stay linked to that task;
+do not create a second mirrored work conversation just for pots. Keep the source
+conversation and actor visible when the user opens the task from the pots inbox.
+Taking over one task suspends conflicting pots coordination for that task and its
+scoped dispatch; unrelated responsibilities continue. Provide separate explicit
+controls for pausing all new coordination and stopping selected running tasks.
+Resuming a taken-over task's coordination remains explicit.
 
 ## Confirmed decisions: context and live switching (2026-10-24)
 
 The user selected **A: preserve conversation context**. Leaving a project keeps
 existing dialogue/history eligible as model context. It removes project-derived
-mounts and new access to project folders, configuration, rules, board and notes.
+mounts and authorization for new project access, including configuration, rules,
+board and notes. Independently granted folder access is separately disclosed;
+it does not preserve project membership. The accepted distinction between leaving
+and explicitly blocking a folder is specified in the
+[overlap contract](conversation-execution-contracts.md#3-resolve-overlapping-folder-permissions-explicitly).
 Do not clear or sanitize the old conversation as a side effect of departure.
 Previously read material may still be known; this is accepted, not an isolation
 claim about information already obtained. Stop injecting the departed project's
@@ -182,18 +256,20 @@ Boundaries:
 
 1. Project membership supplies defined resource grants, not all host access.
    Conversation-specific mounts and project mounts have separate provenance.
-   Aliases, overlapping roots, default cwd, read/write rights and grant precedence
-   must be explicit. A mount must be enforced for shell/tools/children as well as UI.
+   Resolve overlapping grants using the [effective-access contract](conversation-execution-contracts.md#effective-access-rules);
+   defaults and physical alias enforcement still need implementation detail.
+   A mount must be enforced for shell/tools/children as well as UI.
 2. Creating a new empty folder is permitted only under a configured server root
    and current user authority; validate paths, symlinks, collisions and ownership.
    Do not reuse a pre-existing nonempty path as if it were newly allocated.
-3. Recommended initial execution: all direct filesystem mounts of one attempt
+3. Initial execution contract: all direct filesystem mounts of one attempt
    resolve on the selected Node. Cross-Node resources need an explicit remote
    access/copy design; a folder on server B is not magically local on server A.
 4. Leaving/moving a project is an access transition. Block new affected work,
    reconcile queued actions, quiesce/stop old workers and descendants, revoke old
    project grants, rebuild the execution sandbox while preserving conversation
-   context, then resume under a new binding generation. Do not report success while old workers still hold project access.
+   context, then resume under a new binding generation. Do not report success
+   while old workers retain revoked authority.
    An offline Node or interrupted transition remains pending/blocked until resolved.
 5. Changing a mount list does not close existing file descriptors or withdraw
    bytes already read. Decision A preserves existing conversation context and
@@ -201,8 +277,9 @@ Boundaries:
    remain attributable and are not evidence of successful resource revocation.
    Never copy additional project content to bypass the user's removal.
 6. Authority from unrelated mounts or broad host access may overlap the removed
-   project path. Define explicit deny/grant precedence or disclose remaining
-   independent access; revoking only a UI mount cannot prove the path is unreadable.
+   project path. Leaving removes project-derived authority and discloses explicit
+   independent grants; ambient host reads cannot silently restore it. A conversation
+   folder block overrides overlapping grants, under the effective-access contract.
 7. Keep memory authorship/deletion provenance and original filesystem data.
    Project board/notes reopen scoped collaboration design; automatic migration of
    existing global USER/MEMORY into project-only stores is not authorized.
@@ -235,7 +312,9 @@ Boundaries:
 - **Environment:** available, offline, incompatible or access denied. These do
   not erase the conversation or imply that its task was canceled.
 
-Exact persisted state names and transitions require a later contract review.
+Foreground response ownership, message targeting and overlapping task behavior
+are defined in the [message routing contract](conversation-execution-contracts.md#2-route-new-messages-while-tasks-run).
+Exact persisted state names and transitions require a later engineering review.
 
 ## Primary user journeys
 
@@ -296,8 +375,9 @@ checkpoint before implementation; preserve source attribution and tool ownership
   require the current controller to be online.
 - Before a conflicting command, show who/what currently controls the execution
   and offer explicit takeover. Fence stale commands using a backend generation.
-- User takeover suspends conflicting pirc dispatch for that task. It does not
-  silently kill running tools; show whether work continues, pauses or is stopping.
+- User takeover suspends conflicting pirc dispatch for that task; unrelated pots
+  responsibilities continue. It does not silently kill running tools; show whether
+  work continues, pauses or is stopping.
 - Resuming assistant coordination is explicit. Another browser tab opening must
   not silently reclaim it.
 - Every decision has one backend outcome. Duplicate submissions return the
@@ -543,6 +623,9 @@ All unchecked work is future work; no stage grants implementation authority.
       for running workspace changes, 2026-10-24.
 - [x] Record the user's acceptance of the specification-review recommendations,
       2026-10-24, as the design baseline rather than unresolved alternatives.
+- [x] Record acceptance of the seven follow-up behavior recommendations and detail
+      capability composition, message/task routing and overlapping grants in
+      [Conversation execution contracts](conversation-execution-contracts.md).
 - [ ] Validate enforcement for active workers/descriptors and offline hosts;
       specify remaining permission defaults and project-note lifecycle details.
 - [ ] Inventory existing API/storage identities against each proposed concept and
@@ -650,9 +733,10 @@ Reconfirming context retention or the warning is unnecessary: both are decided.
 
 ### 2. Resource identity, mount precedence and default cwd — adopted model, remaining defaults
 
-**Remaining:** alias resolution, exact permission defaults, overlap handling,
-resource lifetime and the project-wide transition protocol. The overall shape
-and inherited project configuration are accepted.
+**Remaining:** physical alias enforcement, exact initial permission defaults,
+resource lifetime and the project-wide transition implementation. Overlap behavior
+is now adopted in the [effective-access contract](conversation-execution-contracts.md#effective-access-rules),
+alongside the overall shape and inherited project configuration.
 
 Adopted shape: one chosen main working directory plus named mounts.
 Each mount has a stable resource ID, Node ID, resolved source identity, alias,
@@ -664,13 +748,15 @@ Do not claim Node-local path identity solves cross-Node shared filesystems.
 The current [sandbox policy](../docs/deploy/sandbox-and-browser.md#what-the-policy-is)
 allows broad reads outside private paths. Removing a mount alone cannot meet the
 new requirement if the old path remains readable through that policy or a parent
-mount. Specify explicit deny/grant precedence and resolve symlink/parent aliases.
-An independent grant must be visible; it must not be invented to defeat removal.
+mount. Enforce the adopted deny/grant precedence and validate symlink/parent
+aliases. An independent grant must be visible; it must not be invented to defeat
+removal. Current policy behavior is not proof of the new contract.
 
-**Remaining defaults:** which main directory is selected initially; default
-read/write access for additional folders; handling a separately granted copy of
-the removed path. Inherited project changes with an affected-conversation preview
-and revocation enforcement are adopted. Specify per-host acknowledgement and
+**Remaining defaults:** which main directory is selected initially and default
+read/write access for additional folders. A separately granted path is retained
+and disclosed on leaving; an explicit folder block overrides it. Inherited
+project changes with an affected-conversation preview and revocation enforcement
+are adopted. Specify per-host acknowledgement and
 partial-failure behavior across all affected conversations as engineering work.
 
 **Gate:** overlapping read-only/read-write roots, duplicate aliases, removed cwd,
@@ -692,9 +778,10 @@ Concurrent note edits require expected revisions and conflict review.
 
 Decision A remains in force: old dialogue stays model context. After departure,
 the active prompt states the new environment and effective rules; old quoted
-rules are historical material, not current policy. No new project retrieval is
-allowed. A departure does not change memory authorship or delete other agents'
-notes. Global USER/MEMORY and repository handoffs retain their existing provenance.
+rules are historical material, not current policy. No fresh retrieval may use the
+departed project's authority. Independently granted folder reads keep their own
+scope; they do not preserve membership or active rule injection. A departure does
+not change memory authorship or delete other agents' notes. Global USER/MEMORY and repository handoffs retain their existing provenance.
 
 **Adopted:** authorized project agents may maintain notes directly with provenance
 and revision conflicts; project rules remain user-controlled. Ordinary rule edits
@@ -776,8 +863,9 @@ idempotency identity. Verify the same grant at delivery and effect boundaries.
 Explicit user stop/takeover supersedes queued pots dispatch; pots may
 report a resulting conflict but cannot relaunch the task automatically. A comment
 from another agent or an external source is not the user's new instruction.
-Clarify whether direct user intervention suspends only the affected task or an
-entire responsibility; do not stop unrelated work by accident.
+Direct user takeover suspends coordination only for the affected task and its
+scoped dispatch. Unrelated responsibilities continue; broader pausing has its own
+explicit control. See the accepted follow-up and message routing contract.
 
 **Adopted:** pausing new coordination and stopping running tasks are separate
 controls with visible scope. No implicit restart after user stop/takeover.
@@ -858,8 +946,8 @@ or pots user-precedence rule is not needed.
 
 - **Engineering work:** revocation and restart protocol, identity mapping, team-task
   mapping, schemas/event ordering, conflict fixtures, API/feature proof and migration.
-- **Specific product settings still needed:** additional-mount permission defaults
-  and overlapping independent grants; note retention/deletion; pots observation
+- **Specific product settings still needed:** initial additional-mount permission
+  defaults; detailed note retention/deletion; pots observation
   scopes, spending/concurrency limits and notification times.
 - **Explicitly deferred:** App authentication/topology and Flutter Web selection.
 - **Before code changes:** agree on the first implementation slice. Acceptance of

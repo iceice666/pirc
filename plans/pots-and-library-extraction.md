@@ -14,6 +14,14 @@ tasks and preservation of pirc-owned authority boundaries. See the
 This settles the recommended direction, not final Rust signatures, feature/API
 choices that were only listed as questions, implementation or publication.
 
+The accepted follow-up is detailed in [Conversation execution contracts](conversation-execution-contracts.md):
+capability composition, one foreground response flow with attributed parallel
+tasks, and project-grant removal versus an explicit conversation folder block.
+These remain pirc host responsibilities. A generic loop must expose cancel/resume
+and correlated results so the host can reject obsolete work; it must not decide
+user-message targets, create resource grants or silently restart stopped tasks.
+Items 4–7 are recorded in the [main plan](unified-conversations.md#accepted-follow-up-behavior-and-detailed-contracts-2026-10-24).
+
 ## Combined direction
 
 The product should have one conversation/work experience, project-mounted
@@ -45,6 +53,8 @@ The following are requested design requirements, not implementation approval:
 - A project behaves like an organizational folder and shares one or several
   mounted folders and configuration/rule files with its conversations.
 - Leaving the project removes its project-derived mounts and content access.
+  Separately granted folder access remains disclosed; an explicit conversation
+  folder block overrides overlapping grants and must be enforced by the host.
 - Explore a project board/shared memory to help agents communicate and understand
   concurrent work, especially another agent holding a conflicting write lease.
 - Recommend tasks for most complex work; long/background and multi-agent work
@@ -57,8 +67,9 @@ The following are requested design requirements, not implementation approval:
 
 Detailed journeys and pending decisions are in [Unified conversations](unified-conversations.md).
 The user subsequently selected **A** on 2026-10-24: preserve existing conversation
-context after project departure and stop mounts/new project access. During an
-active run, warn first; if the user proceeds, enforce revocation of subsequent
+context after project departure and stop project-derived mounts/new access.
+The accepted follow-up separately discloses retained independent folder grants.
+During an active run, warn first; if the user proceeds, enforce revocation of subsequent
 access and notify the agent of the user-initiated change. The agent can decide
 whether it needs to ask a follow-up question. These product behaviors are decided;
 OS revocation/rebuild and offline-host acknowledgement remain technical design.
