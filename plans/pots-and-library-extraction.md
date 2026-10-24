@@ -183,6 +183,38 @@ A product task can contain many loop runs. pots can coordinate many product
 tasks. Neither belongs inside the reusable loop, and neither requires the loop
 extraction to be finished before its product behavior can be designed.
 
+## API specification still needed before crate extraction
+
+The handoff and boundary table identify code ownership, but they do not yet define
+a callable library contract. Complete this review alongside the product
+[specification gaps](unified-conversations.md#specification-review-what-is-not-detailed-enough-2026-10-24).
+All signatures/names remain to be proposed; adding a trait alone is not completion.
+
+| Boundary                  | Questions the specification must answer                                                                                         | Required proof                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| Shared types              | Which fields are generic; wire-only wrappers; absent/null; ordered JSON; metadata versus endpoint credentials                   | Old fixtures serialize identically; no dependency cycle or unintended HTTP/OAuth in protocol consumers                        |
+| Model adapter             | Request ownership/lifetimes; delta versus partial snapshot callbacks; final reply consistency; backpressure; cancellation owner | Partial, canceled and malformed streams behave predictably without duplicate final messages                                   |
+| Errors/retries            | Typed failure categories; partial usage; retryability; masking boundary; behavior after an effect may have occurred             | pirc keeps existing wire/errors; raw credentials/provider responses are not leaked; unknown outcomes are not replayed blindly |
+| Loop suspension           | Stable call IDs; one/many tools; concurrent results; approval/lock waits; continuation input; terminal reason                   | Duplicate/stale resume is refused; suspended work cancels; idle and completed remain distinguishable                          |
+| Host policy changes       | How revocation/stop notices interrupt work; grant-generation checks; preserving conversation on host restart                    | An in-flight old model reply cannot execute a removed-resource tool after rebinding                                           |
+| Scheduling/runtime        | Local and Send requirements; callback bounds; spawn/runtime assumptions; effect ordering                                        | Existing local adapter compiles and preserves conformance; Send consumer works without changing pirc scheduling               |
+| OAuth/client construction | HTTP/TLS ownership; browser/callback presentation; credential refresh/cancel; callback cleanup; optional discovery              | Local synthetic flow tests; no global provider installation, unexpected listeners or credential persistence in the library    |
+| Packaging                 | Feature dependency matrix; public exports; internal compatibility helpers; MSRV and notice retention                            | Build intended feature sets independently, including default-off OAuth; path dependencies remain unpublished                  |
+
+Recommended design sequence: inventory existing request/result/event shapes;
+write a minimal local-adapter example and a separate Send-use example as proposed
+contracts; define suspension/resume state transitions; then, only when authorized,
+implement fake-adapter proofs before moving the full agent loop. Generic-loop
+persistence should expose state/effect boundaries the host can journal, without
+owning pirc session files or promising exactly-once arbitrary tool effects.
+
+For each extraction change, record the baseline revision and exact fixtures/gates.
+Do not approve deduplication of native/pi transports merely because happy-path
+answers look alike. Compare request headers/body, cache identity, reasoning/tool
+stream semantics, aborts, usage and error behavior separately. Public API names,
+type ownership and local/Send strategy need a review; the user does not need to
+choose implementation-level boxing or lock algorithms.
+
 ## Combined delivery sequence — proposals, no implementation authorization
 
 | Stage                          | Deliverable                                                                                                   | Dependencies / gate                                                                     |

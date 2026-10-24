@@ -576,28 +576,257 @@ old binding. Temporary file contention is
 visible and release wakes a waiter without replaying a stale edit. A forged
 "pots" text label never obtains dispatch authority.
 
-## Decisions still open — discuss one at a time
+## Specification review: what is not detailed enough (2026-10-24)
 
-1. **Revocation engineering:** context retention (A), the warning, confirmed
-   removal of subsequent access and agent notification are decided. Validate the
-   mechanism for stopping/rebuilding affected sandboxes, remote acknowledgement,
-   partial effects and overlapping independent grants; do not reopen A as a choice.
-2. **Workspace setup:** allocation timing for drafts, main cwd with several mounts,
-   read/write defaults and initial same-Node restriction. The ability to configure,
-   mount and create folders is agreed; live-switching UX is recorded above.
-3. **Shared project information:** durable board and project notes versus a single
-   freeform shared memory, rule editing, retention and conflicts. Recommend board
-   plus scoped notes plus host-reported resource waiting, with separate authority.
-4. **Task threshold:** long/background and multi-agent work should be tracked;
-   define automatic creation and completion/acceptance criteria without making
-   ordinary chat cumbersome. Do not equate task creation with execution approval.
-5. **pots controls:** initial scopes, standing dispatch grants, takeover, budgets,
-   quiet hours and responsibility lifecycle. Product references do not authorize
-   unrestricted computer access or every referenced integration.
-6. **Native identity/topology:** deferred at the user's request; evaluate secure
-   App independence without exposing raw Node/tool endpoints. Provider OAuth
-   extraction does not solve this login problem.
-7. **Library decisions:** crate names, neutral model types/config split, optional
-   OAuth/features, local/Send contract, error representation and eventual license.
-   Preserve all six routes first; investigate consolidation separately.
-8. **Flutter Web:** evaluation only after the shared behavior contract is stable.
+The product direction and decision A are settled, but this is not yet a complete
+implementation specification. The gaps below separate engineering work from
+choices that change user-visible behavior. Suggested defaults remain proposals.
+Do not ask the user to design locks or Rust traits; bring them the relevant
+behavior and tradeoffs. Keep App topology and Flutter Web deferred as requested.
+
+### 1. Live transition failure and recovery — foundational
+
+**Missing:** a durable state machine, commit boundary, acknowledgement ownership,
+partial effects, offline behavior and the exact process boundary. The agent itself
+currently runs inside the sandbox: preserving a conversation does not establish
+that the same agent process can survive a mount change. Specify what the Node
+supervisor persists before stopping/restarting an agent and its descendants.
+
+Proposed transition contract (internal names, not approved API enum values):
+
+| State            | Required fact                                                             | Permitted next behavior                                                                     |
+| ---------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| Preview          | Current binding/revision and affected tools/resources shown               | Cancel without mutation; confirm against that revision                                      |
+| Accepted         | Transition intent durable; old-generation dispatch fenced                 | Notify execution host; duplicate request returns this transition                            |
+| Revoking         | Host stops affected effects/children and retires old authority            | Keep UI applying; never claim the old mount is already inaccessible without acknowledgement |
+| Preparing        | Revocation acknowledged; replacement policy/environment being prepared    | New workspace effects remain blocked                                                        |
+| Ready            | Host acknowledges installed binding; canonical revision committed         | Deliver trusted environment-change event and accept new-generation effects                  |
+| Blocked / failed | Last completed stage, affected resources and outcome uncertainty recorded | Retry/reconcile; no silent regrant of the removed resources                                 |
+
+If the new workspace fails after old access was revoked, remain blocked or use
+an explicitly selected safe environment. Do not restore old project access as
+an automatic rollback. A transition to server B must not expose new execution
+as ready while server A's removed authority remains unaccounted for. Unrelated
+user programs are not killed to enforce an agent's transition.
+
+**Engineering deliverable:** state diagram and a failure matrix for every stage,
+including Gateway/Node restart, two devices switching simultaneously, an in-flight
+model reply proposing an old tool call, old terminals, open descriptors and
+orphaned background children. Define notice ordering and restart reconstruction.
+
+**Gate:** one command ID yields one transition; each crash point resumes safely;
+old approvals/tool calls cannot act after revocation; original changes survive.
+Reconfirming context retention or the warning is unnecessary: both are decided.
+
+### 2. Resource identity, mount precedence and default cwd — user decision first
+
+**Missing:** whether the workspace is one main directory with additional mounts,
+how aliases resolve, permission defaults, overlap handling, resource lifetime and
+who can change project bindings for other conversations.
+
+Recommended starting shape: one chosen main working directory plus named mounts.
+Each mount has a stable resource ID, Node ID, resolved source identity, alias,
+read/write mode, grant source (project or explicit conversation grant), revision
+and ownership (user folder or pirc-managed allocation). The same underlying
+folder must not gain separate write-lock identities merely through two aliases.
+Do not claim Node-local path identity solves cross-Node shared filesystems.
+
+The current [sandbox policy](../docs/deploy/sandbox-and-browser.md#what-the-policy-is)
+allows broad reads outside private paths. Removing a mount alone cannot meet the
+new requirement if the old path remains readable through that policy or a parent
+mount. Specify explicit deny/grant precedence and resolve symlink/parent aliases.
+An independent grant must be visible; it must not be invented to defeat removal.
+
+**User decisions:** main-directory selection; default read/write access for
+additional folders; handling a separately granted copy of the removed path;
+whether one mount change in project settings applies to all member conversations.
+Recommend inherited project changes with an affected-conversation preview and
+revocation enforcement, rather than silent per-conversation copies of settings.
+
+**Gate:** overlapping read-only/read-write roots, duplicate aliases, removed cwd,
+missing paths and unauthorized creation targets have deterministic outcomes.
+Empty-draft abandonment never deletes a user-created folder. Physical allocation
+at first send versus explicit Create folder remains a small UX decision.
+
+### 3. Project rules, shared notes and retained context — user decision first
+
+**Missing:** authoritative storage, edit rights, revision/conflict behavior,
+retention, search and what updates existing conversations observe.
+
+Recommend three separate records rather than a single shared text blob: approved
+project rules, revisioned project notes, and an append-only attributed board.
+Keep Node file enforcement independent from all three. Agents can propose rule
+changes; ordinary board posts cannot overwrite rules or grant permissions.
+Concurrent note edits require expected revisions and conflict review.
+
+Decision A remains in force: old dialogue stays model context. After departure,
+the active prompt states the new environment and effective rules; old quoted
+rules are historical material, not current policy. No new project retrieval is
+allowed. A departure does not change memory authorship or delete other agents'
+notes. Global USER/MEMORY and repository handoffs retain their existing provenance.
+
+**User decisions:** who may edit durable project notes; whether agents may write
+notes directly or only propose; when non-permission rule edits reach active
+conversations; board visibility/retention and treatment on project deletion.
+Recommend applying ordinary rule edits at the next safe turn boundary with the
+revision recorded, while access revocations use the confirmed immediate-transition
+flow. Do not confuse this with a fresh approval of project-only global memory.
+
+**Gate:** two agents cannot silently overwrite each other's note; project leave
+removes fresh retrieval but retains conversation history; old rules cannot restore
+an old grant; deletion previews enumerate the relevant records and exclusions.
+
+### 4. Tasks and existing goal/todo/team tools — engineering mapping plus UX choices
+
+**Missing:** one authoritative task identity, mapping to existing `goal`, `todo`
+and team `task_*` tools, automatic-creation criteria, completion and retry semantics.
+Without this mapping the redesign would add another task list to an already
+redundant experience.
+
+Recommend one durable product task per meaningful objective. A goal describes its
+objective; todos/milestones are progress within it; a delegated team task maps to
+a child task or an internal step. Choose that mapping explicitly before changing
+storage or showing totals. The same job seen in a conversation, project or pots
+must keep one identity and one authoritative status.
+
+Define owner, origin request, parent/dependencies, target binding, attempts,
+blocking reason, artifacts, acceptance criteria and cancellation intent. An agent
+ending a turn is not proof that its background jobs finished. Retry adds an
+attempt, preserving the old outcome; it does not manufacture a second objective.
+Do not infer execution permission from creating or accepting a task record.
+
+**User decisions:** complex-work threshold and whether finished work defaults to
+Completed or Ready for review. Recommend automatic tracking for background and
+multi-agent work, optional tracking for brief edits, and Ready for review when
+the request explicitly needs user acceptance. Show stages/known counts instead
+of invented percentages.
+
+**Gate:** a parent cannot finish while required child work remains running or
+blocked; cancellation does not silently restart it; Web and App show the same
+milestones without duplicate goal/todo/task counts.
+
+### 5. Collaboration waits and isolation — engineering detail, limited UX choices
+
+**Missing:** queue/wait identity, release events, fairness, deadlock handling,
+crash cleanup and a deliberate same-folder versus isolated-worktree policy.
+
+Specify a host-reported wait with task/attempt, resource, holder, reason and
+cancellation token. Release invalidates the wait and prompts rechecking grants
+and current file contents; it does not directly execute a previously computed
+edit. Scheduling wake-ups should not consume repeated model calls. Avoid lost
+wake-ups if release happens while the waiter subscribes.
+
+Detect A-waits-for-B/B-waits-for-A cycles. Stop/escalate or reschedule work safely;
+do not unlock an active writer after an arbitrary timer. A crashed holder and
+its children must be reconciled before another writer is granted access.
+External editors and arbitrary shell writes remain outside complete attribution.
+
+**User decision:** preferred default for conflicting parallel coding work.
+Recommend shared reads and non-overlapping edits; offer isolated worktrees when
+parallel writes overlap. Their results still need explicit integration/review.
+Detailed queue algorithms and lock bookkeeping are engineering decisions.
+
+**Gate:** release races, stopped holders, cycles, external edits and a late waiter
+cannot cause silent overwrite, false completion, infinite polling or bypass.
+
+### 6. pots authority, instruction conflicts and attention budget — user policy
+
+**Missing:** a grant matrix, instruction precedence, budget accounting and the
+lifetime of recurring responsibilities. The verbs "observe" and "coordinate"
+are not sufficient to determine who may start/stop/change a particular task.
+
+Specify per-scope read-progress/read-content, suggest, create-task, dispatch,
+follow-up, stop/reprioritize and notify grants. Separate issuing an instruction
+from authorizing the target's tool effect. Each dispatch records pots identity,
+originating user request or standing grant, target, current grant revision and
+idempotency identity. Verify the same grant at delivery and effect boundaries.
+
+Recommend explicit user stop/takeover supersedes queued pots dispatch; pots may
+report a resulting conflict but cannot relaunch the task automatically. A comment
+from another agent or an external source is not the user's new instruction.
+Clarify whether direct user intervention suspends only the affected task or an
+entire responsibility; do not stop unrelated work by accident.
+
+**User decisions:** initial observation scope, standing execution grants, spending
+and concurrency limits, quiet hours, digest cadence and whether a paused pots
+also pauses already delegated work. Separate pause new coordination from stop
+running tasks so the effect is visible. No default amounts/times are approved.
+
+**Gate:** repeated events produce one actionable suggestion; dismissed suggestions
+stay quiet until materially changed; denied/revoked grants survive retries;
+budget exhaustion is reported; agents cannot create a mutual-dispatch loop.
+
+### 7. Shared client commands and synchronization — specify now, topology later
+
+**Missing:** request/result envelopes, cursor scope, revisions, reconnect fallback,
+local drafts and canonical versus local UI state. Independent App acceptance
+cannot be reduced to having an HTTP connection.
+
+Proposed contract inventory (logical fields, not finalized routes/schema):
+
+| Contract             | Minimum identity/state                                                                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Command              | Owner from authentication; actor; target IDs; idempotency key; expected revision; binding/grant generation where relevant |
+| Command outcome      | Accepted/applied/rejected/unknown; operation/transition ID; current revision; structured reason and permitted next action |
+| Workspace transition | Previous/desired binding; affected attempts; current stage; host acknowledgement; interrupted effects and error           |
+| Event                | Stable event identity; defined stream cursor; aggregate revision; actor/origin; target; occurrence time                   |
+| Snapshot             | Canonical revision and resume cursor; capabilities; connection/execution status; outstanding decisions                    |
+| Decision             | Question/action identity; source task; revision; pending/resolved/expired; resolver and outcome                           |
+| Local draft          | Account and draft identity; selected binding; text and attachment lifecycle; explicit unsent state                        |
+
+Do not accept client-provided actor labels or grants as proof. Define atomic
+snapshot-plus-event handoff, missing-cursor fallback, duplicates and out-of-order
+updates; a stale event cannot resurrect a removed mount or answered question.
+Reading a notification, dismissing it and resolving its action are separate facts.
+Offline commands with possible side effects require outcome reconciliation,
+not an automatic retry with a new identity.
+
+**Deferred user decision:** native sign-in, server exposure and connection security
+mechanism, as explicitly requested. Do not select a new public port while defining
+these neutral contracts. Existing desktop-Web approval dependencies remain a
+known obstacle until that design is settled.
+
+**Gate:** two devices race a switch/approval, a push is delayed, and a response is
+lost after successful application: both clients converge without duplicate work,
+wrong-account cache exposure or needing the other Web client online.
+
+### 8. Migration, extraction and delivery boundaries — engineering/review gates
+
+**Missing:** old-to-new identity mapping, schema/version support, cutover behavior,
+release scope and a realistic rollback boundary. Current re-export/parity plans
+for crates do not cover product-data migration.
+
+Inventory existing Chat projects, directory workspaces, sessions, delegation and
+team task IDs, memory ledgers, uploads, approvals, schedules and recoveries. Define
+which remain canonical, which gain aliases and which are new records. Moving
+navigation must not implicitly relocate files or change a scheduled job's target.
+Use actual representative old fixtures, including large histories and pending work.
+
+Recommend small independently verifiable deliveries: resource/transition contract,
+then unified conversation workflow and task tracking, then pots coordination and
+bounded proactivity. Provider extraction can proceed as a separately approved
+behavior-preserving change; reusable-loop integration has its own API and event
+ordering gate in [pots and Rust foundations](pots-and-library-extraction.md).
+
+**Owner decisions:** first implementation slice and library naming/public API
+choices. Flutter Web remains separate evaluation; no framework replacement or
+crates.io publication is implied. Rollback must name the supported data version;
+switching back the UI is not safe database downgrade proof.
+
+**Gate:** interrupted upgrades resume; stable links and memory provenance survive;
+pending work is neither lost nor replayed; old clients are supported explicitly
+or refused clearly; no migration silently enables pots monitoring or new grants.
+
+### Recommended discussion order
+
+1. Main working directory, additional mounts and read/write defaults.
+2. Project rule/note update semantics and project-wide mount changes.
+3. Task creation, review/completion and parallel-work isolation defaults.
+4. pots standing grants, pause/takeover and notification/budget settings.
+5. App authentication/topology when the user chooses to reopen it.
+6. Extraction API choices and the first implementation slice.
+
+Meanwhile the engineering specification should fill in revocation/recovery,
+identity mapping, protocol examples and failure fixtures. Those details are not
+all product questions for the user to answer. Confirmed context retention and
+live-switch warning behavior are not reopened by this review.
