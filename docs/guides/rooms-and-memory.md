@@ -53,7 +53,11 @@ one only once you agree.
 
 When a conversation in one room keeps going about something another room covers (15
 messages or more), pirc asks once that day whether to continue there; say yes and it moves,
-with the open loops of that conversation.
+with the open loops of that conversation and a copy of what was said about it: the new room
+shows the messages as a quote — who said it, when, their words and the names of any files —
+while the old room keeps every message and still takes new ones. The copy keeps the newest
+50 messages (up to 20,000 characters, a longer message cut at 4,000) and says how many older
+ones did not fit; files are named, never copied.
 
 ## Memory
 

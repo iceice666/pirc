@@ -69,12 +69,24 @@ The desktop room is the design's three columns
   anchor (title, status glyph and count, the thread's last activity, Open
   thread), file attachments as a card with "Download" and images at 240×135.
   Lines (worker, loop, memory, wake, move) sit at the same 72px inset with an
-  icon and their compact actions. A "Today"/date hairline begins each day, and
-  a red "New" divider marks where the unread messages began: `RoomsState`
-  keeps `unreadMark` (the room's `readSeq` when it opened) because opening a
-  room marks it read. A question is a warning-tinted card with an "ASKS YOU"
-  badge, its request in mono, Yes / Allow again this session / No / Thread and
-  "or just reply" — the same `workersApi.answer` call as before.
+  icon and their compact actions. A move that copied a topic's conversation
+  (`body.quote`) is a message of its own from the host: its body's `text` is
+  the gateway's sentence ("Copied N messages about …"), shown by clients that
+  cannot draw the copy and skipped here, and `figure.quote` draws the rest —
+  the count and topic, the old room's name as a button that opens it, each
+  quoted message with its author (a face in its colour, a person in theirs),
+  the date it was said, its words (Markdown through the same component with
+  `fileLinks={false}` for a face, plain text with mentions for a person), its
+  files' names, and "Cut short here" when the gateway trimmed a long one, then
+  how many older messages did not fit. It uses `--accent` for the rail,
+  `--bg-sidebar` behind and `--line` between entries, wraps anywhere, and
+  keeps the same one-column shape on a phone. A "Today"/date hairline begins
+  each day, and a red "New" divider marks where the unread messages began:
+  `RoomsState` keeps `unreadMark` (the room's `readSeq` when it opened)
+  because opening a room marks it read. A question is a warning-tinted card
+  with an "ASKS YOU" badge, its request in mono, Yes / Allow again this
+  session / No / Thread and "or just reply" — the same `workersApi.answer`
+  call as before.
 - **Composer**: a filled `--bg-composer` surface, a round 28px attach button
   (files, paste and drag-and-drop), a one-line textarea that grows, the
   "@ to bring in a face" placeholder, an accent 32px circular send, and at most
