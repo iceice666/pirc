@@ -108,3 +108,29 @@ scenario numbering, and the final diff; verify the included App fixes through
 relevant existing automated tests/static analysis after integration. Do not start
 new runtime architecture implementation to make this review appear complete.
 Record actual command results separately from the future acceptance scenarios.
+
+### Verification performed before push
+
+After `git pull --rebase origin main`, the branch was up to date with baseline
+`aca6eeb6` and had no integration conflicts. At `311b995a`, the included App changes
+passed `flutter analyze --no-pub` and **230 tests** across these existing suites:
+
+- `html_keyboard_events_test.dart`
+- `browser_parity_test.dart`
+- `terminal_parity_test.dart`
+- `timeline_parity_test.dart`
+- `document_absolute_position_test.dart`
+- `document_absolute_basis_test.dart`
+- `document_live_runtime_dialog_author_position_test.dart`
+
+Tests used `flutter test --no-pub --concurrency=2 --reporter=expanded` in
+`apps/android`. These verify the included keyboard protocol/localized error and
+modal-positioning changes, not the future architecture. No emulator or Chrome
+instance was started. Only this run's newly created `build/native_assets`,
+`build/test_cache` and `build/unit_test_assets` were removed; pre-existing releases
+and parity artifacts were preserved.
+
+Markdown formatting, local references/heading anchors, the 32 numbered future
+acceptance cases and diff whitespace were checked. This verification record changes
+no runtime source. Release publication and new architecture implementation remain
+outside the current request.
