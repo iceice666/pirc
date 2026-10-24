@@ -27,7 +27,7 @@ use serde_json::{Value, json};
 
 use crate::app::{App, AppState, ReqBody, forward};
 use crate::auth::Identity;
-use crate::db::{Session, Store, Workspace, atomic};
+use crate::db::{DeletionStatus, Session, Store, Workspace, atomic};
 use crate::error::{ApiError, ApiResult};
 use crate::http::{no_content, ok};
 use crate::memory::{ProjectChoice, ProjectDecision};
@@ -69,7 +69,7 @@ fn project(
                 "Project belongs to another user",
             ));
         }
-        if deletion.status == "deleted" {
+        if deletion.status == DeletionStatus::Deleted {
             return Ok(None);
         }
     }

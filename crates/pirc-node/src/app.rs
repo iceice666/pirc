@@ -46,7 +46,9 @@ use crate::project_files;
 use crate::router::{Body, Request, Response, Route, delete, get, parse, patch, post, put};
 use crate::runner::{CommandPayload, Delivery};
 use crate::services::Node;
-use crate::store::{NameSource, SessionRow, Store, UploadKind, UploadRow, Workspace};
+use crate::store::{
+    DeletionStatus, NameSource, SessionRow, Store, UploadKind, UploadRow, Workspace,
+};
 use crate::util::{head16, hex, payload_hash, prefix_uuid, random_bytes, sha256_hex};
 
 /// Core's routes for this node's role (the assistant prompt routes exist on
@@ -736,7 +738,7 @@ async fn delete_session(
             if deletion.owner_user != user {
                 return Err(ApiError::forbidden("Chat belongs to another user"));
             }
-            if deletion.status == "deleted" {
+            if deletion.status == DeletionStatus::Deleted {
                 return Ok(Response::empty(204));
             }
         }
@@ -883,7 +885,7 @@ async fn delete_workspace(
             if deletion.owner_user != user {
                 return Err(ApiError::forbidden("Project belongs to another user"));
             }
-            if deletion.status == "deleted" {
+            if deletion.status == DeletionStatus::Deleted {
                 return Ok(Response::empty(204));
             }
         }

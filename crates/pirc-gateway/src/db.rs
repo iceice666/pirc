@@ -632,11 +632,38 @@ pub struct Lease {
     pub expires_at: i64,
 }
 
-/// A session being deleted: its owner and `deleting`/`deleted`.
+/// Where a session's or project's deletion stands (`status` column).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DeletionStatus {
+    /// Fenced; the node's cleanup may still be running or need a retry.
+    Deleting,
+    Deleted,
+}
+
+impl DeletionStatus {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "deleting" => Some(Self::Deleting),
+            "deleted" => Some(Self::Deleted),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Deleting => "deleting",
+            Self::Deleted => "deleted",
+        }
+    }
+}
+
+sql_text_enum!(DeletionStatus);
+
+/// A session or project being deleted: its owner and how far it got.
 #[derive(Clone, Debug)]
 pub struct Deletion {
     pub owner_user: String,
-    pub status: String,
+    pub status: DeletionStatus,
 }
 
 /// Run `body` atomically: a savepoint, so it nests inside a caller's
@@ -2140,7 +2167,7 @@ mod tests {
         conn.finish_session_deletion(&session.id).unwrap();
         assert_eq!(
             conn.session_deletion(&session.id).unwrap().unwrap().status,
-            "deleted"
+            DeletionStatus::Deleted
         );
     }
 

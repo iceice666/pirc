@@ -471,12 +471,21 @@ pub struct Recovery {
     pub unknown_commands: usize,
 }
 
+/// Where a deletion stands (`status` of `session_deletions` and
+/// `workspace_deletions`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DeletionStatus {
+    /// Fenced; the cleanup may still be running or need a retry.
+    Deleting,
+    Deleted,
+}
+
 /// A row of `session_deletions` or `workspace_deletions`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SessionDeletion {
     pub owner_user: String,
-    /// `deleting` or `deleted`.
-    pub status: String,
+    pub status: DeletionStatus,
 }
 
 /// The node's queries (owner: **core**), each the `GatewayDatabase`
@@ -1004,7 +1013,7 @@ impl Store for Connection {
                 |row| {
                     Ok(SessionDeletion {
                         owner_user: row.get(0)?,
-                        status: row.get(1)?,
+                        status: parse_enum(row.get(1)?)?,
                     })
                 },
             )
@@ -1184,7 +1193,7 @@ impl Store for Connection {
                 |row| {
                     Ok(SessionDeletion {
                         owner_user: row.get(0)?,
-                        status: row.get(1)?,
+                        status: parse_enum(row.get(1)?)?,
                     })
                 },
             )
@@ -1975,7 +1984,7 @@ mod tests {
         assert_eq!(connection.get_upload("upload_1").unwrap_err().status, 404);
         assert_eq!(
             connection.workspace_deletion("p").unwrap().unwrap().status,
-            "deleted"
+            DeletionStatus::Deleted
         );
     }
 
@@ -2108,7 +2117,7 @@ mod tests {
             db.session_deletion(&id).unwrap(),
             Some(SessionDeletion {
                 owner_user: "u".into(),
-                status: "deleted".into()
+                status: DeletionStatus::Deleted,
             })
         );
     }

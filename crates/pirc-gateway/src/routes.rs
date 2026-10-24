@@ -17,7 +17,7 @@ use serde_json::{Map, Value, json};
 
 use crate::app::{AppState, Claimed, ReqBody, forward, query_map};
 use crate::auth::Identity;
-use crate::db::{CapabilitiesPatch, Lease, Store, atomic};
+use crate::db::{CapabilitiesPatch, DeletionStatus, Lease, Store, atomic};
 use crate::error::{ApiError, json_response};
 use crate::http::{Body, no_content, ok};
 use crate::node_events::run_name;
@@ -947,7 +947,7 @@ pub async fn delete_session(
             if deletion.owner_user != user {
                 return Err(ApiError::new(403, "forbidden", "Chat belongs to another user").into());
             }
-            if deletion.status == "deleted" {
+            if deletion.status == DeletionStatus::Deleted {
                 return Ok(no_content());
             }
         }
