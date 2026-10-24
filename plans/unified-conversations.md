@@ -5,7 +5,8 @@
 Status: architecture planning baseline, updated 2026-10-24. The user accepted the
 recommendations from the specification review for inclusion in this plan. Only
 planning is authorized: this does not authorize implementation, schema migration,
-deployment, remote push or release, or apply new permissions to a running system.
+deployment, release or changes to running permissions. Repository publication is
+separately governed by the user's explicit review/rebase/push request.
 Accepted design choices and still-open details are distinguished below.
 
 ## Agreed direction and priority
@@ -61,8 +62,9 @@ The user accepted all seven follow-up recommendations, detailed items 1–3 firs
 then requested the same depth for items 4–7. [Conversation execution contracts](conversation-execution-contracts.md)
 now covers all seven with flows, authority/ownership boundaries, exception handling
 and future acceptance cases. These are adopted target behaviors; this planning
-work does not implement code, migrations or deployed permission changes. Keep the
-updates local; no push is authorized.
+work does not implement code, migrations or deployed permission changes. The user
+subsequently authorized review, integration and publication of the repository commits;
+that does not authorize implementing this architecture or publishing a release.
 
 | Item                                 | Accepted direction                                                                                                                                                    | Detail status                                                                                                                                                    |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -229,16 +231,16 @@ The 2026-10-24 user clarification replaces the earlier organization-only project
 proposal: project membership also supplies mounted resources and configuration;
 leaving removes project-derived access. Implementation details remain proposals.
 
-| Concept             | Responsibility                                                                                    | Relationship and lifetime                                                                                                            |
-| ------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Project             | Folder-like organization plus shared mounts, rules/configuration and proposed collaboration board | Contains conversations and one or more resource bindings; need not equal one physical directory                                      |
-| Conversation        | Stable dialogue, attributed messages/results and a configured workspace                           | Optionally belongs to one project; has its own bindings plus currently authorized project bindings                                   |
-| Workspace binding   | Resolve the selected Node, primary working directory and named read/write mounts                  | Configurable when creating a conversation; can use existing folders or an explicitly created server folder; versioned at transitions |
-| Resource mount      | Describe a directory/configuration resource, its alias, host, permissions and grant source        | May derive from a project or explicit conversation configuration; not just a symlink or display label                                |
-| Task                | Track an objective, dependencies, owner, progress, blocking reason and deliverables               | One originating conversation; can have child tasks and many attempts; pots links to the same identity                                |
-| Execution attempt   | Run an agent turn/work against an explicit environment and authority generation                   | One conversation, optionally one task; its resource set cannot silently mutate mid-run                                               |
-| Pending decision    | Durable proposal/confirmation with an authoritative outcome                                       | References task/attempt and revision; shared across devices                                                                          |
-| pots responsibility | Track an ongoing user-authorized concern and when to observe or follow up                         | May create suggestions and authorized tasks; bounded by scopes, budget and pause controls                                            |
+| Concept             | Responsibility                                                                                    | Relationship and lifetime                                                                                                                 |
+| ------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Project             | Folder-like organization plus shared mounts, rules/configuration and proposed collaboration board | Contains conversations and one or more resource bindings; need not equal one physical directory                                           |
+| Conversation        | Stable dialogue, attributed messages/results and a configured workspace                           | Optionally belongs to one project; has its own bindings plus currently authorized project bindings                                        |
+| Workspace binding   | Resolve the selected Node, primary working directory and named read/write mounts                  | Configurable when creating a conversation; can use existing folders or an explicitly created server folder; versioned at transitions      |
+| Resource mount      | Describe a directory/configuration resource, its alias, host, permissions and grant source        | May derive from a project or explicit conversation configuration; not just a symlink or display label                                     |
+| Task                | Track an objective, dependencies, owner, progress, blocking reason and deliverables               | One immutable request/suggestion origin; optional execution conversation until dispatch; child tasks/attempts and pots share its identity |
+| Execution attempt   | Run an agent turn/work against an explicit environment and authority generation                   | One conversation, optionally one task; its resource set cannot silently mutate mid-run                                                    |
+| Pending decision    | Durable proposal/confirmation with an authoritative outcome                                       | References task/attempt and revision; shared across devices                                                                               |
+| pots responsibility | Track an ongoing user-authorized concern and when to observe or follow up                         | May create suggestions and authorized tasks; bounded by scopes, budget and pause controls                                                 |
 
 ```mermaid
 flowchart TD
@@ -308,6 +310,10 @@ Boundaries:
   Plain questions and brief edits can remain ordinary turns. Progress shows
   milestones and blocking reasons; percentages need an actual measurable basis.
   User acceptance, where required, is distinct from an agent saying it is done.
+- A tracking-only pots task has an origin/owner but may have no execution
+  conversation or attempt yet. Start reuses an explicitly selected conversation
+  or creates one once at the first dispatched instruction. Opening/tracking the
+  suggestion alone must not add an empty session to the conversation list.
 - **Attempt:** queued → starting → running → succeeded / failed / stopped;
   disconnect can leave outcome unknown. Do not treat lost connectivity as success
   or blindly retry a possibly completed side effect.
@@ -613,6 +619,9 @@ replace arbitrary content with simplified output or authorize WebView fallback.
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.
+The [integrated architecture review](unified-architecture-review.md) separates
+corrected contradictions, pending product settings and engineering proof gates;
+its review scope is this architecture family, not every historical repository plan.
 
 ### A. Relationship and workflow review — current priority
 

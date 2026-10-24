@@ -9,8 +9,10 @@ capability composition, message/task routing, overlapping folder permissions,
 Node switching, lifecycle/deletion, content access and pots coordination.
 This document records
 target behavior and future acceptance cases; it does not implement or verify it.
-Keep all work local. App authentication/topology, Flutter Web selection and the
-first code implementation remain separate decisions.
+The later user request authorizes review/rebase/push of repository commits, not
+implementation of these contracts. App authentication/topology, Flutter Web
+selection and the first code implementation remain separate decisions. See the
+[integrated architecture review](unified-architecture-review.md) for remaining gates.
 
 The main plan owns domain lifetimes, retained context (decision A), revocation,
 checkpoints and migration. This document refines those contracts. Names below
@@ -483,6 +485,24 @@ compatibility baseline. These two operations intentionally differ:
   where that provenance was recorded. Do not treat blanket Keep or Forget as the
   default for every mixed entry.
 
+For the new cross-project move feature, record the project-membership generation
+at each memory version/proposal/source write, alongside stable conversation and
+original-entry provenance. Moving conversation C from A to B does not reassign
+C's old A-origin versions to B or make its later B-origin versions part of A.
+Project deletion selects current member conversations for conversation destruction,
+but classifies memory by immutable write-time provenance, including moved or
+previously deleted sources. A's deletion cannot delete C merely because C once
+belonged to A. Single-conversation deletion still uses its original-entry rule.
+
+Run the project-level global-memory plan once. Internal cleanup of its member
+conversations must not invoke the standalone conversation-memory purge afterward:
+that would undo the user's mixed-history Keep/Edit choices. Use a recorded cleanup
+scope/receipt so retry or restart cannot change the selected deletion semantics.
+Legacy records without sufficient membership history require an explicit migration
+classification/review; never infer historical ownership from today's membership.
+New writes during a membership transition must bind to a committed generation or
+wait; a model-supplied project label is not provenance.
+
 Project deletion tombstones remain project-scoped; global Forget retains its own
 semantics. New project notes must record sources/version origins so known derived
 content cannot evade deletion by being relabelled as a board post. Apply the same
@@ -555,7 +575,10 @@ not a retry of a canceled UI dialog.
   writers are reconciled and no late result resurrects it. Mounted user files stay.
 - **L5-3:** Exercise single-conversation versus project memory cleanup with original,
   edited, suffix and mixed histories, a stale review revision and an earlier-deleted
-  source. Match existing semantics and preserve other contributions where required.
+  source. Also move a conversation A → B: A-origin and B-origin versions keep
+  their write-time scope, and deleting A does not delete the moved conversation.
+  Project cleanup/restart must not run a second standalone memory purge that undoes
+  a reviewed Keep/Edit decision. Missing legacy scope requires review, not a guess.
 - **L5-4:** Delete a project with member conversations, an external schedule and an
   independent delegated session. Preview and results distinguish owned deletion,
   blocked dependent targets and retained external records; no automatic retargeting.
@@ -693,11 +716,16 @@ An accepted work suggestion links to the same canonical task and source conversa
 used elsewhere. Opening it from pots, a project, a notification or the App changes
 the view, not task ownership or the number of work conversations.
 
-When no work conversation exists, the first accepted work instruction creates one
-through the ordinary authorized first-message flow. Reopening a suggestion or
-replaying its acceptance returns that existing mapping. Coordination history may
-record the user's request and task links, but must not mirror every worker message
-into a second independently actionable work transcript.
+Separate a task's immutable origin (user message or pots responsibility/suggestion),
+record owner and optional execution-conversation binding. A tracking-only task can
+exist without an execution conversation or attempt. Reopening/accepting it for
+tracking does not create an empty session. On the first authorized dispatch, reuse
+the explicitly selected conversation or create/map one through the idempotent
+first-message flow. Retrying Start returns that same mapping. An origin link alone
+does not confer ownership for deletion or authority for execution.
+
+Coordination history may record the user's request and task links, but must not
+mirror every worker message into a second independently actionable work transcript.
 
 | Record         | Minimum facts and purpose                                                                                                                                      |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -814,7 +842,9 @@ and real background push delivery retain their separate design/acceptance gates.
   IDs or lost responses. One canonical task/conversation and dispatch result remain.
 - **P7-3:** Opening, reading, dismissing or choosing tracking-only never starts work.
   Start with sufficient grants runs without redundant generic approval; missing
-  scope shows the exact decision and does not dispatch early.
+  scope shows the exact decision and does not dispatch early. Tracking without
+  a target conversation creates no empty session; first Start creates/maps one
+  execution conversation once, with origin and ownership still separately recorded.
 - **P7-4:** Take over A while pots coordinates A and B. Stale A follow-ups are fenced,
   A's running effects are truthfully reported, B continues, and an explicit Stop A
   reconciles only the affected execution scope. Resume B cannot release A's takeover.

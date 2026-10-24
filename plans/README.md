@@ -46,6 +46,11 @@ preserving current memory-deletion and checkpoint ownership rules. The
 indexes the specifications. They are planning contracts, not completed implementation
 or evidence of passing runtime tests.
 
+[Integrated architecture review](unified-architecture-review.md) records the
+cross-plan contradictions corrected before publication, remaining product choices,
+and engineering proof gates. The architecture documents can be published as a
+planning baseline; this is not approval to implement every unchecked stage.
+
 ## Existing work and acceptance backlog
 
 1. **Android approval acceptance (assistant 3a).** Verify multi-line USER proposal
@@ -69,7 +74,9 @@ or evidence of passing runtime tests.
    protocol 12, mode-id stores and agent enforcement) is implemented; full Linux
    conformance passed 217 tests with reviewed snapshots on 2026-10-19. Phase 3
    was implemented 2026-10-19; remaining: the Settings Modes page, retiring
-   `kind`, an Android scratch parity capture and guide screenshots.
+   `kind`, an Android scratch parity capture and guide screenshots. Treat those
+   as existing behavior/backlog; assess further fixed-tab UI expansion against
+   the adopted unified-conversation contracts before implementation.
 5. **Workspace-memory search quality.** [Memory search](memory-search.md):
    an evaluation set, then FTS5 + BM25 with CJK bigrams replacing `LIKE`, then
    optional hybrid semantic search through a gateway-side embeddings endpoint

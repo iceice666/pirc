@@ -219,7 +219,7 @@ All signatures/names remain to be proposed; adding a trait alone is not completi
 | Host policy changes       | How revocation/stop notices interrupt work; grant-generation checks; preserving conversation on host restart                    | An in-flight old model reply cannot execute a removed-resource tool after rebinding                                           |
 | Scheduling/runtime        | Local and Send requirements; callback bounds; spawn/runtime assumptions; effect ordering                                        | Existing local adapter compiles and preserves conformance; Send consumer works without changing pirc scheduling               |
 | OAuth/client construction | HTTP/TLS ownership; browser/callback presentation; credential refresh/cancel; callback cleanup; optional discovery              | Local synthetic flow tests; no global provider installation, unexpected listeners or credential persistence in the library    |
-| Packaging                 | Feature dependency matrix; public exports; internal compatibility helpers; MSRV and notice retention                            | Build intended feature sets independently, including default-off OAuth; path dependencies remain unpublished                  |
+| Packaging                 | Feature dependency matrix; public exports; internal compatibility helpers; MSRV and notice retention                            | Build the selected feature sets independently; test OAuth disabled/enabled if that proposal is chosen; remain unpublished     |
 
 Adopted design sequence: inventory existing request/result/event shapes;
 write a minimal local-adapter example and a separate Send-use example as proposed
@@ -232,20 +232,23 @@ For each extraction change, record the baseline revision and exact fixtures/gate
 Do not approve deduplication of native/pi transports merely because happy-path
 answers look alike. Compare request headers/body, cache identity, reasoning/tool
 stream semantics, aborts, usage and error behavior separately. Public API names,
-type ownership and local/Send strategy need a review; the user does not need to
-choose implementation-level boxing or lock algorithms.
+type ownership and local/Send strategy need engineering review and proofs; the
+user does not need to choose implementation-level boxing or lock algorithms.
+Keep packaging proposals distinct from adopted choices: the feature-matrix gate
+below does not itself approve the handoff's default-off OAuth proposal. The
+[integrated review](unified-architecture-review.md) records remaining decisions.
 
 ## Combined delivery sequence — adopted direction, no implementation authorization
 
-| Stage                          | Deliverable                                                                                                   | Dependencies / gate                                                                     |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| A. Specify adopted contracts   | Project mounts, departure/revocation, workspace switching, task identity, board/wait protocol, pots authority | Complete remaining contracts/settings in Unified conversations; only planning now       |
-| B1. Provider extraction        | Pure types, compatible adapters, then transport and optional OAuth separation                                 | Owner settles names/type placement; isolate this refactor from product behavior changes |
-| B2. Product foundations        | Versioned workspace bindings, mount enforcement, durable tasks/decisions, independent-client state            | Stage A; can use the existing agent loop and provider adapter                           |
-| C. Unified workflow            | Same-conversation work, project resources, meaningful waiting/progress, Web/App contract parity               | Mount transitions, replay prevention and concurrent-writer acceptance                   |
-| D. pots                        | Overview and attributed dispatch, then scoped proactive observation/digests                                   | Tasks, provenance, grants, durable wake-ups and notification reconciliation             |
-| E. Loop extraction             | Fake-adapter core, pirc integration and event-order/conformance checks                                        | Stable provider boundary plus understood tool-wait/approval/cancel semantics            |
-| F. Optional frontend migration | Flutter Web comparison against current Web on difficult interactions                                          | Separate decision after measurement; not a dependency of App independence               |
+| Stage                          | Deliverable                                                                                                   | Dependencies / gate                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| A. Specify adopted contracts   | Project mounts, departure/revocation, workspace switching, task identity, board/wait protocol, pots authority | Complete remaining contracts/settings in Unified conversations; only planning now             |
+| B1. Provider extraction        | Pure types, compatible adapters, then transport and optional OAuth separation                                 | Settle packaging/API boundary with compatibility proof; isolate from product behavior changes |
+| B2. Product foundations        | Versioned workspace bindings, mount enforcement, durable tasks/decisions, independent-client state            | Stage A; can use the existing agent loop and provider adapter                                 |
+| C. Unified workflow            | Same-conversation work, project resources, meaningful waiting/progress, Web/App contract parity               | Mount transitions, replay prevention and concurrent-writer acceptance                         |
+| D. pots                        | Overview and attributed dispatch, then scoped proactive observation/digests                                   | Tasks, provenance, grants, durable wake-ups and notification reconciliation                   |
+| E. Loop extraction             | Fake-adapter core, pirc integration and event-order/conformance checks                                        | Stable provider boundary plus understood tool-wait/approval/cancel semantics                  |
+| F. Optional frontend migration | Flutter Web comparison against current Web on difficult interactions                                          | Separate decision after measurement; not a dependency of App independence                     |
 
 B1/B2 are independent work streams in planning; this does not authorize spawning
 agents or changing both at once. Keep integration checkpoints small so a provider
