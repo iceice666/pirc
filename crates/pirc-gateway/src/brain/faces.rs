@@ -24,7 +24,7 @@ use serde_json::{Value, json};
 use crate::app::App;
 use crate::db::Store as _;
 use crate::db::atomic;
-use crate::db::rooms::{GENERAL_ROOM_ID, HOST_FACE_ID, RoomStore};
+use crate::db::rooms::{GENERAL_ROOM_ID, HOST_FACE_ID, MessageKind, RoomStore, Speaker};
 use crate::error::{ApiError, ApiResult};
 use crate::util::{new_id, now_ms, safe_json};
 
@@ -631,9 +631,12 @@ These are the defaults; the house rules come after them and win where they diffe
 `speak_as` that face and answer; a few words of hand-over first, as the face you are, only when the change would otherwise surprise.\n\
 - Faces never talk with each other: they only hand over and report back.\n\
 - A face named with `@` answers for itself.\n\
-- A face is made only when someone asks for one or agrees to what you suggested: when a project or a recurring topic seems to deserve \
-one, say so in a sentence and ask (say that @PM could look after the SlimeOS PRs, and whether to make it), then wait; `create_face` \
-only once they say yes, never unasked.\n\
+- Work in a workspace is its face's. The workspaces under Workers say whose each is: in another face's, you do not call a worker or read \
+the repository yourself (the tool refuses); `speak_as` that face, then do it as them. As the host you work in what nobody looks after.\n\
+- A face is made only when someone asks for one or agrees to what you suggested; `create_face` never unasked. \
+The first time you are asked to do something in a workspace no face looks after yet, say so in a few words and offer one \
+(\"nobody looks after slimeos yet; want a @SlimeOS PM for it?\"), and do the work meanwhile as the host; do not ask again if they pass. \
+When a project or a recurring topic seems to deserve a face, the same: one sentence, then wait.\n\
 - Once the topic of the conversation is clear, say it with `topic` (a few words, the same name while it stays the same), \
 with the workspace or source it is about.";
 
@@ -749,6 +752,112 @@ pub fn sections(conn: &Connection, route: &Route) -> Vec<pirc_agent::context::Pr
             FACE_RULES,
         ),
     ]
+}
+
+// ---------- offering a face ----------
+
+/// Workspaces of `node_id` that no face looks after and that were never
+/// offered one: repositories only (a scratch directory is nobody's), as
+/// workers may be called in them.
+fn unoffered(app: &App, conn: &Connection, node_id: &str) -> ApiResult<Vec<crate::db::Workspace>> {
+    let mut out = Vec::new();
+    for workspace in conn.list_workspaces()? {
+        if workspace.host_id != node_id
+            || !workspace.id.contains(':')
+            || workspace.mode.as_str() == pirc_config::node::SCRATCH
+            || !app
+                .mode(&workspace.mode)
+                .is_some_and(|mode| mode.delegate_target)
+        {
+            continue;
+        }
+        let offered: bool = conn.query_row(
+            "SELECT count(*) FROM face_offers WHERE workspace_id=?",
+            [&workspace.id],
+            |row| row.get::<_, i64>(0).map(|count| count > 0),
+        )?;
+        if offered || !crate::project_links::keepers(conn, &workspace)?.is_empty() {
+            continue;
+        }
+        out.push(workspace);
+    }
+    Ok(out)
+}
+
+/// A node brought workspaces: those no face looks after are offered one,
+/// once each, in a line of the host's in `#general` (the brain is not
+/// woken; the Workers section says whose each workspace is, so a "yes"
+/// there makes it). Returns the workspaces offered.
+pub fn offer_faces(app: &App, node_id: &str) -> Vec<String> {
+    let offered = {
+        let conn = app.db.lock();
+        let workspaces = match unoffered(app, &conn, node_id) {
+            Ok(workspaces) => workspaces,
+            Err(error) => {
+                crate::log::warn(&format!(
+                    "faces: cannot look at {node_id}'s workspaces: {}",
+                    error.message
+                ));
+                return Vec::new();
+            }
+        };
+        if workspaces.is_empty() {
+            return Vec::new();
+        }
+        let names: Vec<String> = workspaces
+            .iter()
+            .map(|workspace| workspace.display_name.clone())
+            .collect();
+        let ids: Vec<String> = workspaces
+            .iter()
+            .map(|workspace| workspace.id.clone())
+            .collect();
+        let text = if names.len() == 1 {
+            format!(
+                "Nobody looks after {} on {node_id} yet. Ask for a face when it deserves one (\"make a face for {}\").",
+                names[0], names[0]
+            )
+        } else {
+            format!(
+                "Nobody looks after {} on {node_id} yet. Ask for a face when one deserves it (\"make a face for {}\").",
+                names.join(", "),
+                names[0]
+            )
+        };
+        let result = atomic(&conn, |tx| {
+            let now = now_ms();
+            for id in &ids {
+                tx.execute(
+                    "INSERT OR IGNORE INTO face_offers (workspace_id, offered_at) VALUES (?, ?)",
+                    params![id, now],
+                )?;
+            }
+            tx.post_message(
+                GENERAL_ROOM_ID,
+                Speaker::Face(HOST_FACE_ID),
+                MessageKind::Line,
+                &json!({ "text": text, "faceOffer": { "workspaces": ids } }),
+            )
+        });
+        match result {
+            Ok(message) => Some((message, ids)),
+            Err(error) => {
+                crate::log::warn(&format!(
+                    "faces: cannot offer a face in #general: {}",
+                    error.message
+                ));
+                None
+            }
+        }
+    };
+    let Some((message, ids)) = offered else {
+        return Vec::new();
+    };
+    app.room_message(&message);
+    if let Ok(room) = app.db.lock().get_room(GENERAL_ROOM_ID) {
+        app.room_changed(&room);
+    }
+    ids
 }
 
 // ---------- presence ----------

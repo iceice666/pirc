@@ -80,6 +80,8 @@ impl App {
             crate::log::error(&format!("workspace sync of {}: {error}", node.id));
         }
         self.directory_changed();
+        // Repositories nobody looks after are offered a face, once.
+        crate::brain::faces::offer_faces(self, &node.id);
         let sessions = self
             .db
             .lock()

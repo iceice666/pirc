@@ -243,6 +243,12 @@ CREATE TABLE project_links (
   PRIMARY KEY (face_id, workspace_id)
 );
 
+-- A workspace no face looks after is offered one once, in #general, when
+-- its node first brings it (brain/faces.rs `offer_faces`). offered_at: when.
+CREATE TABLE face_offers (
+  workspace_id TEXT PRIMARY KEY, offered_at INTEGER NOT NULL
+);
+
 -- Topics (decision #18): the brain tags what a turn was about with its
 -- `topic` tool, and the turn's messages carry the name (room_messages.topic).
 -- What each topic touches (a workspace or a source, as the brain said), and

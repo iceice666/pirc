@@ -633,6 +633,8 @@ pub fn call(app: &App, input: NewWorker) -> ApiResult<Delegation> {
             None,
         )
     };
+    // Another face's workspace: the brain hands over first, in the room.
+    project_links::check_territory(&app.db.lock(), &input.face_id, &workspace)?;
     // The node is connected but no longer has the workspace (a link outlives
     // it on purpose): not a reason to wait for the node.
     if project_links::removed(app, &workspace) {

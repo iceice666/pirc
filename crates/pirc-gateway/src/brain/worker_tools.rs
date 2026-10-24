@@ -38,7 +38,8 @@ use super::loops;
 use super::memory::{RoomMemory, WRITING_TOOLS, object, quoted};
 use super::turn::Progress;
 use crate::app::App;
-use crate::db::rooms::RoomInputStore;
+use crate::db::Store as _;
+use crate::db::rooms::{HOST_FACE_ID, RoomInputStore};
 use crate::delegations::{self, NewWorker};
 use crate::memory::text::clip;
 use crate::memory_records::person;
@@ -106,9 +107,21 @@ pub fn section(app: &App, waking: bool, face_id: &str) -> PromptSection {
     if workspaces.is_empty() {
         text.push_str("\n\nWorkspaces: none yet, so no worker can be called now.");
     } else {
-        text.push_str("\n\nWorkspaces (`workspace` takes the id):");
+        text.push_str("\n\nWorkspaces (`workspace` takes the id; one another face looks after is its to work in: `speak_as` it first):");
+        let conn = app.db.lock();
         for workspace in workspaces.iter().take(LISTED) {
             let field = |key: &str| workspace[key].as_str().unwrap_or_default();
+            // Whose it is, when not this face's: the keepers, or nobody's yet.
+            let keepers = conn
+                .find_workspace(field("id"))
+                .ok()
+                .flatten()
+                .map(|stored| {
+                    (
+                        stored.mode.as_str() == pirc_config::node::SCRATCH,
+                        crate::project_links::keepers(&conn, &stored).unwrap_or_default(),
+                    )
+                });
             let mut line = format!(
                 "\n- {}: {} on {}",
                 field("id"),
@@ -133,7 +146,19 @@ pub fn section(app: &App, waking: bool, face_id: &str) -> PromptSection {
             match workspace["linked"].as_str() {
                 Some("workspace") => line.push_str("; yours"),
                 Some("repository") => line.push_str("; a clone of yours"),
-                _ => {}
+                _ => match keepers {
+                    Some((_, keepers)) if !keepers.is_empty() => {
+                        let whose: Vec<String> = keepers
+                            .iter()
+                            .map(|keeper| format!("{} (speak_as {})", keeper.name, keeper.face_id))
+                            .collect();
+                        line.push_str(&format!("; {}'s", whose.join(" and ")));
+                    }
+                    Some((false, _)) if face_id == HOST_FACE_ID => {
+                        line.push_str("; no face looks after it yet");
+                    }
+                    _ => {}
+                },
             }
             line.push(')');
             text.push_str(&line);
@@ -519,7 +544,14 @@ impl WorkerTool {
                 let (Some(reference), Some(op)) = (text("workspace"), text("op")) else {
                     return Ok(ToolResult::error("`workspace` and `op` are required"));
                 };
-                let workspace = match readable(&app, &reference) {
+                let workspace = match readable(&app, &reference).and_then(|workspace| {
+                    crate::project_links::check_territory(
+                        &app.db.lock(),
+                        &self.memory.face(),
+                        &workspace,
+                    )
+                    .map(|()| workspace)
+                }) {
                     Ok(workspace) => workspace,
                     Err(error) => return Ok(ToolResult::error(error.message)),
                 };

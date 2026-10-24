@@ -377,6 +377,7 @@ pub async fn create_workspace(
     let local_id = workspace.id.clone();
     app.nodes.add_workspace(&node_id, workspace, raw)?;
     app.directory_changed();
+    crate::brain::faces::offer_faces(&app, &node_id);
     let stored = app
         .db
         .lock()

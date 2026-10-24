@@ -1701,3 +1701,75 @@ async fn a_topic_move_shows_both_rooms_and_announces_the_copy() {
                 && event.data["message"]["body"]["move"]["direction"] == "to")
     );
 }
+
+/// A node's repositories nobody looks after are offered a face once, in
+/// one line of the host's in #general; a scratch directory and a face's
+/// own workspace are not.
+#[tokio::test]
+async fn workspaces_nobody_looks_after_are_offered_a_face_once() {
+    use crate::db::Store as _;
+    let h = harness();
+    {
+        let conn = h.app.db.lock();
+        conn.sync_remote_workspaces(
+            "home",
+            &[
+                (
+                    "slimeos".into(),
+                    "SlimeOS".into(),
+                    crate::db::ModeId::new("directory").unwrap(),
+                ),
+                (
+                    "site".into(),
+                    "site".into(),
+                    crate::db::ModeId::new("directory").unwrap(),
+                ),
+                (
+                    "tmp".into(),
+                    "tmp".into(),
+                    crate::db::ModeId::new("scratch").unwrap(),
+                ),
+            ],
+        )
+        .unwrap();
+        faces::create(
+            &conn,
+            &faces::NewFace {
+                name: "Web".into(),
+                territory: faces::Territory {
+                    workspaces: vec!["home:site".into()],
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    }
+    let (events, _subscription) = record(&h.app);
+    assert_eq!(faces::offer_faces(&h.app, "home"), ["home:slimeos"]);
+    let said = lines(&h.app, GENERAL_ROOM_ID);
+    assert_eq!(said.len(), 1, "{said:?}");
+    assert!(
+        said[0].starts_with("Nobody looks after SlimeOS on home yet."),
+        "{}",
+        said[0]
+    );
+    assert!(
+        events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|event| event.kind == "room_message"
+                && event.data["message"]["body"]["faceOffer"]["workspaces"][0] == "home:slimeos")
+    );
+    // Offered once: the node connecting again says nothing.
+    assert!(faces::offer_faces(&h.app, "home").is_empty());
+    assert_eq!(lines(&h.app, GENERAL_ROOM_ID).len(), 1);
+    // The host's Workers section says whose each workspace is.
+    let section = worker_tools::section(&h.app, false, crate::db::rooms::HOST_FACE_ID).text;
+    assert!(section.contains("home:slimeos: SlimeOS on home (offline: a worker waits for it; no face looks after it yet)"), "{section}");
+    assert!(
+        section.contains("home:site: site on home (offline: a worker waits for it; Web (speak_as "),
+        "{section}"
+    );
+}
