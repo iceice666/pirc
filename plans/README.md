@@ -29,7 +29,12 @@ attributed **pirc pots** coordination. [pots and reusable Rust foundations](pots
 connects those requirements to the proposed provider/loop extraction, with
 confirmed coupling, corrections and staged acceptance gates. Only planning is
 authorized. Existing security/data-loss issues and acceptance gaps below remain
-valid; this does not mark mobile parity complete.
+valid; this does not mark mobile parity complete. The user subsequently accepted
+[the specification-review recommendations](unified-conversations.md#accepted-specification-review-recommendations-2026-10-24)
+as the planning baseline. Accepted choices are no longer repeated as approval
+questions; engineering contracts, unspecified settings and explicitly deferred
+App connection/Flutter Web decisions remain open. Code implementation is not yet
+authorized by this planning task.
 
 ## Existing work and acceptance backlog
 

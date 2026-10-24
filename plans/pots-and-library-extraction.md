@@ -7,6 +7,12 @@ analysis of a supplied library-extraction handoff together with Chat/Work
 unification and pirc pots. Only planning/documentation is authorized. No crate,
 runtime, transport, permission, deployment or UI change is implemented here.
 Crate names and API sketches in the handoff remain proposals, not approvals.
+On 2026-10-24 the user accepted the specification-review recommendations as the
+planning baseline: staged delivery, compatibility/failure gates, unified product
+tasks and preservation of pirc-owned authority boundaries. See the
+[accepted decisions](unified-conversations.md#accepted-specification-review-recommendations-2026-10-24).
+This settles the recommended direction, not final Rust signatures, feature/API
+choices that were only listed as questions, implementation or publication.
 
 ## Combined direction
 
@@ -201,7 +207,7 @@ All signatures/names remain to be proposed; adding a trait alone is not completi
 | OAuth/client construction | HTTP/TLS ownership; browser/callback presentation; credential refresh/cancel; callback cleanup; optional discovery              | Local synthetic flow tests; no global provider installation, unexpected listeners or credential persistence in the library    |
 | Packaging                 | Feature dependency matrix; public exports; internal compatibility helpers; MSRV and notice retention                            | Build intended feature sets independently, including default-off OAuth; path dependencies remain unpublished                  |
 
-Recommended design sequence: inventory existing request/result/event shapes;
+Adopted design sequence: inventory existing request/result/event shapes;
 write a minimal local-adapter example and a separate Send-use example as proposed
 contracts; define suspension/resume state transitions; then, only when authorized,
 implement fake-adapter proofs before moving the full agent loop. Generic-loop
@@ -215,11 +221,11 @@ stream semantics, aborts, usage and error behavior separately. Public API names,
 type ownership and local/Send strategy need a review; the user does not need to
 choose implementation-level boxing or lock algorithms.
 
-## Combined delivery sequence — proposals, no implementation authorization
+## Combined delivery sequence — adopted direction, no implementation authorization
 
 | Stage                          | Deliverable                                                                                                   | Dependencies / gate                                                                     |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| A. Agree contracts             | Project mounts, departure/revocation, workspace switching, task identity, board/wait protocol, pots authority | Resolve the decisions in Unified conversations; only planning now                       |
+| A. Specify adopted contracts   | Project mounts, departure/revocation, workspace switching, task identity, board/wait protocol, pots authority | Complete remaining contracts/settings in Unified conversations; only planning now       |
 | B1. Provider extraction        | Pure types, compatible adapters, then transport and optional OAuth separation                                 | Owner settles names/type placement; isolate this refactor from product behavior changes |
 | B2. Product foundations        | Versioned workspace bindings, mount enforcement, durable tasks/decisions, independent-client state            | Stage A; can use the existing agent loop and provider adapter                           |
 | C. Unified workflow            | Same-conversation work, project resources, meaningful waiting/progress, Web/App contract parity               | Mount transitions, replay prevention and concurrent-writer acceptance                   |
