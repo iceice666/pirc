@@ -11,15 +11,23 @@
 //! the host is asked, in the next turn there, to suggest moving; it moves
 //! only when someone says yes (`move_room` with their words), and the open
 //! loops of the conversation go along.
+//!
+//! A move that names the topic also copies the topic's messages into the new
+//! room as one quote ([move_room], [`MAX_QUOTE_MESSAGES`] and the two
+//! character limits): the old room keeps every message and takes new ones,
+//! and people in the new room read what was said before they came. Nothing
+//! of a move happens halfway: both lines, the copy, the loops and the rooms'
+//! `moved_*` fields are written in one transaction.
 
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
 
 use super::faces;
 use crate::app::App;
-use crate::db::rooms::{Moved, Room, RoomStore};
+use crate::db::rooms::{HOST_FACE_ID, Message, MessageKind, Moved, Room, RoomStore, Speaker};
 use crate::error::{ApiError, ApiResult};
 use crate::project_links;
+use crate::util::safe_json;
 use crate::wake::quota;
 
 /// Messages on one topic before moving it is suggested (decision #11).
@@ -243,14 +251,19 @@ pub struct Move {
     pub moved: Moved,
     /// The open loops that went along.
     pub loops: Vec<super::loops::OpenLoop>,
+    /// The topic's messages copied into the new room, as a quote: `None`
+    /// without a topic, or when nothing carries it.
+    pub quote: Option<Message>,
 }
 
 /// Continue `from`'s conversation in `to`; with a topic, the open loops of
-/// the room made since the topic began go along.
+/// the room made since the topic began go along, and the topic's messages
+/// are copied into the new room as one quote (they stay where they were).
 pub fn move_room(conn: &Connection, from: &str, to: &str, topic: Option<&str>) -> ApiResult<Move> {
     crate::db::atomic(conn, |tx| {
-        let moved = tx.move_room(from, to)?;
+        let mut moved = tx.move_room(from, to)?;
         let mut loops = Vec::new();
+        let mut quote = None;
         if let Some(name) = topic {
             let began: Option<i64> = tx.query_row(
                 "SELECT MIN(created_at) FROM room_messages WHERE room_id=? AND topic=?",
@@ -273,15 +286,141 @@ pub fn move_room(conn: &Connection, from: &str, to: &str, topic: Option<&str>) -
                     loops.push(super::loops::get(tx, &id)?);
                 }
             }
+            // The conversation itself: copied, not taken. One message in the
+            // new room, under its "Continued from" line.
+            if let Some(body) = quote_body(tx, &moved.from, name)? {
+                quote = Some(tx.post_message(
+                    to,
+                    Speaker::Face(HOST_FACE_ID),
+                    MessageKind::Text,
+                    &body,
+                )?);
+                // The copy moved the new room's activity and seq on: the
+                // event says so, rather than the room as it was a message ago.
+                moved.to = tx.get_room(to)?;
+            }
         }
-        Ok(Move { moved, loops })
+        Ok(Move {
+            moved,
+            loops,
+            quote,
+        })
     })
+}
+
+/// Messages one quote carries at most (the newest of the topic).
+pub const MAX_QUOTE_MESSAGES: usize = 50;
+/// Characters of quoted words altogether.
+pub const MAX_QUOTE_CHARS: usize = 20_000;
+/// Characters of one quoted message (a longer one is cut).
+pub const MAX_QUOTE_TEXT_CHARS: usize = 4_000;
+
+/// The `body` of the message a move leaves in the new room: the topic's
+/// messages as a `quote` (who said it, when, their words, the files' names),
+/// the oldest left out first when they do not all fit. `None` when nothing
+/// in `from` carries the topic.
+fn quote_body(conn: &Connection, from: &Room, topic: &str) -> ApiResult<Option<Value>> {
+    let total: i64 = conn.query_row(
+        "SELECT count(*) FROM room_messages WHERE room_id=? AND topic=? AND kind='text'",
+        [&from.id, topic],
+        |row| row.get(0),
+    )?;
+    if total == 0 {
+        return Ok(None);
+    }
+    // Newest first, so the character budget keeps the latest words.
+    let rows: Vec<(String, i64, String, Option<String>, Value, i64)> = {
+        let mut statement = conn.prepare(
+            "SELECT id, seq, speaker, user, body_json, created_at FROM room_messages
+             WHERE room_id=? AND topic=? AND kind='text' ORDER BY seq DESC LIMIT ?",
+        )?;
+        let rows =
+            statement.query_map(params![from.id, topic, MAX_QUOTE_MESSAGES as i64], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    safe_json(&row.get::<_, String>(4)?, json!({})),
+                    row.get(5)?,
+                ))
+            })?;
+        rows.collect::<Result<_, _>>()?
+    };
+    let mut quoted: Vec<Value> = Vec::new();
+    let mut chars = 0usize;
+    for (id, seq, speaker, user, body, at) in rows {
+        let text = body["text"].as_str().unwrap_or_default();
+        let (text, cut) = cut_text(text, MAX_QUOTE_TEXT_CHARS);
+        let length = text.chars().count();
+        if !quoted.is_empty() && chars + length > MAX_QUOTE_CHARS {
+            break;
+        }
+        chars += length;
+        let mut entry = json!({ "id": id, "seq": seq, "speaker": speaker, "at": at, "text": text });
+        if let Some(user) = user {
+            entry["user"] = json!(user);
+        }
+        if cut {
+            entry["cut"] = json!(true);
+        }
+        // The bytes stay in the old room: only the files' names travel.
+        let files: Vec<Value> = body["attachments"]
+            .as_array()
+            .map(|list| {
+                list.iter()
+                    .map(|file| json!({ "kind": file["kind"], "filename": file["filename"] }))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if !files.is_empty() {
+            entry["attachments"] = json!(files);
+        }
+        quoted.push(entry);
+    }
+    quoted.reverse();
+    let omitted = total - quoted.len() as i64;
+    let mut quote = json!({
+        "from": { "id": from.id, "name": from.name },
+        "topic": topic,
+        "messages": quoted,
+    });
+    if omitted > 0 {
+        quote["omitted"] = json!(omitted);
+    }
+    // The sentence for clients that cannot draw the copy (the brain reads it
+    // in its new room too); the web draws the quote instead.
+    let text = if omitted > 0 {
+        format!(
+            "Copied {count} messages about \"{topic}\" from #{room} (the {omitted} older ones did not fit).",
+            count = quoted.len(),
+            room = from.name,
+        )
+    } else {
+        format!(
+            "Copied {count} messages about \"{topic}\" from #{room}.",
+            count = quoted.len(),
+            room = from.name,
+        )
+    };
+    Ok(Some(json!({ "text": text, "quote": quote })))
+}
+
+/// `text` cut to `max` characters, and whether it was.
+fn cut_text(text: &str, max: usize) -> (&str, bool) {
+    match text.char_indices().nth(max) {
+        Some((at, _)) => (&text[..at], true),
+        None => (text, false),
+    }
 }
 
 /// Tell everyone about a move.
 pub fn moved(app: &App, done: &Move) {
     app.room_message(&done.moved.from_line);
     app.room_message(&done.moved.to_line);
+    if let Some(quote) = &done.quote {
+        app.room_message(quote);
+    }
     app.room_changed(&done.moved.from);
     app.room_changed(&done.moved.to);
     for open_loop in &done.loops {
@@ -289,7 +428,7 @@ pub fn moved(app: &App, done: &Move) {
     }
 }
 
-/// `{from, to, fromLine, toLine, loops}` for the API.
+/// `{from, to, fromLine, toLine, loops, quote?}` for the API.
 pub fn public(done: &Move) -> Value {
     let mut value = json!(done.moved);
     value["loops"] = json!(
@@ -298,6 +437,9 @@ pub fn public(done: &Move) -> Value {
             .map(|open_loop| &open_loop.id)
             .collect::<Vec<_>>()
     );
+    if let Some(quote) = &done.quote {
+        value["quote"] = json!(quote);
+    }
     value
 }
 
@@ -419,6 +561,229 @@ mod tests {
         tag(&conn, &room.id, &topic, &ids, now).unwrap();
         assert_eq!(
             check(&conn, &room.id, &topic.name, now, zone).unwrap(),
+            None
+        );
+    }
+
+    fn topic(name: &str) -> Topic {
+        Topic {
+            name: name.into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_topic_move_copies_its_messages_as_one_quote() {
+        let db = Db::memory();
+        let conn = db.lock();
+        let target = conn.create_room("slimeos").unwrap();
+        let ids = say(&conn, 3);
+        // A picture, so the copy can name the file it does not carry.
+        let picture = conn
+            .post_message(
+                GENERAL_ROOM_ID,
+                Speaker::User("ann"),
+                MessageKind::Text,
+                &json!({
+                    "text": "the screenshot",
+                    "attachments": [{
+                        "id": "up1", "kind": "image", "filename": "shot.png",
+                        "mimeType": "image/png", "byteSize": 3,
+                    }],
+                }),
+            )
+            .unwrap();
+        let name = "slimeos pr";
+        tag(
+            &conn,
+            GENERAL_ROOM_ID,
+            &topic(name),
+            &[ids[0].clone(), ids[1].clone(), picture.id.clone()],
+            1,
+        )
+        .unwrap();
+        let done = move_room(&conn, GENERAL_ROOM_ID, &target.id, Some(name)).unwrap();
+        let quote = done.quote.expect("the topic's messages come along");
+        assert_eq!(
+            (quote.room_id.as_str(), quote.kind.as_str()),
+            (target.id.as_str(), "text"),
+            "a message of its own in the new room"
+        );
+        let copy = &quote.body["quote"];
+        assert_eq!(copy["from"]["id"], GENERAL_ROOM_ID);
+        assert_eq!(copy["from"]["name"], "general");
+        assert_eq!(copy["topic"], name);
+        assert!(copy["omitted"].is_null(), "all of them fit");
+        let copied = copy["messages"].as_array().unwrap();
+        let texts: Vec<&str> = copied
+            .iter()
+            .map(|message| message["text"].as_str().unwrap())
+            .collect();
+        assert_eq!(texts, ["message 0", "message 1", "the screenshot"]);
+        // Who said it, when, and the original message to trace it back to.
+        assert_eq!(copied[0]["id"], ids[0].as_str());
+        assert_eq!(copied[0]["seq"], 1);
+        assert_eq!(copied[0]["speaker"], "user");
+        assert_eq!(copied[0]["user"], "ann");
+        assert!(copied[0]["at"].is_i64());
+        // The file's name travels; the upload and its bytes stay behind.
+        assert!(copied[0]["attachments"].is_null());
+        assert_eq!(
+            copied[2]["attachments"],
+            json!([{ "kind": "image", "filename": "shot.png" }])
+        );
+        // Copied, not taken: the old room keeps its words, and its line.
+        let old = conn.list_messages(GENERAL_ROOM_ID, None, 10).unwrap();
+        assert_eq!(old.len(), 5, "four messages and the line");
+        assert!(old.iter().all(|message| message.id != quote.id));
+        // The new room: "Continued from" first, then the copy.
+        let new = conn.list_messages(&target.id, None, 10).unwrap();
+        assert_eq!(new.len(), 2);
+        assert_eq!(new[0].kind, "line");
+        assert_eq!(new[1].id, quote.id);
+        // The room the move reports is the one with the copy in it.
+        assert_eq!(
+            (done.moved.to.last_seq, done.moved.to.id.as_str()),
+            (2, target.id.as_str())
+        );
+        // A message on another topic stays out.
+        assert!(!texts.contains(&"message 2"));
+    }
+
+    #[test]
+    fn a_quote_keeps_the_newest_and_says_how_many_it_left_out() {
+        let db = Db::memory();
+        let conn = db.lock();
+        let target = conn.create_room("slimeos").unwrap();
+        let ids = say(&conn, MAX_QUOTE_MESSAGES + 5);
+        tag(&conn, GENERAL_ROOM_ID, &topic("many"), &ids, 1).unwrap();
+        let done = move_room(&conn, GENERAL_ROOM_ID, &target.id, Some("many")).unwrap();
+        let body = done.quote.unwrap().body;
+        let copied = body["quote"]["messages"].as_array().unwrap();
+        assert_eq!(copied.len(), MAX_QUOTE_MESSAGES);
+        assert_eq!(body["quote"]["omitted"], 5);
+        // The newest kept, the oldest left out, in the order they were said.
+        assert_eq!(copied[0]["id"], ids[5].as_str());
+        assert_eq!(
+            copied[MAX_QUOTE_MESSAGES - 1]["id"],
+            ids[ids.len() - 1].as_str()
+        );
+        assert_eq!(
+            body["text"],
+            format!(
+                "Copied {MAX_QUOTE_MESSAGES} messages about \"many\" from #general (the 5 older ones did not fit)."
+            )
+        );
+    }
+
+    #[test]
+    fn a_quote_stops_at_its_character_budget() {
+        let db = Db::memory();
+        let conn = db.lock();
+        let target = conn.create_room("slimeos").unwrap();
+        // Six messages of just under the per-message limit: five fit the
+        // whole budget, the sixth (the oldest) is left out.
+        let ids: Vec<String> = (0..6)
+            .map(|_| {
+                conn.post_message(
+                    GENERAL_ROOM_ID,
+                    Speaker::User("ann"),
+                    MessageKind::Text,
+                    &json!({ "text": "x".repeat(MAX_QUOTE_TEXT_CHARS) }),
+                )
+                .unwrap()
+                .id
+            })
+            .collect();
+        tag(&conn, GENERAL_ROOM_ID, &topic("long"), &ids, 1).unwrap();
+        let done = move_room(&conn, GENERAL_ROOM_ID, &target.id, Some("long")).unwrap();
+        let body = done.quote.unwrap().body;
+        let copied = body["quote"]["messages"].as_array().unwrap();
+        assert_eq!(copied.len(), MAX_QUOTE_CHARS / MAX_QUOTE_TEXT_CHARS);
+        assert_eq!(body["quote"]["omitted"], 1);
+        assert!(copied.iter().all(|message| message["cut"].is_null()));
+    }
+
+    #[test]
+    fn a_long_message_is_cut_in_the_copy_and_kept_whole_in_its_room() {
+        let db = Db::memory();
+        let conn = db.lock();
+        let target = conn.create_room("slimeos").unwrap();
+        let long = "y".repeat(MAX_QUOTE_TEXT_CHARS + 500);
+        let id = conn
+            .post_message(
+                GENERAL_ROOM_ID,
+                Speaker::User("ann"),
+                MessageKind::Text,
+                &json!({ "text": long }),
+            )
+            .unwrap()
+            .id;
+        tag(
+            &conn,
+            GENERAL_ROOM_ID,
+            &topic("long"),
+            std::slice::from_ref(&id),
+            1,
+        )
+        .unwrap();
+        let done = move_room(&conn, GENERAL_ROOM_ID, &target.id, Some("long")).unwrap();
+        let body = done.quote.unwrap().body;
+        let copied = body["quote"]["messages"].as_array().unwrap();
+        assert_eq!(copied[0]["cut"], true);
+        assert_eq!(
+            copied[0]["text"].as_str().unwrap().chars().count(),
+            MAX_QUOTE_TEXT_CHARS
+        );
+        let kept = conn.get_message(GENERAL_ROOM_ID, &id).unwrap();
+        assert_eq!(kept.body["text"].as_str().unwrap(), long, "nothing is lost");
+    }
+
+    #[test]
+    fn a_move_without_a_topic_copies_nothing() {
+        let db = Db::memory();
+        let conn = db.lock();
+        let target = conn.create_room("slimeos").unwrap();
+        let ids = say(&conn, 2);
+        tag(&conn, GENERAL_ROOM_ID, &topic("t"), &ids, 1).unwrap();
+        let done = move_room(&conn, GENERAL_ROOM_ID, &target.id, None).unwrap();
+        assert!(done.quote.is_none());
+        let new = conn.list_messages(&target.id, None, 10).unwrap();
+        assert_eq!(new.len(), 1, "only the line");
+        assert_eq!(new[0].kind, "line");
+        // A topic nothing carries copies nothing either.
+        let empty = move_room(&conn, GENERAL_ROOM_ID, &target.id, Some("nothing")).unwrap();
+        assert!(empty.quote.is_none());
+    }
+
+    #[test]
+    fn a_move_that_fails_leaves_no_copy() {
+        let db = Db::memory();
+        let conn = db.lock();
+        let target = conn.create_room("slimeos").unwrap();
+        let ids = say(&conn, 2);
+        tag(&conn, GENERAL_ROOM_ID, &topic("t"), &ids, 1).unwrap();
+        conn.update_room(
+            &target.id,
+            &RoomPatch {
+                archived: Some(true),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let failed = move_room(&conn, GENERAL_ROOM_ID, &target.id, Some("t"));
+        match failed {
+            Err(error) => assert_eq!(error.code, "conflict"),
+            Ok(_) => panic!("an archived room takes no move"),
+        }
+        // Nothing of the move happened: neither line, nor copy, nor tag.
+        assert_eq!(conn.list_messages(&target.id, None, 10).unwrap().len(), 0);
+        assert_eq!(
+            conn.list_messages(GENERAL_ROOM_ID, None, 10).unwrap().len(),
+            2
+        );
+        assert_eq!(
+            conn.get_room(GENERAL_ROOM_ID).unwrap().moved_to_room_id,
             None
         );
     }

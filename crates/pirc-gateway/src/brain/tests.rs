@@ -11,7 +11,7 @@ use super::scheduler::FAILED_LINE;
 use super::store::TurnStore;
 use super::*;
 use crate::db::Db;
-use crate::db::rooms::{GENERAL_ROOM_ID, RoomInputStore, RoomStore};
+use crate::db::rooms::{GENERAL_ROOM_ID, MessageKind, RoomInputStore, RoomStore, Speaker};
 use crate::events::RoomEvent;
 
 const ME: &str = "me@example.com";
@@ -1632,4 +1632,72 @@ async fn people_who_speak_first_hear_of_their_worker_in_their_turn() {
         ["It went well: every test passes."]
     );
     assert!(unreported(&h.app).is_empty());
+}
+
+#[tokio::test]
+async fn a_topic_move_shows_both_rooms_and_announces_the_copy() {
+    let h = harness();
+    let target = room(&h.app, "slimeos");
+    {
+        let conn = h.app.db.lock();
+        let first = conn
+            .post_message(
+                GENERAL_ROOM_ID,
+                Speaker::User(ME),
+                MessageKind::Text,
+                &json!({ "text": "the parser broke" }),
+            )
+            .unwrap();
+        let second = conn
+            .post_message(
+                GENERAL_ROOM_ID,
+                Speaker::User(ME),
+                MessageKind::Text,
+                &json!({ "text": "fixed it" }),
+            )
+            .unwrap();
+        moving::tag(
+            &conn,
+            GENERAL_ROOM_ID,
+            &moving::Topic {
+                name: "slimeos".into(),
+                ..Default::default()
+            },
+            &[first.id, second.id],
+            1,
+        )
+        .unwrap();
+    }
+    let (events, _subscription) = record(&h.app);
+    let done = {
+        let conn = h.app.db.lock();
+        moving::move_room(&conn, GENERAL_ROOM_ID, &target, Some("slimeos")).unwrap()
+    };
+    moving::moved(&h.app, &done);
+    // Every device sees the new room's line and its copy, in that order.
+    let announced: Vec<Value> = events
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|event| event.kind == "room_message" && event.room_id == target)
+        .map(|event| event.data["message"].clone())
+        .collect();
+    assert_eq!(announced.len(), 2, "the line and the copy");
+    assert_eq!(announced[0]["body"]["move"]["direction"], "from");
+    let copy = &announced[1]["body"]["quote"];
+    assert_eq!(copy["from"]["name"], "general");
+    assert_eq!(copy["messages"][0]["text"], "the parser broke");
+    assert_eq!(copy["messages"][1]["text"], "fixed it");
+    assert_eq!(copy["messages"][0]["speaker"], "user");
+    assert_eq!(copy["messages"][0]["user"], ME);
+    // And the old room hears where it went.
+    assert!(
+        events
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|event| event.room_id == GENERAL_ROOM_ID
+                && event.kind == "room_message"
+                && event.data["message"]["body"]["move"]["direction"] == "to")
+    );
 }

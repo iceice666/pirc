@@ -190,7 +190,8 @@ impl FaceTool {
             ),
             Which::Move => (
                 "Continue this conversation in another room, once someone agreed to (\"ok, let's go there\"). \
-                 Both rooms are shown a line, and the open loops of the conversation go along.",
+                 Both rooms are shown a line, the open loops of the conversation go along, and its messages \
+                 are copied into the new room as a quote (the old room keeps them, and still takes messages).",
                 object(
                     json!({
                         "to": { "type": "string", "description": "The room's id or #name." },
@@ -658,14 +659,30 @@ impl FaceTool {
                 match done {
                     Ok(done) => {
                         moving::moved(app, &done);
+                        // What came along with it: the loops, and the copy of
+                        // the conversation people will find there.
+                        let mut along = Vec::new();
+                        match done.loops.len() {
+                            0 => {}
+                            1 => along.push("its open loop".to_owned()),
+                            n => along.push(format!("its {n} open loops")),
+                        }
+                        if let Some(quote) = &done.quote {
+                            let copied = quote.body["quote"]["messages"]
+                                .as_array()
+                                .map_or(0, Vec::len);
+                            along.push(match copied {
+                                1 => "1 message copied".to_owned(),
+                                n => format!("{n} messages copied"),
+                            });
+                        }
+                        let along = match along.len() {
+                            0 => String::new(),
+                            _ => format!(", with {}", along.join(" and ")),
+                        };
                         Ok(ToolResult::text(format!(
-                            "Moved: the conversation continues in #{}{}.",
+                            "Moved: the conversation continues in #{}{along}.",
                             done.moved.to.name,
-                            match done.loops.len() {
-                                0 => String::new(),
-                                1 => ", with its open loop".to_owned(),
-                                n => format!(", with its {n} open loops"),
-                            }
                         )))
                     }
                     Err(error) => Ok(ToolResult::error(error.message)),

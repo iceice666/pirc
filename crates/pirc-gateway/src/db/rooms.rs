@@ -6,7 +6,9 @@
 //! - archiving hides a room and deletes nothing; an archived room can still
 //!   be read but takes no new messages until it is unarchived;
 //! - a move writes two lines: "continued in #to" in the old room and
-//!   "continued from #from" at the start of the new one;
+//!   "continued from #from" at the start of the new one (a move that names
+//!   the conversation's topic adds a copy of that topic's messages after the
+//!   second line, in `brain::moving`; the messages themselves never move);
 //! - a room's messages are numbered 1, 2, ... in the order they were stored,
 //!   and a user's own messages are read when sent.
 

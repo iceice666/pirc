@@ -452,6 +452,12 @@ expression: stable(t.into_value())
         "text": "Continued from #random"
       },
       {
+        "kind": "text",
+        "room": "room_<uuid:2>",
+        "speaker": "face:pirc",
+        "text": "Copied 18 messages about \"slimeos release\" from #random."
+      },
+      {
         "loop_changed": [
           "Ship the SlimeOS release",
           "open",
@@ -475,7 +481,7 @@ expression: stable(t.into_value())
         "Opened [<loop:1>] Ship the SlimeOS release (from user)",
         "Noted: this is about \"slimeos release\".",
         "Noted: this is about \"slimeos release\".",
-        "Moved: the conversation continues in #slimeos, with its open loop."
+        "Moved: the conversation continues in #slimeos, with its open loop and 18 messages copied."
       ]
     },
     "step": "suggested once a day"
