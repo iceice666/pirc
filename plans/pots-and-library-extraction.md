@@ -6,13 +6,15 @@ Status: integrated research/design proposal, 2026-10-24. The user requested
 analysis of a supplied library-extraction handoff together with Chat/Work
 unification and pirc pots. Only planning/documentation is authorized. No crate,
 runtime, transport, permission, deployment or UI change is implemented here.
-Crate names and API sketches in the handoff remain proposals, not approvals.
+The user subsequently adopted the three crate names and packaging direction below;
+public API sketches and implementation proofs remain engineering work.
 On 2026-10-24 the user accepted the specification-review recommendations as the
 planning baseline: staged delivery, compatibility/failure gates, unified product
 tasks and preservation of pirc-owned authority boundaries. See the
 [accepted decisions](unified-conversations.md#accepted-specification-review-recommendations-2026-10-24).
-This settles the recommended direction, not final Rust signatures, feature/API
-choices that were only listed as questions, implementation or publication.
+The latest acceptance also settles optional default-off OAuth and separating
+transport features by wire API. Final Rust signatures, precise feature names/type
+placement, implementation and crates.io publication are not implied.
 
 All seven accepted follow-up areas are detailed in [Conversation execution contracts](conversation-execution-contracts.md):
 capability composition, foreground/parallel task routing, overlapping grants,
@@ -182,11 +184,11 @@ preserve existing attribution/notices when moving source. No public release is
 part of this plan. Verify dependency APIs and candidate crate versions separately
 if they are selected; the supplied ecosystem comparisons are not acceptance proof.
 
-## Proposed extraction boundary
+## Adopted extraction boundary
 
-Working names, pending confirmation:
+Adopted crate names and planned responsibilities:
 
-| Crate / adapter              | Proposed contents                                                                                                               |
+| Crate / adapter              | Planned contents                                                                                                                |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `pirc-llm-types`             | Pure messages, deltas, tool schemas, stop/error metadata and required neutral value types; ordered serde compatibility          |
 | `pirc-llm`                   | Six existing transports initially, HTTP/SSE/parsing, explicit cache settings, injected credentials/client; optional OAuth       |
@@ -194,10 +196,13 @@ Working names, pending confirmation:
 | Existing `pirc-providers`    | Gateway backend storage, catalogs/configuration, environment policy, cache identity derivation and safe error adaptation        |
 | Existing `pirc-agent` / Node | Remote inference adapter, features, memory, team/task integration, scheduling compatibility, sandbox/tools and checkpoint hooks |
 
-OAuth off by default and one feature per wire API are recommendations from the
-handoff, not yet confirmed. Test the intended feature combinations individually:
-workspace feature unification can hide missing optional dependencies. Preserve
-pi/native route selection until fixture comparisons justify a separate change.
+Adopt optional OAuth, off by default, and transport features separated by wire API.
+The pirc adapter explicitly enables the features it currently needs so extraction
+does not disable existing subscription logins or change transport routing. Default-
+feature minimal consumers must not require OAuth. Test disabled/enabled OAuth and
+intended transport combinations independently: workspace feature unification can
+hide missing optional dependencies. Exact feature names/dependency graph remain
+engineering work; preserve pi/native paths until separate fixture comparison.
 
 A product task can contain many loop runs. pots can coordinate many product
 tasks. Neither belongs inside the reusable loop, and neither requires the loop
@@ -208,18 +213,19 @@ extraction to be finished before its product behavior can be designed.
 The handoff and boundary table identify code ownership, but they do not yet define
 a callable library contract. Complete this review alongside the product
 [specification gaps](unified-conversations.md#specification-review-what-is-not-detailed-enough-2026-10-24).
-All signatures/names remain to be proposed; adding a trait alone is not completion.
+Public trait/method/type signatures remain to be designed; the crate names are
+settled. Adding a trait alone is not completion.
 
-| Boundary                  | Questions the specification must answer                                                                                         | Required proof                                                                                                                |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| Shared types              | Which fields are generic; wire-only wrappers; absent/null; ordered JSON; metadata versus endpoint credentials                   | Old fixtures serialize identically; no dependency cycle or unintended HTTP/OAuth in protocol consumers                        |
-| Model adapter             | Request ownership/lifetimes; delta versus partial snapshot callbacks; final reply consistency; backpressure; cancellation owner | Partial, canceled and malformed streams behave predictably without duplicate final messages                                   |
-| Errors/retries            | Typed failure categories; partial usage; retryability; masking boundary; behavior after an effect may have occurred             | pirc keeps existing wire/errors; raw credentials/provider responses are not leaked; unknown outcomes are not replayed blindly |
-| Loop suspension           | Stable call IDs; one/many tools; concurrent results; approval/lock waits; continuation input; terminal reason                   | Duplicate/stale resume is refused; suspended work cancels; idle and completed remain distinguishable                          |
-| Host policy changes       | How revocation/stop notices interrupt work; grant-generation checks; preserving conversation on host restart                    | An in-flight old model reply cannot execute a removed-resource tool after rebinding                                           |
-| Scheduling/runtime        | Local and Send requirements; callback bounds; spawn/runtime assumptions; effect ordering                                        | Existing local adapter compiles and preserves conformance; Send consumer works without changing pirc scheduling               |
-| OAuth/client construction | HTTP/TLS ownership; browser/callback presentation; credential refresh/cancel; callback cleanup; optional discovery              | Local synthetic flow tests; no global provider installation, unexpected listeners or credential persistence in the library    |
-| Packaging                 | Feature dependency matrix; public exports; internal compatibility helpers; MSRV and notice retention                            | Build the selected feature sets independently; test OAuth disabled/enabled if that proposal is chosen; remain unpublished     |
+| Boundary                  | Questions the specification must answer                                                                                         | Required proof                                                                                                                          |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Shared types              | Which fields are generic; wire-only wrappers; absent/null; ordered JSON; metadata versus endpoint credentials                   | Old fixtures serialize identically; no dependency cycle or unintended HTTP/OAuth in protocol consumers                                  |
+| Model adapter             | Request ownership/lifetimes; delta versus partial snapshot callbacks; final reply consistency; backpressure; cancellation owner | Partial, canceled and malformed streams behave predictably without duplicate final messages                                             |
+| Errors/retries            | Typed failure categories; partial usage; retryability; masking boundary; behavior after an effect may have occurred             | pirc keeps existing wire/errors; raw credentials/provider responses are not leaked; unknown outcomes are not replayed blindly           |
+| Loop suspension           | Stable call IDs; one/many tools; concurrent results; approval/lock waits; continuation input; terminal reason                   | Duplicate/stale resume is refused; suspended work cancels; idle and completed remain distinguishable                                    |
+| Host policy changes       | How revocation/stop notices interrupt work; grant-generation checks; preserving conversation on host restart                    | An in-flight old model reply cannot execute a removed-resource tool after rebinding                                                     |
+| Scheduling/runtime        | Local and Send requirements; callback bounds; spawn/runtime assumptions; effect ordering                                        | Existing local adapter compiles and preserves conformance; Send consumer works without changing pirc scheduling                         |
+| OAuth/client construction | HTTP/TLS ownership; browser/callback presentation; credential refresh/cancel; callback cleanup; optional discovery              | Local synthetic flow tests; no global provider installation, unexpected listeners or credential persistence in the library              |
+| Packaging                 | Feature dependency matrix; public exports; internal compatibility helpers; MSRV and notice retention                            | Build default-minimal, OAuth-disabled/enabled and transport feature sets independently; explicitly test pirc opt-in; remain unpublished |
 
 Adopted design sequence: inventory existing request/result/event shapes;
 write a minimal local-adapter example and a separate Send-use example as proposed
@@ -234,21 +240,21 @@ answers look alike. Compare request headers/body, cache identity, reasoning/tool
 stream semantics, aborts, usage and error behavior separately. Public API names,
 type ownership and local/Send strategy need engineering review and proofs; the
 user does not need to choose implementation-level boxing or lock algorithms.
-Keep packaging proposals distinct from adopted choices: the feature-matrix gate
-below does not itself approve the handoff's default-off OAuth proposal. The
-[integrated review](unified-architecture-review.md) records remaining decisions.
+Packaging direction is adopted; the feature matrix must verify it without hiding
+missing dependencies through workspace unification. The [integrated review](unified-architecture-review.md#adopted-defaults-and-deliberately-deferred-decisions)
+separates those choices from numerical settings and engineering decisions still open.
 
 ## Combined delivery sequence — adopted direction, no implementation authorization
 
-| Stage                          | Deliverable                                                                                                   | Dependencies / gate                                                                           |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| A. Specify adopted contracts   | Project mounts, departure/revocation, workspace switching, task identity, board/wait protocol, pots authority | Complete remaining contracts/settings in Unified conversations; only planning now             |
-| B1. Provider extraction        | Pure types, compatible adapters, then transport and optional OAuth separation                                 | Settle packaging/API boundary with compatibility proof; isolate from product behavior changes |
-| B2. Product foundations        | Versioned workspace bindings, mount enforcement, durable tasks/decisions, independent-client state            | Stage A; can use the existing agent loop and provider adapter                                 |
-| C. Unified workflow            | Same-conversation work, project resources, meaningful waiting/progress, Web/App contract parity               | Mount transitions, replay prevention and concurrent-writer acceptance                         |
-| D. pots                        | Overview and attributed dispatch, then scoped proactive observation/digests                                   | Tasks, provenance, grants, durable wake-ups and notification reconciliation                   |
-| E. Loop extraction             | Fake-adapter core, pirc integration and event-order/conformance checks                                        | Stable provider boundary plus understood tool-wait/approval/cancel semantics                  |
-| F. Optional frontend migration | Flutter Web comparison against current Web on difficult interactions                                          | Separate decision after measurement; not a dependency of App independence                     |
+| Stage                          | Deliverable                                                                                                   | Dependencies / gate                                                                             |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| A. Specify adopted contracts   | Project mounts, departure/revocation, workspace switching, task identity, board/wait protocol, pots authority | Complete remaining contracts/settings in Unified conversations; only planning now               |
+| B1. Provider extraction        | Pure types, compatible adapters, then transport and optional OAuth separation                                 | Implement adopted packaging with API/compatibility proof; isolate from product behavior changes |
+| B2. Product foundations        | Versioned workspace bindings, mount enforcement, durable tasks/decisions, independent-client state            | Stage A; can use the existing agent loop and provider adapter                                   |
+| C. Unified workflow            | Same-conversation work, project resources, meaningful waiting/progress, Web/App contract parity               | Mount transitions, replay prevention and concurrent-writer acceptance                           |
+| D. pots                        | Overview and attributed dispatch, then scoped proactive observation/digests                                   | Tasks, provenance, grants, durable wake-ups and notification reconciliation                     |
+| E. Loop extraction             | Fake-adapter core, pirc integration and event-order/conformance checks                                        | Stable provider boundary plus understood tool-wait/approval/cancel semantics                    |
+| F. Optional frontend migration | Flutter Web comparison against current Web on difficult interactions                                          | Separate decision after measurement; not a dependency of App independence                       |
 
 B1/B2 are independent work streams in planning; this does not authorize spawning
 agents or changing both at once. Keep integration checkpoints small so a provider

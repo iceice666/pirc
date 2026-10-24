@@ -48,8 +48,13 @@ or evidence of passing runtime tests.
 
 [Integrated architecture review](unified-architecture-review.md) records the
 cross-plan contradictions corrected before publication, remaining product choices,
-and engineering proof gates. The architecture documents can be published as a
-planning baseline; this is not approval to implement every unchecked stage.
+and engineering proof gates. The user then adopted the [recommended defaults](unified-architecture-review.md#adopted-defaults-and-deliberately-deferred-decisions):
+read-only additional mounts, first-send allocation unless explicitly created,
+durable notes without age expiry, scoped/bounded pots, and the three crate names
+with optional default-off OAuth. Exact amounts/times and board-retention/editor
+presets remain configuration work; App sign-in and Flutter Web stay deferred.
+The architecture documents can be published as a planning baseline; this is not
+approval to implement every unchecked stage.
 
 ## Existing work and acceptance backlog
 

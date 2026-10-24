@@ -68,7 +68,9 @@ Do not silently weaken the policy to accommodate that tool.
 ### Discuss-to-work flow
 
 1. The user starts a conversation with its selected workspace or managed empty
-   workspace. Conversation creation follows the existing draft/first-send plan.
+   workspace. Retain choices in the draft; allocate managed storage at first accepted
+   send unless the user explicitly invokes Create folder. Repeated first-send
+   requests resolve the same allocation and conversation.
 2. A question can be answered without a new mode or a new work session. Relevant
    rules are selected by current binding and scope; historical rules stay history.
 3. When the user requests work, resolve the target and effective capabilities.
@@ -289,7 +291,10 @@ Removing a block is an explicit user access change against the current revision,
 with a preview of grants that would become effective again. A new mount does not
 silently remove a block. A changed path/Node or unclear resource identity requires
 revalidation; do not treat a display alias as proof that a prohibition no longer
-applies. Exact initial read/write defaults for newly added mounts remain open.
+applies. The main folder/access scope is explicitly selected and shown; newly
+added additional folders default to read-only unless writes are explicitly granted.
+Preserve existing grants on migration and display effective access where another
+grant already permits writes; a read-only new alias does not revoke that grant.
 
 ### Enforcement and transition requirements
 
@@ -805,6 +810,10 @@ other conversations, and resuming pots elsewhere does not release that takeover.
   rechecks relevance/authority then. A new occurrence of a recurring responsibility
   can be distinct, but its occurrence identity must be explicit; do not suppress
   all future work or resend the same occurrence repeatedly.
+- **Adopted activation:** observation starts only for user-selected scopes, with
+  progress/content rights separate. Suggestions do not imply dispatch authority.
+  Require finite configured budgets and bounded concurrency before proactive work;
+  absent values cannot mean unlimited. Nonurgent suggestions use the digest/inbox.
 - **Budgets:** track observation and dispatch usage under their scoped configured
   limits, including concurrent workers. Reserve/check budget before new costly
   work; exhausted/unknown accounting blocks new discretionary analysis/dispatch
@@ -829,8 +838,10 @@ other conversations, and resuming pots elsewhere does not release that takeover.
   may inform a suggestion, but cannot become a new user instruction. Preserve
   delegation lineage and bounded loop/depth/concurrency policy at every dispatch.
 
-Exact quiet hours, digest cadence, scope presets and budget/depth numbers require
-concrete settings proposals; they are not invented by this workflow. Native sign-in
+The activation policy is adopted; exact quiet hours, digest cadence and budget/
+concurrency/depth numbers still require concrete settings. User-selected scopes
+and standing grants must be explicit; approval of the plan does not grant access
+to every project or authorize autonomous dispatch across all conversations. Native sign-in
 and real background push delivery retain their separate design/acceptance gates.
 
 ### Acceptance cases to implement later
@@ -868,8 +879,10 @@ and real background push delivery retain their separate design/acceptance gates.
 The user-visible behavior above is adopted. Remaining engineering work includes
 persistent schemas, API/error shapes, atomic ordering and crash recovery, trusted
 intent/control boundaries, per-tool capability inventory, platform enforcement
-proofs and old-mode migration fixtures. Exact mount defaults and previously
-unspecified budgets/retention values still require a concrete proposal.
+proofs and old-mode migration fixtures. Mount/allocation policies are adopted.
+Durable notes have no automatic age expiry; explicit removal and existing source/
+project deletion still apply. Board-retention/editor presets and exact pots limits
+and times need configuration within those policies.
 
 All seven behavior contracts now include flows, failure handling and acceptance
 cases. Further implementation specification must cover cross-host context custody,

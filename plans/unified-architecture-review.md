@@ -6,13 +6,17 @@ Review date: 2026-10-24. Scope: Chat/Work unification, projects/tasks/resources,
 pots, independent clients and reusable Rust foundations, including their links
 to current modes, mobile, memory deletion and checkpoints. This is a review of
 that architecture family, not a claim to revalidate every historical plan or
-all running code. The fetched `origin/main` baseline is `aca6eeb6`.
+all running code. The original review's fetched `origin/main` baseline was
+`aca6eeb6`. After publication, the user accepted the review's recommended defaults
+and requested another documentation commit, rebase and push. The adopted choices
+below supersede their earlier proposal status; implementation is still separate.
 
 The user authorized this review, corrections and, after verification, a pull/rebase
 and push of the local repository commits. That permission does not implement the
 new architecture, change deployment permissions, replace Web, publish crates or
-create a release. Existing App fixes in the unpublished commit range need their
-own relevant verification; document checks alone do not validate those changes.
+create a release. The preceding publication included App fixes with the recorded
+verification below. This follow-up changes planning documents only; those earlier
+runtime results must not be presented as new tests of the architecture.
 
 ## Review outcome and corrected contradictions
 
@@ -26,7 +30,7 @@ verified merely because they are written down.
 | Task required an originating conversation, but tracking a pots suggestion must not create an empty work session   | Separate immutable request/suggestion origin, record owner and optional execution conversation; first authorized dispatch creates/maps the execution conversation once | Task lifecycle in the main plan; P7-2/P7-3 in execution contracts |
 | A conversation can move projects, but deletion could classify all its memory using today's membership             | Record write-time membership generation for new memory versions/proposals; keep stable original-entry/session provenance and review insufficient legacy evidence       | Memory deletion contract and L5-3                                 |
 | Project deletion could internally invoke single-chat memory deletion and undo its mixed-history Keep/Edit choices | Project deletion owns one memory cleanup plan; child session cleanup uses that scope and cannot run a second standalone memory purge                                   | L5-3, including crash/retry and moved conversations               |
-| Default-off OAuth was labelled undecided while the feature-test gate assumed it was chosen                        | Keep the packaging choice proposed; test the selected feature matrix, including both OAuth states if that proposal is chosen                                           | Library packaging table and API proof gates                       |
+| Default-off OAuth was labelled undecided while the feature-test gate assumed it was chosen                        | The review first made the gate conditional; subsequent user acceptance adopts optional default-off OAuth and tests for disabled/enabled consumers                      | Library packaging table and API proof gates                       |
 | Earlier “keep local/no push” status could be mistaken for the current publication instruction                     | Record the latest review/rebase/push authorization separately from unchanged planning-only implementation scope                                                        | Status paragraphs in the plans                                    |
 
 Other apparent tensions were checked and are intentional distinctions:
@@ -43,29 +47,39 @@ Other apparent tensions were checked and are intentional distinctions:
 - Reusable-loop extraction supplies mechanics. Project permissions, product tasks,
   memory ownership, provenance and pots authority remain in the pirc host.
 
-## Product settings still needing a concrete choice
+## Adopted defaults and deliberately deferred decisions
 
-These do not block publishing the plan. Settle them before the corresponding
-implementation/default is enabled; do not ask the user to reconfirm already
-adopted behavior. Recommendations in this table are proposals, not newly applied
-permissions or settings.
+The user accepted the recommendations after the integrated review. Use the following
+planning baseline without asking for the same choices again. Adoption specifies
+future behavior; it does not change current grants, enable pots, implement crates
+or authorize automatic data migration.
 
-| Choice                                               | Recommended proposal to review                                                                                                                                                             | When needed                                            |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| Initial cwd and mount permissions                    | Choose the main folder explicitly; show its read/write scope. Default additional folders to read-only unless explicitly granted writes; preserve existing grants on migration              | Workspace-creation/settings slice                      |
-| Managed empty-folder allocation                      | Keep choices in a draft; allocate at first accepted send unless the user explicitly invokes Create folder. Never delete an explicitly created user work folder on draft abandonment        | Draft/workspace-creation slice                         |
-| New shared notes/board retention and editing presets | Keep durable notes until explicit removal; separate operational board retention from notes, and show exact editor scopes. Do not invent an automatic destructive retention period          | Project collaboration storage/settings slice           |
-| pots initial observation/execution scopes            | Start from user-selected scopes, distinguish progress from full content, and suggest without autonomous dispatch unless an explicit request or standing grant permits it                   | pots onboarding/activation                             |
-| pots spending/concurrency and notification values    | Configure finite budgets and bounded concurrency before enabling proactive runs; use quiet digests for nonurgent suggestions. Exact amounts, quiet hours and cadence still need a proposal | pots activation and settings                           |
-| App sign-in and server exposure                      | Review account/bootstrap and management security separately; preserve independent-client requirements and existing authorization meanwhile                                                 | Native independent onboarding, explicitly deferred     |
-| Flutter Web                                          | Compare a measured vertical slice with the existing Web client before deciding whether to migrate                                                                                          | Optional later evaluation, explicitly deferred         |
-| Reusable-crate packaging/names                       | Review the working `pirc-llm-types`, `pirc-llm`, `pirc-agent-loop` names, optional OAuth/defaults and feature layout as one bounded packaging proposal                                     | Before extraction; no crates.io publication is implied |
+| Area                                        | Adopted direction                                                                                                                                                                                                                  | Remaining work                                                                                                                        |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Initial cwd and mount permissions           | Explicitly select/show the main folder and its read/write scope, including the managed-empty-workspace choice. New additional folders default to read-only unless explicitly granted writes; preserve existing grants on migration | Binding UI and enforcement; explain effective access when another grant already permits writes                                        |
+| Managed empty-folder allocation             | Keep choices in a draft; allocate at first accepted send unless the user explicitly invokes Create folder. Never delete an explicitly created user work folder on draft abandonment                                                | Idempotent allocation, interrupted first send and ownership checks                                                                    |
+| Shared notes and board                      | Durable notes have no automatic age-based expiry; explicit removal and existing source/project deletion rules still apply. Separate operational board retention from durable notes and show editor scopes                          | Storage/provenance mapping, editor presets and exact board-retention settings; no invented destructive duration                       |
+| pots initial scope and execution            | Use user-selected observation scopes, distinguish progress from full content, and suggest without autonomous dispatch unless an explicit request or standing grant permits it                                                      | Scope selection and grants; no migration/onboarding step silently selects every project or conversation                               |
+| pots spending/concurrency and notifications | Require configured finite budgets and bounded concurrency before proactive runs; group nonurgent suggestions into quiet digests/inbox                                                                                              | Actual budget/concurrency values, quiet hours and digest cadence were never specified and remain to configure                         |
+| App sign-in and server exposure             | Keep separate security review deferred while preserving independent-client requirements and existing authorization                                                                                                                 | Reopen at native onboarding design; do not choose a new public port or replace authorization now                                      |
+| Flutter Web                                 | Keep optional evaluation deferred; compare a measured vertical slice with existing Web before deciding migration                                                                                                                   | No framework replacement authorized                                                                                                   |
+| Reusable crates                             | Adopt `pirc-llm-types`, `pirc-llm`, `pirc-agent-loop`; keep provider OAuth optional and off by default, with transport features separated by wire API. pirc explicitly enables required features to preserve its current behavior  | Exact feature names/dependency graph, Rust API/type ownership and local/Send proofs; path dependencies only, no crates.io publication |
 
-The user does not need to choose Rust boxing, lock algorithms, database column
-names or every task-classification heuristic. Implementers should propose/test
-those within the adopted contracts. Public licensing/external publication is a
-separate later owner decision, not a prerequisite for publishing this repository
-planning work or considering path dependencies.
+### Remaining concrete values and engineering choices
+
+No numerical amounts, time windows or destructive retention periods were proposed
+and accepted. Configure finite pots budgets/concurrency before enabling proactive
+work; do not interpret an absent setting as unlimited. The runtime design must
+provide a complete finite configuration before activation rather than silently
+inventing user authorization. Quiet-hour/digest values and board-retention/editor
+presets still need concrete proposals within the adopted policy.
+
+The actual observed projects/content and standing execution grants are user
+configuration choices, not another architecture approval. Existing grants survive
+migration; new-folder defaults do not downgrade them or override explicit blocks.
+Public trait/type signatures and feature names are engineering work. Public
+licensing/external publication remains a separate owner decision. The user does
+not need to choose Rust boxing, lock algorithms or database column names.
 
 ## Engineering specifications and proof gates still missing
 
@@ -84,8 +98,9 @@ planning work or considering path dependencies.
 
 These gates are dependencies of implementation stages, not ten new approval forms.
 A gate is complete only with the specified design/evidence, not by updating its
-checkbox. Initial mount defaults, retention amounts and pots settings must not be
-smuggled into engineering work as though the user had already chosen them.
+checkbox. The adopted policy must not be reopened as unresolved; unspecified
+numeric settings, destructive durations or new access scopes must not be treated
+as though the user had already chosen them.
 
 ## Suggested bounded first implementation proposal
 
@@ -93,8 +108,9 @@ Before changing code, present one small delivery: define the resource/capability
 and identity contracts with compatibility fixtures, then apply them to a selected
 same-conversation workflow. Keep provider extraction independently reviewable;
 do not make full loop extraction, Flutter Web migration or a new auth mechanism
-prerequisites for every product change. A default that changes access or deletion
-behavior needs its corresponding product choice first.
+prerequisites for every product change. Implement the adopted defaults without
+silently altering existing permissions or the established deletion contracts;
+bring genuinely new behavioral tradeoffs back for review.
 
 Current fixed Chat/Work tabs describe shipped navigation; they are not the desired
 end state. Existing modes/mobile backlog remains available, but further old-layout
@@ -109,7 +125,7 @@ relevant existing automated tests/static analysis after integration. Do not star
 new runtime architecture implementation to make this review appear complete.
 Record actual command results separately from the future acceptance scenarios.
 
-### Verification performed before push
+### App verification for the preceding publication
 
 After `git pull --rebase origin main`, the branch was up to date with baseline
 `aca6eeb6` and had no integration conflicts. At `311b995a`, the included App changes

@@ -49,12 +49,18 @@ Engineering detail and validation remain work to do, not evidence of implementat
 | Client consistency           | Backend-authorized commands, idempotent outcome reconciliation, revisions/cursors, separate notification/read/decision states and account-isolated local drafts/cache                              |
 | Migration and extraction     | Map existing identities and provenance, verify restart-safe migrations and compatibility; stage product changes and provider extraction separately; preserve loop event/error/cancel behavior      |
 
-Still unspecified: initial read/write defaults for extra folders, note retention
-values and new-note storage/provenance mapping, spending/concurrency numbers,
-quiet-hour/digest defaults, final API/type names and first implementation
-authorization. The follow-up below settles the previously open distinction between removing a project's grants and
-blocking all folder access for a conversation. App authentication/topology and
-Flutter Web remain explicitly deferred. Decision A remains unchanged.
+The user subsequently adopted the [review's defaults](unified-architecture-review.md#adopted-defaults-and-deliberately-deferred-decisions):
+explicit main-folder selection/scope, read-only new additional mounts, managed
+allocation at first accepted send unless Create folder was explicit, durable notes
+without age-based expiry, and scoped/bounded pots with quiet nonurgent digests.
+The three proposed crate names and optional default-off OAuth are also adopted.
+Existing grants and source-aware deletion rules remain intact.
+
+Still unspecified: exact pots budget/concurrency values, quiet hours/digest cadence,
+board-retention/editor presets, storage/provenance details and final Rust APIs.
+App authentication/topology and Flutter Web remain explicitly deferred. Decision A
+and the distinction between leaving a project and blocking a folder stand.
+Implementation remains a separate step from documenting/publishing this plan.
 
 ## Accepted follow-up behavior and detailed contracts (2026-10-24)
 
@@ -295,10 +301,10 @@ Boundaries:
 
 - **Conversation:** configure workspace/mounts at creation → local draft → first
   accepted message → persisted conversation → archived or explicitly deleted.
-  Proposed allocation policy: retain workspace choices in the draft and allocate
-  managed storage at first send, unless the user explicitly invokes Create folder.
-  Empty drafts still do not litter the session list; never delete a user-created
-  folder merely because its draft was abandoned. Allocation timing needs review.
+  Adopted allocation policy: retain workspace choices in the draft and allocate
+  managed storage at first accepted send, unless the user explicitly invokes Create
+  folder. Empty drafts still do not litter the session list; never delete a
+  user-created folder merely because its draft was abandoned.
 - A first-send request has a stable idempotency identity. Retries, uploads and
   interrupted creation must not create duplicate conversations or orphaned
   permanent attachments. An unsent message remains visibly a draft.
@@ -333,7 +339,7 @@ Exact persisted state names and transitions require a later engineering review.
    location. A managed empty default keeps ordinary chatting easy.
 2. Show the selected server, primary directory and additional named mounts without
    forcing a Chat/Work choice. A plain chat uses the same workspace abstraction.
-3. Keep an unsent conversation as a draft; review the allocation timing above.
+3. Keep an unsent conversation as a draft; apply the adopted allocation timing above.
 4. On first send, persist idempotently, resolve current grants and launch the
    needed agent context. An unavailable environment leaves the request recoverable.
 5. Organizing it into or out of a project applies the explicit resource transition
@@ -446,9 +452,11 @@ code changes. Checkpoints provide recovery, not universal writer isolation.
 Board content is other-agent data with provenance, not a user's instruction or
 approval. It must not automatically become global personal memory. Leaving a
 project removes future access, but previously copied text cannot be claimed erased.
-Project-note retention/deletion still requires design; post-departure conversation
-context is settled by decision A above. Previously read notes may remain in that
-context, while new project-note retrieval is denied.
+Durable project notes have no automatic age-based expiry; explicit removal and
+source/project deletion follow the lifecycle contract. Operational board retention
+is configured separately; storage and editor presets still require specification.
+Post-departure context follows decision A: previously read notes may remain, while
+retrieval through the departed project's authority is denied.
 
 ## pirc pots: proactive but bounded
 
@@ -499,7 +507,8 @@ Notification categories (adopted treatment; exact timing settings remain open):
 
 Include per-category controls, quiet hours, deduplication and a visible reason
 for each suggestion. Proactive monitoring/analysis has a configurable budget and
-can be stopped independently of ordinary chat. Exact defaults remain open.
+can be stopped independently of ordinary chat. Exact numeric limits, quiet-hour
+windows and digest cadence remain to configure; the policy itself is adopted.
 
 ## Independent App and shared backend contract
 
@@ -747,8 +756,8 @@ Reconfirming context retention or the warning is unnecessary: both are decided.
 
 ### 2. Resource identity, mount precedence and default cwd — adopted model, remaining defaults
 
-**Remaining:** physical alias enforcement, exact initial permission defaults,
-resource lifetime and the project-wide transition implementation. Overlap behavior
+**Remaining:** physical alias enforcement, resource lifetime and the project-wide
+transition implementation. The initial permission policy is now adopted. Overlap behavior
 is now adopted in the [effective-access contract](conversation-execution-contracts.md#effective-access-rules),
 alongside the overall shape and inherited project configuration.
 
@@ -766,17 +775,18 @@ mount. Enforce the adopted deny/grant precedence and validate symlink/parent
 aliases. An independent grant must be visible; it must not be invented to defeat
 removal. Current policy behavior is not proof of the new contract.
 
-**Remaining defaults:** which main directory is selected initially and default
-read/write access for additional folders. A separately granted path is retained
-and disclosed on leaving; an explicit folder block overrides it. Inherited
-project changes with an affected-conversation preview and revocation enforcement
-are adopted. Specify per-host acknowledgement and
-partial-failure behavior across all affected conversations as engineering work.
+**Adopted defaults:** explicitly select/show the main folder and access scope;
+new additional folders default to read-only unless granted writes. Existing grants
+survive migration. A separately granted path is retained and disclosed on leaving;
+an explicit folder block overrides it. Project changes inherit with an affected-
+conversation preview and enforced revocation. Per-host acknowledgement and partial
+failure handling across affected conversations remain engineering work.
 
 **Gate:** overlapping read-only/read-write roots, duplicate aliases, removed cwd,
 missing paths and unauthorized creation targets have deterministic outcomes.
-Empty-draft abandonment never deletes a user-created folder. Physical allocation
-at first send versus explicit Create folder remains a small UX decision.
+Empty-draft abandonment never deletes a user-created folder. Managed allocation
+occurs at first accepted send unless the user explicitly invokes Create folder;
+retries must not duplicate the folder or conversation.
 
 ### 3. Project rules, shared notes and retained context — adopted structure, remaining lifecycle
 
@@ -884,9 +894,11 @@ explicit control. See the accepted follow-up and message routing contract.
 
 **Adopted:** pausing new coordination and stopping running tasks are separate
 controls with visible scope. No implicit restart after user stop/takeover.
-**Remaining settings:** initial observation scope and standing execution grants,
-spending/concurrency limits, quiet hours and digest cadence. No numerical or time
-defaults were proposed and accepted; do not invent approval for specific values.
+**Adopted activation policy:** user-selected observation scopes, distinct progress/
+content rights, no autonomous dispatch without an explicit request or standing
+grant, and finite configured budgets/bounded concurrency. Nonurgent suggestions
+use quiet digests/inbox. Actual scope selections, grants, numeric limits, quiet hours
+and cadence are configuration work; no specific amounts or times were approved.
 
 **Gate:** repeated events produce one actionable suggestion; dismissed suggestions
 stay quiet until materially changed; denied/revoked grants survive retries;
@@ -944,8 +956,8 @@ bounded proactivity. Provider extraction can proceed as a separately approved
 behavior-preserving change; reusable-loop integration has its own API and event
 ordering gate in [pots and Rust foundations](pots-and-library-extraction.md).
 
-**Owner decisions:** first implementation slice and library naming/public API
-choices. Flutter Web remains separate evaluation; no framework replacement or
+**Next delivery decision:** first implementation slice. Crate names and packaging
+direction are adopted; public API/type details still need engineering review. Flutter Web remains separate evaluation; no framework replacement or
 crates.io publication is implied. Rollback must name the supported data version;
 switching back the UI is not safe database downgrade proof.
 
@@ -961,12 +973,13 @@ or pots user-precedence rule is not needed.
 
 - **Engineering work:** revocation and restart protocol, identity mapping, team-task
   mapping, schemas/event ordering, conflict fixtures, API/feature proof and migration.
-- **Specific product settings still needed:** initial additional-mount permission
-  defaults; note retention settings; pots observation
-  scopes, spending/concurrency limits and notification times.
+- **Remaining settings:** actual pots scope/grant selections, finite budget and
+  concurrency values, notification times and board-retention/editor presets.
+  Additional-mount, allocation and durable-note policies are already adopted.
 - **Explicitly deferred:** App authentication/topology and Flutter Web selection.
 - **Before code changes:** agree on the first implementation slice. Acceptance of
-  this planning direction is not a request to implement or publish it now.
+  this planning direction is not a request to implement it; repository publication
+  follows the separately authorized commit/rebase/push workflow.
 
 Bring only unresolved behavior or consequential tradeoffs back to the user.
 Engineering details should be completed by the implementer within the approved
