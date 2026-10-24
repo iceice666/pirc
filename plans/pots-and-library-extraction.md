@@ -14,13 +14,16 @@ tasks and preservation of pirc-owned authority boundaries. See the
 This settles the recommended direction, not final Rust signatures, feature/API
 choices that were only listed as questions, implementation or publication.
 
-The accepted follow-up is detailed in [Conversation execution contracts](conversation-execution-contracts.md):
-capability composition, one foreground response flow with attributed parallel
-tasks, and project-grant removal versus an explicit conversation folder block.
-These remain pirc host responsibilities. A generic loop must expose cancel/resume
-and correlated results so the host can reject obsolete work; it must not decide
-user-message targets, create resource grants or silently restart stopped tasks.
-Items 4–7 are recorded in the [main plan](unified-conversations.md#accepted-follow-up-behavior-and-detailed-contracts-2026-10-24).
+All seven accepted follow-up areas are detailed in [Conversation execution contracts](conversation-execution-contracts.md):
+capability composition, foreground/parallel task routing, overlapping grants,
+Node switching, lifecycle/deletion, historical/live content and pots coordination.
+The [main plan](unified-conversations.md#accepted-follow-up-behavior-and-detailed-contracts-2026-10-24)
+indexes those contracts. Their state, authorization and data ownership remain pirc
+host responsibilities. A generic loop must expose cancel/resume and correlated
+results so the host can reject obsolete work; it must not decide user-message
+targets, create grants, own deletion/cache storage or silently restart stopped tasks.
+Cross-Node context handoff and pots dispatch use trusted host adapters rather than
+copying private session stores or giving the loop provider/account credentials.
 
 ## Combined direction
 
@@ -275,6 +278,11 @@ state flows can be specified now, but no new listener or public port is implied.
 - **pots and clients:** actor provenance cannot be forged by prompt text; narrowed
   grants remain narrowed through delegation; user takeover fences queued dispatch;
   duplicate approvals, missed push and closed Web do not replay work.
+- **Lifecycle/content/pots:** the N4/L5/C6/P7 cases in the conversation contracts
+  cover interrupted Node transitions, owned deletion versus retained recovery
+  evidence, live-file reauthorization/account caches, suggestion deduplication and
+  user takeover. Extraction must preserve these host boundaries; generic-loop
+  tests alone do not establish backend/client or OS enforcement.
 - Run workspace tests and clippy at each actual extraction checkpoint, plus the
   focused compatibility gates. Nix verification remains waived as previously
   requested; physical-device/remote-push limitations are not silently cleared.

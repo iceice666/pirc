@@ -48,30 +48,31 @@ Engineering detail and validation remain work to do, not evidence of implementat
 | Client consistency           | Backend-authorized commands, idempotent outcome reconciliation, revisions/cursors, separate notification/read/decision states and account-isolated local drafts/cache                              |
 | Migration and extraction     | Map existing identities and provenance, verify restart-safe migrations and compatibility; stage product changes and provider extraction separately; preserve loop event/error/cancel behavior      |
 
-Still unspecified: initial read/write defaults for extra folders, detailed note
-retention/deletion, spending/concurrency numbers, quiet-hour/digest defaults,
-final API/type names and first implementation authorization. The follow-up below
-settles the previously open distinction between removing a project's grants and
+Still unspecified: initial read/write defaults for extra folders, note retention
+values and new-note storage/provenance mapping, spending/concurrency numbers,
+quiet-hour/digest defaults, final API/type names and first implementation
+authorization. The follow-up below settles the previously open distinction between removing a project's grants and
 blocking all folder access for a conversation. App authentication/topology and
 Flutter Web remain explicitly deferred. Decision A remains unchanged.
 
 ## Accepted follow-up behavior and detailed contracts (2026-10-24)
 
-The user accepted all seven follow-up recommendations and requested detailed
-planning for items 1–3 first. [Conversation execution contracts](conversation-execution-contracts.md)
-is the detailed source for these three areas, with flows, authority boundaries,
-routing/access tables and future acceptance cases. They are adopted target
-behavior; no code, migration, deployed permission change or push is authorized.
+The user accepted all seven follow-up recommendations, detailed items 1–3 first,
+then requested the same depth for items 4–7. [Conversation execution contracts](conversation-execution-contracts.md)
+now covers all seven with flows, authority/ownership boundaries, exception handling
+and future acceptance cases. These are adopted target behaviors; this planning
+work does not implement code, migrations or deployed permission changes. Keep the
+updates local; no push is authorized.
 
-| Item                                 | Accepted direction                                                                                                                                                    | Detail status                                                            |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| 1. Chat/Work capabilities            | Compose runtime availability, conversation configuration, resource grants, approvals and readiness; no automatic global assistant/admin rights from mounting a folder | Detailed in the capability mapping and old-mode migration contract       |
-| 2. Messages during multiple tasks    | One foreground response flow; attributed parallel child/background tasks; questions, corrections, independent objectives and explicit controls have distinct routing  | Detailed in the message routing, ordering and cancellation contract      |
-| 3. Overlapping folder permissions    | Leaving removes project-derived grants and discloses retained independent grants; an explicit conversation-level folder block overrides overlapping grants            | Detailed in the effective-access rules, examples and revocation contract |
-| 4. Switching Nodes                   | Switch execution binding without automatic migration of files, processes or browser state; no automatic offline failover                                              | Direction recorded below; detailed transfer design remains later work    |
-| 5. Archive/delete/leave              | Archive organizes; deletion reconciles affected running work first; leaving changes grants; original folders and memory provenance are protected                      | Direction recorded below; full lifecycle matrix remains later work       |
-| 6. Historical content and file links | Preserve saved dialogue under decision A; distinguish conversation-owned attachments from live project file references                                                | Direction recorded below; cache/retention mechanics remain later work    |
-| 7. pots entry and takeover           | An accepted suggestion links to one canonical task; subsequent discussion stays task-linked; takeover suspends coordination only for the affected task                | Direction recorded below; detailed presentation remains later work       |
+| Item                                 | Accepted direction                                                                                                                                                    | Detail status                                                                                                                                                    |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Chat/Work capabilities            | Compose runtime availability, conversation configuration, resource grants, approvals and readiness; no automatic global assistant/admin rights from mounting a folder | Detailed in the capability mapping and old-mode migration contract                                                                                               |
+| 2. Messages during multiple tasks    | One foreground response flow; attributed parallel child/background tasks; questions, corrections, independent objectives and explicit controls have distinct routing  | Detailed in the message routing, ordering and cancellation contract                                                                                              |
+| 3. Overlapping folder permissions    | Leaving removes project-derived grants and discloses retained independent grants; an explicit conversation-level folder block overrides overlapping grants            | Detailed in the effective-access rules, examples and revocation contract                                                                                         |
+| 4. Switching Nodes                   | Switch execution binding without automatic migration of files, processes or browser state; no automatic offline failover                                              | [Switch flow and failure cases](conversation-execution-contracts.md#4-switch-nodes-without-implicit-migration); separate file transfer remains outside switching |
+| 5. Archive/delete/leave              | Archive organizes; deletion reconciles affected running work first; leaving changes grants; original folders and memory provenance are protected                      | [Lifecycle ownership, deletion flow and cases](conversation-execution-contracts.md#5-archive-leave-and-delete-with-explicit-ownership)                           |
+| 6. Historical content and file links | Preserve saved dialogue under decision A; distinguish conversation-owned attachments from live project file references                                                | [Content kinds, access flow and cases](conversation-execution-contracts.md#6-separate-saved-content-from-live-file-references)                                   |
+| 7. pots entry and takeover           | An accepted suggestion links to one canonical task; subsequent discussion stays task-linked; takeover suspends coordination only for the affected task                | [pots workflow, controls and cases](conversation-execution-contracts.md#7-make-pots-a-bounded-coordinator-with-one-task-record)                                  |
 
 ### 4. Switching Nodes without implicit data transfer
 
@@ -90,17 +91,18 @@ Archiving changes organization, without automatically stopping work or schedules
 Leaving changes project grants under item 3. Deleting a conversation/project with
 affected active work first fences new dispatch, stops affected workers and scoped
 descendants, and reconciles their outcomes before reporting deletion complete.
-An offline worker leaves
-that operation pending rather than creating an orphan that can continue writing.
+An offline worker leaves that operation pending rather than creating an orphan
+that can continue writing.
 Show the affected tasks, schedules, notes, attachments and checkpoint records in
 the deletion preview; distinguish related references from records actually owned
 by the deleted entity. Do not silently delete unrelated work or user-owned folders.
 
 Keep the existing memory-origin deletion/forget rules, including other authors'
 contributions. Deletion cannot be bypassed by copying source-derived memory into
-shared notes. The full lifecycle matrix still needs to specify scheduling cleanup,
-shared-data references, managed allocations and minimal pending-operation records;
-this accepted direction does not invent a new retention duration.
+shared notes. The [detailed lifecycle contract](conversation-execution-contracts.md#5-archive-leave-and-delete-with-explicit-ownership)
+now specifies owned/retained records, schedules, mixed-origin memory, checkpoint
+dependencies and interrupted cleanup. Concrete storage/receipt mechanisms and
+retention durations remain to specify; no universal erasure claim is implied.
 
 ### 6. Retained history is distinct from fresh file access
 
@@ -445,7 +447,7 @@ context, while new project-note retrieval is denied.
 ## pirc pots: proactive but bounded
 
 Product name supplied by the user: **pirc pots** (personal assistant).
-Proposed presentation: one stable assistant entry point with an overview,
+Planned presentation: one stable assistant entry point with an overview,
 pending decisions and task-specific discussion threads. It is not a second
 unstructured collection of interchangeable Chat sessions. A continuous persona
 must not require an infinite transcript containing every agent's raw output.
@@ -480,7 +482,7 @@ and backoff, rather than a model continuously rereading every conversation.
 Assistant inference runs on an available authorized execution service; a Gateway
 alone is not an agent runtime. Show unavailable/stale status when it cannot run.
 
-Notification policy proposal:
+Notification categories (adopted treatment; exact timing settings remain open):
 
 | Category                                               | Default treatment                                            |
 | ------------------------------------------------------ | ------------------------------------------------------------ |
@@ -626,6 +628,9 @@ All unchecked work is future work; no stage grants implementation authority.
 - [x] Record acceptance of the seven follow-up behavior recommendations and detail
       capability composition, message/task routing and overlapping grants in
       [Conversation execution contracts](conversation-execution-contracts.md).
+- [x] Extend the detailed contracts to items 4–7: Node switching, lifecycle/deletion,
+      historical/live content and pots coordination, including 32 future acceptance
+      cases. This records specifications, not passed runtime tests.
 - [ ] Validate enforcement for active workers/descriptors and offline hosts;
       specify remaining permission defaults and project-note lifecycle details.
 - [ ] Inventory existing API/storage identities against each proposed concept and
@@ -787,8 +792,9 @@ not change memory authorship or delete other agents' notes. Global USER/MEMORY a
 and revision conflicts; project rules remain user-controlled. Ordinary rule edits
 apply at the next safe turn boundary with the revision recorded; access
 revocations use the confirmed live-transition flow.
-**Remaining:** detailed editor scope, retention/search visibility, deletion rules
-and migration mapping. Existing global memory is not automatically re-scoped.
+**Remaining:** detailed editor scope, retention/search settings, storage/migration
+mapping and implementation of the adopted lifecycle/deletion contract. Existing
+global memory is not automatically re-scoped.
 
 **Gate:** two agents cannot silently overwrite each other's note; project leave
 removes fresh retrieval but retains conversation history; old rules cannot restore
@@ -947,7 +953,7 @@ or pots user-precedence rule is not needed.
 - **Engineering work:** revocation and restart protocol, identity mapping, team-task
   mapping, schemas/event ordering, conflict fixtures, API/feature proof and migration.
 - **Specific product settings still needed:** initial additional-mount permission
-  defaults; detailed note retention/deletion; pots observation
+  defaults; note retention settings; pots observation
   scopes, spending/concurrency limits and notification times.
 - **Explicitly deferred:** App authentication/topology and Flutter Web selection.
 - **Before code changes:** agree on the first implementation slice. Acceptance of
