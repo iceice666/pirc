@@ -16,7 +16,7 @@
   import { lineAction } from '../../loops';
   import { describeOrigin, forgetRemembered } from '../../memory';
   import type { ThreadActivity } from '../../room-events';
-  import { roomsApi, type RoomMessage } from '../../rooms';
+  import { roomsApi, type QuotedMessage, type RoomMessage } from '../../rooms';
   import { engineLink, type OverviewSection } from '../../routes';
   import { wakesApi } from '../../wakes';
   import {
@@ -173,6 +173,28 @@
   const lastWord = $derived(anchor ? activity[anchor.threadId] : undefined);
   /** A line or report about a worker: it opens the thread. */
   const workerThread = $derived(message.threadId ?? message.body.worker?.threadId ?? undefined);
+
+  /**
+   * A move brought this room the conversation (POST /api/rooms/:id/move with
+   * a topic): its messages are quoted here, and the gateway's sentence under
+   * them ("Copied N messages…") is left to clients that cannot draw it.
+   */
+  const quote = $derived(message.body.quote);
+  /** Who said a quoted message: a face keeps its own name and colour. */
+  const quotedName = (item: QuotedMessage) =>
+    item.speaker === 'user'
+      ? (item.user ?? t('common.unknownUser'))
+      : (speakerFace(faces, item.speaker)?.name ?? item.speaker.replace(/^face:/, ''));
+  const quotedColor = (item: QuotedMessage) =>
+    faceColor(speakerFace(faces, item.speaker), quotedName(item));
+  /** When it was said, where: a copy is read later than it was written. */
+  const quotedTime = (item: QuotedMessage) =>
+    new Intl.DateTimeFormat(locale(), { dateStyle: 'medium', timeStyle: 'short' }).format(item.at);
+  const quotedFullTime = (item: QuotedMessage) =>
+    new Date(item.at).toLocaleString(locale(), { dateStyle: 'full', timeStyle: 'long' });
+  /** The files a quoted message carried: their names, not the files. */
+  const quotedFiles = (item: QuotedMessage) =>
+    (item.attachments ?? []).map((file) => file.filename ?? t('rooms.attachment.file')).join(', ');
 
   /** A worker's red line, asked here (plan 07). */
   const question = $derived(message.kind === 'question' ? message.body.question : undefined);
@@ -362,7 +384,7 @@
           {#if message.pinnedAt}<Pin size={12} aria-label={t('common.pinned')} />{/if}
         </header>
       {/if}
-      {#if message.body.text || message.body.streaming}
+      {#if (message.body.text || message.body.streaming) && !quote}
         {#if isFace}
           <!-- What pirc and its workers write is Markdown: code, lists, tables.
                Nothing here is a Files pane, so a workspace path shows as code
@@ -381,6 +403,48 @@
               >{/if}
           </p>
         {/if}
+      {/if}
+      {#if quote}
+        <!-- What the move brought along: the old room's words, quoted, each
+             with who said it and when; the files keep only their names. -->
+        <figure class="quote" aria-label={t('rooms.quote.label', { room: quote.from.name })}>
+          <figcaption>
+            <ArrowRightLeft size={14} aria-hidden="true" />
+            <span
+              >{t('rooms.quote.count', {
+                count: quote.messages.length,
+                topic: quote.topic,
+              })}</span
+            >
+            <button type="button" class="open" onclick={() => onopenroom?.(quote.from.id)}
+              >{t('rooms.quote.open', { room: quote.from.name })}</button
+            >
+          </figcaption>
+          <ol class="copied">
+            {#each quote.messages as item (item.id)}
+              <li data-quoted={item.id}>
+                <div class="who">
+                  <span class="name" style:color={quotedColor(item)}>{quotedName(item)}</span>
+                  <time datetime={new Date(item.at).toISOString()} title={quotedFullTime(item)}
+                    >{quotedTime(item)}</time
+                  >
+                </div>
+                {#if item.speaker === 'user'}
+                  <p class="text">{@render said(item.text)}</p>
+                {:else}
+                  <Markdown source={item.text} fileLinks={false} />
+                {/if}
+                {#if item.cut}<p class="note">{t('rooms.quote.cut')}</p>{/if}
+                {#if item.attachments?.length}
+                  <p class="files"><FileText size={12} aria-hidden="true" />{quotedFiles(item)}</p>
+                {/if}
+              </li>
+            {/each}
+          </ol>
+          {#if quote.omitted}
+            <p class="omitted">{t('rooms.quote.omitted', { count: quote.omitted })}</p>
+          {/if}
+        </figure>
       {/if}
       {#if question}
         {#if question.request.title}
@@ -699,6 +763,75 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     line-height: 1.5;
+  }
+  /* What a move brought along: the topic's messages, quoted in the new room
+     behind a rail, the same on a phone (one column, words wrapping). */
+  .quote {
+    margin: 8px 0 0;
+    padding: 8px 12px 8px 12px;
+    border-left: 2px solid var(--accent);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    background: var(--bg-sidebar);
+  }
+  .quote figcaption {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .quote .open {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .quote .open:hover {
+    text-decoration: underline;
+  }
+  .quote .copied {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+  }
+  .quote .copied > li + li {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+  }
+  .quote .who {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .quote .who .name {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+  .quote .who time {
+    color: var(--faint);
+  }
+  .quote .copied .text {
+    margin-top: 2px;
+  }
+  .quote .note,
+  .quote .files,
+  .quote .omitted {
+    margin: 4px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  .quote .files {
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
   .mention {
     padding: 0 3px;

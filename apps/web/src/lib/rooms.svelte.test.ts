@@ -1311,6 +1311,78 @@ describe('rooms page', () => {
     expect(head.textContent).not.toContain('Continue in');
   });
 
+  it('quotes the conversation a move copied here, and opens the room it came from', async () => {
+    pages.general = [
+      message('general', 1),
+      {
+        id: 'general-quote',
+        roomId: 'general',
+        seq: 2,
+        speaker: 'face:host',
+        user: null,
+        kind: 'text',
+        body: {
+          text: 'Copied 2 messages about "slimeos" from #topic (the 3 older ones did not fit).',
+          quote: {
+            from: { id: 'topic', name: 'topic' },
+            topic: 'slimeos',
+            omitted: 3,
+            messages: [
+              {
+                id: 'topic-1',
+                seq: 4,
+                speaker: 'user',
+                user: 'ann@example.com',
+                at: 1_700_000_000_000,
+                text: 'the parser broke',
+                attachments: [{ kind: 'image' as const, filename: 'shot.png' }],
+              },
+              {
+                id: 'topic-2',
+                seq: 5,
+                speaker: 'face:host',
+                at: 1_700_000_600_000,
+                text: '**fixed** it',
+                cut: true,
+              },
+            ],
+          },
+        },
+        threadId: null,
+        createdAt: 1_700_001_000_000,
+        editedAt: null,
+        pinnedAt: null,
+      },
+    ];
+    const store = await show();
+    const figure = target.querySelector<HTMLElement>('figure.quote')!;
+    expect(figure.getAttribute('aria-label')).toBe('Messages copied from #topic');
+    expect(figure.querySelector('figcaption')!.textContent).toContain('2 messages about "slimeos"');
+    // The gateway's own sentence is for clients that cannot draw the copy.
+    expect(target.textContent).not.toContain('Copied 2 messages');
+    // Each quoted message keeps who said it, when, and its words.
+    const items = [...figure.querySelectorAll<HTMLElement>('.copied > li')];
+    expect(items.map((item) => item.dataset.quoted)).toEqual(['topic-1', 'topic-2']);
+    expect(items[0]!.querySelector('.who .name')!.textContent).toBe('ann@example.com');
+    expect(items[0]!.querySelector('.who .name')!.getAttribute('style')).toContain('color');
+    expect(items[0]!.textContent).toContain('the parser broke');
+    expect(items[0]!.querySelector('time')!.getAttribute('datetime')).toBe(
+      new Date(1_700_000_000_000).toISOString(),
+    );
+    // Files keep their names, not their bytes.
+    expect(items[0]!.querySelector('.files')!.textContent).toContain('shot.png');
+    // A face speaks Markdown, in its own colour; a cut message says so.
+    expect(items[1]!.querySelector('.who .name')!.textContent).toBe('pirc');
+    expect(items[1]!.querySelector('strong')!.textContent).toBe('fixed');
+    expect(items[1]!.querySelector('.note')!.textContent).toBe('Cut short here');
+    // What did not fit is said out loud.
+    expect(figure.querySelector('.omitted')!.textContent).toBe('3 older messages were not copied');
+    // The copy opens the room the conversation came from.
+    expect(figure.querySelector('button.open')!.textContent?.trim()).toBe('Open #topic');
+    figure.querySelector<HTMLButtonElement>('button.open')!.click();
+    await vi.waitFor(() => expect(store.currentId).toBe('topic'));
+  });
+
   it('takes files dropped on the composer, and highlights where they land', async () => {
     await show();
     const form = target.querySelector<HTMLFormElement>('.composer')!;

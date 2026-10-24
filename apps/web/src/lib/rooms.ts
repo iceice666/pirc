@@ -40,6 +40,37 @@ export interface RoomAttachment {
   byteSize: number;
 }
 
+/**
+ * One message a move copied into a room (POST /api/rooms/:id/move with a
+ * topic): the original stays where it was, this is the copy's entry.
+ */
+export interface QuotedMessage {
+  /** The message it was copied from, for tracing it back. */
+  id: string;
+  /** Where it was said in the room it came from. */
+  seq: number;
+  /** `user`, or `face:<id>`. */
+  speaker: string;
+  /** Who sent a `user` one. */
+  user?: string;
+  at: number;
+  /** Its words as written (Markdown for a face). */
+  text: string;
+  /** The gateway cut it at its limit. */
+  cut?: boolean;
+  /** The files' names: a copy carries no bytes. */
+  attachments?: { kind: 'image' | 'file'; filename: string | null }[];
+}
+
+/** A move's conversation, copied: the topic's messages from the old room. */
+export interface QuotedMove {
+  from: { id: string; name: string };
+  topic: string;
+  /** How many older messages did not fit. */
+  omitted?: number;
+  messages: QuotedMessage[];
+}
+
 export interface RoomQuestion {
   interactionId: string;
   threadMessageId: string;
@@ -65,6 +96,8 @@ export interface RoomMessage {
     move?: { direction: 'to' | 'from'; roomId: string; roomName: string };
     /** A face's reply still coming in (plan 02). */
     streaming?: boolean;
+    /** The conversation a move brought along, copied from the old room. */
+    quote?: QuotedMove;
     /** A line saying what the brain remembered (plan 03), which "Don't keep" undoes. */
     memory?: RememberedLine;
     /** A line saying what happened to an open loop (plan 04): undone from the line. */
@@ -107,9 +140,12 @@ export const roomsApi = {
     roomId: string,
     patch: { name?: string; archived?: boolean; sourceScope?: Record<string, unknown> | null },
   ) => request<{ room: RoomView }>(path(roomId), { method: 'PATCH', ...json(patch) }),
-  /** With the conversation's `topic` (plan 10), its open loops go along. */
+  /**
+   * With the conversation's `topic` (plan 10), its open loops go along, and
+   * its messages are copied into the new room as one quote.
+   */
   move: (roomId: string, toRoomId: string, topic?: string) =>
-    request<{ from: Room; to: Room; loops: string[] }>(path(roomId, '/move'), {
+    request<{ from: Room; to: Room; loops: string[]; quote?: RoomMessage }>(path(roomId, '/move'), {
       method: 'POST',
       ...json(topic ? { toRoomId, topic } : { toRoomId }),
     }),
