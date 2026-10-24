@@ -28,13 +28,12 @@ mod ops;
 mod timer;
 
 use axum::Router;
-use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 
 use crate::app::{App, AppState};
-use crate::db::{Capability, Session, Store, Workspace, atomic};
+use crate::db::{Capability, Session, Store, Workspace, atomic, sql_text_enum};
 use crate::dispatch::{clip, one_line, redact_secrets, workspace_online};
 use crate::error::{ApiError, ApiResult};
 use crate::push::PushMessage;
@@ -139,22 +138,6 @@ impl RunStatus {
     pub fn is_open(self) -> bool {
         matches!(self, Self::Running | Self::WaitingInput)
     }
-}
-
-macro_rules! sql_text_enum {
-    ($type:ty) => {
-        impl FromSql for $type {
-            fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
-                <$type>::parse(value.as_str()?).ok_or(FromSqlError::InvalidType)
-            }
-        }
-
-        impl ToSql for $type {
-            fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-                Ok(ToSqlOutput::from(self.as_str()))
-            }
-        }
-    };
 }
 
 sql_text_enum!(ScheduleStatus);

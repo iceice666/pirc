@@ -16,7 +16,7 @@ use axum::routing::{get, post};
 use serde_json::{Map, Value, json};
 
 use super::schema::{int, len16, optional, strict};
-use super::store::Store;
+use super::store::{EntryStatus, Kind, ProposalStatus, Store};
 use crate::app::{App, AppState, ReqBody};
 use crate::auth::Identity;
 use crate::db::Store as _;
@@ -90,7 +90,7 @@ fn view(app: &App, user: &str) -> ApiResult<Value> {
     let store = super::store(app, &conn);
     let entries = store.entries(user, None, None)?;
     let proposals: Vec<Value> = store
-        .proposals(user, Some("pending"))?
+        .proposals(user, Some(ProposalStatus::Pending))?
         .into_iter()
         .map(|proposal| {
             let target = proposal
@@ -132,9 +132,9 @@ fn view(app: &App, user: &str) -> ApiResult<Value> {
     };
     Ok(json!({
         "usage": store.usage(user)?,
-        "user": pick(&|entry| entry.kind == "user" && entry.status == "active"),
-        "notes": pick(&|entry| entry.kind == "note" && entry.status == "active"),
-        "removed": pick(&|entry| entry.status == "removed"),
+        "user": pick(&|entry| entry.kind == Kind::User && entry.status == EntryStatus::Active),
+        "notes": pick(&|entry| entry.kind == Kind::Note && entry.status == EntryStatus::Active),
+        "removed": pick(&|entry| entry.status == EntryStatus::Removed),
         "proposals": proposals,
         "sessions": sessions,
     }))

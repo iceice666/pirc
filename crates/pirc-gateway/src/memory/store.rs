@@ -12,7 +12,7 @@ use serde::Serialize;
 use serde_json::{Map, Value, json};
 
 use super::text::{content_hash, grouped, squash};
-use crate::db::atomic;
+use crate::db::{atomic, sql_text_enum};
 use crate::dispatch::redact_secrets;
 use crate::error::{ApiError, ApiResult};
 use crate::util::{hex, now_ms, random_bytes, safe_json};
@@ -21,13 +21,22 @@ pub const ENTRY_MAX_CHARS: usize = 1000;
 pub const QUOTE_MAX_CHARS: usize = 1000;
 pub const PENDING_PROPOSALS_MAX: usize = 20;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Kind {
     User,
     Note,
 }
 
 impl Kind {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "user" => Some(Self::User),
+            "note" => Some(Self::Note),
+            _ => None,
+        }
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             Self::User => "user",
@@ -43,7 +52,8 @@ impl Kind {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Action {
     Add,
     Replace,
@@ -69,6 +79,69 @@ impl Action {
     }
 }
 
+/// An entry's `status` column.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EntryStatus {
+    Active,
+    /// Removed by the user or a proposal; its history is kept.
+    Removed,
+    /// Content and history wiped.
+    Forgotten,
+}
+
+impl EntryStatus {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "active" => Some(Self::Active),
+            "removed" => Some(Self::Removed),
+            "forgotten" => Some(Self::Forgotten),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Removed => "removed",
+            Self::Forgotten => "forgotten",
+        }
+    }
+}
+
+/// A proposal's `status` column.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ProposalStatus {
+    Pending,
+    Approved,
+    Rejected,
+}
+
+impl ProposalStatus {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "pending" => Some(Self::Pending),
+            "approved" => Some(Self::Approved),
+            "rejected" => Some(Self::Rejected),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Approved => "approved",
+            Self::Rejected => "rejected",
+        }
+    }
+}
+
+sql_text_enum!(Kind);
+sql_text_enum!(Action);
+sql_text_enum!(EntryStatus);
+sql_text_enum!(ProposalStatus);
+
 /// Characters of memory per user.
 #[derive(Clone, Copy, Debug)]
 pub struct Budgets {
@@ -80,10 +153,10 @@ pub struct Budgets {
 #[serde(rename_all = "camelCase")]
 pub struct Entry {
     pub id: String,
-    pub kind: String,
+    pub kind: Kind,
     /// Empty once forgotten.
     pub content: String,
-    pub status: String,
+    pub status: EntryStatus,
     pub revision: i64,
     pub origins: Value,
     pub sources: Value,
@@ -107,7 +180,7 @@ impl Entry {
     }
 
     fn is(&self, kind: Kind) -> bool {
-        self.kind == kind.as_str()
+        self.kind == kind
     }
 
     /// Written from content fetched from the network and from nothing the
@@ -152,14 +225,14 @@ pub struct Version {
 #[serde(rename_all = "camelCase")]
 pub struct Proposal {
     pub id: String,
-    pub action: String,
+    pub action: Action,
     pub target_id: Option<String>,
     pub target_revision: Option<i64>,
     pub content: Option<String>,
     pub quote: String,
     pub sources: Value,
     pub session_id: String,
-    pub status: String,
+    pub status: ProposalStatus,
     pub created_at: i64,
     pub decided_at: Option<i64>,
 }
@@ -257,7 +330,7 @@ impl<'a> Store<'a> {
         &self,
         user: &str,
         kind: Option<Kind>,
-        status: Option<&str>,
+        status: Option<EntryStatus>,
     ) -> ApiResult<Vec<Entry>> {
         let mut statement = self
             .conn
@@ -288,7 +361,7 @@ impl<'a> Store<'a> {
 
     fn used(&self, user: &str) -> ApiResult<(i64, i64)> {
         let mut used = (0, 0);
-        for entry in self.entries(user, None, Some("active"))? {
+        for entry in self.entries(user, None, Some(EntryStatus::Active))? {
             if entry.is(Kind::User) {
                 used.0 += len(&entry.content);
             } else if entry.is(Kind::Note) {
@@ -326,7 +399,11 @@ impl<'a> Store<'a> {
         Ok(rows.collect::<Result<_, _>>()?)
     }
 
-    pub fn proposals(&self, user: &str, status: Option<&str>) -> ApiResult<Vec<Proposal>> {
+    pub fn proposals(
+        &self,
+        user: &str,
+        status: Option<ProposalStatus>,
+    ) -> ApiResult<Vec<Proposal>> {
         let mut statement = self
             .conn
             .prepare("SELECT * FROM memory_proposals WHERE owner_user=? ORDER BY created_at, id")?;
@@ -370,20 +447,20 @@ impl<'a> Store<'a> {
 
     /// What a coding session starts with: the approved USER entries only.
     pub fn user_context(&self, user: &str) -> ApiResult<Vec<Value>> {
-        let active = self.entries(user, None, Some("active"))?;
+        let active = self.entries(user, None, Some(EntryStatus::Active))?;
         Ok(Self::briefs(&active, Kind::User))
     }
 
     /// What an assistant session starts with.
     pub fn context(&self, user: &str, session_id: Option<&str>) -> ApiResult<Map<String, Value>> {
-        let active = self.entries(user, None, Some("active"))?;
+        let active = self.entries(user, None, Some(EntryStatus::Active))?;
         let brief = |kind: Kind| Self::briefs(&active, kind);
         let decisions: Vec<Value> = match session_id {
             Some(session_id) => {
                 let mut decided: Vec<Proposal> = self
                     .proposals(user, None)?
                     .into_iter()
-                    .filter(|p| p.session_id == session_id && p.status != "pending")
+                    .filter(|p| p.session_id == session_id && p.status != ProposalStatus::Pending)
                     .collect();
                 decided.sort_by_key(|p| p.decided_at.unwrap_or(0));
                 let skip = decided.len().saturating_sub(20);
@@ -404,7 +481,7 @@ impl<'a> Store<'a> {
         context.insert("usage".into(), self.usage(user)?);
         context.insert(
             "pendingProposals".into(),
-            json!(self.proposals(user, Some("pending"))?.len()),
+            json!(self.proposals(user, Some(ProposalStatus::Pending))?.len()),
         );
         context.insert("proposalDecisions".into(), Value::Array(decisions));
         Ok(context)
@@ -444,14 +521,14 @@ impl<'a> Store<'a> {
                     ),
                 ));
             }
-            if entry.status == "forgotten" {
+            if entry.status == EntryStatus::Forgotten {
                 return Err(ApiError::new(
                     409,
                     "forgotten",
                     "The user asked to forget this note",
                 ));
             }
-            if entry.status == "removed" {
+            if entry.status == EntryStatus::Removed {
                 return Err(ApiError::new(
                     409,
                     "conflict",
@@ -473,7 +550,7 @@ impl<'a> Store<'a> {
                     user,
                     &entry,
                     Next {
-                        status: Some("removed"),
+                        status: Some(EntryStatus::Removed),
                         ..Next::default()
                     },
                     "remove",
@@ -533,7 +610,7 @@ impl<'a> Store<'a> {
                 Action::Add => None,
                 _ => {
                     let target = self.entry(user, input.id.as_deref().unwrap_or_default())?;
-                    if !target.is(Kind::User) || target.status != "active" {
+                    if !target.is(Kind::User) || target.status != EntryStatus::Active {
                         return Err(ApiError::not_found(format!(
                             "No USER entry {}",
                             input.id.as_deref().unwrap_or("undefined")
@@ -579,17 +656,17 @@ impl<'a> Store<'a> {
                 )?;
                 rows.collect::<Result<_, _>>()?
             };
-            if let Some(pending) = matching.iter().find(|row| row.status == "pending") {
+            if let Some(pending) = matching.iter().find(|row| row.status == ProposalStatus::Pending) {
                 return Ok((pending.clone(), true));
             }
-            if matching.iter().any(|row| row.status == "rejected") {
+            if matching.iter().any(|row| row.status == ProposalStatus::Rejected) {
                 return Err(ApiError::new(
                     409,
                     "rejected_before",
                     "The user already rejected this exact change; do not propose it again",
                 ));
             }
-            let waiting = self.proposals(user, Some("pending"))?.len();
+            let waiting = self.proposals(user, Some(ProposalStatus::Pending))?.len();
             if waiting >= PENDING_PROPOSALS_MAX {
                 return Err(ApiError::new(
                     429,
@@ -617,7 +694,7 @@ impl<'a> Store<'a> {
                     quote,
                     sources.to_string(),
                     session_id,
-                    "pending",
+                    ProposalStatus::Pending,
                     now_ms(),
                 ],
             )?;
@@ -670,7 +747,7 @@ impl<'a> Store<'a> {
                 origins: json!(["user"]),
                 sources: Value::Object(sources),
             };
-            let entry = if proposal.action == "add" {
+            let entry = if proposal.action == Action::Add {
                 let content = proposal.content.clone().unwrap_or_default();
                 self.refuse_forgotten(user, &content)?;
                 match self.active_with(user, Kind::User, &content)? {
@@ -682,7 +759,7 @@ impl<'a> Store<'a> {
                 }
             } else {
                 let target = self.entry(user, proposal.target_id.as_deref().unwrap_or_default())?;
-                if target.status != "active" {
+                if target.status != EntryStatus::Active {
                     return Err(ApiError::new(
                         409,
                         "conflict",
@@ -700,12 +777,12 @@ impl<'a> Store<'a> {
                     )
                     .with_details(json!({ "id": target.id, "revision": target.revision })));
                 }
-                if proposal.action == "remove" {
+                if proposal.action == Action::Remove {
                     self.update(
                         user,
                         &target,
                         Next {
-                            status: Some("removed"),
+                            status: Some(EntryStatus::Removed),
                             ..Next::default()
                         },
                         "remove",
@@ -762,7 +839,7 @@ impl<'a> Store<'a> {
     fn forget_in(&self, user: &str, entry_id: &str, scope: &str) -> ApiResult<()> {
         self.tx(|| {
             let entry = self.entry(user, entry_id)?;
-            if entry.status == "forgotten" {
+            if entry.status == EntryStatus::Forgotten {
                 return Ok(());
             }
             let versions: Vec<String> = {
@@ -828,7 +905,7 @@ impl<'a> Store<'a> {
     pub fn restore(&self, user: &str, entry_id: &str, revision: Option<i64>) -> ApiResult<Entry> {
         self.tx(|| {
             let entry = self.entry(user, entry_id)?;
-            if entry.status == "forgotten" {
+            if entry.status == EntryStatus::Forgotten {
                 return Err(ApiError::new(
                     409,
                     "forgotten",
@@ -837,7 +914,7 @@ impl<'a> Store<'a> {
             }
             let (content, origins, sources) = match revision {
                 None => {
-                    if entry.status == "active" {
+                    if entry.status == EntryStatus::Active {
                         return Ok(entry);
                     }
                     (
@@ -864,7 +941,7 @@ impl<'a> Store<'a> {
                         ApiError::not_found(format!("No version {revision} of {entry_id}"))
                     })?,
             };
-            if entry.status == "active" && content == entry.content {
+            if entry.status == EntryStatus::Active && content == entry.content {
                 return Ok(entry);
             }
             self.refuse_forgotten(user, &content)?;
@@ -873,7 +950,7 @@ impl<'a> Store<'a> {
             } else {
                 Kind::Note
             };
-            let before = if entry.status == "active" {
+            let before = if entry.status == EntryStatus::Active {
                 len(&entry.content)
             } else {
                 0
@@ -884,7 +961,7 @@ impl<'a> Store<'a> {
                 &entry,
                 Next {
                     content: Some(&content),
-                    status: Some("active"),
+                    status: Some(EntryStatus::Active),
                     origins: Some(&origins),
                     sources: Some(&sources),
                 },
@@ -905,7 +982,7 @@ impl<'a> Store<'a> {
     pub fn project_plan(&self, user: &str, sessions: &[String]) -> ApiResult<Vec<ProjectEntry>> {
         let mut plan = Vec::new();
         for entry in self.entries(user, None, None)? {
-            if entry.status == "forgotten" {
+            if entry.status == EntryStatus::Forgotten {
                 continue;
             }
             let versions = self.text_versions(user, &entry.id)?;
@@ -1070,7 +1147,7 @@ impl<'a> Store<'a> {
         } else {
             Kind::Note
         };
-        if entry.status == "active" {
+        if entry.status == EntryStatus::Active {
             self.make_room(user, kind, len(&content) - len(&entry.content))?;
         }
         self.update(
@@ -1128,11 +1205,14 @@ impl<'a> Store<'a> {
 
     fn pending(&self, user: &str, proposal_id: &str) -> ApiResult<Proposal> {
         let proposal = self.proposal(user, proposal_id)?;
-        if proposal.status != "pending" {
+        if proposal.status != ProposalStatus::Pending {
             return Err(ApiError::new(
                 409,
                 "conflict",
-                format!("Proposal {proposal_id} was already {}", proposal.status),
+                format!(
+                    "Proposal {proposal_id} was already {}",
+                    proposal.status.as_str()
+                ),
             ));
         }
         Ok(proposal)
@@ -1141,7 +1221,7 @@ impl<'a> Store<'a> {
     fn active_with(&self, user: &str, kind: Kind, content: &str) -> ApiResult<Option<Entry>> {
         let hash = content_hash(content);
         Ok(self
-            .entries(user, Some(kind), Some("active"))?
+            .entries(user, Some(kind), Some(EntryStatus::Active))?
             .into_iter()
             .find(|entry| content_hash(&entry.content) == hash))
     }
@@ -1241,7 +1321,7 @@ impl<'a> Store<'a> {
             "UPDATE memory_entries SET content=?, status=?, revision=?, origins_json=?, sources_json=?, updated_at=? WHERE id=? AND owner_user=?",
             params![
                 next.content.unwrap_or(&entry.content),
-                next.status.unwrap_or(&entry.status),
+                next.status.unwrap_or(entry.status),
                 entry.revision + 1,
                 next.origins.unwrap_or(&entry.origins).to_string(),
                 next.sources.unwrap_or(&entry.sources).to_string(),
@@ -1327,7 +1407,7 @@ pub struct ProjectDecision {
 #[derive(Default)]
 struct Next<'a> {
     content: Option<&'a str>,
-    status: Option<&'a str>,
+    status: Option<EntryStatus>,
     origins: Option<&'a Value>,
     sources: Option<&'a Value>,
 }

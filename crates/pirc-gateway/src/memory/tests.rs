@@ -6,7 +6,10 @@ use std::sync::Arc;
 use rusqlite::Connection;
 use serde_json::{Value, json};
 
-use super::store::{Action, Budgets, Change, Entry, NoteInput, Proposal, ProposeInput, Store};
+use super::store::{
+    Action, Budgets, Change, Entry, EntryStatus, NoteInput, Proposal, ProposalStatus, ProposeInput,
+    Store,
+};
 use pirc_providers::backends::BackendService;
 
 use crate::app::{App, empty_models};
@@ -353,7 +356,7 @@ fn user_changes_only_when_the_user_approves() {
         format!("user:{ME}")
     );
     let approved = store.proposal(ME, &proposal.id).unwrap();
-    assert_eq!(approved.status, "approved");
+    assert_eq!(approved.status, ProposalStatus::Approved);
     assert_eq!(approved.target_id.as_deref(), Some(entry.id.as_str()));
     assert_eq!(code(store.approve(ME, &proposal.id, None)), "conflict");
     // Already in USER: nothing to propose.
@@ -422,7 +425,10 @@ fn rejections_are_remembered_and_waiting_proposals_capped() {
     let conn = db.lock();
     let store = store(&conn);
     let (proposal, _) = propose(&store, "Likes jazz.", "I said so").unwrap();
-    assert_eq!(store.reject(ME, &proposal.id).unwrap().status, "rejected");
+    assert_eq!(
+        store.reject(ME, &proposal.id).unwrap().status,
+        ProposalStatus::Rejected
+    );
     assert_eq!(
         code(propose(&store, "Likes jazz.", "I said so")),
         "rejected_before"
@@ -469,7 +475,10 @@ fn the_user_budget_counts_when_proposing_and_approving() {
     .0;
     store.approve(ME, &fits.id, None).unwrap();
     assert_eq!(code(store.approve(ME, &grows.id, None)), "memory_full");
-    assert_eq!(store.proposal(ME, &grows.id).unwrap().status, "pending");
+    assert_eq!(
+        store.proposal(ME, &grows.id).unwrap().status,
+        ProposalStatus::Pending
+    );
     assert_eq!(code(propose(&store, "No words.", "  ")), "invalid_input");
 }
 
@@ -524,7 +533,7 @@ fn forgetting_erases_every_version_and_refuses_the_text_again() {
     }
     assert_eq!(
         store.proposal(ME, &pending_remove.id).unwrap().status,
-        "rejected"
+        ProposalStatus::Rejected
     );
     // Neither version can come back, whatever the case or spacing.
     assert_eq!(
@@ -658,7 +667,10 @@ fn deleting_the_source_chat_forgets_what_it_created() {
         (kept.status.as_str(), kept.content.as_str()),
         ("active", "Edited here")
     );
-    assert_eq!(store.entry(OTHER, &other.id).unwrap().status, "active");
+    assert_eq!(
+        store.entry(OTHER, &other.id).unwrap().status,
+        EntryStatus::Active
+    );
     assert_eq!(code(store.proposal(ME, &pending.id)), "not_found");
     for content in ["Originally here", "Edited elsewhere"] {
         assert_eq!(code(note(&store, content, ME)), "forgotten");
@@ -929,8 +941,14 @@ fn deleting_a_project_classifies_by_the_session_of_each_version() {
         code(store.delete_project(ME, &project, "w:p", &stale, true)),
         "conflict"
     );
-    assert_eq!(store.entry(ME, &own.id).unwrap().status, "active");
-    assert_eq!(store.proposal(ME, &pending.id).unwrap().status, "pending");
+    assert_eq!(
+        store.entry(ME, &own.id).unwrap().status,
+        EntryStatus::Active
+    );
+    assert_eq!(
+        store.proposal(ME, &pending.id).unwrap().status,
+        ProposalStatus::Pending
+    );
 
     let decisions = vec![(
         mixed.id.clone(),
@@ -1055,6 +1073,9 @@ fn a_rollback_to_text_forgotten_since_forgets_instead() {
     store
         .delete_project(ME, &project, "w:p", &[], true)
         .unwrap();
-    assert_eq!(store.entry(ME, &entry.id).unwrap().status, "forgotten");
+    assert_eq!(
+        store.entry(ME, &entry.id).unwrap().status,
+        EntryStatus::Forgotten
+    );
     assert_eq!(store.entry(ME, &twin.id).unwrap().content, "Other");
 }

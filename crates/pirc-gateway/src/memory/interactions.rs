@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use rusqlite::Connection;
 use serde_json::{Value, json};
 
-use super::store::{Proposal, Store};
+use super::store::{Proposal, ProposalStatus, Store};
 use crate::app::App;
 use crate::db::Store as _;
 use crate::error::{ApiError, ApiResult};
@@ -115,7 +115,7 @@ fn card(store: &Store<'_>, user: &str, proposal: &Proposal) -> ApiResult<Value> 
 
 fn cards(store: &Store<'_>, user: &str) -> ApiResult<Cards> {
     store
-        .proposals(user, Some("pending"))?
+        .proposals(user, Some(ProposalStatus::Pending))?
         .iter()
         .map(|proposal| {
             let card = card(store, user, proposal)?;

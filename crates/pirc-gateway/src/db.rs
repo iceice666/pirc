@@ -17,6 +17,26 @@ use serde_json::{Value, json};
 use crate::error::{ApiError, ApiResult};
 use crate::util::{new_id, now_ms, safe_json};
 
+/// Store a closed set of words (`as_str`/`parse`) in a TEXT column.
+macro_rules! sql_text_enum {
+    ($type:ty) => {
+        impl ::rusqlite::types::FromSql for $type {
+            fn column_result(
+                value: ::rusqlite::types::ValueRef<'_>,
+            ) -> ::rusqlite::types::FromSqlResult<Self> {
+                <$type>::parse(value.as_str()?).ok_or(::rusqlite::types::FromSqlError::InvalidType)
+            }
+        }
+
+        impl ::rusqlite::types::ToSql for $type {
+            fn to_sql(&self) -> ::rusqlite::Result<::rusqlite::types::ToSqlOutput<'_>> {
+                Ok(::rusqlite::types::ToSqlOutput::from(self.as_str()))
+            }
+        }
+    };
+}
+pub(crate) use sql_text_enum;
+
 /// `PRAGMA user_version` of the Rust schema. The TS gateway's migrations
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
