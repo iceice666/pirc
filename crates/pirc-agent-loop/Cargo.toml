@@ -1,0 +1,17 @@
+[package]
+name = "pirc-agent-loop"
+description = "Host-driven model/tool progression checkpoint; no runtime or policy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+pirc-llm-types = { path = "../pirc-llm-types" }
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
+
+[lints]
+workspace = true

@@ -10,6 +10,7 @@
 | [Session activity and list updates](../guides/session-ui.md#activity-transport) | Node activity, session origins and client updates                                          |
 
 - [Assistant memory and delegation](assistant-memory.md): frozen context, memory ownership, repository identity and delegation contracts.
+- [Reusable LLM foundations](reusable-llm.md): extracted types, transport/OAuth ownership and the generic-loop integration gate.
 - [PTC runtime contracts](ptc.md): discovery, per-operation authority, attachments and execution lifecycle.
 - [Security decisions and accepted limits](security-decisions.md): current trust boundaries and accepted risks.
 

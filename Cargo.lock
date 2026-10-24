@@ -1981,6 +1981,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pirc-agent-loop"
+version = "0.9.3"
+dependencies = [
+ "pirc-llm-types",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "pirc-config"
 version = "0.9.3"
 dependencies = [
@@ -2058,6 +2067,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "pirc-llm"
+version = "0.9.3"
+dependencies = [
+ "axum",
+ "base64 0.22.1",
+ "form_urlencoded",
+ "getrandom 0.3.4",
+ "indexmap",
+ "pirc-llm-types",
+ "regex-lite",
+ "reqwest",
+ "rustls",
+ "serde_json",
+ "sha2",
+ "tokio",
+]
+
+[[package]]
+name = "pirc-llm-types"
+version = "0.9.3"
+dependencies = [
+ "indexmap",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "pirc-node"
 version = "0.9.3"
 dependencies = [
@@ -2105,6 +2141,7 @@ version = "0.9.3"
 dependencies = [
  "indexmap",
  "libc",
+ "pirc-llm-types",
  "serde",
  "serde_json",
 ]
@@ -2114,12 +2151,11 @@ name = "pirc-providers"
 version = "0.9.3"
 dependencies = [
  "axum",
- "base64 0.22.1",
- "form_urlencoded",
  "futures-util",
  "getrandom 0.3.4",
  "indexmap",
  "pirc-config",
+ "pirc-llm",
  "pirc-protocol",
  "regex-lite",
  "reqwest",

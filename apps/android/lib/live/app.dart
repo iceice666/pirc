@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import '../theme.dart';
 import 'gateway.dart';
+import 'pots_page.dart';
 import 'common.dart';
 import 'panels.dart';
 import 'settings.dart';
@@ -783,6 +784,15 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       );
       return;
     }
+    if (name == 'pots') {
+      c.sessionVisible = false;
+      setState(() {
+        section = name;
+        listOpen = false;
+        panelOpen = false;
+      });
+      return;
+    }
     if (name == 'schedules') {
       c.sessionVisible = false;
       c.calendarFocusEventId = null;
@@ -1149,6 +1159,18 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
                                                                 ),
                                                               );
                                                             },
+                                                          )
+                                                        : section == 'pots'
+                                                        ? PotsPage(
+                                                            controller: c,
+                                                            onOpenChat:
+                                                                _openSession,
+                                                            sidebarCollapsed:
+                                                                sidebarCollapsed,
+                                                            onExpand: () =>
+                                                                _sidebarCollapsed(
+                                                                  false,
+                                                                ),
                                                           )
                                                         : section == 'schedules'
                                                         ? SchedulesPage(

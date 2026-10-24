@@ -43,41 +43,7 @@ pub fn info(id: &str) -> Option<&'static OAuthProviderInfo> {
     OAUTH_PROVIDERS.iter().find(|info| info.id == id)
 }
 
-/// `normalizeDomain`: the host name of a GitHub Enterprise domain or URL.
-pub fn normalize_domain(input: &str) -> Option<String> {
-    let trimmed = crate::js::trim(input);
-    if trimmed.is_empty() {
-        return None;
-    }
-    let url = if trimmed.contains("://") {
-        reqwest::Url::parse(trimmed)
-    } else {
-        reqwest::Url::parse(&format!("https://{trimmed}"))
-    }
-    .ok()?;
-    Some(url.host_str().unwrap_or_default().to_owned())
-}
-
-/// `getGitHubCopilotBaseUrl`: the API host from the token's `proxy-ep`,
-/// else the enterprise or individual default.
-pub fn copilot_base_url(token: Option<&str>, enterprise_domain: Option<&str>) -> String {
-    if let Some(token) = token.filter(|token| !token.is_empty())
-        && let Some(start) = token.find("proxy-ep=")
-    {
-        let host = &token[start + "proxy-ep=".len()..];
-        let host = host.split(';').next().unwrap_or_default();
-        if !host.is_empty() {
-            let host = host
-                .strip_prefix("proxy.")
-                .map_or_else(|| host.to_owned(), |rest| format!("api.{rest}"));
-            return format!("https://{host}");
-        }
-    }
-    match enterprise_domain {
-        Some(domain) if !domain.is_empty() => format!("https://copilot-api.{domain}"),
-        _ => "https://api.individual.githubcopilot.com".to_owned(),
-    }
-}
+pub use pirc_llm::oauth::{copilot_base_url, normalize_domain};
 
 /// The catalog of `id` as this account sees it (`modifyModels`).
 fn account_catalog(id: &str, credentials: &Credentials) -> Vec<CatalogModel> {

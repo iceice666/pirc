@@ -61,7 +61,7 @@ export type Upload = Attachment & { preview?: string; uploading?: boolean };
  */
 export type SidebarMode = 'chat' | 'work';
 /** What the main column shows: a session, the schedules, or a project's or workspace's page. */
-export type MainView = 'session' | 'schedules' | 'workspace';
+export type MainView = 'session' | 'schedules' | 'workspace' | 'pots';
 
 /** Something waiting for you, shown under "Needs you". */
 export type InboxItem =
@@ -297,6 +297,13 @@ class AppState {
     saveLayout('workMode', mode === 'work');
   }
 
+  /** Open the owner-scoped pots inbox; viewing never starts work or takes control. */
+  showPots() {
+    this.discardDraftSession();
+    this.view = 'pots';
+    this.#address('?open=pots');
+  }
+
   /** Show the schedules in the main column, optionally opening one. */
   showSchedules(scheduleId?: string) {
     this.discardDraftSession();
@@ -441,6 +448,7 @@ class AppState {
       }
     }
     // A project or workspace page the address names stays in front of the session behind it.
+    if (new URL(location.href).searchParams.get('open') === 'pots') this.view = 'pots';
     const page = new URL(location.href).searchParams.get('workspace');
     const pageWorkspace = page ? this.workspaces.find((item) => item.id === page) : undefined;
     if (pageWorkspace) {

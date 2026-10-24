@@ -2,6 +2,7 @@
 //! `backends/inference.ts`). No provider configuration comes from a node.
 
 use std::future::Future;
+use std::sync::LazyLock;
 
 use pirc_protocol::{
     AssistantDelta, AssistantMessage, InferenceRequest, Model, ModelApi, Models, Provider,
@@ -9,17 +10,55 @@ use pirc_protocol::{
 };
 use tokio::sync::watch;
 
-use crate::anthropic::AnthropicRun;
-use crate::anthropic_native::NativeAnthropicRun;
-use crate::chat::ChatRun;
-use crate::codex::CodexRun;
-use crate::completions::PiRun;
 use crate::errors::safe_inference_error;
-use crate::pi::api_name;
-use crate::responses::ResponsesRun;
-use crate::stream::{Emitter, StreamRequest, assistant};
+use pirc_llm::{Route, StreamRequest, Transport, api_name, assistant};
 
 const CANCELLED: &str = "Model request cancelled";
+
+// Host fingerprinting belongs to the pirc adapter, not the reusable transport.
+/// `os.platform()` and `os.arch()` names.
+fn node_platform() -> &'static str {
+    match std::env::consts::OS {
+        "macos" => "darwin",
+        "windows" => "win32",
+        other => other,
+    }
+}
+
+fn node_arch() -> &'static str {
+    match std::env::consts::ARCH {
+        "x86_64" => "x64",
+        "aarch64" => "arm64",
+        "x86" => "ia32",
+        "powerpc64" => "ppc64",
+        "loongarch64" => "loong64",
+        other => other,
+    }
+}
+
+/// `os.release()`: the kernel release, read once (`/proc` on Linux; the
+/// system's own `uname -r` by absolute path elsewhere, never one found
+/// through `PATH`).
+fn os_release() -> &'static str {
+    static RELEASE: LazyLock<String> = LazyLock::new(|| {
+        let release = std::fs::read_to_string("/proc/sys/kernel/osrelease").ok();
+        let release = release.or_else(|| {
+            let output = std::process::Command::new("/usr/bin/uname")
+                .arg("-r")
+                .env_clear()
+                .output()
+                .ok()?;
+            String::from_utf8(output.stdout).ok()
+        });
+        release.unwrap_or_default().trim().to_owned()
+    });
+    &RELEASE
+}
+
+/// `pi (${os.platform()} ${os.release()}; ${os.arch()})`.
+fn user_agent() -> String {
+    format!("pi ({} {}; {})", node_platform(), os_release(), node_arch())
+}
 
 /// A provider and model a request runs against, with the key to send.
 #[derive(Clone)]
@@ -65,31 +104,14 @@ impl Resolve for Resolved {
 /// Runs inference requests; [`Inference::cancel_all`] ends every run in
 /// flight.
 pub struct Inference {
-    client: reqwest::Client,
+    transport: Transport,
     generation: watch::Sender<u64>,
-    long_cache_retention: bool,
 }
 
 impl Default for Inference {
     fn default() -> Self {
         Self::new()
     }
-}
-
-/// The transport a request uses (`usePi` in `GatewayInference.run`).
-enum Route {
-    /// pi-ai's `openai-completions`.
-    Completions,
-    /// pi-ai's `anthropic-messages`.
-    Anthropic,
-    /// pi-ai's `openai-responses`.
-    Responses,
-    /// pi-ai's `openai-codex-responses`.
-    Codex,
-    /// The native `openai-chat` transport.
-    Chat,
-    /// The native `anthropic-messages` transport.
-    NativeAnthropic,
 }
 
 impl Inference {
@@ -107,9 +129,8 @@ impl Inference {
             .build()
             .expect("the HTTP client builds with the ring provider installed");
         Self {
-            client,
+            transport: Transport::new(client, long),
             generation: watch::Sender::new(0),
-            long_cache_retention: long,
         }
     }
 
@@ -196,6 +217,11 @@ impl Inference {
             request.provider_name.as_str(),
         ])
         .unwrap_or_default();
+        let codex_user_agent = if matches!(route, Route::Codex) {
+            user_agent()
+        } else {
+            String::new()
+        };
         let stream_request = StreamRequest {
             provider_name: &request.provider_name,
             provider,
@@ -210,60 +236,48 @@ impl Inference {
                 ThinkingLevel::Off
             },
             session_id,
+            codex_user_agent: &codex_user_agent,
             max_tokens: request.max_tokens,
             tool_choice: request.tool_choice,
+            resolve_variable: &|name| std::env::var(name).ok(),
         };
-        let mut emitter = Emitter {
-            cancel: cancel.clone(),
-            on_delta,
-        };
-        // A pi-ai transport's run, cancelled when `cancel_all` is called.
-        macro_rules! pi {
-            ($run:ty) => {{
-                let mut run = <$run>::new(&stream_request);
-                let result = tokio::select! {
-                    biased;
-                    result = run.run(&self.client, &stream_request, self.long_cache_retention, &mut emitter) => result.ok(),
-                    _ = cancel.changed() => None,
-                };
-                result.ok_or_else(|| run.aborted())
-            }};
-        }
-        // A native transport's run; its errors may embed upstream bodies.
-        macro_rules! native {
-            ($run:ty) => {{
-                let mut run = <$run>::new(&stream_request);
-                let result = tokio::select! {
-                    biased;
-                    result = run.run(&self.client, &stream_request, &mut emitter) => result.ok(),
-                    _ = cancel.changed() => None,
-                };
-                result
-                    .map(|mut message| {
-                        // `if (message.errorMessage && !usePi)`: an empty one stays.
-                        if let Some(error) =
-                            message.error_message.as_ref().filter(|e| !e.is_empty())
-                        {
-                            message.error_message = Some(safe_inference_error(error));
-                        }
-                        message
-                    })
-                    .ok_or_else(|| run.aborted())
-            }};
-        }
-        let outcome = match route {
-            Route::Completions => pi!(PiRun),
-            Route::Anthropic => pi!(AnthropicRun),
-            Route::Responses => pi!(ResponsesRun),
-            Route::Codex => pi!(CodexRun),
-            Route::Chat => native!(ChatRun),
-            Route::NativeAnthropic => native!(NativeAnthropicRun),
-        };
-        let mut message = outcome.unwrap_or_else(|aborted| aborted);
-        if emitter.cancelled() || message.stop_reason == StopReason::Aborted {
-            message.stop_reason = StopReason::Aborted;
-            message.error_message = Some(CANCELLED.to_owned());
+        let native = matches!(route, Route::Chat | Route::NativeAnthropic);
+        let mut message = self
+            .transport
+            .run(route, &stream_request, cancel, on_delta)
+            .await;
+        // Native errors may contain upstream bodies; only fixed classifications
+        // leave the gateway. Pi paths retain their compatibility classifications.
+        if native
+            && message.stop_reason != StopReason::Aborted
+            && let Some(error) = message.error_message.as_ref().filter(|e| !e.is_empty())
+        {
+            message.error_message = Some(safe_inference_error(error));
         }
         message
+    }
+}
+
+#[cfg(test)]
+mod fingerprint_tests {
+    use super::*;
+
+    #[test]
+    fn codex_fingerprint_preserves_the_pi_format() {
+        let agent = user_agent();
+        assert_eq!(
+            agent,
+            format!("pi ({} {}; {})", node_platform(), os_release(), node_arch())
+        );
+        assert!(agent.starts_with("pi ("), "{agent}");
+        assert!(agent.ends_with(')'), "{agent}");
+        #[cfg(target_os = "linux")]
+        if let Ok(release) = std::fs::read_to_string("/proc/sys/kernel/osrelease") {
+            assert!(agent.contains(release.trim()), "{agent}");
+        }
+        #[cfg(target_arch = "x86_64")]
+        assert!(agent.ends_with("; x64)"), "{agent}");
+        #[cfg(target_arch = "aarch64")]
+        assert!(agent.ends_with("; arm64)"), "{agent}");
     }
 }

@@ -1136,6 +1136,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      footerEntry('pots', LucideIcons.bot, 'pots'),
                       footerEntry(
                         tr("Calendar"),
                         LucideIcons.calendarDays,

@@ -31,6 +31,7 @@
   import MobileTabs from './lib/components/MobileTabs.svelte';
   import Response from './lib/components/Response.svelte';
   import SchedulesPage from './lib/components/SchedulesPage.svelte';
+  import PotsPage from './lib/components/PotsPage.svelte';
   import WorkspacePage from './lib/components/WorkspacePage.svelte';
   import Sidebar from './lib/components/Sidebar.svelte';
   import { topLevelChats } from './lib/chats';
@@ -101,7 +102,7 @@
       : undefined,
   );
   /** A page in the main column (not a conversation): the phone keeps its bottom tabs. */
-  const onPage = $derived(app.view === 'schedules' || !!pageWorkspace);
+  const onPage = $derived(app.view === 'schedules' || app.view === 'pots' || !!pageWorkspace);
   // A page replaces the phone's list.
   $effect(() => {
     if (onPage) sidebarOpen = false;
@@ -479,6 +480,10 @@
       settingsTab = 'general';
       settingsOpen = true;
     }}
+    onpots={() => {
+      app.showPots();
+      sidebarOpen = false;
+    }}
     oncalendar={() => {
       app.showCalendar();
       sidebarOpen = false;
@@ -495,7 +500,13 @@
     class="workspace"
     inert={sidebarOpen && viewportWidth <= 650}
   >
-    {#if app.view === 'schedules'}
+    {#if app.view === 'pots'}
+      <PotsPage
+        {sidebarCollapsed}
+        onexpand={() => (sidebarCollapsed = false)}
+        onopenchat={openSession}
+      />
+    {:else if app.view === 'schedules'}
       <SchedulesPage
         {sidebarCollapsed}
         onexpand={() => (sidebarCollapsed = false)}

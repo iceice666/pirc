@@ -1,0 +1,60 @@
+use crate::db::{Db, SCHEMA_VERSION, Store};
+
+#[test]
+fn migration_1009_adds_empty_disabled_pots_without_changing_existing_state() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("gateway.sqlite");
+    {
+        let db = Db::open(&path).unwrap();
+        let conn = db.lock();
+        conn.sync_remote_workspaces(
+            "work",
+            &[(
+                "repo".into(),
+                "Repo".into(),
+                pirc_protocol::ModeId::new("directory").unwrap(),
+            )],
+        )
+        .unwrap();
+        conn.create_session("work:repo", "node://work/s", "work", "s", "alice")
+            .unwrap();
+        conn.execute("INSERT INTO workspace_removals (workspace_id,owner_user,removed_at) VALUES ('work:repo','alice',1)", []).unwrap();
+        conn.execute_batch("DROP TABLE pots_tasks; DROP TABLE pots_suggestions; DROP TABLE pots_responsibilities; PRAGMA user_version=1009;").unwrap();
+    }
+    for _ in 0..2 {
+        let db = Db::open(&path).unwrap();
+        let conn = db.lock();
+        assert_eq!(
+            conn.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            SCHEMA_VERSION
+        );
+        assert!(conn.find_workspace("work:repo").unwrap().is_some());
+        assert_eq!(
+            conn.query_row(
+                "SELECT count(*) FROM sessions WHERE owner_user='alice'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            1
+        );
+        assert_eq!(
+            conn.query_row("SELECT owner_user FROM workspace_removals", [], |r| r
+                .get::<_, String>(0))
+                .unwrap(),
+            "alice"
+        );
+        assert!(
+            super::list_responsibilities(&conn, "alice", 100)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
+            super::list_suggestions(&conn, "alice", 100)
+                .unwrap()
+                .is_empty()
+        );
+        assert!(super::list_tasks(&conn, "alice", 100).unwrap().is_empty());
+    }
+}

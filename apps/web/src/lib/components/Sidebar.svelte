@@ -6,6 +6,7 @@
     Archive,
     ArchiveRestore,
     Brain,
+    Bot,
     CalendarClock,
     ChevronLeft,
     Clock,
@@ -52,6 +53,8 @@
     onsettings: () => void;
     /** Show the personal Calendar. */
     oncalendar?: () => void;
+    /** Open pots without implicitly accepting or starting a task. */
+    onpots?: () => void;
     /** Review memory changes in Settings. */
     onmemory?: () => void;
   }
@@ -68,6 +71,7 @@
     onclose,
     onsettings,
     oncalendar,
+    onpots,
     onmemory,
   }: Props = $props();
 
@@ -382,6 +386,14 @@
   </div>
 
   <div class="sidebar-footer">
+    <button
+      class="settings-entry pots-entry"
+      class:current={app.view === 'pots'}
+      type="button"
+      onclick={onpots}
+    >
+      <Bot size={17} /><span>{tr('pirc pots')}</span>
+    </button>
     <button
       class="settings-entry calendar-entry"
       class:current={app.view === 'schedules'}

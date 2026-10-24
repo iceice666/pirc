@@ -2,19 +2,61 @@
 
 [Plans](README.md) · [Unified conversations](unified-conversations.md) · [Modes](modes.md) · [Checkpoints](checkpoints.md)
 
-Status: integrated research/design proposal, 2026-10-24. The user requested
-analysis of a supplied library-extraction handoff together with Chat/Work
-unification and pirc pots. Only planning/documentation is authorized. No crate,
-runtime, transport, permission, deployment or UI change is implemented here.
-The user subsequently adopted the three crate names and packaging direction below;
-public API sketches and implementation proofs remain engineering work.
-On 2026-10-24 the user accepted the specification-review recommendations as the
-planning baseline: staged delivery, compatibility/failure gates, unified product
-tasks and preservation of pirc-owned authority boundaries. See the
-[accepted decisions](unified-conversations.md#accepted-specification-review-recommendations-2026-10-24).
-The latest acceptance also settles optional default-off OAuth and separating
-transport features by wire API. Final Rust signatures, precise feature names/type
-placement, implementation and crates.io publication are not implied.
+Status: adopted design with a staged local implementation checkpoint, 2026-10-24.
+The original handoff/research task authorized planning only. The user subsequently
+authorized phased implementation of the reusable foundations and a bounded pots
+checkpoint. That authorization does **not** authorize deployment, paid evaluation,
+crates.io publication or wholesale completion of the unified-conversation design.
+The three adopted crate names and default-off OAuth/wire-feature direction are
+now represented in code; remaining contracts and acceptance gates below stay open.
+See the [accepted design decisions](unified-conversations.md#accepted-specification-review-recommendations-2026-10-24).
+
+## Implementation checkpoint — not the complete target
+
+Current behavior is documented in [pots](../docs/guides/pots.md) and
+[Reusable LLM foundations](../docs/architecture/reusable-llm.md). Implementation
+baseline: eb45f71d8fdefb35a796704ebd9ba7accdf098ff.
+
+- **Pure types:** pirc-llm-types is an unpublished serialization-only leaf;
+  protocol re-exports preserve existing imports/envelopes. Compatible Provider/Model
+  DTOs may still contain credentials: pure data is not a safe public projection.
+- **Transport/OAuth:** six existing native/Pi paths moved to pirc-llm with
+  explicit client/cache/cancellation inputs and separate wire features; OAuth is
+  optional and default off. pirc retains accounts, catalogs, credential storage,
+  host environment/TLS policy, routing/cache identity and error redaction.
+- **Loop:** pirc-agent-loop is an executable fake-adapter/state-machine
+  checkpoint with correlated effects, generation fences, partial/error records,
+  cancellation and local/Send proofs. Production Agent::run is **not** cut over.
+- **pots:** Gateway schema 1010 persists owner-scoped responsibilities, generic
+  session-progress suggestions and canonical tracking tasks. Explicit activation,
+  finite lifetime budgets, durable controls, source/expiry checks, capped lists and
+  atomic deduplication are implemented. Track creates no execution session;
+  Start returns **503 not_ready**. There is no model-driven observation or dispatch.
+- **Clients:** Web and native Android tracking-only pots views are implemented
+  and locally tested. Android has 31 focused/regression test passes, including 11
+  new pots cases; changed-file analysis is clean. APK, physical-device/push and
+  complete execution/notification parity remain unverified.
+
+Recorded local gates: 26 leaf/protocol tests in an isolated workspace; existing
+260-scenario transport parity, 5 cancel/drop and 3 TLS regressions; 17 synthetic
+OAuth tests before final feature isolation (14 OAuth-only tests in the final matrix);
+16 loop tests plus local/Send examples; 22 pots tests within 178 Gateway
+tests; 399 production-agent library tests; integrated strict workspace clippy;
+and Web 61 files / 436 tests, Svelte check and build. Final workspace fmt/clippy
+passed, but the full workspace test run exited 1 with 39 failures across seven
+Node/browser/sandbox targets. Five Node library failures were known; other newly
+seen environment-looking failures lack baseline proof. The copied isolated
+transport/OAuth matrix passed default, each wire, OAuth-only and all-feature
+check/test/strict clippy. Full executable conformance is not clean:
+an initial memory WebSocket failure passed 13 isolated retries (suspected race,
+not proven pre-existing). The full debug-executable run completed with six failures
+in two targets: memory and five node-browser cases. A final fresh-binary focused
+rerun of ten suites passed 20 tests; it does not replace the failed full gate. No
+assertions/snapshots were weakened. The architecture reference
+details scope and matrix gaps. These are **not** full workspace/conformance,
+real-provider, production loop-adapter, pots dispatch, device, deployment or
+publication acceptance. Do not mark P7 or the delivery sequence complete from
+these focused proofs.
 
 All seven accepted follow-up areas are detailed in [Conversation execution contracts](conversation-execution-contracts.md):
 capability composition, foreground/parallel task routing, overlapping grants,
@@ -51,7 +93,8 @@ supply a direct model adapter.
 
 ## Product requirements clarified by the user
 
-The following are requested design requirements, not implementation approval:
+The following are target product requirements. The checkpoint above implements
+only the explicitly described subset; it is not blanket approval for every item:
 
 - Configure a conversation workspace at creation. Mount selected existing
   folders, or explicitly create an empty folder under a configured server area.
@@ -201,20 +244,22 @@ The pirc adapter explicitly enables the features it currently needs so extractio
 does not disable existing subscription logins or change transport routing. Default-
 feature minimal consumers must not require OAuth. Test disabled/enabled OAuth and
 intended transport combinations independently: workspace feature unification can
-hide missing optional dependencies. Exact feature names/dependency graph remain
-engineering work; preserve pi/native paths until separate fixture comparison.
+hide missing optional dependencies. Current feature names and boundaries are documented in the architecture reference;
+further dependency/API stabilization remains engineering work. Preserve pi/native
+paths and their separate fixture comparisons.
 
 A product task can contain many loop runs. pots can coordinate many product
 tasks. Neither belongs inside the reusable loop, and neither requires the loop
 extraction to be finished before its product behavior can be designed.
 
-## API specification still needed before crate extraction
+## API contracts and integration gates still to close
 
-The handoff and boundary table identify code ownership, but they do not yet define
-a callable library contract. Complete this review alongside the product
+The original handoff required the contracts below before extraction. The current
+crates provide concrete callable checkpoint APIs, but API stabilization and host
+integration proofs remain incomplete. Continue this review alongside the product
 [specification gaps](unified-conversations.md#specification-review-what-is-not-detailed-enough-2026-10-24).
-Public trait/method/type signatures remain to be designed; the crate names are
-settled. Adding a trait alone is not completion.
+Current signatures live in the crates and architecture reference; they are not a
+claim of a stable published API. Adding a trait alone is not completion.
 
 | Boundary                  | Questions the specification must answer                                                                                         | Required proof                                                                                                                          |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
@@ -244,11 +289,11 @@ Packaging direction is adopted; the feature matrix must verify it without hiding
 missing dependencies through workspace unification. The [integrated review](unified-architecture-review.md#adopted-defaults-and-deliberately-deferred-decisions)
 separates those choices from numerical settings and engineering decisions still open.
 
-## Combined delivery sequence — adopted direction, no implementation authorization
+## Combined delivery sequence — target and remaining gates
 
 | Stage                          | Deliverable                                                                                                   | Dependencies / gate                                                                             |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| A. Specify adopted contracts   | Project mounts, departure/revocation, workspace switching, task identity, board/wait protocol, pots authority | Complete remaining contracts/settings in Unified conversations; only planning now               |
+| A. Specify adopted contracts   | Project mounts, departure/revocation, workspace switching, task identity, board/wait protocol, pots authority | Complete remaining contracts/settings in Unified conversations                                  |
 | B1. Provider extraction        | Pure types, compatible adapters, then transport and optional OAuth separation                                 | Implement adopted packaging with API/compatibility proof; isolate from product behavior changes |
 | B2. Product foundations        | Versioned workspace bindings, mount enforcement, durable tasks/decisions, independent-client state            | Stage A; can use the existing agent loop and provider adapter                                   |
 | C. Unified workflow            | Same-conversation work, project resources, meaningful waiting/progress, Web/App contract parity               | Mount transitions, replay prevention and concurrent-writer acceptance                           |
@@ -256,13 +301,14 @@ separates those choices from numerical settings and engineering decisions still 
 | E. Loop extraction             | Fake-adapter core, pirc integration and event-order/conformance checks                                        | Stable provider boundary plus understood tool-wait/approval/cancel semantics                    |
 | F. Optional frontend migration | Flutter Web comparison against current Web on difficult interactions                                          | Separate decision after measurement; not a dependency of App independence                       |
 
-B1/B2 are independent work streams in planning; this does not authorize spawning
-agents or changing both at once. Keep integration checkpoints small so a provider
+B1/B2 are independent work streams. The later phased implementation authorization
+permits the checkpoint above, not automatic execution of every future stage. Keep
+integration checkpoints small so a provider
 regression can be distinguished from a workspace/task migration regression.
 App authentication/connection security remains a separate design gate; APIs and
 state flows can be specified now, but no new listener or public port is implied.
 
-## Acceptance gates for later implementation
+## Acceptance gates — focused passes do not close the remaining target
 
 - **Types:** existing decode/round-trip tests plus fixed serialized bytes, field
   ordering, omitted/null fields, enum tags, old session fixtures and tool-schema
@@ -297,6 +343,8 @@ state flows can be specified now, but no new listener or public port is implied.
   requested; physical-device/remote-push limitations are not silently cleared.
   Clean disposable test/build outputs after actual runs.
 
-No tests, builds, OAuth logins, deployments or prototype execution were performed
-for this documentation update. Existing checkpoints, memory and App behavior have
-not been changed by writing this plan.
+The original design-only update performed no runtime verification. The subsequent
+implementation checkpoint and its actually run local gates are recorded at the
+top and in the current architecture reference. No real OAuth login, deployment or
+crate publication was performed. Existing memory/checkpoint authority and the
+remaining device, execution-adapter and full-conformance gates are not waived.

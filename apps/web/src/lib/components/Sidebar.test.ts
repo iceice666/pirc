@@ -28,6 +28,7 @@ const handlers = {
   onclose: vi.fn(),
   onsettings: vi.fn(),
   oncalendar: vi.fn(),
+  onpots: vi.fn(),
 };
 
 beforeEach(() => {
@@ -248,7 +249,7 @@ describe('Sidebar', () => {
     expect(document.activeElement).toBe(menu);
   });
 
-  it('keeps Calendar and settings in the footer in Chat and Work modes', () => {
+  it('keeps pots, Calendar and settings in the footer without starting work', () => {
     const oncalendar = vi.fn();
     app.workspaces = [
       ...app.workspaces,
@@ -276,7 +277,12 @@ describe('Sidebar', () => {
     expect(workCalendar).not.toBeNull();
     workCalendar!.click();
     expect(oncalendar).toHaveBeenCalledTimes(2);
-    target.querySelector<HTMLButtonElement>('.settings-entry:not(.calendar-entry)')!.click();
+    target.querySelector<HTMLButtonElement>('.pots-entry')!.click();
+    expect(handlers.onpots).toHaveBeenCalledTimes(1);
+    expect(handlers.onselect).not.toHaveBeenCalled();
+    target
+      .querySelector<HTMLButtonElement>('.settings-entry:not(.calendar-entry):not(.pots-entry)')!
+      .click();
     expect(handlers.onsettings).toHaveBeenCalled();
   });
 

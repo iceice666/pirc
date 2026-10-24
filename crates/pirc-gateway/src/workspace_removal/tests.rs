@@ -423,7 +423,7 @@ fn migration_from_1008_preserves_workspace_and_history() {
         .unwrap();
         conn.create_session("work:repo", "node://work/s", "work", "s", "u")
             .unwrap();
-        conn.execute_batch("DROP TABLE workspace_removals; PRAGMA user_version=1008;")
+        conn.execute_batch("DROP TABLE pots_tasks; DROP TABLE pots_suggestions; DROP TABLE pots_responsibilities; DROP TABLE workspace_removals; PRAGMA user_version=1008;")
             .unwrap();
     }
     let db = Db::open(&path).unwrap();

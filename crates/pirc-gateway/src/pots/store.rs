@@ -1,0 +1,861 @@
+use crate::db::{Store, atomic};
+use crate::error::{ApiError, ApiResult};
+use crate::util::{new_id, now_ms};
+use rusqlite::{Connection, OptionalExtension, params};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
+
+pub const LIST_MAX: u32 = 100;
+const RESPONSIBILITIES_MAX: u32 = 100;
+// No cursor/retention policy yet: keep every owner list wholly addressable in
+// one capped page. Exhaustion fails closed; controls never replenish budgets.
+const SUGGESTIONS_MAX: i64 = 100;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScopeAccess {
+    Progress,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ObservationScope {
+    pub workspace_id: String,
+    pub access: ScopeAccess,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Budgets {
+    pub observations: u32,
+    pub dispatches: u32,
+    pub concurrency: u32,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResponsibilityInput {
+    pub idempotency_key: String,
+    pub purpose: String,
+    pub scopes: Vec<ObservationScope>,
+    pub budgets: Budgets,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Responsibility {
+    pub id: String,
+    pub owner_user: String,
+    pub revision: i64,
+    pub generation: i64,
+    pub purpose: String,
+    pub scopes: Vec<ObservationScope>,
+    pub budgets: Budgets,
+    pub enabled: bool,
+    pub observation_paused: bool,
+    pub coordination_paused: bool,
+    pub observations_used: u32,
+    pub dispatches_used: u32,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ResponsibilityAction {
+    Activate,
+    Disable,
+    PauseObservation,
+    ResumeObservation,
+    PauseCoordination,
+    ResumeCoordination,
+}
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ResponsibilityControl {
+    pub expected_revision: i64,
+    pub expected_generation: i64,
+    pub action: ResponsibilityAction,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Disposition {
+    Pending,
+    Snoozed,
+    Dismissed,
+    Linked,
+    NeedsRefresh,
+    Superseded,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SuggestedAction {
+    ReviewSessionInput,
+}
+/// Evidence is identifiers and revisions only. No transcript/title/prompt is copied.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Evidence {
+    pub workspace_id: String,
+    pub session_id: String,
+    /// Gateway session binding generation, NOT the independent Node runner epoch.
+    pub runner_epoch: i64,
+    pub interaction_id: String,
+    pub expires_at: i64,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Suggestion {
+    pub id: String,
+    pub owner_user: String,
+    pub responsibility_id: String,
+    pub condition_key: String,
+    pub occurrence_key: String,
+    pub revision: i64,
+    pub evidence: Evidence,
+    pub action: SuggestedAction,
+    pub target_session_id: String,
+    pub disposition: Disposition,
+    pub snoozed_until: Option<i64>,
+    pub task_id: Option<String>,
+    pub accepted_revision: Option<i64>,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AcceptInput {
+    pub expected_revision: i64,
+    pub command_id: String,
+}
+#[derive(Clone, Debug)]
+pub enum SuggestionAction {
+    Dismiss,
+    Snooze { until: i64 },
+}
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SuggestionControl {
+    pub expected_revision: i64,
+    pub action: SuggestionAction,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TaskStatus {
+    Tracked,
+    Stopped,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Task {
+    pub id: String,
+    pub owner_user: String,
+    pub origin_suggestion_id: String,
+    pub accepted_suggestion_revision: i64,
+    pub action: SuggestedAction,
+    pub target_session_id: String,
+    pub execution_session_id: Option<String>,
+    pub status: TaskStatus,
+    pub revision: i64,
+    pub control_generation: i64,
+    pub coordination_paused: bool,
+    pub taken_over: bool,
+    pub created_at: i64,
+    pub updated_at: i64,
+}
+#[derive(Clone, Copy, Debug)]
+pub enum TaskAction {
+    PauseCoordination,
+    ResumeCoordination,
+    TakeOver,
+    Stop,
+}
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TaskControl {
+    pub expected_revision: i64,
+    pub expected_generation: i64,
+    pub action: TaskAction,
+}
+#[derive(Clone, Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StartInput {
+    pub expected_revision: i64,
+    pub expected_generation: i64,
+    pub command_id: String,
+}
+
+// Serde's tagged *unit* variants ignore unknown fields even with
+// deny_unknown_fields. Decode as empty struct variants to make the wire strict.
+macro_rules! strict_actions {
+ ($ty:ident { $($variant:ident),+ $(,)? }) => {
+  impl<'de> Deserialize<'de> for $ty {
+   fn deserialize<D: serde::Deserializer<'de>>(deserializer:D)->Result<Self,D::Error>{
+    #[derive(Deserialize)]
+    #[serde(tag="type",rename_all="snake_case",deny_unknown_fields)]
+    enum Wire { $($variant {}),+ }
+    Ok(match Wire::deserialize(deserializer)? { $(Wire::$variant {}=>Self::$variant),+ })
+   }
+  }
+ };
+}
+strict_actions!(ResponsibilityAction {
+    Activate,
+    Disable,
+    PauseObservation,
+    ResumeObservation,
+    PauseCoordination,
+    ResumeCoordination
+});
+strict_actions!(TaskAction {
+    PauseCoordination,
+    ResumeCoordination,
+    TakeOver,
+    Stop
+});
+impl<'de> Deserialize<'de> for SuggestionAction {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+        enum Wire {
+            Dismiss {},
+            Snooze { until: i64 },
+        }
+        Ok(match Wire::deserialize(deserializer)? {
+            Wire::Dismiss {} => Self::Dismiss,
+            Wire::Snooze { until } => Self::Snooze { until },
+        })
+    }
+}
+fn invalid() -> ApiError {
+    ApiError::invalid_input()
+}
+fn missing() -> ApiError {
+    ApiError::not_found("Pots record not found")
+}
+fn conflict() -> ApiError {
+    ApiError::new(
+        409,
+        "revision_conflict",
+        "Pots record changed; refresh before retrying",
+    )
+}
+fn text(s: &str, max: usize) -> ApiResult<()> {
+    if s.trim().is_empty() || s.len() > max {
+        Err(invalid())
+    } else {
+        Ok(())
+    }
+}
+fn encode<T: Serialize>(v: &T) -> ApiResult<String> {
+    serde_json::to_string(v).map_err(|_| ApiError::internal())
+}
+fn decode<T: DeserializeOwned>(v: String) -> ApiResult<T> {
+    serde_json::from_str(&v).map_err(|_| ApiError::internal())
+}
+fn row<T: DeserializeOwned>(conn: &Connection, table: &str, user: &str, id: &str) -> ApiResult<T> {
+    let data: Option<String> = conn
+        .query_row(
+            &format!("SELECT data FROM {table} WHERE id=? AND owner_user=?"),
+            params![id, user],
+            |r| r.get(0),
+        )
+        .optional()?;
+    decode(data.ok_or_else(missing)?)
+}
+fn list<T: DeserializeOwned>(
+    conn: &Connection,
+    table: &str,
+    user: &str,
+    limit: u32,
+) -> ApiResult<Vec<T>> {
+    if limit == 0 || limit > LIST_MAX {
+        return Err(invalid());
+    }
+    let mut q = conn.prepare(&format!(
+        "SELECT data FROM {table} WHERE owner_user=? ORDER BY id LIMIT ?"
+    ))?;
+    q.query_map(params![user, limit], |r| r.get::<_, String>(0))?
+        .map(|r| decode(r?))
+        .collect()
+}
+/// Reject removed/deleting/checking and foreign/private workspace scopes, without claiming ownership.
+fn workspace(conn: &Connection, user: &str, id: &str) -> ApiResult<()> {
+    conn.get_workspace(id)
+        .map_err(|e| if e.status < 500 { missing() } else { e })?;
+    if !conn.checkpoint_workspace_visible_to_user(id, user)? {
+        return Err(missing());
+    }
+    let checking:bool=conn.query_row("SELECT EXISTS(SELECT 1 FROM workspace_removals WHERE workspace_id=? AND status='checking')",[id],|r|r.get(0))?;
+    if checking {
+        return Err(ApiError::new(
+            409,
+            "workspace_not_ready",
+            "Workspace removal is being checked",
+        ));
+    }
+    Ok(())
+}
+fn source(conn: &Connection, user: &str, evidence: &Evidence) -> ApiResult<()> {
+    workspace(conn, user, &evidence.workspace_id)?;
+    let session = conn
+        .claim_session(&evidence.session_id, user, false)
+        .map_err(|e| if e.status < 500 { missing() } else { e })?;
+    if session.workspace_id != evidence.workspace_id
+        || session.runner_epoch != evidence.runner_epoch
+    {
+        return Err(missing());
+    }
+    Ok(())
+}
+// Acquire the SQLite write reservation before reading records. This avoids deferred
+// read->write snapshot races across gateway connections. Savepoints remain nestable.
+fn lock_owner(conn: &Connection, user: &str) -> ApiResult<()> {
+    conn.execute(
+        "UPDATE pots_responsibilities SET revision=revision WHERE owner_user=?",
+        [user],
+    )?;
+    Ok(())
+}
+fn save_responsibility(conn: &Connection, r: &Responsibility) -> ApiResult<()> {
+    conn.execute("UPDATE pots_responsibilities SET revision=?,generation=?,data=? WHERE id=? AND owner_user=?",params![r.revision,r.generation,encode(r)?,r.id,r.owner_user])?;
+    Ok(())
+}
+fn save_suggestion(conn: &Connection, s: &Suggestion) -> ApiResult<()> {
+    conn.execute(
+        "UPDATE pots_suggestions SET revision=?,data=? WHERE id=? AND owner_user=?",
+        params![s.revision, encode(s)?, s.id, s.owner_user],
+    )?;
+    Ok(())
+}
+
+pub fn create_responsibility(
+    conn: &Connection,
+    user: &str,
+    input: ResponsibilityInput,
+    now: i64,
+) -> ApiResult<Responsibility> {
+    text(user, 320)?;
+    text(&input.purpose, 2000)?;
+    text(&input.idempotency_key, 256)?;
+    let create_spec = encode(&input)?;
+    if input.scopes.is_empty()
+        || input.scopes.len() > 32
+        || input.budgets.observations == 0
+        || input.budgets.observations > 1_000_000
+        || input.budgets.dispatches > 1_000_000
+        || input.budgets.concurrency == 0
+        || input.budgets.concurrency > 32
+    {
+        return Err(invalid());
+    }
+    let mut ids = std::collections::HashSet::new();
+    for scope in &input.scopes {
+        text(&scope.workspace_id, 256)?;
+        if !ids.insert(&scope.workspace_id) {
+            return Err(invalid());
+        }
+    }
+    atomic(conn, |conn| {
+        lock_owner(conn, user)?;
+        for scope in &input.scopes {
+            workspace(conn, user, &scope.workspace_id)?;
+        }
+        let prior:Option<(String,String)>=conn.query_row("SELECT data,create_spec FROM pots_responsibilities WHERE owner_user=? AND create_key=?",params![user,input.idempotency_key],|r|Ok((r.get(0)?,r.get(1)?))).optional()?;
+        if let Some((data, spec)) = prior {
+            if spec != create_spec {
+                return Err(ApiError::new(
+                    409,
+                    "idempotency_conflict",
+                    "Idempotency key already used for different settings",
+                ));
+            }
+            return decode(data);
+        }
+        let count: i64 = conn.query_row(
+            "SELECT count(*) FROM pots_responsibilities WHERE owner_user=?",
+            [user],
+            |r| r.get(0),
+        )?;
+        if count >= i64::from(RESPONSIBILITIES_MAX) {
+            return Err(ApiError::new(
+                409,
+                "limit_reached",
+                "Responsibility limit reached",
+            ));
+        }
+        let r = Responsibility {
+            id: new_id("pr"),
+            owner_user: user.into(),
+            revision: 1,
+            generation: 1,
+            purpose: input.purpose,
+            scopes: input.scopes,
+            budgets: input.budgets,
+            enabled: false,
+            observation_paused: false,
+            coordination_paused: true,
+            observations_used: 0,
+            dispatches_used: 0,
+            created_at: now,
+            updated_at: now,
+        };
+        conn.execute("INSERT INTO pots_responsibilities(id,owner_user,create_key,create_spec,revision,generation,data) VALUES (?,?,?,?,?,?,?)",params![r.id,user,input.idempotency_key,create_spec,r.revision,r.generation,encode(&r)?])?;
+        Ok(r)
+    })
+}
+pub fn get_responsibility(conn: &Connection, user: &str, id: &str) -> ApiResult<Responsibility> {
+    row(conn, "pots_responsibilities", user, id)
+}
+pub fn list_responsibilities(
+    conn: &Connection,
+    user: &str,
+    limit: u32,
+) -> ApiResult<Vec<Responsibility>> {
+    list(conn, "pots_responsibilities", user, limit)
+}
+pub fn control_responsibility(
+    conn: &Connection,
+    user: &str,
+    id: &str,
+    input: ResponsibilityControl,
+    now: i64,
+) -> ApiResult<Responsibility> {
+    atomic(conn, |conn| {
+        lock_owner(conn, user)?;
+        let mut r = get_responsibility(conn, user, id)?;
+        if r.revision != input.expected_revision || r.generation != input.expected_generation {
+            return Err(conflict());
+        }
+        match input.action {
+            ResponsibilityAction::Activate => {
+                for s in &r.scopes {
+                    workspace(conn, user, &s.workspace_id)?;
+                }
+                r.enabled = true;
+            }
+            ResponsibilityAction::Disable => r.enabled = false,
+            ResponsibilityAction::PauseObservation => r.observation_paused = true,
+            ResponsibilityAction::ResumeObservation => {
+                for s in &r.scopes {
+                    workspace(conn, user, &s.workspace_id)?;
+                }
+                r.observation_paused = false;
+            }
+            ResponsibilityAction::PauseCoordination => r.coordination_paused = true,
+            ResponsibilityAction::ResumeCoordination => r.coordination_paused = false,
+        }
+        r.revision += 1;
+        r.generation += 1;
+        r.updated_at = now;
+        save_responsibility(conn, &r)?;
+        Ok(r)
+    })
+}
+
+/// Trusted HOST ONLY: caller authenticates the node and current session binding.
+/// Never expose this function through REST/agent operations. Persist only a
+/// generic progress condition, not event text, prompts, or authority claims.
+/// Dedup happens before quota reservation; each material occurrence costs one.
+#[allow(clippy::too_many_arguments)]
+pub fn ingest_progress(
+    conn: &Connection,
+    user: &str,
+    workspace_id: &str,
+    session_id: &str,
+    epoch: i64,
+    interaction_id: &str,
+    expires_at: i64,
+    now: i64,
+) -> ApiResult<Vec<Suggestion>> {
+    text(interaction_id, 256)?;
+    if expires_at <= now {
+        return Ok(Vec::new());
+    }
+    let evidence = Evidence {
+        workspace_id: workspace_id.into(),
+        session_id: session_id.into(),
+        runner_epoch: epoch,
+        interaction_id: interaction_id.into(),
+        expires_at,
+    };
+    atomic(conn, |conn| {
+        lock_owner(conn, user)?;
+        source(conn, user, &evidence)?;
+        let responsibilities = list_responsibilities(conn, user, LIST_MAX)?;
+        let mut out = Vec::new();
+        for mut r in responsibilities {
+            if !r.enabled
+                || r.observation_paused
+                || !r.scopes.iter().any(|s| s.workspace_id == workspace_id)
+            {
+                continue;
+            }
+            let condition = "session_needs_input".to_owned();
+            // A JSON tuple is injective even if identifiers contain separators.
+            let occurrence = encode(&(session_id, interaction_id))?;
+            let existing:Option<String>=conn.query_row("SELECT data FROM pots_suggestions WHERE owner_user=? AND condition_key=? AND occurrence_key=?",params![user,condition,occurrence],|row|row.get(0)).optional()?;
+            if let Some(data) = existing {
+                let mut prior: Suggestion = decode(data)?;
+                // Do not silently transfer an existing issue to another responsibility.
+                if prior.responsibility_id != r.id {
+                    continue;
+                }
+                if prior.evidence.runner_epoch != epoch {
+                    // Reconnect is not a new occurrence or a renewed instruction.
+                    // Only a currently authorized host event refreshes the binding.
+                    prior.evidence.runner_epoch = epoch;
+                    // A replay cannot extend a formerly issued freshness window.
+                    prior.evidence.expires_at = prior.evidence.expires_at.min(expires_at);
+                    prior.revision += 1;
+                    prior.updated_at = now;
+                    save_suggestion(conn, &prior)?;
+                    out.push(freshness(prior, now));
+                }
+                continue;
+            }
+            if r.observations_used >= r.budgets.observations {
+                continue;
+            }
+            let count: i64 = conn.query_row(
+                "SELECT count(*) FROM pots_suggestions WHERE owner_user=?",
+                [user],
+                |row| row.get(0),
+            )?;
+            if count >= SUGGESTIONS_MAX {
+                continue;
+            }
+            let s = Suggestion {
+                id: new_id("ps"),
+                owner_user: user.into(),
+                responsibility_id: r.id.clone(),
+                condition_key: condition,
+                occurrence_key: occurrence,
+                revision: 1,
+                evidence: evidence.clone(),
+                action: SuggestedAction::ReviewSessionInput,
+                target_session_id: session_id.into(),
+                disposition: Disposition::Pending,
+                snoozed_until: None,
+                task_id: None,
+                accepted_revision: None,
+                created_at: now,
+                updated_at: now,
+            };
+            conn.execute("INSERT INTO pots_suggestions(id,owner_user,responsibility_id,condition_key,occurrence_key,revision,data) VALUES(?,?,?,?,?,?,?)",params![s.id,user,r.id,s.condition_key,s.occurrence_key,s.revision,encode(&s)?])?;
+            r.observations_used += 1;
+            r.revision += 1;
+            r.updated_at = now;
+            save_responsibility(conn, &r)?;
+            out.push(s);
+        }
+        Ok(out)
+    })
+}
+
+// Expiry is derived from durable evidence, never from a timer/client wakeup.
+// Reads project it without database writes; the same revision remains fenced
+// and acceptance checks the durable expiry again with its operation clock.
+fn freshness(mut s: Suggestion, now: i64) -> Suggestion {
+    if s.evidence.expires_at <= now {
+        s.disposition = if s.task_id.is_some() {
+            Disposition::NeedsRefresh
+        } else {
+            Disposition::Superseded
+        };
+    }
+    s
+}
+pub fn get_suggestion(conn: &Connection, user: &str, id: &str) -> ApiResult<Suggestion> {
+    let s: Suggestion = row(conn, "pots_suggestions", user, id)?;
+    source(conn, user, &s.evidence)?;
+    Ok(freshness(s, now_ms()))
+}
+pub fn list_suggestions(conn: &Connection, user: &str, limit: u32) -> ApiResult<Vec<Suggestion>> {
+    let rows: Vec<Suggestion> = list(conn, "pots_suggestions", user, limit)?;
+    rows.into_iter()
+        .filter_map(|s| match source(conn, user, &s.evidence) {
+            Ok(()) => Some(Ok(freshness(s, now_ms()))),
+            Err(e) if e.status < 500 => None,
+            Err(e) => Some(Err(e)),
+        })
+        .collect()
+}
+pub fn control_suggestion(
+    conn: &Connection,
+    user: &str,
+    id: &str,
+    input: SuggestionControl,
+    now: i64,
+) -> ApiResult<Suggestion> {
+    atomic(conn, |conn| {
+        lock_owner(conn, user)?;
+        let mut s = freshness(get_suggestion(conn, user, id)?, now);
+        if s.revision != input.expected_revision {
+            return Err(conflict());
+        }
+        if s.task_id.is_some()
+            || matches!(
+                s.disposition,
+                Disposition::Superseded | Disposition::NeedsRefresh
+            )
+        {
+            return Err(ApiError::new(
+                409,
+                "not_actionable",
+                "Suggestion is no longer actionable",
+            ));
+        }
+        match input.action {
+            SuggestionAction::Dismiss => {
+                s.disposition = Disposition::Dismissed;
+                s.snoozed_until = None;
+            }
+            SuggestionAction::Snooze { until } => {
+                if until <= now {
+                    return Err(invalid());
+                }
+                s.disposition = Disposition::Snoozed;
+                s.snoozed_until = Some(until);
+            }
+        }
+        s.revision += 1;
+        s.updated_at = now;
+        save_suggestion(conn, &s)?;
+        Ok(s)
+    })
+}
+/// Atomically create/link one canonical task. command_id is diagnostic input,
+/// never the deduplication key: a second device returns the same accepted task.
+/// No session is created and no execution is dispatched.
+pub fn accept_tracking(
+    conn: &Connection,
+    user: &str,
+    id: &str,
+    input: AcceptInput,
+    now: i64,
+) -> ApiResult<Task> {
+    text(&input.command_id, 256)?;
+    atomic(conn, |conn| {
+        lock_owner(conn, user)?;
+        let mut s = freshness(get_suggestion(conn, user, id)?, now);
+        if let Some(task_id) = &s.task_id {
+            if s.disposition != Disposition::Linked {
+                return Err(ApiError::new(
+                    409,
+                    "not_actionable",
+                    "Suggestion evidence must be refreshed",
+                ));
+            }
+            if s.accepted_revision != Some(input.expected_revision)
+                && s.revision != input.expected_revision
+            {
+                return Err(conflict());
+            }
+            return get_task(conn, user, task_id);
+        }
+        if s.revision != input.expected_revision {
+            return Err(conflict());
+        }
+        if !matches!(s.disposition, Disposition::Pending | Disposition::Snoozed)
+            || s.snoozed_until.is_some_and(|until| until > now)
+        {
+            return Err(ApiError::new(
+                409,
+                "not_actionable",
+                "Suggestion must be current and unsnoozed",
+            ));
+        }
+        let task = Task {
+            id: new_id("pt"),
+            owner_user: user.into(),
+            origin_suggestion_id: s.id.clone(),
+            accepted_suggestion_revision: s.revision,
+            action: s.action,
+            target_session_id: s.target_session_id.clone(),
+            execution_session_id: None,
+            status: TaskStatus::Tracked,
+            revision: 1,
+            control_generation: 1,
+            coordination_paused: false,
+            taken_over: false,
+            created_at: now,
+            updated_at: now,
+        };
+        conn.execute("INSERT INTO pots_tasks(id,owner_user,origin_suggestion_id,revision,generation,data) VALUES(?,?,?,?,?,?)",params![task.id,user,s.id,task.revision,task.control_generation,encode(&task)?])?;
+        s.accepted_revision = Some(s.revision);
+        s.task_id = Some(task.id.clone());
+        s.disposition = Disposition::Linked;
+        s.snoozed_until = None;
+        s.revision += 1;
+        s.updated_at = now;
+        save_suggestion(conn, &s)?;
+        Ok(task)
+    })
+}
+pub fn get_task(conn: &Connection, user: &str, id: &str) -> ApiResult<Task> {
+    let task: Task = row(conn, "pots_tasks", user, id)?;
+    get_suggestion(conn, user, &task.origin_suggestion_id)?;
+    Ok(task)
+}
+pub fn list_tasks(conn: &Connection, user: &str, limit: u32) -> ApiResult<Vec<Task>> {
+    let rows: Vec<Task> = list(conn, "pots_tasks", user, limit)?;
+    rows.into_iter()
+        .filter_map(
+            |task| match get_suggestion(conn, user, &task.origin_suggestion_id) {
+                Ok(_) => Some(Ok(task)),
+                Err(e) if e.status < 500 => None,
+                Err(e) => Some(Err(e)),
+            },
+        )
+        .collect()
+}
+pub fn control_task(
+    conn: &Connection,
+    user: &str,
+    id: &str,
+    input: TaskControl,
+    now: i64,
+) -> ApiResult<Task> {
+    atomic(conn, |conn| {
+        lock_owner(conn, user)?;
+        let mut task = get_task(conn, user, id)?;
+        if task.revision != input.expected_revision
+            || task.control_generation != input.expected_generation
+        {
+            return Err(conflict());
+        }
+        match input.action {
+            TaskAction::PauseCoordination => task.coordination_paused = true,
+            TaskAction::ResumeCoordination => {
+                if task.taken_over || task.status == TaskStatus::Stopped {
+                    return Err(ApiError::new(
+                        409,
+                        "not_actionable",
+                        "Takeover/stopped work cannot be implicitly resumed",
+                    ));
+                }
+                task.coordination_paused = false;
+            }
+            TaskAction::TakeOver => {
+                task.taken_over = true;
+                task.coordination_paused = true;
+            }
+            TaskAction::Stop => {
+                task.status = TaskStatus::Stopped;
+                task.coordination_paused = true;
+            }
+        }
+        task.revision += 1;
+        task.control_generation += 1;
+        task.updated_at = now;
+        conn.execute(
+            "UPDATE pots_tasks SET revision=?,generation=?,data=? WHERE id=? AND owner_user=?",
+            params![
+                task.revision,
+                task.control_generation,
+                encode(&task)?,
+                id,
+                user
+            ],
+        )?;
+        Ok(task)
+    })
+}
+/// Explicitly unavailable: cannot create fake running state or an empty session.
+pub fn start_task(
+    conn: &Connection,
+    user: &str,
+    id: &str,
+    input: StartInput,
+    _now: i64,
+) -> ApiResult<Task> {
+    text(&input.command_id, 256)?;
+    let task = get_task(conn, user, id)?;
+    if task.revision != input.expected_revision
+        || task.control_generation != input.expected_generation
+    {
+        return Err(conflict());
+    }
+    Err(ApiError::new(
+        503,
+        "not_ready",
+        "Pots execution adapter is not available; task remains tracking-only",
+    ))
+}
+/// Host-only interaction resolution. Do not complete a linked task or replay it.
+/// Query is bounded by the maximum number of owner responsibilities, and targets
+/// one injective occurrence key rather than scanning an unbounded inbox.
+pub fn resolve_progress(
+    conn: &Connection,
+    user: &str,
+    session_id: &str,
+    epoch: i64,
+    interaction_id: &str,
+    now: i64,
+) -> ApiResult<Vec<Suggestion>> {
+    atomic(conn, |conn| {
+        lock_owner(conn, user)?;
+        let occurrence = encode(&(session_id, interaction_id))?;
+        let mut q=conn.prepare("SELECT data FROM pots_suggestions WHERE owner_user=? AND occurrence_key=? AND condition_key='session_needs_input' ORDER BY id LIMIT 100")?;
+        let rows = q
+            .query_map(params![user, occurrence], |r| r.get::<_, String>(0))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let mut out = Vec::new();
+        for data in rows {
+            let mut s: Suggestion = decode(data)?;
+            if s.evidence.runner_epoch != epoch {
+                continue;
+            }
+            source(conn, user, &s.evidence)?;
+            let disposition = if s.task_id.is_some() {
+                Disposition::NeedsRefresh
+            } else {
+                Disposition::Superseded
+            };
+            if s.disposition == disposition {
+                continue;
+            }
+            s.disposition = disposition;
+            s.snoozed_until = None;
+            s.revision += 1;
+            s.updated_at = now;
+            save_suggestion(conn, &s)?;
+            out.push(s);
+        }
+        Ok(out)
+    })
+}
+
+/// Host lifecycle fence: a runner restart/exit/error makes outstanding requests
+/// stale. It never completes or cancels a tracked task or grants fresh authority.
+pub fn invalidate_session_progress(
+    conn: &Connection,
+    user: &str,
+    session_id: &str,
+    now: i64,
+) -> ApiResult<Vec<Suggestion>> {
+    atomic(conn, |conn| {
+        lock_owner(conn, user)?;
+        let session = conn
+            .claim_session(session_id, user, false)
+            .map_err(|e| if e.status < 500 { missing() } else { e })?;
+        workspace(conn, user, &session.workspace_id)?;
+        let rows: Vec<Suggestion> = list(conn, "pots_suggestions", user, LIST_MAX)?;
+        let mut out = Vec::new();
+        for mut s in rows {
+            if s.evidence.session_id != session_id {
+                continue;
+            }
+            let disposition = if s.task_id.is_some() {
+                Disposition::NeedsRefresh
+            } else {
+                Disposition::Superseded
+            };
+            if s.disposition == disposition {
+                continue;
+            }
+            s.disposition = disposition;
+            s.snoozed_until = None;
+            s.revision += 1;
+            s.updated_at = now;
+            save_suggestion(conn, &s)?;
+            out.push(s);
+        }
+        Ok(out)
+    })
+}

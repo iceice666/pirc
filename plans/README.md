@@ -27,14 +27,20 @@ The 2026-10-24 clarification adds configurable conversation workspaces, shared
 project mounts/rules, project departure revocation, collaboration boards and
 attributed **pirc pots** coordination. [pots and reusable Rust foundations](pots-and-library-extraction.md)
 connects those requirements to the proposed provider/loop extraction, with
-confirmed coupling, corrections and staged acceptance gates. Only planning is
-authorized. Existing security/data-loss issues and acceptance gaps below remain
+confirmed coupling, corrections and staged acceptance gates. The user subsequently
+authorized phased code implementation, not deployment or crate publication. A
+[bounded implementation checkpoint](pots-and-library-extraction.md#implementation-checkpoint--not-the-complete-target)
+now includes pure types, transport/OAuth extraction, a fake-adapter loop core and
+progress-only pots tracking with locally tested Web and native Android views.
+Start remains unavailable; production loop integration, APK/device acceptance and the wider architecture
+remain open. Existing security/data-loss issues and acceptance gaps below remain
 valid; this does not mark mobile parity complete. The user subsequently accepted
 [the specification-review recommendations](unified-conversations.md#accepted-specification-review-recommendations-2026-10-24)
 as the planning baseline. Accepted choices are no longer repeated as approval
 questions; engineering contracts, unspecified settings and explicitly deferred
-App connection/Flutter Web decisions remain open. Code implementation is not yet
-authorized by this planning task.
+App connection/Flutter Web decisions remain open. The original planning task was
+not implementation approval; the later authorization is limited to staged code
+work and does not clear the remaining acceptance gates.
 
 [Conversation execution contracts](conversation-execution-contracts.md) details all
 seven accepted follow-up areas: capability composition, foreground/background task

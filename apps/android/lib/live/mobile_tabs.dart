@@ -25,6 +25,7 @@ class MobileTabs extends StatelessWidget {
     final tabs = [
       if (chats) ('chat', tr("Chat"), LucideIcons.messageSquare),
       ('work', tr("Work"), LucideIcons.squareTerminal),
+      ('pots', 'pots', LucideIcons.bot),
       ('schedules', tr("Calendar"), LucideIcons.calendarDays),
       ('settings', tr("Settings"), LucideIcons.settings),
     ];

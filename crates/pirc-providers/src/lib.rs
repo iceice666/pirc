@@ -7,24 +7,16 @@
 //! providers routed through Pi), `anthropic-messages`, `openai-responses`
 //! and `openai-codex-responses`, and the native `openai-chat` and
 //! `anthropic-messages` transports ([`Inference::run`] picks one as
-//! `GatewayInference` did). [`backends`] is the backend settings store.
+//! `GatewayInference` did). Wire mechanics live in `pirc-llm`; this crate
+//! retains gateway policy and safe adapters. [`backends`] is the settings store.
 
-mod anthropic;
-mod anthropic_native;
 pub mod backends;
 mod catalog;
-mod chat;
-mod codex;
-mod completions;
 mod errors;
 mod http;
 mod inference;
 mod js;
-mod json_parse;
 mod models_file;
-mod pi;
-mod responses;
-mod sse;
 mod stream;
 
 pub use catalog::{CatalogModel, catalog_models, catalog_providers, catalog_version};

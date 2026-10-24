@@ -10,6 +10,37 @@ you approve in the authenticated web UI. HTML, JavaScript-backed documents,
 Markdown, code, math and supported diagrams render through Flutter; browser
 compatibility is incomplete. See the [remaining mobile work](../../plans/mobile.md).
 
+## pots tracking checkpoint
+
+The native pots page is available from phone navigation and the desktop sidebar.
+It uses the existing paired Gateway HTTP bridge; no additional socket, observer
+runtime or background worker is installed. Responsibilities select progress-only
+workspaces and finite budgets, are saved disabled, and require explicit activation.
+Observation pause, coordination pause, takeover and Stop tracking remain distinct.
+Track only never creates an execution session; Start is unavailable in this
+checkpoint. Tracking controls do not cancel tools in the source conversation.
+
+Source identifiers, expiry and outdated states are shown without copying source
+transcripts. Refresh/resume reconciles current server state; failed reads hide
+previous records. Re-pairing and server account changes clear records/drafts and
+fence stale responses/actions. Ambiguous mutations reconcile by GET, not automatic
+POST replay. No pots preview is persisted on the phone.
+
+`test/pots_test.dart` covers the tracking state and native phone/tablet UI gates,
+including 390×844 and 1024×900 layouts, source opening without acceptance,
+finite configuration, exact revision/generation requests, retry reconciliation,
+expiry and re-pair/account races. Run it alongside the existing navigation,
+calendar-account and localization regressions:
+
+```sh
+flutter test --no-pub test/pots_test.dart test/i18n_test.dart \
+  test/mobile_page_navigation_test.dart test/navigation_parity_test.dart \
+  test/calendar_account_test.dart
+```
+
+APK build, physical-device acceptance, real push delivery and execution/dispatch
+parity are separate, unclaimed gates.
+
 ## HTML disclosures
 
 Native `<details>` supports script-controlled open state and named accordions.

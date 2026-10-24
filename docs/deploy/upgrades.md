@@ -1,5 +1,21 @@
 # Upgrades
 
+## pots tracking checkpoint: gateway schema 1010
+
+This local implementation adds an opt-in, progress-only **pirc pots** inbox. Back
+up Gateway state before upgrading: schema **1010** adds durable responsibilities,
+sourced suggestions and tracking tasks. Older Gateways refuse the newer schema;
+installing an older executable does not reverse the migration. Existing sessions,
+workspaces, removal markers, memory and schedules are retained. No existing user
+is enrolled in observation and no execution grant is created by the migration.
+
+Update the Gateway and client assets together when deploying this checkpoint.
+Node schema and node protocol are unchanged. The extracted LLM libraries keep
+the existing authenticated Node → Gateway inference route; project agents do not
+receive provider credentials. The generic loop is not yet used by production
+agents. See [pots](../guides/pots.md) for tracking-only controls and the explicit
+execution-unavailable boundary. This change does not authorize a deployment.
+
 ## TLS trust update: October 2026
 
 The Rust gateway's outbound HTTPS and the node's `wss://` connection use
