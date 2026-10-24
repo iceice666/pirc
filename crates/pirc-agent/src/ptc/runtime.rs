@@ -78,7 +78,7 @@ pub struct ExecutionOptions {
     pub broker: Rc<dyn Broker>,
     pub signal: AbortSignal,
     /// Active-time budget; time spent waiting for a human is not counted.
-    pub timeout_ms: f64,
+    pub timeout: Duration,
     pub turn_id: String,
     pub execution_id: String,
     pub on_human_wait: Option<OnHumanWait>,
@@ -203,32 +203,37 @@ fn truncate_utf8(text: &str, bytes: usize) -> String {
 
 /// `Budget`: active time that stops counting while a human is asked.
 struct Budget {
-    limit_ms: f64,
-    used_ms: f64,
+    limit: Duration,
+    used: Duration,
     since: Option<Instant>,
     waiting_since: Option<Instant>,
     stopped: bool,
-    waited_ms: f64,
+    waited: Duration,
 }
 
-fn ms(duration: Duration) -> f64 {
-    duration.as_secs_f64() * 1000.0
+/// Whole milliseconds, rounded (what the report and the model see).
+fn round_ms(duration: Duration) -> u64 {
+    (duration.as_secs_f64() * 1000.0).round() as u64
 }
 
 impl Budget {
-    fn new(limit_ms: f64) -> Self {
+    fn new(limit: Duration) -> Self {
         Self {
-            limit_ms,
-            used_ms: 0.0,
+            limit,
+            used: Duration::ZERO,
             since: Some(Instant::now()),
             waiting_since: None,
             stopped: false,
-            waited_ms: 0.0,
+            waited: Duration::ZERO,
         }
     }
 
-    fn active_ms(&self) -> f64 {
-        self.used_ms + self.since.map_or(0.0, |since| ms(since.elapsed()))
+    fn active(&self) -> Duration {
+        self.used + self.since.map_or(Duration::ZERO, |since| since.elapsed())
+    }
+
+    fn expired(&self) -> bool {
+        self.active() >= self.limit
     }
 
     fn pause(&mut self) {
@@ -238,7 +243,7 @@ impl Budget {
         let Some(since) = self.since.take() else {
             return;
         };
-        self.used_ms += ms(since.elapsed());
+        self.used += since.elapsed();
         self.waiting_since = Some(Instant::now());
     }
 
@@ -247,7 +252,7 @@ impl Budget {
             return;
         }
         if let Some(waiting) = self.waiting_since.take() {
-            self.waited_ms += ms(waiting.elapsed());
+            self.waited += waiting.elapsed();
         }
         self.since = Some(Instant::now());
     }
@@ -258,8 +263,11 @@ impl Budget {
             return None;
         }
         let since = self.since?;
-        let left = (self.limit_ms - self.used_ms).max(1.0);
-        Some(tokio::time::Instant::from_std(since) + Duration::from_secs_f64(left / 1000.0))
+        let left = self
+            .limit
+            .saturating_sub(self.used)
+            .max(Duration::from_millis(1));
+        Some(tokio::time::Instant::from_std(since) + left)
     }
 
     /// Freeze both counters, including a wait still open.
@@ -268,10 +276,10 @@ impl Budget {
             return;
         }
         if let Some(since) = self.since.take() {
-            self.used_ms += ms(since.elapsed());
+            self.used += since.elapsed();
         }
         if let Some(waiting) = self.waiting_since.take() {
-            self.waited_ms += ms(waiting.elapsed());
+            self.waited += waiting.elapsed();
         }
         self.stopped = true;
     }
@@ -830,7 +838,7 @@ fn start_operation(
         {
             let mut state = context.state.borrow_mut();
             state.pending -= 1;
-            let duration = ms(started.elapsed()).round() as i64;
+            let duration = round_ms(started.elapsed()) as i64;
             let outcome_value = if ok {
                 "completed"
             } else {
@@ -1081,7 +1089,7 @@ pub async fn execute(options: ExecutionOptions) -> ExecutionReport {
         code,
         broker,
         signal,
-        timeout_ms,
+        timeout,
         turn_id,
         execution_id,
         on_human_wait,
@@ -1095,7 +1103,7 @@ pub async fn execute(options: ExecutionOptions) -> ExecutionReport {
     let state: Shared = Rc::new(RefCell::new(Exec {
         turn_id,
         execution_id,
-        budget: Budget::new(timeout_ms),
+        budget: Budget::new(timeout),
         human_waiting: false,
         guest_busy: true,
         results_sent: 0,
@@ -1227,11 +1235,7 @@ pub async fn execute(options: ExecutionOptions) -> ExecutionReport {
                                 break;
                             }
                             () = expire => {
-                                let expired = {
-                                    let state = state.borrow();
-                                    state.budget.active_ms() >= state.budget.limit_ms
-                                };
-                                if expired {
+                                if state.borrow().budget.expired() {
                                     stop(StopReason::TimedOut, &mut child);
                                     break;
                                 }
@@ -1326,7 +1330,7 @@ pub async fn execute(options: ExecutionOptions) -> ExecutionReport {
         None if outcome.as_ref().is_some_and(|outcome| outcome.ok) => "completed",
         None => "failed",
     };
-    let total_ms = (state.budget.active_ms() + state.budget.waited_ms).round() as u64;
+    let total_ms = round_ms(state.budget.active() + state.budget.waited);
     let root = state.root_id();
     state.node(vec![
         ("nodeId", json!(root)),
@@ -1339,7 +1343,7 @@ pub async fn execute(options: ExecutionOptions) -> ExecutionReport {
             "Timeout".to_owned(),
             format!(
                 "Active execution budget of {}s exceeded",
-                (timeout_ms / 1000.0).round()
+                timeout.as_secs_f64().round()
             ),
         )),
         Some(StopReason::Cancelled) => Some(("Cancelled".to_owned(), "Cancelled".to_owned())),
@@ -1370,8 +1374,8 @@ pub async fn execute(options: ExecutionOptions) -> ExecutionReport {
         summary: state.summary(true),
         trace: state.trace.clone(),
         trace_truncated: state.trace_truncated,
-        active_ms: state.budget.active_ms().round() as u64,
-        waited_ms: state.budget.waited_ms.round() as u64,
+        active_ms: round_ms(state.budget.active()),
+        waited_ms: round_ms(state.budget.waited),
     }
 }
 

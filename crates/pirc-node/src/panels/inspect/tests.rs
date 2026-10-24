@@ -193,7 +193,7 @@ fn parses_porcelain_status() {
     );
     assert_eq!(parsed.branch.as_deref(), Some("main"));
     assert_eq!(parsed.upstream.as_deref(), Some("origin/main"));
-    assert_eq!((parsed.ahead, parsed.behind), (2.0, 1.0));
+    assert_eq!((parsed.ahead, parsed.behind), (2, 1));
     assert_eq!(
         parsed.files,
         vec![

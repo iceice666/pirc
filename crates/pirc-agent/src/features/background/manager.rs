@@ -158,7 +158,6 @@ const LINE_LIMIT: usize = 4096;
 const INPUT_LIMIT: usize = 64 * 1024;
 /// Monitor matches reported per task before the monitor switches itself off.
 pub const MATCH_LIMIT: u32 = 200;
-const MAX_SAFE: f64 = 9_007_199_254_740_991.0;
 /// How long a stopped group gets between SIGTERM and SIGKILL, and a
 /// finished shell's leftovers to release its pipes.
 const KILL_DELAY: Duration = Duration::from_millis(500);
@@ -514,8 +513,8 @@ impl TaskManager {
 
     /// `output(id, lines)`: the retained tail's last lines, after notices of
     /// what was cut.
-    pub fn output(&self, id: &str, lines: f64) -> Result<String, String> {
-        if lines.fract() != 0.0 || lines.abs() > MAX_SAFE || lines <= 0.0 {
+    pub fn output(&self, id: &str, lines: usize) -> Result<String, String> {
+        if lines == 0 {
             return Err("lines must be a positive safe integer".to_owned());
         }
         let record = self.lookup(id)?;
@@ -532,7 +531,7 @@ impl TaskManager {
         if state.log_truncated {
             out.push("[Log truncated: the log file contains only the first 10 MiB.]");
         }
-        let keep = (lines as usize).min(parts.len());
+        let keep = lines.min(parts.len());
         out.extend(&parts[parts.len() - keep..]);
         Ok(out.join("\n"))
     }

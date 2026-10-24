@@ -56,7 +56,7 @@ async fn captures_output_exit_codes_and_wait_outcomes() {
         assert_eq!(done.task.status, TaskStatus::Completed);
         assert_eq!(done.task.exit_code, Some(Some(0)));
         assert_eq!(done.task.signal, Some(None));
-        let output = manager.output(&ok.id, 200.0).unwrap();
+        let output = manager.output(&ok.id, 200).unwrap();
         assert!(
             output.contains("hello") && output.contains("err"),
             "{output}"
@@ -170,12 +170,10 @@ async fn checks_its_arguments() {
                 "wait timeout must be positive seconds, at most 86400"
             );
         }
-        for lines in [0.0, 1.5, -1.0] {
-            assert_eq!(
-                manager.output(&task.id, lines).unwrap_err(),
-                "lines must be a positive safe integer"
-            );
-        }
+        assert_eq!(
+            manager.output(&task.id, 0).unwrap_err(),
+            "lines must be a positive safe integer"
+        );
         assert_eq!(
             manager.write(&task.id, "").unwrap_err(),
             "input must be 1–65536 characters"
@@ -217,7 +215,7 @@ async fn runs_a_task_on_a_terminal_that_accepts_input() {
         manager.write(&task.id, "bob\n").unwrap();
         let result = manager.wait(&task.id, Some(5.0), None).await.unwrap();
         assert_eq!(result.task.status, TaskStatus::Completed);
-        let output = manager.output(&task.id, 200.0).unwrap();
+        let output = manager.output(&task.id, 200).unwrap();
         assert!(output.contains("hi bob"), "{output}");
         assert!(output.contains("tty-ok"), "{output}");
         assert!(output.contains("xterm-256color 50 200"), "{output}");
@@ -452,10 +450,10 @@ async fn reports_what_the_output_cut() {
             .unwrap();
         manager.wait(&task.id, Some(10.0), None).await.unwrap();
         assert_eq!(
-            manager.output(&task.id, 1.0).unwrap(),
+            manager.output(&task.id, 1).unwrap(),
             "[Output truncated: showing the retained 1 MiB tail.]\nlast"
         );
-        assert_eq!(manager.output(&task.id, 2.0).unwrap().lines().count(), 3);
+        assert_eq!(manager.output(&task.id, 2).unwrap().lines().count(), 3);
     })
     .await;
 }

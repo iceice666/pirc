@@ -34,7 +34,7 @@ pub fn memory_panel(
         .filter(|entry| matches!(entry.data, EntryData::Compaction { .. }))
         .collect();
     let target = pool_target(config);
-    let threshold = |value: f64, max: f64| json!({ "value": value as u64, "max": max as u64 });
+    let threshold = |value: u64, max: u64| json!({ "value": value, "max": max });
     let mut out = json!({
         "architecture":"handoff",
         "handoff":{"snapshots":crate::handoff::valid_snapshots(branch).len(),"latest":crate::handoff::valid_snapshots(branch).last().map(|e|e.id.clone()),"legacyAncestry":crate::handoff::valid_snapshots(branch).last().and_then(|e|crate::handoff::details(e).and_then(|h|h.legacy_base_id)),"textOnly":true},
@@ -42,25 +42,23 @@ pub fn memory_panel(
         "passive": config.passive,
         "thresholds": {
             "observation": threshold(
-                tokens_since_coverage(branch, LedgerType::Observations, current) as f64,
-                config.observe_after_tokens as f64,
+                tokens_since_coverage(branch, LedgerType::Observations, current),
+                config.observe_after_tokens,
             ),
             "reflection": threshold(
-                tokens_since_coverage(branch, LedgerType::Reflections, current) as f64,
-                config.reflect_after_tokens as f64,
+                tokens_since_coverage(branch, LedgerType::Reflections, current),
+                config.reflect_after_tokens,
             ),
             "compaction": threshold(
-                raw_tokens_since_last_compaction(branch) as f64,
-                compact_threshold(config, context_window) as f64,
+                raw_tokens_since_last_compaction(branch),
+                compact_threshold(config, context_window),
             ),
             "visiblePool": {
                 "value": crate::messages::js::number_value(pool_tokens(&visible.observations)),
                 "max": config.observations_pool_max_tokens,
             },
-            "activePool": threshold(
-                pool_tokens(&folded.active_observations),
-                target as f64,
-            ),
+            // Stored token counts are JavaScript numbers (possibly NaN).
+            "activePool": threshold(pool_tokens(&folded.active_observations) as u64, target),
         },
         "counts": {
             "observations": folded.observations.len(),

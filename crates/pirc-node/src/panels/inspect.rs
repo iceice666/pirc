@@ -493,8 +493,8 @@ pub async fn git_status(sandbox: &dyn Sandbox, root: &Path, env: &ChildEnv) -> A
         "root": prefix,
         "branch": parsed.branch,
         "upstream": parsed.upstream,
-        "ahead": number_value(parsed.ahead),
-        "behind": number_value(parsed.behind),
+        "ahead": parsed.ahead,
+        "behind": parsed.behind,
         "files": parsed.files,
         "truncated": truncated,
     }))
@@ -504,8 +504,8 @@ pub async fn git_status(sandbox: &dyn Sandbox, root: &Path, env: &ChildEnv) -> A
 struct Status {
     branch: Option<String>,
     upstream: Option<String>,
-    ahead: f64,
-    behind: f64,
+    ahead: u64,
+    behind: u64,
     files: Vec<Value>,
 }
 
@@ -539,7 +539,7 @@ fn parse_status(stdout: &str) -> Status {
                 regex
                     .captures(counts)
                     .and_then(|c| c.get(1))
-                    .map_or(0.0, |m| m.as_str().parse::<f64>().unwrap_or(0.0))
+                    .map_or(0, |m| m.as_str().parse().unwrap_or(0))
             };
             status.ahead = count(&AHEAD);
             status.behind = count(&BEHIND);

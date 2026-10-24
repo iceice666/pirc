@@ -479,7 +479,7 @@ impl Background {
     fn output_of(&self, id: &str, lines: Option<f64>) -> Result<(String, Value), String> {
         let lines = check_lines(lines.unwrap_or(200.0))?;
         let task = self.manager.get(id)?;
-        let raw = clean(&self.manager.output(id, lines as f64)?);
+        let raw = clean(&self.manager.output(id, lines)?);
         let markers: Vec<&str> = raw
             .split('\n')
             .filter(|line| {
@@ -1014,7 +1014,7 @@ impl Feature for BackgroundFeature {
                 };
                 let task = state.manager.get(&id)?;
                 let lines = check_lines(lines)?;
-                let raw = clean(&state.manager.output(&id, lines as f64)?);
+                let raw = clean(&state.manager.output(&id, lines)?);
                 let (output, _) = truncate_output(&tail_lines(&raw, lines), 64 * 1024);
                 return Ok(Some(
                     json!({ "task": task_public(&task, None), "output": output }),

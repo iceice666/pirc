@@ -79,7 +79,7 @@ impl Broker for FakeBroker {
 #[derive(Default)]
 struct Options {
     signal: Option<AbortSignal>,
-    timeout_ms: Option<f64>,
+    timeout: Option<Duration>,
     writes: Vec<&'static str>,
     on_human_wait: Option<OnHumanWait>,
     on_progress: Option<OnProgress>,
@@ -114,7 +114,7 @@ async fn run(code: &str, handlers: Vec<(&str, Handler)>, options: Options) -> Ru
         code: compiled.js,
         broker: Rc::new(broker),
         signal: options.signal.unwrap_or_else(AbortSignal::never),
-        timeout_ms: options.timeout_ms.unwrap_or(10_000.0),
+        timeout: options.timeout.unwrap_or(Duration::from_secs(10)),
         turn_id: "turn".to_owned(),
         execution_id: "exec".to_owned(),
         on_human_wait: options.on_human_wait,
@@ -740,7 +740,7 @@ async fn a_runaway_loop_is_interrupted_by_the_budget() {
         "for (;;) { try { for (;;) {} } catch {} }",
         vec![],
         Options {
-            timeout_ms: Some(300.0),
+            timeout: Some(Duration::from_millis(300)),
             ..Options::default()
         },
     )
@@ -756,7 +756,7 @@ async fn a_caught_out_of_memory_still_interrupts_a_busy_script() {
         "try { const a = []; for (;;) a.push(\"x\".repeat(1 << 20) + a.length); } catch (_) {} for (;;) {}",
         vec![],
         Options {
-            timeout_ms: Some(5_000.0),
+            timeout: Some(Duration::from_millis(5_000)),
             ..Options::default()
         },
     )
@@ -970,7 +970,7 @@ async fn operations_that_never_settle_are_reported_with_unknown_outcome() {
             handler(|_call: BrokerCall| async move { std::future::pending::<Value>().await }),
         )],
         Options {
-            timeout_ms: Some(200.0),
+            timeout: Some(Duration::from_millis(200)),
             ..Options::default()
         },
     )
@@ -1032,7 +1032,7 @@ async fn cancellation_stops_a_busy_script_at_once_even_while_a_human_is_asked() 
             vec![],
             Options {
                 signal: Some(signal),
-                timeout_ms: Some(60_000.0),
+                timeout: Some(Duration::from_millis(60_000)),
                 on_human_wait: Some(human_waiting(waiting)),
                 ..Options::default()
             },
@@ -1070,7 +1070,11 @@ async fn a_stopped_script_process_is_gone_even_mid_regex() {
             vec![],
             Options {
                 signal: Some(signal),
-                timeout_ms: Some(if by == "timeout" { 200.0 } else { 60_000.0 }),
+                timeout: Some(Duration::from_millis(if by == "timeout" {
+                    200
+                } else {
+                    60_000
+                })),
                 on_process: Some(Box::new(move |pid| {
                     // The script's process gets no environment and `/` as its
                     // directory (readable through `/proc` on Linux only). It
@@ -1119,7 +1123,7 @@ async fn a_stale_idle_report_cannot_pause_the_budget_of_a_busy_script() {
             handler(|call: BrokerCall| async move { ok(&call, "x") }),
         )],
         Options {
-            timeout_ms: Some(300.0),
+            timeout: Some(Duration::from_millis(300)),
             on_human_wait: Some(human_waiting(true)),
             ..Options::default()
         },
@@ -1135,7 +1139,7 @@ async fn a_script_computing_while_a_human_is_asked_still_spends_its_budget() {
         "for (;;) {}",
         vec![],
         Options {
-            timeout_ms: Some(200.0),
+            timeout: Some(Duration::from_millis(200)),
             on_human_wait: Some(human_waiting(true)),
             ..Options::default()
         },
@@ -1229,7 +1233,7 @@ async fn time_spent_waiting_for_a_human_does_not_count_against_the_budget() {
             }),
         )],
         Options {
-            timeout_ms: Some(250.0),
+            timeout: Some(Duration::from_millis(250)),
             on_human_wait: Some(kept_listener(&slot)),
             ..Options::default()
         },
@@ -1252,7 +1256,7 @@ async fn the_store_is_kept_only_from_a_completed_script() {
                 calls: Rc::new(RefCell::new(Vec::new())),
             }),
             signal: AbortSignal::never(),
-            timeout_ms: 10_000.0,
+            timeout: Duration::from_secs(10),
             turn_id: "turn".to_owned(),
             execution_id: "exec".to_owned(),
             on_human_wait: None,

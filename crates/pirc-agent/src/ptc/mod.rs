@@ -16,6 +16,7 @@ pub mod signatures;
 
 use std::cell::{OnceCell, RefCell};
 use std::rc::{Rc, Weak};
+use std::time::Duration;
 
 use pirc_protocol::{Message, UserBlock};
 use serde_json::{Map, Value, json};
@@ -634,10 +635,11 @@ impl PtcTool {
                 ),
             )));
         }
-        let max = budgets::MAX_ACTIVE_TIMEOUT_MS as f64;
-        let timeout_ms = match args.get("timeout").and_then(Value::as_f64) {
-            Some(seconds) => (seconds * 1000.0).min(max),
-            None => (ctx.config.limits.ptc_timeout_ms as f64).min(max),
+        let max = Duration::from_millis(budgets::MAX_ACTIVE_TIMEOUT_MS);
+        let timeout = match args.get("timeout").and_then(Value::as_f64) {
+            // The schema admits only 0 < seconds <= 3600.
+            Some(seconds) => Duration::try_from_secs_f64(seconds).map_or(max, |t| t.min(max)),
+            None => Duration::from_millis(ctx.config.limits.ptc_timeout_ms).min(max),
         };
         let execution_id = random_uuid();
         // Values stored after reading web content stay untrusted when a later
@@ -669,7 +671,7 @@ impl PtcTool {
             code: compiled.js,
             broker: Rc::new(AgentBroker(script.clone())),
             signal: ctx.signal.clone(),
-            timeout_ms,
+            timeout,
             turn_id: ctx.tool_call_id.clone(),
             execution_id: execution_id.clone(),
             store: Some(previous_store.clone()),

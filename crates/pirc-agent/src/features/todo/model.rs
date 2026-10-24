@@ -11,7 +11,7 @@ use serde_json::{Map, Value, json};
 use crate::tools::js;
 
 const MAX_TODOS: usize = 50;
-const MAX_ID: f64 = 1_000_000.0;
+const MAX_ID: u64 = 1_000_000;
 
 /// `Status`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -105,7 +105,7 @@ fn has_controls(text: &str) -> bool {
 /// `positiveId`: a safe integer in 1..=1,000,000.
 fn positive_id(value: Option<&Value>) -> Option<u64> {
     let n = value?.as_f64()?;
-    (n.fract() == 0.0 && n > 0.0 && n <= MAX_ID).then_some(n as u64)
+    (n.fract() == 0.0 && n > 0.0 && n <= MAX_ID as f64).then_some(n as u64)
 }
 
 /// `boundedText`.
@@ -288,7 +288,7 @@ pub fn apply_action(state: &State, action: &Value) -> Result<State, String> {
         if next.todos.len() + items.len() > MAX_TODOS {
             return Err("Task count cannot exceed 50".to_owned());
         }
-        if next.next_id as f64 + items.len() as f64 > MAX_ID {
+        if next.next_id + items.len() as u64 > MAX_ID {
             return Err("Task IDs exhausted".to_owned());
         }
         let mut batch = next;
@@ -316,7 +316,7 @@ pub fn apply_action(state: &State, action: &Value) -> Result<State, String> {
             if next.todos.len() >= MAX_TODOS {
                 return Err("Task count cannot exceed 50".to_owned());
             }
-            if next.next_id as f64 == MAX_ID {
+            if next.next_id == MAX_ID {
                 return Err("Task IDs exhausted".to_owned());
             }
             let id = next.next_id;
@@ -344,13 +344,8 @@ pub fn apply_action(state: &State, action: &Value) -> Result<State, String> {
             next.todos.push(todo);
         }
         Some("update") => {
-            let id = get("id").and_then(Value::as_f64);
             let found = positive_id(get("id"))
-                .and_then(|_| {
-                    next.todos
-                        .iter_mut()
-                        .find(|todo| Some(todo.id as f64) == id)
-                })
+                .and_then(|id| next.todos.iter_mut().find(|todo| todo.id == id))
                 .ok_or_else(|| "Task ID not found".to_owned())?;
             if get("text").is_some() {
                 found.text = bounded_text(get("text"), "text", 200)?;

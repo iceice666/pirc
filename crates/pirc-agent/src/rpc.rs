@@ -453,7 +453,7 @@ fn images(command: &Value) -> Vec<UserBlock> {
 }
 
 /// Largest `get_context` answer on the RPC line (512 KiB).
-const CONTEXT_MAX_BYTES: f64 = 512.0 * 1024.0;
+const CONTEXT_MAX_BYTES: usize = 512 * 1024;
 
 /// The agent's RPC surface as `handleCommand` drives it: [`Agent`], or a
 /// stand-in in tests.
@@ -704,12 +704,13 @@ pub(crate) async fn dispatch<A: Commands>(
         }
         Some("get_context") => {
             // Large prompts use the same node-local disk snapshot, never overflow the RPC line.
+            // A NaN `maxBytes` clamps to 0: nothing fits, as before.
             let limit = match command.get("maxBytes").and_then(Value::as_f64) {
-                Some(max) => max.clamp(0.0, CONTEXT_MAX_BYTES),
+                Some(max) => max.clamp(0.0, CONTEXT_MAX_BYTES as f64) as usize,
                 None => CONTEXT_MAX_BYTES,
             };
             let context = agent.last_context().filter(|context| {
-                serde_json::to_vec(context).is_ok_and(|bytes| (bytes.len() as f64) < limit)
+                serde_json::to_vec(context).is_ok_and(|bytes| bytes.len() < limit)
             });
             Ok(Some(context.unwrap_or(Value::Null)))
         }
