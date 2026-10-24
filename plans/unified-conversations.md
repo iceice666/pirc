@@ -1,8 +1,8 @@
 # Unified conversations, projects and an independent App
 
-[Plans](README.md) · [Workspace modes](modes.md) · [Mobile](mobile.md) · [Assistant contracts](../docs/architecture/assistant-memory.md) · [Checkpoints](checkpoints.md)
+[Plans](README.md) · [Workspace modes](modes.md) · [Mobile](mobile.md) · [Assistant contracts](../docs/architecture/assistant-memory.md) · [Checkpoints](checkpoints.md) · [pots and Rust foundations](pots-and-library-extraction.md)
 
-Status: architecture and workflow proposal, 2026-10-23. The user authorized
+Status: architecture and workflow proposal, updated 2026-10-24. The user authorized
 planning only. No implementation, schema migration, deployment, remote push or
 release is authorized by this plan. Proposed defaults below are reviewable design
 choices, not claims about shipped behavior or approval to change security policy.
@@ -58,65 +58,85 @@ These are implementation facts to account for, not the target architecture:
 
 ## Domain model: proposed relationships
 
-Names here describe product concepts, not approved database tables or API names.
-Do not reuse today's overloaded `workspace` or `session` identifiers as if these
-new relationships already existed.
+The 2026-10-24 user clarification replaces the earlier organization-only project
+proposal: project membership also supplies mounted resources and configuration;
+leaving removes project-derived access. Implementation details remain proposals.
 
-| Concept               | Responsibility                                                                          | Relationship and lifetime                                                                                                                                       |
-| --------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Project               | Organize conversations, reference material, instructions and preferred environments     | One owner; zero or more conversations and environment links. It need not have a repository or directory.                                                        |
-| Conversation          | Stable user-visible dialogue and its attributed messages/results                        | Belongs to the owner and optionally one project. Can have no task or several tasks. Survives an agent restart or execution change.                              |
-| Task                  | Track a requested objective, decisions, dependencies, progress and deliverables         | Has one originating conversation, with links from other views. Can have child tasks and several execution attempts. Viewing it from pirc does not duplicate it. |
-| Execution environment | Identify the actual Node, directory/worktree or scratch area and supported capabilities | Linked from zero or more projects. Availability and authorized access are separate from project membership. An environment is not a device UI.                  |
-| Execution attempt     | Record a concrete agent run against a task or a normal conversation turn                | Belongs to one conversation and optionally one task. Has one explicit environment binding and an authority snapshot; restart/retry remains attributable.        |
-| Pending decision      | Represent a specific proposal or confirmation awaiting the user                         | References its task/run and revision. Has a durable pending/handled/expired state shared by all clients.                                                        |
+| Concept             | Responsibility                                                                                    | Relationship and lifetime                                                                                                            |
+| ------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Project             | Folder-like organization plus shared mounts, rules/configuration and proposed collaboration board | Contains conversations and one or more resource bindings; need not equal one physical directory                                      |
+| Conversation        | Stable dialogue, attributed messages/results and a configured workspace                           | Optionally belongs to one project; has its own bindings plus currently authorized project bindings                                   |
+| Workspace binding   | Resolve the selected Node, primary working directory and named read/write mounts                  | Configurable when creating a conversation; can use existing folders or an explicitly created server folder; versioned at transitions |
+| Resource mount      | Describe a directory/configuration resource, its alias, host, permissions and grant source        | May derive from a project or explicit conversation configuration; not just a symlink or display label                                |
+| Task                | Track an objective, dependencies, owner, progress, blocking reason and deliverables               | One originating conversation; can have child tasks and many attempts; pots links to the same identity                                |
+| Execution attempt   | Run an agent turn/work against an explicit environment and authority generation                   | One conversation, optionally one task; its resource set cannot silently mutate mid-run                                               |
+| Pending decision    | Durable proposal/confirmation with an authoritative outcome                                       | References task/attempt and revision; shared across devices                                                                          |
+| pots responsibility | Track an ongoing user-authorized concern and when to observe or follow up                         | May create suggestions and authorized tasks; bounded by scopes, budget and pause controls                                            |
 
 ```mermaid
 flowchart TD
     P[Project] --> C[Conversations]
-    P --> E[Preferred environments]
-    C --> T[Tasks when needed]
-    C --> R[Execution attempts]
-    T --> R
-    R --> B[One bound environment]
-    R --> D[Pending decisions and results]
-    A[pirc overview] --> T
-    A --> D
+    P --> M[Shared mounts and rules]
+    P --> B[Project board and scoped notes]
+    C --> W[Versioned workspace binding]
+    M --> W
+    C --> T[Tracked tasks]
+    T --> R[Execution attempts]
+    W --> R
+    A[pirc pots] --> T
+    A --> D[Suggestions and pending decisions]
 ```
 
-Important boundaries:
+Boundaries:
 
-1. A project is not a filesystem directory, sandbox or new private-memory scope.
-   Project-only memory remains shelved in [Plans](README.md); reopening it needs
-   a separate decision. Project instructions remain explicit context inputs.
-2. A folder move changes organization, not filesystem location or authority.
-   Historical instructions, upload ownership, memory provenance and execution
-   bindings do not change. Future context changes require an explicit transition;
-   until migration semantics exist, block unsupported moves rather than relabel
-   protected resources as belonging to the destination project.
-3. A conversation retains its visible history when work begins. Backend execution
-   contexts may differ; do not copy all assistant memory or credentials into a
-   repository agent to preserve the appearance of continuity.
-4. Each task has one canonical identity. A retry is a new attempt, not a new
-   unrelated task. An agent's session ID is not the task ID.
-5. One execution attempt cannot silently change directory, Node or authority.
-   A different target starts a new attempt after the necessary user decision.
-   A revoked grant still takes effect; an authority snapshot is not permanent access.
-6. Browsing any project or task does not grant read access to its contents or
-   permission to instruct its agent. Backend ownership and policy checks apply.
+1. Project membership supplies defined resource grants, not all host access.
+   Conversation-specific mounts and project mounts have separate provenance.
+   Aliases, overlapping roots, default cwd, read/write rights and grant precedence
+   must be explicit. A mount must be enforced for shell/tools/children as well as UI.
+2. Creating a new empty folder is permitted only under a configured server root
+   and current user authority; validate paths, symlinks, collisions and ownership.
+   Do not reuse a pre-existing nonempty path as if it were newly allocated.
+3. Recommended initial execution: all direct filesystem mounts of one attempt
+   resolve on the selected Node. Cross-Node resources need an explicit remote
+   access/copy design; a folder on server B is not magically local on server A.
+4. Leaving/moving a project is an access transition. Block new affected work,
+   reconcile queued actions, quiesce/stop old workers and descendants, revoke old
+   project grants, rebuild the sandbox/context, then resume under a new binding
+   generation. Do not report success while old workers still hold project access.
+   An offline Node or interrupted transition remains pending/blocked until resolved.
+5. Changing a mount list does not close existing file descriptors or withdraw
+   bytes already read. Earlier messages, copied files, summaries and model state
+   need a separate policy; do not claim unmounting erases them. Never silently
+   copy all project files or project notes into a conversation-private directory.
+6. Authority from unrelated mounts or broad host access may overlap the removed
+   project path. Define explicit deny/grant precedence or disclose remaining
+   independent access; revoking only a UI mount cannot prove the path is unreadable.
+7. Keep memory authorship/deletion provenance and original filesystem data.
+   Project board/notes reopen scoped collaboration design; automatic migration of
+   existing global USER/MEMORY into project-only stores is not authorized.
+8. Every task keeps a stable identity across attempts. Existing checkpoint recovery
+   still opens an isolated workspace and blank recovery conversation; it does not
+   inherit the source memory writer or overwrite later user changes.
 
 ### Drafts, tasks and execution states
 
-- **Conversation:** local draft → first accepted message → persisted conversation
-  → archived or explicitly deleted. Opening New, leaving, or opening another
-  empty draft does not create a server session or allocate a worktree.
+- **Conversation:** configure workspace/mounts at creation → local draft → first
+  accepted message → persisted conversation → archived or explicitly deleted.
+  Proposed allocation policy: retain workspace choices in the draft and allocate
+  managed storage at first send, unless the user explicitly invokes Create folder.
+  Empty drafts still do not litter the session list; never delete a user-created
+  folder merely because its draft was abandoned. Allocation timing needs review.
 - A first-send request has a stable idempotency identity. Retries, uploads and
   interrupted creation must not create duplicate conversations or orphaned
   permanent attachments. An unsent message remains visibly a draft.
-- **Task:** proposed → ready → running → waiting for user / blocked → awaiting
-  review → completed; canceled and failed remain distinguishable. Ordinary chat
-  does not require task creation. Explicit user acceptance, where required, is
-  separate from an agent reporting that it is finished.
+- **Task:** proposed → ready → running → waiting for user / resource / dependency
+  → awaiting review → completed; canceled and failed remain distinguishable.
+  Recommend tracked tasks for complex work; long/background and multi-agent work
+  should require them. Create tasks automatically from an authorized request;
+  do not require a form or infer execution permission from a task card.
+  Plain questions and brief edits can remain ordinary turns. Progress shows
+  milestones and blocking reasons; percentages need an actual measurable basis.
+  User acceptance, where required, is distinct from an agent saying it is done.
 - **Attempt:** queued → starting → running → succeeded / failed / stopped;
   disconnect can leave outcome unknown. Do not treat lost connectivity as success
   or blindly retry a possibly completed side effect.
@@ -127,20 +147,25 @@ Exact persisted state names and transitions require a later contract review.
 
 ## Primary user journeys
 
-### 1. Chat without configuring a project
+### 1. Create a conversation and workspace
 
-1. Open New conversation, enter a message and send.
-2. Use an available authorized default scratch/chat environment; choosing a
-   filesystem directory is unnecessary. If execution is unavailable, preserve
-   the draft and explain which service is missing.
-3. Chat normally. A brief question does not create a task card or delegation.
-4. Optionally organize the conversation into a project under the move rules above.
+1. Open New conversation. Configure its workspace: use mounted folders, inherit
+   project resources, or explicitly create an empty folder in an allowed server
+   location. A managed empty default keeps ordinary chatting easy.
+2. Show the selected server, primary directory and additional named mounts without
+   forcing a Chat/Work choice. A plain chat uses the same workspace abstraction.
+3. Keep an unsent conversation as a draft; review the allocation timing above.
+4. On first send, persist idempotently, resolve current grants and launch the
+   needed agent context. An unavailable environment leaves the request recoverable.
+5. Organizing it into or out of a project applies the explicit resource transition
+   below; it does not physically move a repository or reassign old memory origins.
 
 ### 2. Discuss, then work in the same conversation
 
 1. Open a project conversation and discuss the change.
-2. Ask the agent to implement it. Resolve the intended environment from the
-   explicit choice or an unambiguous, authorized project default.
+2. Ask the agent to implement it. Use the configured workspace and its explicit
+   primary target/mount aliases. Project defaults are resolved when configuring
+   the binding, not silently re-read to redirect an already-running attempt.
 3. If several targets are plausible, ask once with readable device/directory
    choices. Never guess a remote target or silently widen permissions.
 4. Show the selected environment and granted operation scope in the conversation.
@@ -188,19 +213,61 @@ checkpoint before implementation; preserve source attribution and tool ownership
 - Device command control, assistant coordination authority and filesystem writer
   isolation are distinct; one lease must not be assumed to solve all three.
 
-### 6. Recover work or change an environment
+### 6. Switch environments, leave projects or recover work
 
-- Opening another project or moving a conversation does not move a running agent.
-- A changed environment needs a new attributed attempt with an explicit handoff.
-- Checkpoint recovery continues to create an independent recovery workspace and
-  its own blank recovery conversation. The source may link to it, but must not
-  implicitly inherit source memory writers or replay commands into the recovery.
-- Never reset, overwrite or clean the original directory or later user changes.
-  Parallel writers require isolation or conflict handling; checkpoints alone are
-  not a lock against editors, shell processes or another Node.
+- Before starting a run, changing workspace selection changes the next run's
+  binding. After completion, a new environment starts a new attributed attempt
+  in the same visible conversation; old results retain their original location.
+- During execution, distinguish Stop and switch from an explicit "use another
+  environment for a separate task" operation. Do not relabel a running process.
+  The default running-transition behavior remains to be confirmed.
+- Leaving a project must revoke its mounts, rules, board access and retrieval from
+  project notes. Mark the move pending until the old authority is no longer usable;
+  do not silently let a detached background child keep working in the project.
+- Merely navigating to another page does not change membership or stop work.
+- Existing files stay where they are. Define whether history from the old project
+  remains future model context; unmounting alone does not remove that information.
+- Checkpoint recovery keeps its independent workspace and blank conversation,
+  linked from the source. No implicit original-directory overwrite or source
+  memory-writer inheritance is allowed.
 
-## pirc assistant: proactive but bounded
+## Project collaboration: board, notes and resource waiting
 
+The user's shared-board idea is a collaboration requirement under design.
+Existing team `board_*`/`task_*` operations in `features/team/broker.rs` are a
+starting point, but that parent-side broker is not automatically a durable board
+shared by every independent conversation in a project.
+
+Use three explicit kinds of information:
+
+| Kind                           | Content                                                                     | Authority                                                                                     |
+| ------------------------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Project rules/configuration    | User-approved instructions and resource settings                            | Versioned, user-controlled; agents propose changes rather than grant themselves rights        |
+| Project board and shared notes | Work claims, messages, decisions, stable project facts                      | Scoped and attributed to actor/task/source; revisions, retention and deletion policy required |
+| Resource wait state            | Who actually holds a write lease, conflicting path, wait reason and release | Computed by the execution host; board text cannot acquire/release a real lock                 |
+
+Recommended conflict flow: A holds a path → B receives structured owner/path/reason
+→ B does independent work or enters a visible waiting state → release wakes B → B
+rechecks authority and rereads the current file before attempting its edit.
+Do not classify temporary contention as task completion or a generic fatal error.
+Avoid model polling loops and unlimited retry spend; cancellation and a bounded
+escalation policy remain available. Detect dependency cycles; do not solve them
+by expiring a still-active writer's lease or asking an agent to bypass the broker.
+
+The current Node write broker is per Node and holds leases until the run settles
+or stops. A second lock table in Gateway would not automatically coordinate shell
+processes, user editors or multiple Nodes sharing storage. Keep Node enforcement,
+expose useful wait state, and prefer isolated worktrees for overlapping parallel
+code changes. Checkpoints provide recovery, not universal writer isolation.
+
+Board content is other-agent data with provenance, not a user's instruction or
+approval. It must not automatically become global personal memory. Leaving a
+project removes future access, but previously copied text cannot be claimed erased.
+Details of project-note retention and post-departure context require confirmation.
+
+## pirc pots: proactive but bounded
+
+Product name supplied by the user: **pirc pots** (personal assistant).
 Proposed presentation: one stable assistant entry point with an overview,
 pending decisions and task-specific discussion threads. It is not a second
 unstructured collection of interchangeable Chat sessions. A continuous persona
@@ -217,6 +284,18 @@ Observation itself has limits: no scanning arbitrary files, accounts or new
 sources merely to find something useful. Retrieved content and other agents'
 messages remain data, not user permission. Unapproved suggestions expire or stay
 pending; silence, dismissal and notification delivery never authorize execution.
+
+pots messages must carry backend-issued actor identity, source responsibility/task,
+initiating user request or standing grant, target and scope. Display "From pots"
+in the receiving conversation. A text prefix is insufficient: agents must not
+be able to impersonate the user or manufacture delegated authority.
+
+Configure observation, conversation reading, suggestions, dispatch/follow-ups,
+stop/reprioritize, and notifications separately. User commands or explicit
+standing grants authorize dispatch; the ability to watch progress does not.
+Revalidate grants at delivery and execution, deduplicate retries, and fence queued
+pots instructions after user takeover or project departure. Include loop/depth
+and budget limits so bots cannot trigger an endless dispatch cycle.
 
 The backend stores the suggestion, supporting evidence, revision, related tasks
 and disposition. Event/rule filters should trigger bounded analysis, with budgets
@@ -288,6 +367,20 @@ Web session is not.
   them remains a deployment limitation. Always-on coordination and phone OS push
   behavior need separate deployment/device acceptance.
 
+## Relation to reusable crates and App connection design
+
+See [pots and Rust foundations](pots-and-library-extraction.md) for checked handoff
+findings, official dots/Grok Bot references and the combined delivery sequence.
+The reusable loop does not own product tasks, mounts, memory or pots authority.
+Provider extraction can be behavior-preserving and independent; loop integration
+must respect tool-wait, cancellation, event ordering and context transitions.
+
+The user deferred the secure server-to-App connection mechanism. Preserve the
+independent-client requirements above while leaving authentication/topology for
+separate review. Android already connects to Gateway directly; no new public
+Node/agent port, bypass of Gateway authorization, or inbound phone listener is
+implied. Model-provider subscription OAuth is separate from pirc App login.
+
 ## Flutter Web: evaluation only
 
 A shared Flutter client could reduce duplicate UI and state logic. It is not
@@ -318,12 +411,14 @@ replace arbitrary content with simplified output or authorize WebView fallback.
 - Map existing Chat projects, directory workspaces and sessions to the new
   concepts without resetting IDs, breaking deep links or moving user files.
   Define aliasing if new conversation/task IDs are needed.
-- Old sessions remain readable and controllable with their original authority.
-  Do not restart running agents or assign new tools just because navigation changed.
+- Navigation migration alone preserves old sessions and their authority. An
+  explicit project departure or mount revocation is a separate transition that
+  may require stopping/rebuilding the old execution; do not confuse the two.
 - Preserve memory provenance, deletion/forget semantics, uploads and project
   ownership. Moving a conversation must not reinterpret which prior project or
   conversation created a memory. Define cross-project move/deletion behavior
-  before enabling that operation; global memory policy is unchanged.
+  before enabling that operation. Project-scoped collaboration is newly under
+  discussion; existing global memory is not silently re-scoped or migrated.
 - Preserve pending approvals, schedule/calendar targets, delegation references
   and checkpoint recovery provenance. Migration must not duplicate scheduled
   runs, replay a command or resume a stopped task.
@@ -344,8 +439,10 @@ All unchecked work is future work; no stage grants implementation authority.
 - [x] Record the user's direction and separate present behavior from proposals.
 - [x] Draft concept relationships, lifecycle boundaries and primary journeys.
 - [x] Define independent-App criteria and keep Flutter Web optional.
-- [ ] Review the draft with the user, especially context transitions, project
-      moves, task creation and direct control versus pirc coordination.
+- [x] Record the 2026-10-24 user requirements: configured workspaces, project
+      mounts/unmounting, shared collaboration, task emphasis and attributed pots.
+- [ ] Confirm running transitions, old project context after departure, mount
+      defaults and project-note semantics; detailed choices remain unresolved.
 - [ ] Inventory existing API/storage identities against each proposed concept and
       resolve incompatible lifecycle/permission rules before a schema proposal.
 
@@ -353,7 +450,10 @@ All unchecked work is future work; no stage grants implementation authority.
 
 - [ ] Specify task/attempt/decision transitions, command fencing and event recovery.
 - [ ] Specify native identity/bootstrap, renewal and scoped management transitions.
-- [ ] Specify safe context handoffs, memory provenance and deletion/move behavior.
+- [ ] Specify safe mount/context handoffs, memory provenance and deletion/move
+      behavior, including descendants, offline hosts and interrupted transitions.
+- [ ] Specify project board/notes and structured resource waiting, reusing existing
+      team/task and Node write-broker behavior without adding competing authority.
 - [ ] Define migration/version compatibility, staged rollout and fallback criteria.
 - [ ] Sketch Web and App journeys in the existing design language; do not copy
       current Chat/Work navigation simply to preserve screenshot parity.
@@ -364,7 +464,9 @@ All unchecked work is future work; no stage grants implementation authority.
       identity, then environment-bound execution and canonical task tracking.
 - [ ] Propose App setup/synchronization independence as a parallel contract concern,
       with mobile-only acceptance for every delivered flow.
-- [ ] Add pirc overview and durable decisions before expanding proactive discovery.
+- [ ] Add pots overview, authenticated dispatch attribution and durable decisions
+      before expanding proactive discovery; use the combined sequence in the
+      [library integration plan](pots-and-library-extraction.md).
 - [ ] Add scoped observation, quiet suggestions and authorized coordination.
 - [ ] Evaluate Flutter Web separately; retain the current Web until acceptance
       supports an explicit migration decision.
@@ -373,39 +475,52 @@ All unchecked work is future work; no stage grants implementation authority.
 
 No scenario below has been executed by this documentation task.
 
-| Scenario                                       | Required outcome                                                                                      |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Open/abandon several empty drafts              | No permanent sessions or allocated worktrees; first-send retries create only one conversation         |
-| Discuss, then implement                        | Same visible conversation; explicit environment and authority; no blanket assistant-memory transfer   |
-| Plain project without a repository             | Normal chat/files organization without forcing directory or Node selection                            |
-| Move conversation / change default environment | Running bindings, historical provenance and permissions unchanged; unsupported moves refused          |
-| Multiple agents and an external editor         | No hidden overwrite; isolated attempts or explicit conflicts; checkpoints preserve later user changes |
-| User takes over a pirc-managed task            | Stale assistant commands fenced; running work status shown; no silent reclaim                         |
-| All desktop Web pages closed                   | Phone can sign in, create/continue work, answer decisions and perform authorized management           |
-| App suspended / notification missed            | Backend tasks persist; phone reconciles inbox/status when opened; real push tested separately         |
-| Same confirmation on two devices               | One recorded outcome; duplicate is shown as handled; stale notifications cannot execute it again      |
-| Network fails during send or approval          | Draft/outcome preserved; reconnect reconciles status without blind replay                             |
-| Gateway works but Node is offline              | Overview/cached state remains useful; affected execution clearly unavailable                          |
-| Credential revoked / account switched          | Authority ends and account data is isolated; no stale credential retry loop                           |
-| Suggestion ignored or snoozed                  | No execution, repeated nagging or automatic widening of observation scope                             |
-| Upgrade existing data                          | Links, memories, schedules, approvals and recoveries remain attributable; no duplicate work           |
+| Scenario                                       | Required outcome                                                                                                                  |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Open/abandon several empty drafts              | No phantom sessions; workspace choices retained; explicit user-created folders are not deleted; first-send retries are idempotent |
+| Discuss, then implement                        | Same visible conversation; explicit environment and authority; no blanket assistant-memory transfer                               |
+| Plain project without a repository             | Managed empty workspace supports ordinary chat; selected folder/config mounts work without requiring a Git repository             |
+| Move conversation / change default environment | Display/default changes do not redirect active work; membership change revokes project-derived access through a fenced transition |
+| Multiple agents and an external editor         | No hidden overwrite; isolated attempts or explicit conflicts; checkpoints preserve later user changes                             |
+| User takes over a pirc-managed task            | Stale assistant commands fenced; running work status shown; no silent reclaim                                                     |
+| All desktop Web pages closed                   | Phone can sign in, create/continue work, answer decisions and perform authorized management                                       |
+| App suspended / notification missed            | Backend tasks persist; phone reconciles inbox/status when opened; real push tested separately                                     |
+| Same confirmation on two devices               | One recorded outcome; duplicate is shown as handled; stale notifications cannot execute it again                                  |
+| Network fails during send or approval          | Draft/outcome preserved; reconnect reconciles status without blind replay                                                         |
+| Gateway works but Node is offline              | Overview/cached state remains useful; affected execution clearly unavailable                                                      |
+| Credential revoked / account switched          | Authority ends and account data is isolated; no stale credential retry loop                                                       |
+| Suggestion ignored or snoozed                  | No execution, repeated nagging or automatic widening of observation scope                                                         |
+| Upgrade existing data                          | Links, memories, schedules, approvals and recoveries remain attributable; no duplicate work                                       |
 
-## Decisions still open
+Additional acceptance: leaving while a shell/child is active cannot report
+unmounted prematurely; an unavailable Node leaves the transition pending; old
+project board retrieval is refused after departure; temporary file contention is
+visible and release wakes a waiter without replaying a stale edit. A forged
+"pots" text label never obtains dispatch authority.
 
-Recommended defaults are proposals to review, not blockers to writing this plan:
+## Decisions still open — discuss one at a time
 
-1. **Execution handoff:** how to preserve conversation continuity across different
-   agent contexts. Recommend explicit attributed handoffs and bounded context,
-   rather than mutating a privileged process into a repository executor.
-2. **Project structure and moves:** nesting depth and cross-project context/file
-   transfer semantics. Recommend a simple initial organization model; no implicit
-   filesystem moves or memory ownership changes.
-3. **Task creation:** when an ordinary request becomes tracked work. Recommend
-   explicit user requests and clearly announced long/background work, without a
-   mandatory task form for every message.
-4. **Native identity:** mechanism, management reauthentication and renewal policy.
-   Preserve security while removing the required desktop-Web step.
-5. **Proactivity:** initial observation scopes, analysis budget, digest frequency
-   and quiet-hour defaults. Recommend opt-in scopes and bounded event-driven work.
-6. **Flutter Web:** retain as evaluation until the difficult interaction surfaces
-   pass agreed criteria. No framework migration is necessary to begin domain design.
+1. **Project departure and context:** confirm stop/rebuild behavior for active
+   attempts, and whether old project-derived messages stay eligible as future
+   model input. Recommendation: revoke live access immediately through a fenced
+   transition, preserve visible history, and choose context handling explicitly;
+   do not promise that old information has been forgotten.
+2. **Workspace setup/switching:** allocation timing for drafts, main cwd with
+   several mounts, read/write defaults, running-switch behavior and initial
+   same-Node restriction. The ability to configure/mount/create folders is agreed.
+3. **Shared project information:** durable board and project notes versus a single
+   freeform shared memory, rule editing, retention and conflicts. Recommend board
+   plus scoped notes plus host-reported resource waiting, with separate authority.
+4. **Task threshold:** long/background and multi-agent work should be tracked;
+   define automatic creation and completion/acceptance criteria without making
+   ordinary chat cumbersome. Do not equate task creation with execution approval.
+5. **pots controls:** initial scopes, standing dispatch grants, takeover, budgets,
+   quiet hours and responsibility lifecycle. Product references do not authorize
+   unrestricted computer access or every referenced integration.
+6. **Native identity/topology:** deferred at the user's request; evaluate secure
+   App independence without exposing raw Node/tool endpoints. Provider OAuth
+   extraction does not solve this login problem.
+7. **Library decisions:** crate names, neutral model types/config split, optional
+   OAuth/features, local/Send contract, error representation and eventual license.
+   Preserve all six routes first; investigate consolidation separately.
+8. **Flutter Web:** evaluation only after the shared behavior contract is stable.

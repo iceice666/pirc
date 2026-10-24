@@ -23,8 +23,13 @@ distinguish projects, conversations, tasks and execution environments, and make
 the App independently usable. pirc may discover and suggest relevant work quietly;
 execution remains governed by user-granted authority. Flutter Web is evaluation
 only. Domain relationships and workflows come before new interface implementation.
-Only planning is authorized at this stage. Existing security/data-loss issues and
-acceptance gaps below remain valid; this does not mark mobile parity complete.
+The 2026-10-24 clarification adds configurable conversation workspaces, shared
+project mounts/rules, project departure revocation, collaboration boards and
+attributed **pirc pots** coordination. [pots and reusable Rust foundations](pots-and-library-extraction.md)
+connects those requirements to the proposed provider/loop extraction, with
+confirmed coupling, corrections and staged acceptance gates. Only planning is
+authorized. Existing security/data-loss issues and acceptance gaps below remain
+valid; this does not mark mobile parity complete.
 
 ## Existing work and acceptance backlog
 
@@ -82,12 +87,15 @@ acceptance gaps below remain valid; this does not mark mobile parity complete.
    observational; Linux runtime, real-device acceptance and reviewed disposal
    remain follow-ups. Publication still requires an explicit request.
 
-## Shelved: project-only memory (B)
+## Project-only memory (B): collaboration design reopened, migration still shelved
 
-**Not queued for implementation.** Global memory remains preferred. Reopen only
-if a project's notes must be kept out of global memory; project deletion accepts
-that other chats may re-learn deleted notes. The restricted profile is shelved
-with B. Hard deletion (D) is implemented, not blocked on B.
+On 2026-10-24 the user proposed project-scoped boards/shared notes and withdrawal
+of project-specific content on departure. This reopens the collaboration/context
+boundary for [architecture discussion](unified-conversations.md), not automatic
+implementation of the old B design. Existing global USER/MEMORY remains as-is;
+full re-scoping, the old restricted profile and migration remain undecided.
+Hard deletion (D) is implemented, not blocked on this discussion. Unmounting alone
+does not erase old conversation content, copies or previously learned notes.
 
 If reopened, retain the design constraints:
 
