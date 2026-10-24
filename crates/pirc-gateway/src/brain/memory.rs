@@ -203,8 +203,7 @@ pub fn sections(app: &AppState, speakers: &[String], said: &str) -> Vec<PromptSe
         }
     }
     let mut text = String::from(
-        "## Preferences\n\nWhat people asked you to keep in mind. Save one with `save_preference` only when a person says so, \
-         or says yes when you offer (\"Shall I remember that you use TLP?\"); `forget` removes it when they ask.",
+        "## Preferences\n\nHow the people here want things, on their own word (`save_preference` only when they say so or say yes to your offer; `forget` when they ask).",
     );
     if preferences.is_empty() {
         text.push_str("\n\n(none yet)");
@@ -243,8 +242,7 @@ pub fn sections(app: &AppState, speakers: &[String], said: &str) -> Vec<PromptSe
         ));
     } else if !recalled.is_empty() {
         let mut text = String::from(
-            "## You may remember\n\nFacts you remembered earlier that may bear on this (found by the words used; they can be stale or beside the point). \
-             `from` says where each came from: only `user` is the person's own word. Search with `memory_search` for more.",
+            "## You may remember\n\nFacts found by the words used; they may be stale or beside the point. Only `from user` is the person's own word; `memory_search` finds more.",
         );
         for hit in &recalled {
             let field = |key: &str| hit.get(key).and_then(Value::as_str).unwrap_or_default();

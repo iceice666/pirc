@@ -30,8 +30,24 @@ const MAX_DEBOUNCE_MS: i64 = 60_000;
 const SETTINGS_FILE: &str = "brain.json";
 
 /// The brain without a `SOUL.md`.
-const HOST_IDENTITY: &str = "You are pirc, the household's assistant. You talk with the people of the household in chat rooms, where several of them may be present.
-Answer directly and plainly; say what you did and what you could not do.";
+const HOST_IDENTITY: &str = "You are pirc. You live in this household's gateway and talk with its people in chat rooms, where several of them may be present, \
+the way a colleague does in a team chat: you have your own views and say them, you do what was asked without ceremony, and when you do not know, you say so or ask.";
+
+/// How the brain talks when `CHAT.md` does not say otherwise: a chat
+/// register, not a report. The house rules come after and win.
+pub const TALKING: &str = "## Talking\n\n\
+This is a chat, not a report. These are the defaults; the house rules come after them and win where they differ.\n\
+- Write like a person typing in a team chat: usually one to three sentences of plain prose. No headings, no bold labels, \
+no bullet lists unless someone asks for a list. One thought per message.\n\
+- Answer the question. Do not restate it, do not open by announcing what you are about to do, do not close by offering more help.\n\
+- Do not narrate your tools. The room already shows what you remembered, which loop you opened or closed and which worker you called; \
+never repeat it in your own words. Say only what the room cannot see: the answer, your view, the question back.\n\
+- Several messages arrived together: reply to what matters, in the order it was said; not every line needs an answer.\n\
+- When something takes a while (a worker, a search), a few words before you start are enough (\"looking\"), \
+and the result comes as another message when you have it.\n\
+- Have a view. When something seems a bad idea, say so plainly and why, in a sentence; then do what the person decides.\n\
+- When you are unsure what was meant, ask one question instead of guessing or covering every case.\n\
+- Write in the language people write in. Names of tools, files and commands stay as they are.";
 
 /// Which prompt file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -189,7 +205,7 @@ fn replace(
 }
 
 /// The brain's system prompt for a turn in `room`: its persona, the room it
-/// speaks in, then the house rules.
+/// speaks in, how it talks, then the house rules.
 pub fn sections(config_dir: &Path, room: &Room) -> Vec<PromptSection> {
     let soul = inspect(config_dir, PromptName::Soul);
     let mut sections = vec![if soul.text.is_empty() {
@@ -202,9 +218,15 @@ pub fn sections(config_dir: &Path, room: &Room) -> Vec<PromptSection> {
         "Room",
         "built-in",
         format!(
-            "You are speaking in the room #{}. Each message from people starts with who said it (`name: text`); messages that arrive together are one batch, so answer them together. You have no files, shell or computer of your own: the tools you are given are all you can use.",
+            "You are speaking in the room #{}. Each message from people starts with who said it (`name: text`); messages that arrive together are one batch: read them all, then answer. You have no files, shell or computer of your own: the tools you are given are all you can use.",
             room.name
         ),
+    ));
+    sections.push(PromptSection::new(
+        "talking",
+        "Talking",
+        "built-in default",
+        TALKING,
     ));
     let rules = inspect(config_dir, PromptName::Chat);
     if !rules.text.is_empty() {
@@ -327,15 +349,17 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         let plain = sections(dir.path(), &room("plants"));
-        assert_eq!(ids(&plain), ["soul", "room"]);
+        assert_eq!(ids(&plain), ["soul", "room", "talking"]);
         assert_eq!(plain[0].text, HOST_IDENTITY);
         assert!(plain[1].text.contains("#plants"));
+        assert!(plain[2].text.starts_with("## Talking"));
         write(dir.path(), PromptName::Soul, "You are Mo.").unwrap();
         write(dir.path(), PromptName::Chat, "No emoji.").unwrap();
         let custom = sections(dir.path(), &room("plants"));
-        assert_eq!(ids(&custom), ["soul", "room", "chat-md"]);
+        // The house rules come last: they win over the talking defaults.
+        assert_eq!(ids(&custom), ["soul", "room", "talking", "chat-md"]);
         assert_eq!(
-            (custom[0].text.as_str(), custom[2].text.as_str()),
+            (custom[0].text.as_str(), custom[3].text.as_str()),
             ("You are Mo.", "No emoji.")
         );
     }

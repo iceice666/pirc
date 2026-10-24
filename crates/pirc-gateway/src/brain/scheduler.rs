@@ -863,9 +863,9 @@ fn report_section(count: usize) -> PromptSection {
         "built-in",
         format!(
             "## Worker reports\n\n\
-             Nobody spoke: {what}, and the room has not been told. Read what follows, then tell the people here in one message, \
-             in your own words and as briefly as it allows, what came of it; do not paste a report. \
-             The whole of each report is in its worker's thread."
+             Nobody spoke: {what}, and the room has not been told. Tell the people here what came of it in one message, \
+             the way you would tell a colleague: what got done, what to look at, what went wrong, in a few sentences. \
+             Not a report and not a list; the whole of it is in the worker's thread."
         ),
     )
 }

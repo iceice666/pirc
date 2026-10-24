@@ -887,12 +887,9 @@ pub fn section(app: &App, face_id: &str) -> (pirc_agent::context::PromptSection,
     open.sort_by_key(|open_loop| !mine(open_loop));
     let clock = json!({ "zone": app.config.timezone });
     let mut text = format!(
-        "## Open loops\n\nIt is {} now. These are the things still open between you and the people here: always in front of you until they are closed. \
-         Open one with `open_loop` when something stays unresolved or someone asks to be reminded (\"remind me about the meeting on Wednesday\"), \
-         with a time anchor when it has a time (`at`, or `cron` when it repeats; `autoClose` when the time is the thing itself, like a meeting or a deadline). \
-         Use `touch_loop` when one comes up, `update_loop` when it changes, and `close_loop` with the reason once it is resolved or someone says it no longer matters; \
-         `reopen_loop` when they say it is not done. `from` says where each came from: only `user` is the people's own word. \
-         Past {OPEN_LIMIT}, the ones without a time that were mentioned least recently go to memory.",
+        "## Open loops\n\nIt is {} now. What is still open between you and the people here, in front of you until it is closed \
+         (`open_loop` when something stays unresolved or someone asks to be reminded; `touch_loop` when one comes up, `update_loop`, `close_loop` with the reason, `reopen_loop`). \
+         Only `from user` is the people's own word. Past {OPEN_LIMIT}, the ones without a time that were mentioned least recently go to memory.",
         when(now, &clock),
     );
     if open.is_empty() {

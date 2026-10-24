@@ -482,7 +482,7 @@ async fn a_new_soul_applies_to_the_next_turn() {
     })
     .await;
     let asked = model.asked();
-    assert!(asked[0].system_prompt.contains("the household's assistant"));
+    assert!(asked[0].system_prompt.contains("this household's gateway"));
     assert!(asked[1].system_prompt.starts_with("You are Mo."));
     assert!(asked[1].system_prompt.contains("#general"));
 }
