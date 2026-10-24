@@ -1264,5 +1264,19 @@
   "Running: {0}": "Running: {0}",
   "Completed {0} operations": "Completed {0} operations",
   "Activity details": "Activity details",
-  "{0} failed": "{0} failed"
+  "{0} failed": "{0} failed",
+  "Remove workspace": "Remove workspace",
+  "Remove workspace…": "Remove workspace…",
+  "Remove workspace?": "Remove workspace?",
+  "Removing…": "Removing…",
+  "Remove “{0}” from pirc?": "Remove “{0}” from pirc?",
+  "Could not remove this workspace. Try again.": "Could not remove this workspace. Try again.",
+  "Hides this workspace and its sessions from pirc and pauses its schedules. Your files and history are kept.": "Hides this workspace and its sessions from pirc and pauses its schedules. Your files and history are kept.",
+  "Repository files, session transcripts, uploads and memories are not deleted. Project links remain, marked as removed.": "Repository files, session transcripts, uploads and memories are not deleted. Project links remain, marked as removed.",
+  "Stop running sessions before removing it. Workspaces with another user’s sessions or schedules cannot be removed.": "Stop running sessions before removing it. Workspaces with another user’s sessions or schedules cannot be removed.",
+  "To restore a directory workspace and its history, add the same directory on the same device again. Paused schedules stay paused.": "To restore a directory workspace and its history, add the same directory on the same device again. Paused schedules stay paused.",
+  "This workspace uses a separate directory per session. Adding another creates a new workspace; it does not restore this one.": "This workspace uses a separate directory per session. Adding another creates a new workspace; it does not restore this one.",
+  "Connect the device to verify that this workspace is idle before removing it.": "Connect the device to verify that this workspace is idle before removing it.",
+  "Only directories eligible for Add workspace can be restored there. Configured paths outside the device’s home directory have no UI restore.": "Only directories eligible for Add workspace can be restored there. Configured paths outside the device’s home directory have no UI restore.",
+  "Removal does not stop existing background jobs or terminals. Stop them first if needed.": "Removal does not stop existing background jobs or terminals. Stop them first if needed."
 }

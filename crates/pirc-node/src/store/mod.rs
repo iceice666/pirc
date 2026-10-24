@@ -514,6 +514,8 @@ pub trait Store {
     fn list_workspaces(&self) -> ApiResult<Vec<Workspace>>;
     /// 404 "Workspace not found"; 409 while it is being deleted.
     fn get_workspace(&self, workspace_id: &str) -> ApiResult<Workspace>;
+    /// By canonical path; 409 while the matching workspace is being deleted.
+    fn find_workspace_by_path(&self, canonical_path: &str) -> ApiResult<Option<Workspace>>;
     /// The workspace even while it is being deleted (the deletion's own lookups).
     fn find_workspace(&self, workspace_id: &str) -> ApiResult<Option<Workspace>>;
     fn workspace_deletion(&self, workspace_id: &str) -> ApiResult<Option<SessionDeletion>>;
@@ -971,6 +973,17 @@ impl Store for Connection {
             ));
         }
         Ok(workspace)
+    }
+
+    fn find_workspace_by_path(&self, canonical_path: &str) -> ApiResult<Option<Workspace>> {
+        let id: Option<String> = self
+            .query_row(
+                "SELECT id FROM workspaces WHERE canonical_path=?1",
+                [canonical_path],
+                |row| row.get(0),
+            )
+            .optional()?;
+        id.map(|id| self.get_workspace(&id)).transpose()
     }
 
     fn find_workspace(&self, workspace_id: &str) -> ApiResult<Option<Workspace>> {

@@ -55,6 +55,7 @@ pub fn routes(config: &NodeConfig) -> Vec<Route> {
     let deletions = Arc::new(Deletions::default());
     let mut routes = vec![
         post("/api/workspaces", create_workspace),
+        get("/api/workspaces/:id/removal-check", workspace_removal_check),
         delete("/api/workspaces/:id", {
             let deletions = deletions.clone();
             move |node, request| delete_workspace(node, request, deletions.clone())
@@ -225,6 +226,7 @@ struct NewWorkspace {
     mode: ModeId,
     path: Option<String>,
     display_name: String,
+    restore_existing: bool,
 }
 
 fn new_workspace(body: &Value, _chat_node: bool) -> ApiResult<NewWorkspace> {
@@ -248,6 +250,7 @@ fn new_workspace(body: &Value, _chat_node: bool) -> ApiResult<NewWorkspace> {
         mode,
         path: optional_string(map, "path", true, 1, 4096)?,
         display_name: string(map, "displayName", true, 1, 200)?,
+        restore_existing: optional_bool(map, "restoreExisting")?.unwrap_or(false),
     })
 }
 
@@ -274,6 +277,7 @@ async fn create_workspace(node: Node, request: Request) -> ApiResult<Response> {
         mode: mode_id,
         path,
         display_name,
+        restore_existing,
     } = new_workspace(request.json(), config.chat())?;
     let mode = node.mode(&mode_id)?;
     if mode.workdir == Workdir::PerSession {
@@ -364,13 +368,33 @@ async fn create_workspace(node: Node, request: Request) -> ApiResult<Response> {
             "Workspace must not contain or sit inside {clash} (pirc's state or a credential store)"
         )));
     }
-    let workspace = node.db.lock().add_workspace(
-        &workspace_id(),
-        &config.node_id,
-        &display_name,
-        &canonical,
-        mode_id,
-    )?;
+    let workspace = {
+        let db = node.db.lock();
+        // The gateway may restore a removed directory registration, but only
+        // after the same path checks as creation. Never reinterpret or update
+        // an existing workspace (its identity and history must stay intact).
+        let existing = if restore_existing {
+            db.find_workspace_by_path(&canonical)?
+        } else {
+            None
+        };
+        if let Some(workspace) = existing {
+            if workspace.mode != mode_id {
+                return Err(ApiError::conflict(
+                    "Workspace ID or path is already registered",
+                ));
+            }
+            workspace
+        } else {
+            db.add_workspace(
+                &workspace_id(),
+                &config.node_id,
+                &display_name,
+                &canonical,
+                mode_id,
+            )?
+        }
+    };
     // Its roles, as registration reports them, for delegations.
     let mut body = serde_json::to_value(&workspace).unwrap_or_default();
     let details = crate::link::workspace_details(&node, vec![Some(canonical)]).await;
@@ -383,6 +407,48 @@ async fn create_workspace(node: Node, request: Request) -> ApiResult<Response> {
         }
     }
     created(json!({ "workspace": body }))
+}
+
+/// Read-only authoritative preflight. The gateway fences its mutations before
+/// calling this; delayed activity frames do not prove that the node is idle.
+async fn workspace_removal_check(node: Node, request: Request) -> ApiResult<Response> {
+    let db = node.db.lock();
+    let workspace = db.get_workspace(param(&request, "id"))?;
+    let mode = node.mode(&workspace.mode).ok();
+    if workspace.id == "chats"
+        || workspace.mode.as_str() == "chat"
+        || mode.is_some_and(|mode| mode.projects || mode.full_assistant())
+    {
+        return Err(ApiError::bad_request(
+            "Only Work workspaces can be removed; chat projects use Delete project",
+        ));
+    }
+    let other: bool = db.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sessions WHERE workspace_id=?1 AND (owner_user IS NULL OR owner_user!=?2))",
+        rusqlite::params![workspace.id, request.user],
+        |row| row.get(0),
+    )?;
+    if other {
+        return Err(ApiError::forbidden(
+            "Workspace contains another user's sessions",
+        ));
+    }
+    let busy: bool = db.query_row(
+        "SELECT EXISTS(SELECT 1 FROM runs r JOIN sessions s ON s.id=r.session_id WHERE s.workspace_id=?1 AND r.status IN ('queued','running','waiting_input','stopping')) OR EXISTS(SELECT 1 FROM sessions WHERE workspace_id=?1 AND runner_state='starting') OR EXISTS(SELECT 1 FROM commands c JOIN sessions s ON s.id=c.session_id WHERE s.workspace_id=?1 AND c.status IN ('received','dispatched'))",
+        [&workspace.id],
+        |row| row.get(0),
+    )?;
+    let sessions = db.workspace_sessions(&workspace.id)?;
+    if busy
+        || sessions.iter().any(|session| {
+            node.runners.is_starting(&session.id) || !node.writes.leases(&session.id).is_empty()
+        })
+    {
+        return Err(ApiError::conflict(
+            "Stop active sessions and delegations before removing this workspace",
+        ));
+    }
+    Ok(Response::json(json!({ "idle": true })))
 }
 
 /// `chatProject`: the workspace, which must be a chat project.
@@ -1623,6 +1689,21 @@ mod tests {
         let chat = parsed(json!({ "kind": "chat", "displayName": " Trip " })).unwrap();
         assert_eq!(chat.mode.as_str(), "chat");
         assert_eq!(chat.display_name, "Trip");
+        assert!(!chat.restore_existing);
+        for restore in [false, true] {
+            assert_eq!(
+                parsed(json!({ "path": "~/p", "displayName": "P", "restoreExisting": restore }))
+                    .unwrap()
+                    .restore_existing,
+                restore
+            );
+        }
+        for restore in [Value::Null, json!("true"), json!(1), json!({})] {
+            assert!(
+                parsed(json!({ "path": "~/p", "displayName": "P", "restoreExisting": restore }))
+                    .is_err()
+            );
+        }
         let directory = parsed(json!({ "path": " ~/p ", "displayName": "P", "extra": 1 })).unwrap();
         assert_eq!(directory.mode.as_str(), "directory");
         assert_eq!(directory.path.as_deref(), Some("~/p"));
@@ -1664,6 +1745,383 @@ mod tests {
             user: "test-user".into(),
             body: Body::Json(body),
         }
+    }
+
+    async fn workspace_test_node() -> (tempfile::TempDir, Node) {
+        use pirc_config::Env;
+        use pirc_protocol::NodeRole;
+        use pirc_protocol::mode::default_work;
+
+        let dir = tempfile::tempdir_in("/tmp").unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let state = root.join("state").display().to_string();
+        let config_dir = root.join("config").display().to_string();
+        let home = root.display().to_string();
+        let env = Env::new(
+            [
+                ("PIRC_NODE_ID", "test-node"),
+                ("PIRC_NODE_TOKEN", "0123456789abcdef0123456789abcdef"),
+                ("PIRC_DAEMON_URL", "ws://127.0.0.1:8787"),
+                ("PIRC_ALLOWED_USERS", "test-user"),
+                ("PIRC_STATE_DIR", state.as_str()),
+                ("PIRC_CONFIG_DIR", config_dir.as_str()),
+                ("PIRC_MODES", "directory,review"),
+                ("PIRC_BROWSER", "false"),
+                ("HOME", home.as_str()),
+            ],
+            &root,
+        );
+        let config = NodeConfig::load(&env, NodeRole::Node).unwrap();
+        let node = crate::services::Services::start(config, env).await.unwrap();
+        let mut review = default_work();
+        review.id = ModeId::new("review").unwrap();
+        node.replace_modes(vec![default_work(), review]).await;
+        (dir, node)
+    }
+
+    #[tokio::test]
+    async fn workspace_removal_check_is_read_only_and_uses_authoritative_node_state() {
+        use crate::store::{CommandStatus, RunStatus, RunnerState};
+        let (_dir, node) = workspace_test_node().await;
+        let root = Path::new(node.env.get("HOME").unwrap());
+        let repository = root.join("repository");
+        std::fs::create_dir(&repository).unwrap();
+        node.db
+            .lock()
+            .add_workspace(
+                "repo",
+                "test-node",
+                "Repository",
+                &repository.to_string_lossy(),
+                ModeId::new("directory").unwrap(),
+            )
+            .unwrap();
+        let session = node
+            .db
+            .lock()
+            .create_session("repo", "/private/session", "test-user")
+            .unwrap();
+        let check = || workspace_removal_check(node.clone(), request(Some("repo"), json!({})));
+        let changes = node.db.lock().total_changes();
+        let idle = check().await.unwrap();
+        assert_eq!(idle.status, 200);
+        assert_eq!(idle.body, Some(json!({ "idle": true })));
+        assert_eq!(node.db.lock().total_changes(), changes);
+
+        // No link/activity publication is needed for any of these refusals.
+        let run = node.db.lock().create_run(&session.id).unwrap();
+        for status in [
+            RunStatus::Queued,
+            RunStatus::Running,
+            RunStatus::WaitingInput,
+            RunStatus::Stopping,
+        ] {
+            node.db.lock().update_run(&run, status, None).unwrap();
+            let changes = node.db.lock().total_changes();
+            assert_eq!(check().await.unwrap_err().status, 409);
+            assert_eq!(node.db.lock().total_changes(), changes);
+        }
+        node.db
+            .lock()
+            .update_run(&run, RunStatus::Succeeded, None)
+            .unwrap();
+        assert!(check().await.is_ok());
+        node.db
+            .lock()
+            .set_runner_state(&session.id, RunnerState::Starting)
+            .unwrap();
+        assert_eq!(check().await.unwrap_err().status, 409);
+        node.db
+            .lock()
+            .set_runner_state(&session.id, RunnerState::Ready)
+            .unwrap();
+        assert!(check().await.is_ok());
+        node.db
+            .lock()
+            .receive_command(
+                "command",
+                &session.id,
+                "hash",
+                &json!({"type":"prompt","message":"hello"}),
+            )
+            .unwrap();
+        for status in [CommandStatus::Received, CommandStatus::Dispatched] {
+            node.db
+                .lock()
+                .update_command("command", status, None, None)
+                .unwrap();
+            assert_eq!(check().await.unwrap_err().status, 409);
+        }
+        node.db
+            .lock()
+            .update_command("command", CommandStatus::Accepted, None, None)
+            .unwrap();
+        assert!(check().await.is_ok());
+        assert_eq!(
+            node.writes.acquire(&session.id, &repository),
+            crate::write_broker::WriteGrant::Granted
+        );
+        assert_eq!(check().await.unwrap_err().status, 409);
+        node.writes.release(&session.id);
+        assert!(check().await.is_ok());
+
+        let other = node
+            .db
+            .lock()
+            .create_session("repo", "/private/other", "other-user")
+            .unwrap();
+        let changes = node.db.lock().total_changes();
+        assert_eq!(check().await.unwrap_err().status, 403);
+        assert_eq!(node.db.lock().total_changes(), changes);
+        node.db
+            .lock()
+            .execute(
+                "UPDATE sessions SET owner_user=NULL WHERE id=?",
+                [&other.id],
+            )
+            .unwrap();
+        assert_eq!(check().await.unwrap_err().status, 403);
+        assert!(repository.is_dir());
+        node.close().await;
+    }
+
+    #[tokio::test]
+    async fn workspace_removal_check_rejects_chat_projects_and_missing_workspaces() {
+        use pirc_protocol::mode::{default_chat, default_work};
+        let (_dir, node) = workspace_test_node().await;
+        let mut chat = default_chat();
+        chat.id = ModeId::new("review").unwrap();
+        node.replace_modes(vec![default_work(), chat]).await;
+        let created = create_workspace(
+            node.clone(),
+            request(None, json!({ "mode":"review", "displayName":"Project" })),
+        )
+        .await
+        .unwrap();
+        let id = created.body.unwrap()["workspace"]["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert_eq!(
+            workspace_removal_check(node.clone(), request(Some(&id), json!({})))
+                .await
+                .unwrap_err()
+                .status,
+            400
+        );
+        let mut scratch = default_chat();
+        scratch.id = ModeId::new("review").unwrap();
+        scratch.projects = false;
+        scratch.assistant = pirc_protocol::mode::AssistantAccess::User;
+        node.replace_modes(vec![default_work(), scratch]).await;
+        assert!(
+            workspace_removal_check(node.clone(), request(Some(&id), json!({})))
+                .await
+                .is_ok()
+        );
+        node.replace_modes(Vec::new()).await;
+        assert!(
+            workspace_removal_check(node.clone(), request(Some(&id), json!({})))
+                .await
+                .is_ok()
+        );
+        assert_eq!(
+            workspace_removal_check(node.clone(), request(Some("missing"), json!({})))
+                .await
+                .unwrap_err()
+                .status,
+            404
+        );
+        node.close().await;
+    }
+
+    #[tokio::test]
+    async fn restore_existing_workspace_preserves_identity_history_and_files() {
+        let (_dir, node) = workspace_test_node().await;
+        let root = Path::new(node.env.get("HOME").unwrap());
+        let repository = root.join("repository");
+        std::fs::create_dir(&repository).unwrap();
+        let file = repository.join("keep.txt");
+        std::fs::write(&file, "workspace contents").unwrap();
+        let first = create_workspace(
+            node.clone(),
+            request(
+                None,
+                json!({ "path": repository, "displayName": "Original" }),
+            ),
+        )
+        .await
+        .unwrap();
+        assert_eq!(first.status, 201);
+        let original = first.body.unwrap()["workspace"].clone();
+        let id = original["id"].as_str().unwrap();
+        let response = create_session(node.clone(), request(None, json!({ "workspaceId": id })))
+            .await
+            .unwrap();
+        let session_id = response.body.unwrap()["session"]["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let session = node.db.lock().get_session(&session_id).unwrap();
+        let history = Path::new(&session.private_session_path).join("session.jsonl");
+        std::fs::write(&history, "saved session history\n").unwrap();
+        let saved_session = serde_json::to_value(&session).unwrap();
+        let saved_workspace =
+            serde_json::to_value(node.db.lock().get_workspace(id).unwrap()).unwrap();
+        let changes = node.db.lock().total_changes();
+
+        for flag in [None, Some(false)] {
+            let mut body = json!({ "path": repository, "displayName": "Replacement" });
+            if let Some(flag) = flag {
+                body["restoreExisting"] = json!(flag);
+            }
+            let error = create_workspace(node.clone(), request(None, body))
+                .await
+                .unwrap_err();
+            assert_eq!(error.status, 409);
+            assert_eq!(error.code, "conflict");
+        }
+        // Resolve a symlink and ~/ alias before looking up the existing row.
+        let alias = root.join("alias");
+        std::os::unix::fs::symlink(&repository, &alias).unwrap();
+        for path in [repository.display().to_string(), "~/alias".to_owned()] {
+            let restored = create_workspace(
+                node.clone(),
+                request(
+                    None,
+                    json!({
+                        "path": path, "displayName": "Replacement", "restoreExisting": true,
+                    }),
+                ),
+            )
+            .await
+            .unwrap();
+            assert_eq!(restored.status, 201);
+            assert_eq!(restored.body.unwrap()["workspace"], original);
+        }
+        let mismatch = create_workspace(
+            node.clone(),
+            request(None, json!({
+                "path": repository, "displayName": "Review", "mode": "review", "restoreExisting": true,
+            })),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(mismatch.status, 409);
+        assert_eq!(mismatch.code, "conflict");
+        assert_eq!(node.db.lock().total_changes(), changes);
+        assert_eq!(node.db.lock().list_workspaces().unwrap().len(), 1);
+        assert_eq!(
+            serde_json::to_value(node.db.lock().get_workspace(id).unwrap()).unwrap(),
+            saved_workspace
+        );
+        assert_eq!(
+            serde_json::to_value(node.db.lock().get_session(&session_id).unwrap()).unwrap(),
+            saved_session
+        );
+        assert_eq!(node.db.lock().workspace_sessions(id).unwrap().len(), 1);
+        assert_eq!(
+            std::fs::read_to_string(&history).unwrap(),
+            "saved session history\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            "workspace contents"
+        );
+
+        // The flag still creates a new workspace if no row matches.
+        let fresh = root.join("fresh");
+        std::fs::create_dir(&fresh).unwrap();
+        let response = create_workspace(
+            node.clone(),
+            request(
+                None,
+                json!({ "path": fresh, "displayName": "Fresh", "restoreExisting": true }),
+            ),
+        )
+        .await
+        .unwrap();
+        assert_ne!(response.body.unwrap()["workspace"]["id"], original["id"]);
+        node.close().await;
+    }
+
+    #[tokio::test]
+    async fn restore_existing_workspace_does_not_bypass_path_validation_or_deletion_fence() {
+        let (_dir, node) = workspace_test_node().await;
+        let root = Path::new(node.env.get("HOME").unwrap());
+        let file = root.join("file");
+        std::fs::write(&file, "not a directory").unwrap();
+        // Seed even invalid paths: an existing row must not bypass validation.
+        let outside = tempfile::tempdir_in("/tmp").unwrap();
+        let state = node.config.state_dir.canonicalize().unwrap();
+        let sensitive = root.join(".ssh");
+        std::fs::create_dir(&sensitive).unwrap();
+        let outside = outside.path().canonicalize().unwrap();
+        for (index, path) in [&state, &sensitive, &outside].into_iter().enumerate() {
+            node.db
+                .lock()
+                .add_workspace(
+                    &format!("invalid_{index}"),
+                    "test-node",
+                    "Invalid",
+                    &path.to_string_lossy(),
+                    ModeId::new("directory").unwrap(),
+                )
+                .unwrap();
+        }
+        let changes = node.db.lock().total_changes();
+        for (path, status) in [
+            ("relative".to_owned(), 400),
+            (root.join("missing").display().to_string(), 400),
+            (file.display().to_string(), 400),
+            (root.display().to_string(), 403),
+            (state.display().to_string(), 403),
+            (sensitive.display().to_string(), 403),
+            (outside.display().to_string(), 403),
+        ] {
+            let error = create_workspace(
+                node.clone(),
+                request(
+                    None,
+                    json!({ "path": path, "displayName": "Restored", "restoreExisting": true }),
+                ),
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(error.status, status, "{path}: {error:?}");
+        }
+        assert_eq!(node.db.lock().total_changes(), changes);
+        let repository = root.join("repository");
+        std::fs::create_dir(&repository).unwrap();
+        node.db
+            .lock()
+            .add_workspace(
+                "deleting",
+                "test-node",
+                "Deleting",
+                &repository.to_string_lossy(),
+                ModeId::new("directory").unwrap(),
+            )
+            .unwrap();
+        node.db
+            .lock()
+            .begin_workspace_deletion("deleting", "test-user")
+            .unwrap();
+        let changes = node.db.lock().total_changes();
+        let error = create_workspace(
+            node.clone(),
+            request(
+                None,
+                json!({ "path": repository, "displayName": "Restored", "restoreExisting": true }),
+            ),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.status, 409);
+        assert!(error.message.contains("being deleted"));
+        assert_eq!(node.db.lock().total_changes(), changes);
+        assert!(repository.is_dir());
+        node.close().await;
     }
 
     #[tokio::test]

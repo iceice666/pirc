@@ -40,6 +40,12 @@ also exercises the platform verifier; on macOS and Windows it exercises WebPKI
 rather than the native OS trust service. This test does not validate the
 deployed host's CA updates or any external command-line tool's trust store.
 
+## Work workspace removal: gateway schema 1009
+
+This update adds non-destructive **Remove workspace…** under a Work workspace’s Settings in the web app. Back up gateway state before upgrading: schema **1009** adds durable removal markers, and older gateways refuse the new schema. Deploy the updated gateway, web assets and coding nodes together. The node protocol and node schema are unchanged, but removal requires the new node idle-check endpoint; an older node fails closed without removing the workspace.
+
+Removal retains files and history, pauses schedules and survives node reconnects. Restoring an eligible directory through **Add workspace** requires the updated node’s same-path restoration support. Per-session workspaces and configured paths outside the device home currently have no UI restore; read the confirmation and [workspace removal guide](../guides/session-ui.md#removing-a-work-workspace-web) before removing them.
+
 ## 0.9.3: memory, calendar and checkpoints
 
 Upgrade the Gateway and every chat/coding Node together: **node protocol 14**

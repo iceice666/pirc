@@ -452,6 +452,151 @@ async fn node_workspaces() {
     insta::assert_json_snapshot!("node_workspaces", t.into_value());
 }
 
+/// Removal fences only gateway access; re-adding the canonical directory
+/// must recover the node's original workspace and saved conversation.
+#[tokio::test(flavor = "multi_thread")]
+async fn removed_directory_readd_restores_real_node_history() {
+    let Some(mut cluster) = Cluster::start().await else {
+        return;
+    };
+    let home = cluster.dir.path().canonicalize().unwrap().join("node-home");
+    let repository = home.join("restore-repository");
+    fs::create_dir_all(&repository).unwrap();
+    let sentinel = repository.join("keep.txt");
+    fs::write(&sentinel, "never delete repository contents\n").unwrap();
+    std::os::unix::fs::symlink(&repository, home.join("restore-alias")).unwrap();
+    let api = cluster.api();
+    let headers = browser_headers();
+    let add =
+        |path: &str, name: &str| json!({ "nodeId": NODE_ID, "path": path, "displayName": name });
+    let created = api
+        .send(
+            "POST",
+            "/api/workspaces",
+            &headers,
+            Some(add("~/restore-repository", "Original repository")),
+        )
+        .await;
+    assert_eq!(created.status, 201, "{}", created.body);
+    let workspace = created.body["workspace"].clone();
+    let id = workspace["id"].as_str().unwrap();
+    let workspace_path = format!("/api/workspaces/{}", urlencode(id));
+    let duplicate = api
+        .send(
+            "POST",
+            "/api/workspaces",
+            &headers,
+            Some(add("~/restore-alias", "Must not rename")),
+        )
+        .await;
+    assert_eq!(duplicate.status, 409, "{}", duplicate.body);
+    let (session_id, _) = run_once(&cluster, id, "Remember this conversation").await;
+    let session_path = format!("/api/sessions/{session_id}/snapshot");
+    let before = api.send("GET", &session_path, &headers, None).await;
+    assert_eq!(before.status, 200, "{}", before.body);
+    let history = before.body["history"].clone();
+    assert!(history.is_array(), "{}", before.body);
+    assert!(history.to_string().contains("Remember this conversation"));
+    assert!(history.to_string().contains("Done."));
+    let schedule = api
+        .send(
+            "POST",
+            "/api/schedules",
+            &headers,
+            Some(
+                json!({ "workspaceId": id, "prompt": "A future task", "at": "2040-01-01T09:00Z" }),
+            ),
+        )
+        .await;
+    assert_eq!(schedule.status, 201, "{}", schedule.body);
+    let schedule_id = schedule.body["schedule"]["id"].as_str().unwrap();
+    assert_eq!(schedule.body["schedule"]["status"], "active");
+
+    // An agent_settled event can narrowly precede the final activity frame.
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let removed = api.send("DELETE", &workspace_path, &headers, None).await;
+        if removed.status == 204 {
+            break;
+        }
+        assert_eq!(removed.status, 409, "{}", removed.body);
+        assert!(tokio::time::Instant::now() < deadline, "{}", removed.body);
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+    for restarted in [false, true] {
+        if restarted {
+            cluster.restart_node(false).await;
+            cluster.restart_gateway(false).await;
+        }
+        for (path, field, hidden_id) in [
+            ("/api/workspaces", "workspaces", id),
+            ("/api/sessions", "sessions", session_id.as_str()),
+        ] {
+            let listed = api.send("GET", path, &headers, None).await;
+            assert_eq!(listed.status, 200, "{}", listed.body);
+            assert!(
+                listed.body[field]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|row| row["id"] != hidden_id)
+            );
+        }
+        let denied = api.send("GET", &session_path, &headers, None).await;
+        assert_eq!(denied.status, 404, "{}", denied.body);
+        let denied = api
+            .send(
+                "POST",
+                "/api/sessions",
+                &headers,
+                Some(json!({ "workspaceId": id })),
+            )
+            .await;
+        assert_eq!(denied.status, 404, "{}", denied.body);
+        assert_eq!(
+            fs::read_to_string(&sentinel).unwrap(),
+            "never delete repository contents\n"
+        );
+    }
+    let restored = api
+        .send(
+            "POST",
+            "/api/workspaces",
+            &headers,
+            Some(add("~/restore-alias", "Must not rename")),
+        )
+        .await;
+    assert_eq!(restored.status, 201, "{}", restored.body);
+    assert_eq!(restored.body["workspace"], workspace);
+    let restored_history = api.send("GET", &session_path, &headers, None).await;
+    assert_eq!(restored_history.status, 200, "{}", restored_history.body);
+    assert_eq!(restored_history.body["history"], history);
+    assert_eq!(restored_history.body["session"]["id"], session_id);
+    let sessions = api.send("GET", "/api/sessions", &headers, None).await;
+    assert!(
+        sessions.body["sessions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["id"] == session_id)
+    );
+    let schedule = api
+        .send(
+            "GET",
+            &format!("/api/schedules/{schedule_id}"),
+            &headers,
+            None,
+        )
+        .await;
+    assert_eq!(schedule.status, 200, "{}", schedule.body);
+    assert_eq!(schedule.body["schedule"]["status"], "paused");
+    assert!(schedule.body["schedule"]["nextRunAt"].is_null());
+    assert_eq!(
+        fs::read_to_string(&sentinel).unwrap(),
+        "never delete repository contents\n"
+    );
+}
+
 fn urlencode(id: &str) -> String {
     id.replace(':', "%3A")
 }

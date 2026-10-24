@@ -14,6 +14,18 @@ Recent places pinned sessions first, has Show done and workspace filtering, and 
 
 Scheduled sessions carry a clock/origin indicator and a header link to their schedule. Delegated sessions carry their own origin indicator and link to the initiating chat. Chat headers omit jobs and the control pill.
 
+## Removing a Work workspace (web)
+
+Open the workspace by clicking its name under **Work**, choose its **Settings** tab, then **Remove workspace…**. The confirmation explains what is retained before anything changes. This is not Chat’s destructive **Delete project** action.
+
+Removal unregisters the workspace from the gateway’s lists, including its sessions, and pauses its active schedules. It does **not** delete repository files, session transcripts, uploads or memories on the node. Project links are retained and report the workspace as removed. A durable gateway marker keeps it hidden across node reconnects, restarts and configuration-based announcements. The node must be online and support the idle-check endpoint; the gateway fences new commands before checking the node’s authoritative run and write-lease state. A failed check rolls the temporary fence back.
+
+An active run, write lease, delegation or schedule run prevents removal; stop that work first. A workspace containing another user’s sessions or schedules cannot be removed. The top-level Chats and chat projects cannot use this action.
+
+To restore a directory workspace, use **Add workspace** on the same device with the same directory and mode. Its original identity, name and history are retained; paused schedules stay paused until you resume them. A per-session Work workspace has no directory-based restore shortcut: adding another creates a new workspace. Only paths eligible for **Add workspace** can be restored there: configured paths outside the device’s home directory currently have no UI restore. Retained data is not erased or purged by removal. Existing background jobs and terminals are not stopped; stop them before removal if needed.
+
+API: authenticated `DELETE /api/workspaces/:id` returns `204` on success (including retries by the same user), `403` for another user’s data, `409` while work is active or a removal check is in progress, `503` when the device is offline, or `400` for a chat workspace. An old node without the idle-check endpoint fails closed with `502`. Adding an existing directory restores it only if it was explicitly removed; ordinary duplicate registration remains a conflict.
+
 ## Writes and run cards
 
 Blocked writes fail immediately: they are not queued or retried. A sidebar lock marks only a lease holder, not the blocked session. The failed tool card names and links to the holder. There is no waiting-for-write-lease subtitle or composer lease banner; the broker's authority/coordination policy remains unchanged by these UI affordances.

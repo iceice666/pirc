@@ -266,6 +266,70 @@ describe('WorkspacePage', () => {
     expect(deleteButton()).toBeUndefined();
   });
 
+  it('offers non-destructive removal for Work workspaces, requires an online device, and excludes chat projects', async () => {
+    const props = render(directory);
+    const removeButton = () =>
+      [...target.querySelectorAll('button')].find((item) =>
+        item.textContent?.includes('Remove workspace…'),
+      );
+    tab('Settings').click();
+    flushSync();
+    expect(removeButton()?.disabled).toBe(false);
+    app.nodes = [];
+    flushSync();
+    expect(removeButton()?.disabled).toBe(true);
+    expect(target.textContent).toContain('Connect the device to verify');
+    app.nodes = [{ id: 'node' } as never];
+    props.workspace = { ...directory, available: false };
+    flushSync();
+    tab('Settings').click();
+    flushSync();
+    expect(removeButton()?.disabled).toBe(false);
+    props.workspace = { ...project, mode: 'chat', available: false };
+    flushSync();
+    tab('Settings').click();
+    flushSync();
+    expect(removeButton()).toBeUndefined();
+    props.workspace = project;
+    flushSync();
+    tab('Settings').click();
+    flushSync();
+    expect(removeButton()).toBeUndefined();
+    props.workspace = { ...project, id: 'home:chats', available: false };
+    flushSync();
+    tab('Settings').click();
+    flushSync();
+    expect(removeButton()).toBeUndefined();
+    await flush();
+  });
+
+  it('opens a named removal confirmation from workspace Settings and Cancel makes no request', () => {
+    HTMLDialogElement.prototype.showModal = function () {
+      this.open = true;
+    };
+    HTMLDialogElement.prototype.close = function () {
+      this.open = false;
+      this.dispatchEvent(new Event('close'));
+    };
+    const remove = vi.spyOn(app, 'removeWorkspace').mockResolvedValue();
+    render(directory);
+    tab('Settings').click();
+    flushSync();
+    [...target.querySelectorAll('button')]
+      .find((b) => b.textContent?.includes('Remove workspace…'))!
+      .click();
+    flushSync();
+    const dialog = target.querySelector<HTMLDialogElement>(
+      '[aria-labelledby="remove-workspace-title"]',
+    )!;
+    expect(dialog.open).toBe(true);
+    expect(dialog.textContent).toContain('Remove “Code” from pirc?');
+    [...dialog.querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Cancel')!.click();
+    flushSync();
+    expect(dialog.open).toBe(false);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
   it("shows a scratch workspace's capabilities only, whatever its legacy kind", async () => {
     app.modeCatalog = demoModes;
     app.workspaces = [directory, project, scratch];

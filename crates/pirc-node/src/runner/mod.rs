@@ -282,6 +282,17 @@ impl RunnerManager {
         self.lock().runners.get(session_id).cloned()
     }
 
+    /// Removal must not mistake a start waiting to update its database row
+    /// for idle. Avoid lock inversion with the store: uncertainty is busy.
+    pub(crate) fn is_starting(&self, session_id: &str) -> bool {
+        let state = match self.state.try_lock() {
+            Ok(state) => state,
+            Err(std::sync::TryLockError::Poisoned(state)) => state.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => return true,
+        };
+        state.starting.contains_key(session_id)
+    }
+
     /// Called with the caller's lifecycle lock held. The manager can be busy
     /// starting a runner while waiting for that same lock, so neither lock may
     /// be acquired by waiting here. Uncertain state counts as an active writer.

@@ -34,6 +34,7 @@ mod slots;
 mod sockets;
 mod util;
 mod web_search;
+mod workspace_removal;
 mod ws;
 
 use std::net::SocketAddr;

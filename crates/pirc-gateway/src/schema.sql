@@ -189,5 +189,16 @@ CREATE TABLE project_links (
   PRIMARY KEY (project_workspace_id, workspace_id)
 );
 
+-- BEGIN workspace removals (1009)
+-- Unregister only: node files, sessions and memory remain intact. Registration
+-- never clears this fence; only an explicit Add workspace restores it.
+CREATE TABLE workspace_removals (
+  workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+  owner_user TEXT NOT NULL, removed_at INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'removed' CHECK(status IN ('checking','removed')),
+  token TEXT NOT NULL DEFAULT ''
+);
+-- END workspace removals (1009)
+
 -- The one chat node this gateway is bound to.
 CREATE TABLE assistant_node (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), node_id TEXT NOT NULL);

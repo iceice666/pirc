@@ -1264,5 +1264,19 @@
   "Running: {0}": "執行中：{0}",
   "Completed {0} operations": "已完成 {0} 項操作",
   "Activity details": "操作詳情",
-  "{0} failed": "{0} 項失敗"
+  "{0} failed": "{0} 項失敗",
+  "Remove workspace": "移除工作區",
+  "Remove workspace…": "移除工作區…",
+  "Remove workspace?": "要移除工作區嗎？",
+  "Removing…": "正在移除…",
+  "Remove “{0}” from pirc?": "要從 pirc 移除「{0}」嗎？",
+  "Could not remove this workspace. Try again.": "無法移除此工作區，請再試一次。",
+  "Hides this workspace and its sessions from pirc and pauses its schedules. Your files and history are kept.": "從 pirc 隱藏此工作區及其對話，並暫停其排程。你的檔案和歷史紀錄都會保留。",
+  "Repository files, session transcripts, uploads and memories are not deleted. Project links remain, marked as removed.": "不會刪除儲存庫檔案、對話紀錄、上傳檔案或記憶。專案連結會保留，並標示為已移除。",
+  "Stop running sessions before removing it. Workspaces with another user’s sessions or schedules cannot be removed.": "請先停止執行中的對話。若工作區含有其他使用者的對話或排程，就無法移除。",
+  "To restore a directory workspace and its history, add the same directory on the same device again. Paused schedules stay paused.": "若要恢復目錄工作區及其歷史紀錄，請在同一裝置重新加入相同目錄。已暫停的排程不會自動恢復。",
+  "This workspace uses a separate directory per session. Adding another creates a new workspace; it does not restore this one.": "此工作區會為每個對話使用獨立目錄。重新加入會建立新的工作區，不會恢復此工作區。",
+  "Connect the device to verify that this workspace is idle before removing it.": "請連線至此裝置，確認工作區沒有執行中的工作後再移除。",
+  "Only directories eligible for Add workspace can be restored there. Configured paths outside the device’s home directory have no UI restore.": "只有符合「新增工作區」條件的目錄才能從該處恢復。透過設定加入、位於裝置家目錄以外的路徑，目前無法從 UI 恢復。",
+  "Removal does not stop existing background jobs or terminals. Stop them first if needed.": "移除不會停止既有背景工作或終端機。如有需要，請先自行停止。"
 }

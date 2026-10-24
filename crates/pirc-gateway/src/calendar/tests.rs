@@ -577,6 +577,7 @@ fn migration_from_previous_version_preserves_existing_schedules() {
     let path = dir.path().join("db.sqlite");
     let c = Connection::open(&path).unwrap();
     c.execute_batch(include_str!("../schema.sql")).unwrap();
+    c.execute_batch("DROP TABLE workspace_removals;").unwrap();
     schedule(&c, "0 9 * * *");
     c.pragma_update(None, "user_version", 1006).unwrap();
     drop(c);

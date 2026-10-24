@@ -353,3 +353,16 @@ it('answers relayed confirms and stops delegations without a control lease', asy
   expect(calls[2]![1]).toMatchObject({ method: 'POST' });
   expect(calls[2]![1].body).toBeUndefined();
 });
+
+it('removes a workspace with an encoded id and DELETE, without a destructive body', async () => {
+  const fetch = vi.fn(
+    async (_url: string, _init?: RequestInit) => new Response(null, { status: 204 }),
+  );
+  vi.stubGlobal('fetch', fetch);
+  await api.removeWorkspace('node:repo /one');
+  expect(fetch).toHaveBeenCalledWith(
+    '/api/workspaces/node%3Arepo%20%2Fone',
+    expect.objectContaining({ method: 'DELETE' }),
+  );
+  expect(fetch.mock.calls[0]?.[1]?.body).toBeUndefined();
+});

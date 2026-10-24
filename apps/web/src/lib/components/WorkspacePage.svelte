@@ -20,6 +20,7 @@
   } from '@lucide/svelte';
   import DeleteChatDialog from './dialogs/DeleteChatDialog.svelte';
   import DeleteProjectDialog from './dialogs/DeleteProjectDialog.svelte';
+  import RemoveWorkspaceDialog from './dialogs/RemoveWorkspaceDialog.svelte';
   import { tick } from 'svelte';
   import { rovingFocus } from '../a11y';
   import { app } from '../app.svelte';
@@ -122,6 +123,7 @@
 
   let deletingChat: SessionSummary | undefined = $state();
   let deletingProject: Workspace | undefined = $state();
+  let removingWorkspace: Workspace | undefined = $state();
   let renamingId: string | undefined = $state();
   let renameValue = $state('');
   let renameInput: HTMLInputElement | undefined = $state();
@@ -361,6 +363,30 @@
                 <ProjectTrust workspaceId={workspace.id} />
               {/if}
             {/if}
+            {#if !chat && !mode.projects && workspace.mode !== 'chat' && !(workspace.kind === 'chat' && !workspace.mode) && workspace.id !== `${workspace.hostId}:chats`}
+              <section class="settings-section">
+                <h3>{tr('Remove workspace')}</h3>
+                <p class="note">
+                  {tr(
+                    'Hides this workspace and its sessions from pirc and pauses its schedules. Your files and history are kept.',
+                  )}
+                </p>
+                <button
+                  class="button ghost danger"
+                  type="button"
+                  disabled={app.usingDemo || !online}
+                  onclick={() => (removingWorkspace = workspace)}
+                  ><Trash2 size={15} /> {tr('Remove workspace…')}</button
+                >
+                {#if !online && !app.usingDemo}
+                  <p class="note">
+                    {tr(
+                      'Connect the device to verify that this workspace is idle before removing it.',
+                    )}
+                  </p>
+                {/if}
+              </section>
+            {/if}
             {#if mode.projects && !topLevel}
               <section class="settings-section">
                 <h3>{tr('Delete project')}</h3>
@@ -497,6 +523,7 @@
 
 <DeleteChatDialog bind:session={deletingChat} />
 <DeleteProjectDialog bind:workspace={deletingProject} />
+<RemoveWorkspaceDialog bind:workspace={removingWorkspace} />
 
 <style>
   .workspace-page {

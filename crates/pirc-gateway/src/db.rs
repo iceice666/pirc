@@ -21,7 +21,7 @@ use crate::util::{new_id, now_ms, safe_json};
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1008;
+pub const SCHEMA_VERSION: i64 = 1009;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = concat!(
@@ -92,6 +92,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
            owner_user TEXT
          );",
     ),
+    (1009, "CREATE TABLE workspace_removals (workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE, owner_user TEXT NOT NULL, removed_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'removed' CHECK(status IN ('checking','removed')), token TEXT NOT NULL DEFAULT '');"),
 ];
 
 /// Placeholder name of a new session until the agent's title replaces it.
@@ -872,6 +873,9 @@ impl Store for Connection {
             [stamp],
         )?;
             tx.execute("DELETE FROM leases", [])?;
+            // Removal probes have no node-side effects. An interrupted probe
+            // must be retried, not leave a permanent checking fence.
+            tx.execute("DELETE FROM workspace_removals WHERE status='checking'", [])?;
             Ok(RecoveredStartup { unknown_commands })
         })
     }
@@ -938,7 +942,7 @@ impl Store for Connection {
 
     fn list_workspaces(&self) -> ApiResult<Vec<Workspace>> {
         let mut statement = self.prepare(
-            "SELECT * FROM workspaces WHERE id NOT IN (SELECT workspace_id FROM workspace_deletions) AND id NOT IN (SELECT workspace_id FROM checkpoint_workspace_owners) ORDER BY display_name",
+            "SELECT * FROM workspaces WHERE id NOT IN (SELECT workspace_id FROM workspace_deletions) AND id NOT IN (SELECT workspace_id FROM workspace_removals WHERE status='removed') AND id NOT IN (SELECT workspace_id FROM checkpoint_workspace_owners) ORDER BY display_name",
         )?;
         let rows = statement.query_map([], Workspace::from_row)?;
         Ok(rows.collect::<Result<_, _>>()?)
@@ -948,6 +952,7 @@ impl Store for Connection {
         let mut statement = self.prepare(
             "SELECT w.* FROM workspaces w
              WHERE w.id NOT IN (SELECT workspace_id FROM workspace_deletions)
+               AND w.id NOT IN (SELECT workspace_id FROM workspace_removals WHERE status='removed')
                AND NOT EXISTS (
                  SELECT 1 FROM checkpoint_workspace_owners c
                  WHERE c.workspace_id=w.id AND (c.owner_user IS NULL OR c.owner_user!=?)
@@ -1024,6 +1029,9 @@ impl Store for Connection {
     }
 
     fn get_workspace(&self, workspace_id: &str) -> ApiResult<Workspace> {
+        if crate::workspace_removal::removed(self, workspace_id)? {
+            return Err(ApiError::not_found("Workspace not found"));
+        }
         let workspace = self
             .find_workspace(workspace_id)?
             .ok_or_else(|| ApiError::not_found("Workspace not found"))?;
@@ -1278,7 +1286,7 @@ impl Store for Connection {
     }
 
     fn list_sessions(&self) -> ApiResult<Vec<Session>> {
-        let mut statement = self.prepare(&format!("{SESSION_SELECT} ORDER BY updated_at DESC"))?;
+        let mut statement = self.prepare(&format!("{SESSION_SELECT} WHERE workspace_id NOT IN (SELECT workspace_id FROM workspace_removals WHERE status='removed') ORDER BY updated_at DESC"))?;
         let rows = statement.query_map([], Session::from_row)?;
         Ok(rows.collect::<Result<_, _>>()?)
     }
@@ -1361,6 +1369,9 @@ impl Store for Connection {
                 "Session belongs to another user",
             ));
         }
+        if crate::workspace_removal::removed(self, &session.workspace_id)? {
+            return Err(ApiError::not_found("Workspace not found"));
+        }
         if !deleting {
             self.require_session_available(session_id)?;
         }
@@ -1421,6 +1432,10 @@ impl Store for Connection {
     }
 
     fn require_session_available(&self, session_id: &str) -> ApiResult<()> {
+        let session = self.get_session(session_id)?;
+        if crate::workspace_removal::removed(self, &session.workspace_id)? {
+            return Err(ApiError::not_found("Workspace not found"));
+        }
         if self.session_deletion(session_id)?.is_some() {
             return Err(ApiError::new(
                 409,
@@ -1496,6 +1511,7 @@ impl Store for Connection {
         payload: &Value,
     ) -> ApiResult<(Command, bool)> {
         atomic(self, |tx| {
+            tx.require_session_available(session_id)?;
             let existing = tx
                 .query_row(
                     "SELECT * FROM commands WHERE id=?",
@@ -1826,6 +1842,12 @@ mod tests {
                 "",
             );
         // And schema 1005's delegation columns.
+        let start = first
+            .find("-- BEGIN workspace removals (1009)")
+            .expect("schema.sql changed: update this test");
+        let end = first.find("-- END workspace removals (1009)").unwrap()
+            + "-- END workspace removals (1009)".len();
+        let first = format!("{}{}", &first[..start], &first[end..]);
         let first = first.replace(", digest TEXT", "");
         let first = first.replace(
             ",\n  -- How it started: 'approved' (the user's card), 'auto' (the chat's delegation\n  -- approval policy), NULL before it started. The origins of the chat's context\n  -- the agent reported (JSON array), and the user's own words it verified\n  -- (quote, JSON array of their message entry ids).\n  dispatch TEXT, origins_json TEXT, quote TEXT, quote_entry_ids TEXT\n",
@@ -1936,6 +1958,8 @@ mod tests {
                 schema = schema.replace(", digest TEXT", "");
             }
             conn.execute_batch(&schema).unwrap();
+            conn.execute_batch("DROP TABLE workspace_removals;")
+                .unwrap();
             if !checkpoints {
                 conn.execute_batch("DROP TABLE checkpoint_workspace_owners;")
                     .unwrap();

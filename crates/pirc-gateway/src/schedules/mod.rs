@@ -41,6 +41,7 @@ use crate::util::{hex, now_ms, random_bytes};
 
 pub use cron::{Zone, format_time};
 pub use ops::{Op, parse_op, run_op};
+pub(crate) use timer::arm;
 pub use timer::start;
 
 pub const THINKING_LEVELS: &[&str] = &["off", "minimal", "low", "medium", "high", "xhigh", "max"];
@@ -1431,6 +1432,12 @@ impl Ctx<'_> {
     }
 
     fn fall(&mut self, schedule: &Schedule, at: i64, grace: i64) -> ApiResult<()> {
+        // A removal probe is temporary: leave its due time and history intact
+        // until the probe either commits removal or rolls its fence back.
+        let checking: bool = self.conn.query_row("SELECT EXISTS(SELECT 1 FROM workspace_removals WHERE workspace_id=? AND status='checking')", [&schedule.spec.workspace_id], |row| row.get(0))?;
+        if checking {
+            return Ok(());
+        }
         let due_at = schedule.next_run_at.unwrap_or(at);
         // The latest fire time that has passed: several slept through count once.
         let mut latest = due_at;

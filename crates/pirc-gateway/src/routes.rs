@@ -130,6 +130,17 @@ pub async fn list_nodes(
             let node_id = node["id"].as_str().unwrap_or_default().to_owned();
             if let Some(workspaces) = node["workspaces"].as_array_mut() {
                 workspaces.retain(|workspace| {
+                    let Some(local_id) = workspace["id"].as_str() else {
+                        return false;
+                    };
+                    if crate::workspace_removal::completed(
+                        &app.db.lock(),
+                        &format!("{node_id}:{local_id}"),
+                    )
+                    .unwrap_or(true)
+                    {
+                        return false;
+                    }
                     if workspace["checkpointPrivate"].as_bool() != Some(true) {
                         return true;
                     }
@@ -749,7 +760,7 @@ pub async fn create_workspace(
             json!({"mode":mode_id, "displayName":display_name})
         }
         _ => {
-            json!({"mode":mode_id, "path":trimmed(input.path.as_deref().ok_or_else(ApiError::invalid_input)?,4096)?, "displayName":display_name})
+            json!({"mode":mode_id, "path":trimmed(input.path.as_deref().ok_or_else(ApiError::invalid_input)?,4096)?, "displayName":display_name, "restoreExisting":true})
         }
     };
     let node_id = input.node_id;
@@ -796,15 +807,29 @@ pub async fn create_workspace(
     let mode = workspace.mode.clone();
     {
         let conn = app.db.lock();
-        conn.sync_remote_workspaces(
-            &node_id,
-            &[(workspace.id.clone(), workspace.display_name.clone(), mode)],
-        )?;
-        conn.set_workspace_repos(&node_id, &[(workspace.id.clone(), workspace.repo.clone())])?;
+        let id = format!("{node_id}:{}", workspace.id);
+        if conn.find_workspace(&id)?.is_some() && !crate::workspace_removal::removed(&conn, &id)? {
+            return Err(ApiError::new(
+                409,
+                "conflict",
+                "Workspace ID or path is already registered",
+            )
+            .into());
+        }
+        atomic(&conn, |conn| {
+            crate::workspace_removal::restore(conn, &id, &identity.user)?;
+            conn.sync_remote_workspaces(
+                &node_id,
+                &[(workspace.id.clone(), workspace.display_name.clone(), mode)],
+            )?;
+            conn.set_workspace_repos(&node_id, &[(workspace.id.clone(), workspace.repo.clone())])
+        })?;
     }
     let local_id = workspace.id.clone();
     app.nodes.add_workspace(&node_id, workspace, raw)?;
     app.directory_changed();
+    app.sessions_changed(Some(&identity.user));
+    app.schedules_changed(&identity.user);
     let stored = app
         .db
         .lock()

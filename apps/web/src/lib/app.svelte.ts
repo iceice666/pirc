@@ -462,15 +462,21 @@ class AppState {
     this.loading = false;
   }
 
+  #nodesRequest = 0;
   /** Refresh the node and workspace lists (they change as devices come and go). */
   async refreshNodes() {
     if (this.demo) return;
+    const request = ++this.#nodesRequest;
     try {
       const [online, available, modes] = await Promise.all([
         api.nodes(),
         api.workspaces(),
         this.#loadModes(),
       ]);
+      if (request !== this.#nodesRequest) return;
+      for (const workspace of this.workspaces) {
+        if (!available.some((item) => item.id === workspace.id)) this.hideWorkspace(workspace.id);
+      }
       this.nodes = online;
       this.workspaces = available;
       this.modeCatalog = modes;
@@ -902,6 +908,32 @@ class AppState {
     this.scheduleRevision++;
     // Each keeps its last list on failure: the deletion itself is done.
     void Promise.all([this.refreshNodes(), this.refreshMemory(), this.refreshSchedules()]);
+  }
+
+  /** Clear local navigation too when another client removes this workspace. */
+  private hideWorkspace(workspaceId: string) {
+    this.#sessionsVersion++;
+    if (this.draftWorkspaceId === workspaceId) this.discardDraftSession();
+    for (const session of this.sessions.filter((item) => item.workspaceId === workspaceId))
+      this.removeSession(session.id);
+    this.workspaces = this.workspaces.filter((item) => item.id !== workspaceId);
+    if (this.workspaceViewId === workspaceId) {
+      this.workspaceViewId = undefined;
+      this.view = 'session';
+      this.#address(
+        this.activeSessionId ? `?session=${encodeURIComponent(this.activeSessionId)}` : '?',
+      );
+    }
+  }
+
+  /** Unregister without deleting the workspace's files, sessions or memories. */
+  async removeWorkspace(workspaceId: string) {
+    if (this.demo) return;
+    await api.removeWorkspace(workspaceId);
+    ++this.#nodesRequest;
+    this.hideWorkspace(workspaceId);
+    this.scheduleRevision++;
+    void Promise.all([this.refreshNodes(), this.refreshSchedules()]);
   }
 
   /** Rename, pin or settle from the sidebar. Applied at once and rolled back on failure. */
@@ -1537,8 +1569,11 @@ class AppState {
   /** Add a workspace on a device. Throws with a displayable message on failure. */
   async createWorkspace(input: NewWorkspace) {
     const workspace = await api.createWorkspace(input);
+    ++this.#nodesRequest;
     this.workspaces = [...this.workspaces.filter((item) => item.id !== workspace.id), workspace];
     this.nodes = await api.nodes();
+    // Adding the same directory may restore a removed workspace and its sessions.
+    await this.refreshSessions();
     return workspace;
   }
 

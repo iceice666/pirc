@@ -379,6 +379,8 @@ export const api = {
       throw error;
     }
   },
+  removeWorkspace: (workspaceId: string) =>
+    request<void>(`/api/workspaces/${encodeURIComponent(workspaceId)}`, { method: 'DELETE' }),
   createWorkspace: async (input: NewWorkspace) =>
     (
       await request<{ workspace: Workspace }>('/api/workspaces', {

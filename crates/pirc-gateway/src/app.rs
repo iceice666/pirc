@@ -338,6 +338,10 @@ pub fn router(app: AppState) -> Router {
         )
         .route("/api/modes", get(routes::list_modes))
         .route(
+            "/api/workspaces/{workspace_id}",
+            delete(crate::workspace_removal::delete),
+        )
+        .route(
             "/api/workspaces/{workspace_id}/capabilities",
             get(routes::get_capabilities).patch(routes::patch_capabilities),
         )
@@ -429,6 +433,7 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
     ("GET", "/api/sessions/{id}/terminals/{terminal_id}/stream"),
     ("GET", "/api/sessions/{id}/browser/stream"),
     ("PUT", "/api/assistant/prompts/{name}"),
+    ("DELETE", "/api/workspaces/{workspace_id}"),
     ("GET", "/api/workspaces/{workspace_id}/capabilities"),
     ("PATCH", "/api/workspaces/{workspace_id}/capabilities"),
     ("GET", "/api/workspaces/{workspace_id}/links"),

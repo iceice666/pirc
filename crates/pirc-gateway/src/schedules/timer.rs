@@ -39,7 +39,7 @@ fn runtime(app: &App) -> Option<Arc<Runtime>> {
 }
 
 /// Look at the schedules again (the TS `arm()`); nothing before [`start`].
-pub(super) fn arm(app: &App) {
+pub(crate) fn arm(app: &App) {
     if let Some(runtime) = runtime(app) {
         runtime.arm.notify_one();
     }
@@ -111,19 +111,21 @@ pub(super) fn tick(app: &AppState) {
     }
 }
 
+pub(super) fn next_due(app: &AppState) -> ApiResult<Option<i64>> {
+    read(app, |ctx| {
+        Ok(ctx.conn.query_row(
+            "SELECT MIN(next_run_at) AS due FROM schedules WHERE status='active' AND next_run_at IS NOT NULL AND workspace_id NOT IN (SELECT workspace_id FROM workspace_removals WHERE status='checking')",
+            [],
+            |row| row.get::<_, Option<i64>>(0),
+        )?)
+    })
+}
+
 /// Sleep until the earliest due schedule (at most an hour), or until the
 /// schedules change.
 async fn run_timer(app: AppState, runtime: Arc<Runtime>) {
     loop {
-        let due = read(&app, |ctx| {
-            Ok(ctx.conn.query_row(
-                "SELECT MIN(next_run_at) AS due FROM schedules WHERE status='active' AND next_run_at IS NOT NULL",
-                [],
-                |row| row.get::<_, Option<i64>>(0),
-            )?)
-        })
-        .ok()
-        .flatten();
+        let due = next_due(&app).ok().flatten();
         match due {
             None => runtime.arm.notified().await,
             Some(due) => {

@@ -93,6 +93,7 @@ pub fn links(conn: &Connection, project_id: &str) -> ApiResult<Vec<Link>> {
 
 /// Replace a project's links with `workspace_ids` (directory workspaces).
 /// Links kept keep their creation time; the repository is the one known now.
+/// Existing removed or missing links keep their stored metadata unchanged.
 pub fn set_links(
     conn: &Connection,
     catalog: &pirc_config::modes::ModeCatalog,
@@ -100,18 +101,26 @@ pub fn set_links(
     workspace_ids: &[String],
 ) -> ApiResult<Vec<Link>> {
     require_project(conn, catalog, project_id)?;
-    let mut wanted: Vec<Workspace> = Vec::new();
+    let existing = links(conn, project_id)?;
+    let mut wanted: Vec<Link> = Vec::new();
     for id in workspace_ids {
-        if wanted.iter().any(|workspace| &workspace.id == id) {
+        if wanted.iter().any(|link| &link.workspace_id == id) {
             continue;
         }
-        let workspace = conn
-            .query_row(
-                "SELECT * FROM workspaces WHERE id=?",
-                [id],
-                Workspace::from_row,
-            )
-            .optional()?
+        let previous = existing.iter().find(|link| &link.workspace_id == id);
+        let workspace = conn.find_workspace(id)?;
+        if crate::workspace_removal::removed(conn, id)? || workspace.is_none() {
+            if let Some(link) = previous {
+                wanted.push(link.clone());
+                continue;
+            }
+            return Err(ApiError::new(
+                400,
+                "invalid_input",
+                format!("{id} is not a directory workspace"),
+            ));
+        }
+        let workspace = workspace
             .filter(|workspace| {
                 catalog
                     .modes
@@ -126,7 +135,13 @@ pub fn set_links(
                     format!("{id} is not a directory workspace"),
                 )
             })?;
-        wanted.push(workspace);
+        wanted.push(Link {
+            workspace_id: workspace.id,
+            repo: workspace
+                .repo
+                .or_else(|| previous.and_then(|link| link.repo.clone())),
+            created_at: previous.map_or_else(now_ms, |link| link.created_at),
+        });
     }
     if wanted.len() > MAX_LINKS {
         return Err(ApiError::new(
@@ -137,7 +152,7 @@ pub fn set_links(
     }
     let kept: Vec<&str> = wanted
         .iter()
-        .map(|workspace| workspace.id.as_str())
+        .map(|link| link.workspace_id.as_str())
         .collect();
     atomic(conn, |tx| {
         for link in links(tx, project_id)? {
@@ -148,11 +163,10 @@ pub fn set_links(
                 )?;
             }
         }
-        let at = now_ms();
-        for workspace in &wanted {
+        for link in &wanted {
             tx.execute(
                 "INSERT INTO project_links (project_workspace_id,workspace_id,repo,created_at) VALUES (?,?,?,?) ON CONFLICT(project_workspace_id,workspace_id) DO UPDATE SET repo=COALESCE(excluded.repo, project_links.repo)",
-                params![project_id, workspace.id, workspace.repo, at],
+                params![project_id, link.workspace_id, link.repo, link.created_at],
             )?;
         }
         links(tx, project_id)
@@ -223,8 +237,9 @@ pub fn view(app: &App, links: &[Link]) -> ApiResult<Value> {
             Some(workspace) => {
                 item["name"] = json!(workspace.display_name);
                 item["node"] = json!(workspace.host_id);
-                item["online"] = json!(workspace_online(app, &workspace));
-                item["removed"] = json!(removed(app, &workspace));
+                let unregistered = crate::workspace_removal::completed(&conn, &workspace.id)?;
+                item["online"] = json!(!unregistered && workspace_online(app, &workspace));
+                item["removed"] = json!(unregistered || removed(app, &workspace));
                 if workspace.repo.is_some() {
                     item["repo"] = json!(workspace.repo);
                 }

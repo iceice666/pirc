@@ -29,7 +29,8 @@ expression: t.into_value()
         "payload": {
           "displayName": "Project",
           "mode": "directory",
-          "path": "/srv/project"
+          "path": "/srv/project",
+          "restoreExisting": true
         },
         "url": "/api/workspaces",
         "user": "test@example.com"

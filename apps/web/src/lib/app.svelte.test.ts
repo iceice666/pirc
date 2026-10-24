@@ -696,3 +696,83 @@ describe('app asynchronous refreshes', () => {
     await expect(app.stopDelegation('d1')).resolves.toBe('Another device controls it');
   });
 });
+
+describe('workspace removal', () => {
+  function setup() {
+    app.demo = undefined;
+    app.workspaces = [workspace, { ...workspace, id: 'other' }];
+    app.sessions = [
+      { ...demoSnapshot.session, id: 'one', workspaceId: workspace.id },
+      { ...demoSnapshot.session, id: 'two', workspaceId: 'other' },
+    ];
+    vi.spyOn(app, 'refreshNodes').mockResolvedValue();
+    vi.spyOn(app, 'refreshSchedules').mockResolvedValue();
+  }
+  it('updates lists and navigation only after success, without deleting sessions or memories', async () => {
+    setup();
+    app.showWorkspace(workspace.id);
+    const remove = vi.spyOn(api, 'removeWorkspace').mockResolvedValue();
+    const deleteSession = vi.spyOn(api, 'deleteSession');
+    const memoryRevision = app.memoryRevision;
+    const scheduleRevision = app.scheduleRevision;
+    await app.removeWorkspace(workspace.id);
+    expect(remove).toHaveBeenCalledWith(workspace.id);
+    expect(app.workspaces.map((w) => w.id)).toEqual(['other']);
+    expect(app.sessions.map((s) => s.id)).toEqual(['two']);
+    expect(app.view).toBe('session');
+    expect(app.workspaceViewId).toBeUndefined();
+    expect(location.search).not.toContain('workspace=');
+    expect(deleteSession).not.toHaveBeenCalled();
+    expect(app.memoryRevision).toBe(memoryRevision);
+    expect(app.scheduleRevision).toBe(scheduleRevision + 1);
+  });
+  it('leaves the workspace and session state intact on a rejected request', async () => {
+    setup();
+    app.showWorkspace(workspace.id);
+    vi.spyOn(api, 'removeWorkspace').mockRejectedValue(new Error('Stop running sessions'));
+    await expect(app.removeWorkspace(workspace.id)).rejects.toThrow('Stop running sessions');
+    expect(app.workspaces).toHaveLength(2);
+    expect(app.sessions).toHaveLength(2);
+    expect(app.workspaceViewId).toBe(workspace.id);
+    expect(app.view).toBe('workspace');
+  });
+  it('clears an unsent conversation targeted at the removed workspace', async () => {
+    setup();
+    vi.spyOn(api, 'removeWorkspace').mockResolvedValue();
+    await app.createSession(workspace.id);
+    expect(app.draftWorkspaceId).toBe(workspace.id);
+    await app.removeWorkspace(workspace.id);
+    expect(app.draftWorkspaceId).toBeUndefined();
+    expect(app.isDraftSession).toBe(false);
+  });
+});
+
+it('closes a workspace removed in another client when directory lists refresh', async () => {
+  app.demo = undefined;
+  app.workspaces = [workspace];
+  app.sessions = [{ ...demoSnapshot.session, id: 'removed-session', workspaceId: workspace.id }];
+  app.showWorkspace(workspace.id);
+  vi.spyOn(api, 'nodes').mockResolvedValue([]);
+  vi.spyOn(api, 'workspaces').mockResolvedValue([]);
+  vi.spyOn(api, 'modes').mockResolvedValue([]);
+  await app.refreshNodes();
+  expect(app.workspaces).toEqual([]);
+  expect(app.sessions).toEqual([]);
+  expect(app.workspaceViewId).toBeUndefined();
+  expect(app.view).toBe('session');
+  expect(location.search).not.toContain('workspace=');
+});
+
+it('ignores an older directory refresh after a newer response removes the workspace', async () => {
+  app.demo = undefined;
+  app.workspaces = [workspace];
+  vi.spyOn(api, 'nodes').mockResolvedValue([]);
+  vi.spyOn(api, 'modes').mockResolvedValue([]);
+  const older = deferred<Workspace[]>();
+  vi.spyOn(api, 'workspaces').mockReturnValueOnce(older.promise).mockResolvedValueOnce([]);
+  const pending = app.refreshNodes();
+  await app.refreshNodes();
+  older.resolve([workspace]);
+  await pending;
+  expect(app.workspaces).toEqual([]);
+});

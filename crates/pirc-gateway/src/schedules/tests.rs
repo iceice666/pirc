@@ -879,3 +879,43 @@ fn specs_round_trip_as_the_ts_gateway_stored_them() {
             "thinking": null, "notify": "all" })
     );
 }
+
+#[tokio::test]
+async fn pending_workspace_removal_does_not_advance_pause_or_fail_due_schedules() {
+    let f = fixture();
+    let schedule = create(
+        &f.app,
+        json!({"workspace":"work:test", "prompt":"Summarize.", "cron":hourly()}),
+    )
+    .unwrap();
+    let due = now_ms() - 3_600_000;
+    sql(
+        &f.app,
+        "UPDATE schedules SET next_run_at=? WHERE id=?",
+        rusqlite::params![due, schedule.id],
+    );
+    let before = with(&f.app, |ctx| ctx.get(USER, &schedule.id)).unwrap();
+    sql(
+        &f.app,
+        "INSERT INTO workspace_removals (workspace_id,owner_user,removed_at,status,token) VALUES ('work:test',?,0,'checking','probe')",
+        [USER],
+    );
+    assert_eq!(super::timer::next_due(&f.app).unwrap(), None);
+    tick(&f.app);
+    let checking = with(&f.app, |ctx| ctx.get(USER, &schedule.id)).unwrap();
+    assert_eq!(checking.status, "active");
+    assert_eq!(checking.next_run_at, Some(due));
+    assert_eq!(checking.updated_at, before.updated_at);
+    assert!(runs(&f.app, &schedule.id).is_empty());
+    sql(
+        &f.app,
+        "DELETE FROM workspace_removals WHERE token='probe'",
+        [],
+    );
+    assert_eq!(super::timer::next_due(&f.app).unwrap(), Some(due));
+    tick(&f.app);
+    assert_eq!(runs(&f.app, &schedule.id).len(), 1);
+    let after = with(&f.app, |ctx| ctx.get(USER, &schedule.id)).unwrap();
+    assert_eq!(after.status, "active");
+    assert!(after.next_run_at.unwrap() > now_ms());
+}
