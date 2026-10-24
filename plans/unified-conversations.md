@@ -27,6 +27,70 @@ physical-device acceptance gaps remain recorded, not silently closed by this
 architecture proposal. The initial App scope remains Android; iOS transport is
 outside the previously agreed scope.
 
+## Confirmed decisions: context and live switching (2026-10-24)
+
+The user selected **A: preserve conversation context**. Leaving a project keeps
+existing dialogue/history eligible as model context. It removes project-derived
+mounts and new access to project folders, configuration, rules, board and notes.
+Do not clear or sanitize the old conversation as a side effect of departure.
+Previously read material may still be known; this is accepted, not an isolation
+claim about information already obtained. Stop injecting the departed project's
+rules as active configuration, even if their text remains in historical messages.
+
+The user also specified the running-workflow behavior:
+
+1. Switching/removing a workspace or mounted folder while an agent is running
+   first shows a warning explaining affected resources and in-flight work.
+2. Canceling leaves the workspace and execution unchanged. If the user proceeds,
+   revoke the removed access and reject subsequent stale/unauthorized operations
+   through enforced execution/sandbox boundaries; do not wait for task completion
+   or for the agent to approve the change.
+3. Deliver a trusted runtime event to the agent explaining that the **user**
+   changed/removed the workspace or mounts, what is now available and why an
+   affected operation was denied/interrupted. Deliver it at a safe event boundary
+   before accepting further effects; model notification alone is not enforcement.
+4. Keep the same visible conversation and its context. The agent may continue
+   within the remaining grants or ask the user if it needs clarification. The
+   application must not force a follow-up question or automatically restore the
+   removed mount, expand rights, select another directory or retry an old write
+   against the replacement workspace.
+
+### Enforcement implications to design, not existing functionality
+
+The requirement is authoritative revocation, not merely removing a UI item or
+returning an error from the next cooperative file tool. Current Linux bubblewrap
+mount plans and macOS sandbox-exec profiles are constructed for process launch
+(`crates/pirc-node/src/sandbox/{linux,macos}.rs`). No dynamic per-mount revocation
+mechanism was established by this review. Updating a policy object cannot be
+assumed to revoke a running shell's open descriptors or its background children.
+
+Proposed implementation contract, pending technical validation:
+
+- Treat the confirmed request as a versioned access transition. Immediately fence
+  new work under the old binding at the controlling service and execution host;
+  stale queued commands and approval results cannot recreate the removed access.
+- Stop/quiesce affected tool processes and descendants, retire their old sandbox
+  authority, and rebuild the execution sandbox where live enforcement is not
+  available. Preserve the conversation/model context and explain interrupted
+  tool outcomes. A preserved agent identity does not require the same OS process.
+- Publish the replacement binding only after its permissions are installed and
+  revocation has been acknowledged. Revalidate every subsequent effect against
+  the current generation and target; old proposals are not retargeted implicitly.
+- Switching must preserve original files and already completed effects. An
+  interrupted command may have partially changed files: record that uncertainty
+  and expose relevant checkpoints; do not claim rollback or replay it blindly.
+- An offline execution host cannot acknowledge immediate revocation. Show the
+  transition as pending/blocked, fence Gateway dispatch, and keep reconnecting
+  workers from resuming their old authority before reconciliation. Do not claim
+  that a remote offline process stopped at the instant the user tapped Confirm.
+- Show applying/completed/failed states and retain a durable transition identity
+  through retries, crashes and concurrent device changes. Completion requires
+  the actual revocation boundary; an agent-facing notice is not completion proof.
+
+The intended UX takes effect on confirmation without asking the agent's consent.
+The exact OS enforcement and remote acknowledgement strategy remains engineering
+work; there is no zero-latency distributed revocation guarantee in this plan.
+
 ## Current behavior: evidence and constraints
 
 These are implementation facts to account for, not the target architecture:
@@ -101,13 +165,14 @@ Boundaries:
    access/copy design; a folder on server B is not magically local on server A.
 4. Leaving/moving a project is an access transition. Block new affected work,
    reconcile queued actions, quiesce/stop old workers and descendants, revoke old
-   project grants, rebuild the sandbox/context, then resume under a new binding
-   generation. Do not report success while old workers still hold project access.
+   project grants, rebuild the execution sandbox while preserving conversation
+   context, then resume under a new binding generation. Do not report success while old workers still hold project access.
    An offline Node or interrupted transition remains pending/blocked until resolved.
 5. Changing a mount list does not close existing file descriptors or withdraw
-   bytes already read. Earlier messages, copied files, summaries and model state
-   need a separate policy; do not claim unmounting erases them. Never silently
-   copy all project files or project notes into a conversation-private directory.
+   bytes already read. Decision A preserves existing conversation context and
+   history; unmounting does not erase those. Previously copied files/summaries
+   remain attributable and are not evidence of successful resource revocation.
+   Never copy additional project content to bypass the user's removal.
 6. Authority from unrelated mounts or broad host access may overlap the removed
    project path. Define explicit deny/grant precedence or disclose remaining
    independent access; revoking only a UI mount cannot prove the path is unreadable.
@@ -218,15 +283,18 @@ checkpoint before implementation; preserve source attribution and tool ownership
 - Before starting a run, changing workspace selection changes the next run's
   binding. After completion, a new environment starts a new attributed attempt
   in the same visible conversation; old results retain their original location.
-- During execution, distinguish Stop and switch from an explicit "use another
-  environment for a separate task" operation. Do not relabel a running process.
-  The default running-transition behavior remains to be confirmed.
+- During execution, warn before a workspace/mount removal or switch. On user
+  confirmation, enforce revocation, reject stale effects and notify the agent
+  under the confirmed live-switching contract above. Preserve conversation context;
+  stop/rebuild affected execution where required instead of relabeling a process.
+  Starting a separate task elsewhere remains a distinct operation.
 - Leaving a project must revoke its mounts, rules, board access and retrieval from
   project notes. Mark the move pending until the old authority is no longer usable;
   do not silently let a detached background child keep working in the project.
 - Merely navigating to another page does not change membership or stop work.
-- Existing files stay where they are. Define whether history from the old project
-  remains future model context; unmounting alone does not remove that information.
+- Existing files stay where they are. Decision A retains history from the old
+  project as future model context while removing project-derived mounts and new
+  retrieval. Historical text does not reauthorize the departed project's resources.
 - Checkpoint recovery keeps its independent workspace and blank conversation,
   linked from the source. No implicit original-directory overwrite or source
   memory-writer inheritance is allowed.
@@ -263,7 +331,9 @@ code changes. Checkpoints provide recovery, not universal writer isolation.
 Board content is other-agent data with provenance, not a user's instruction or
 approval. It must not automatically become global personal memory. Leaving a
 project removes future access, but previously copied text cannot be claimed erased.
-Details of project-note retention and post-departure context require confirmation.
+Project-note retention/deletion still requires design; post-departure conversation
+context is settled by decision A above. Previously read notes may remain in that
+context, while new project-note retrieval is denied.
 
 ## pirc pots: proactive but bounded
 
@@ -441,8 +511,10 @@ All unchecked work is future work; no stage grants implementation authority.
 - [x] Define independent-App criteria and keep Flutter Web optional.
 - [x] Record the 2026-10-24 user requirements: configured workspaces, project
       mounts/unmounting, shared collaboration, task emphasis and attributed pots.
-- [ ] Confirm running transitions, old project context after departure, mount
-      defaults and project-note semantics; detailed choices remain unresolved.
+- [x] Record decision A and warning/confirmed-revocation/agent-notification behavior
+      for running workspace changes, 2026-10-24.
+- [ ] Validate enforcement for active workers/descriptors and offline hosts;
+      confirm mount defaults and project-note lifecycle semantics.
 - [ ] Inventory existing API/storage identities against each proposed concept and
       resolve incompatible lifecycle/permission rules before a schema proposal.
 
@@ -494,20 +566,25 @@ No scenario below has been executed by this documentation task.
 
 Additional acceptance: leaving while a shell/child is active cannot report
 unmounted prematurely; an unavailable Node leaves the transition pending; old
-project board retrieval is refused after departure; temporary file contention is
+project board retrieval is refused after departure; retained dialogue still works
+as model context. Canceling the warning changes nothing; confirming rejects old
+queued/approved tools, reports interrupted effects and delivers the user-change
+event without a mandatory follow-up question. A running child with an open file
+must not retain removed authority after transition completion. Duplicate or
+concurrent switches are reconciled by revision; reconnection cannot revive the
+old binding. Temporary file contention is
 visible and release wakes a waiter without replaying a stale edit. A forged
 "pots" text label never obtains dispatch authority.
 
 ## Decisions still open — discuss one at a time
 
-1. **Project departure and context:** confirm stop/rebuild behavior for active
-   attempts, and whether old project-derived messages stay eligible as future
-   model input. Recommendation: revoke live access immediately through a fenced
-   transition, preserve visible history, and choose context handling explicitly;
-   do not promise that old information has been forgotten.
-2. **Workspace setup/switching:** allocation timing for drafts, main cwd with
-   several mounts, read/write defaults, running-switch behavior and initial
-   same-Node restriction. The ability to configure/mount/create folders is agreed.
+1. **Revocation engineering:** context retention (A), the warning, confirmed
+   removal of subsequent access and agent notification are decided. Validate the
+   mechanism for stopping/rebuilding affected sandboxes, remote acknowledgement,
+   partial effects and overlapping independent grants; do not reopen A as a choice.
+2. **Workspace setup:** allocation timing for drafts, main cwd with several mounts,
+   read/write defaults and initial same-Node restriction. The ability to configure,
+   mount and create folders is agreed; live-switching UX is recorded above.
 3. **Shared project information:** durable board and project notes versus a single
    freeform shared memory, rule editing, retention and conflicts. Recommend board
    plus scoped notes plus host-reported resource waiting, with separate authority.

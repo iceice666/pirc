@@ -50,8 +50,14 @@ The following are requested design requirements, not implementation approval:
   Web remains an evaluation option.
 
 Detailed journeys and pending decisions are in [Unified conversations](unified-conversations.md).
-In particular, unmounting does not erase information already present in history,
-and a communication board does not itself prevent concurrent filesystem writes.
+The user subsequently selected **A** on 2026-10-24: preserve existing conversation
+context after project departure and stop mounts/new project access. During an
+active run, warn first; if the user proceeds, enforce revocation of subsequent
+access and notify the agent of the user-initiated change. The agent can decide
+whether it needs to ask a follow-up question. These product behaviors are decided;
+OS revocation/rebuild and offline-host acknowledgement remain technical design.
+Unmounting does not erase retained information or undo completed writes, and a
+communication board does not itself prevent concurrent filesystem writes.
 
 ## Reference capabilities: dots and Grok Bot
 
@@ -133,8 +139,11 @@ Confirmed in the current sources:
    omit how to submit approval/tool results, streaming progress, cancellation,
    parallel call correlation and terminal completion. Distinguish idle from done,
    and blocked tools from failed tools. A resume must not execute a tool twice.
-   Approval and lock policy live in the pirc host; a generic tool request/result
-   boundary may be cleaner than building pirc's approval modes into the core.
+   Approval, lock and mount-revocation policy live in the pirc host; a generic
+   tool request/result boundary may be cleaner than building pirc policy into
+   the core. Host-originated environment changes must be deliverable while a
+   run is waiting/streaming, with denied/interrupted results correlated to calls;
+   do not let loop resume replay effects under an obsolete workspace generation.
 6. **Retain failure information without leaking it.** Preserve partial replies,
    cancellation and structured retry/error reasons in the generic interface.
    The pirc adapter can retain `StopReason::Error` wire behavior and redact errors
@@ -207,7 +216,10 @@ state flows can be specified now, but no new listener or public port is implied.
   pirc-conformance with unchanged event ordering.
 - **Workspace/project:** multi-root aliases and overlap, revoked mounts, leaving
   while tools/children run, stale queues, unavailable Node, crashes mid-transition,
-  project rules and memory access, historical/copy limitations disclosed.
+  project rules and memory access, retained conversation context (decision A),
+  cancelable warnings, trusted agent notifications, open-descriptor revocation,
+  partial-command effects, old approval rejection and historical/copy limitations.
+  No forced user question, silent remount or retargeted retry after removal.
 - **Collaboration:** A holds a file, B waits with owner/reason visible, no busy
   polling or false completion; release wakes B; B rereads before editing; cyclic
   waits and stopped owners resolve without forcing unsafe lock expiry.
