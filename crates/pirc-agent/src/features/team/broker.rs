@@ -432,7 +432,7 @@ struct Member {
     /// Outcome of the latest final assistant message; reported once when
     /// the child settles.
     last_outcome: Option<(OutcomeKind, String)>,
-    background: Option<bool>,
+    background: bool,
     outcome: Option<OutcomeSlot>,
 }
 
@@ -676,7 +676,7 @@ impl Team {
         if member.mode == Mode::Subagent {
             out.insert(
                 "background".to_owned(),
-                json!(member.background.unwrap_or(false)),
+                json!(member.background),
             );
         }
         if let Some(file) = &member.session_file {
@@ -1067,7 +1067,7 @@ impl Team {
             rpc: None,
             inflight: HashMap::new(),
             last_outcome: None,
-            background: None,
+            background: false,
             outcome: None,
         }));
         // Reserve before awaiting so parallel spawns respect the limit.
@@ -1182,7 +1182,7 @@ impl Team {
                 let mut m = member.borrow_mut();
                 m.last_error = Some(error.clone());
                 // The spawn call itself reports this failure; no separate notice.
-                m.background = Some(false);
+                m.background = false;
                 (m.mode, m.rpc.clone())
             };
             if mode == Mode::Subagent {
@@ -1337,7 +1337,7 @@ impl Team {
         let (sender, receiver) = oneshot::channel();
         {
             let mut m = member.borrow_mut();
-            m.background = Some(background);
+            m.background = background;
             m.outcome = Some(OutcomeSlot {
                 sender: Some(sender),
                 settled: false,
@@ -1447,7 +1447,7 @@ impl Team {
                 .map(js::string_of),
         };
         // A stop the parent requested needs no notice; the parent already knows.
-        let background = member.borrow().background == Some(true);
+        let background = member.borrow().background;
         if background
             && let Some(entry) = &entry
             && !self.closing.get()
