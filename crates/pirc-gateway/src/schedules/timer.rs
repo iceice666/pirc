@@ -13,7 +13,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 use tokio::sync::{Notify, mpsc};
 
-use super::{DEFAULT_GRACE_MS, OPEN_RUNS, Run, Schedule, read, run_message, with};
+use super::{DEFAULT_GRACE_MS, OPEN_RUNS, Run, RunStatus, Schedule, read, run_message, with};
 use crate::app::{App, AppState};
 use crate::db::{Store, Workspace};
 use crate::dispatch::{Progress, deliver, is_watched_event, read_progress, start_session};
@@ -177,7 +177,7 @@ pub(super) async fn dispatch(app: AppState, schedule: Schedule, run: Run, worksp
         let failed = with(&app, |ctx| {
             ctx.finish(
                 &run.id,
-                "failed",
+                RunStatus::Failed,
                 &format!("Could not start the run: {message}"),
             )
         });
@@ -222,7 +222,7 @@ pub(super) async fn check(app: &AppState, id: &str) -> Result<(), String> {
         let Some(run) = ctx.run_row(id)? else {
             return Ok(None);
         };
-        if !["running", "waiting_input"].contains(&run.status.as_str()) {
+        if !run.status.is_open() {
             return Ok(None);
         }
         let Some(session_id) = run.session_id.clone() else {
@@ -251,16 +251,20 @@ pub(super) async fn check(app: &AppState, id: &str) -> Result<(), String> {
     .await
     .map_err(|failure| failure.0)?;
     let outcome: ApiResult<()> = with(app, |ctx| match progress {
-        Progress::Dropped => ctx.finish(id, "failed", "The agent stopped before it took the task"),
+        Progress::Dropped => ctx.finish(
+            id,
+            RunStatus::Failed,
+            "The agent stopped before it took the task",
+        ),
         Progress::Waiting(_) => {
-            if run.status != "waiting_input" {
-                ctx.set_run_status(&run, "waiting_input")?;
+            if run.status != RunStatus::WaitingInput {
+                ctx.set_run_status(&run, RunStatus::WaitingInput)?;
             }
             Ok(())
         }
         Progress::Working => {
-            if run.status == "waiting_input" {
-                ctx.set_run_status(&run, "running")?;
+            if run.status == RunStatus::WaitingInput {
+                ctx.set_run_status(&run, RunStatus::Running)?;
             }
             Ok(())
         }
@@ -275,7 +279,7 @@ pub(super) async fn check(app: &AppState, id: &str) -> Result<(), String> {
                 } else {
                     answer
                 };
-                ctx.finish(id, "completed", &answer)
+                ctx.finish(id, RunStatus::Completed, &answer)
             } else {
                 let reason = failure_reason
                     .filter(|reason| !reason.is_empty())
@@ -286,7 +290,11 @@ pub(super) async fn check(app: &AppState, id: &str) -> Result<(), String> {
                 } else {
                     format!("\n\nLast answer: {answer}")
                 };
-                ctx.finish(id, "failed", &format!("The run {status}{reason}{last}"))
+                ctx.finish(
+                    id,
+                    RunStatus::Failed,
+                    &format!("The run {status}{reason}{last}"),
+                )
             }
         }
         Progress::Unknown | Progress::Queued => Ok(()),

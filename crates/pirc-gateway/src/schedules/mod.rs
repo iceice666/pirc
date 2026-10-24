@@ -28,6 +28,7 @@ mod ops;
 mod timer;
 
 use axum::Router;
+use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -62,6 +63,102 @@ const RUNS_KEPT: i64 = 50;
 /// A fire time the timer reaches later than this was slept through: missed, not run.
 const DEFAULT_GRACE_MS: i64 = 120_000;
 const OPEN_RUNS: &str = "('running','waiting_input')";
+
+/// A schedule's `status` column.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ScheduleStatus {
+    Active,
+    Paused,
+    /// A one-shot that fired (a new `runAt` makes it active again).
+    Done,
+}
+
+impl ScheduleStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Active => "active",
+            Self::Paused => "paused",
+            Self::Done => "done",
+        }
+    }
+
+    fn parse(text: &str) -> Option<Self> {
+        match text {
+            "active" => Some(Self::Active),
+            "paused" => Some(Self::Paused),
+            "done" => Some(Self::Done),
+            _ => None,
+        }
+    }
+}
+
+/// A run's `status` column (`OPEN_RUNS` are `Running` and `WaitingInput`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunStatus {
+    Running,
+    WaitingInput,
+    Completed,
+    Failed,
+    /// Due while the gateway was down or its node offline; the user allows
+    /// or dismisses it.
+    Missed,
+    Dismissed,
+    /// Due while the previous run was still going.
+    Skipped,
+}
+
+impl RunStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Running => "running",
+            Self::WaitingInput => "waiting_input",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Missed => "missed",
+            Self::Dismissed => "dismissed",
+            Self::Skipped => "skipped",
+        }
+    }
+
+    fn parse(text: &str) -> Option<Self> {
+        match text {
+            "running" => Some(Self::Running),
+            "waiting_input" => Some(Self::WaitingInput),
+            "completed" => Some(Self::Completed),
+            "failed" => Some(Self::Failed),
+            "missed" => Some(Self::Missed),
+            "dismissed" => Some(Self::Dismissed),
+            "skipped" => Some(Self::Skipped),
+            _ => None,
+        }
+    }
+
+    /// Still going: the agent runs or waits for the user.
+    pub fn is_open(self) -> bool {
+        matches!(self, Self::Running | Self::WaitingInput)
+    }
+}
+
+macro_rules! sql_text_enum {
+    ($type:ty) => {
+        impl FromSql for $type {
+            fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+                <$type>::parse(value.as_str()?).ok_or(FromSqlError::InvalidType)
+            }
+        }
+
+        impl ToSql for $type {
+            fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
+                Ok(ToSqlOutput::from(self.as_str()))
+            }
+        }
+    };
+}
+
+sql_text_enum!(ScheduleStatus);
+sql_text_enum!(RunStatus);
 
 /// `/api/schedules*`.
 pub fn routes() -> Router<AppState> {
@@ -107,7 +204,7 @@ pub fn calendar_projection(
                 "schedule":view,"run":run.json(),"origin":origin}),
             );
         }
-        if schedule.status != "active" {
+        if schedule.status != ScheduleStatus::Active {
             continue;
         }
         let mut last = from
@@ -173,7 +270,7 @@ pub struct Schedule {
     pub id: String,
     pub owner_user: String,
     pub spec: Spec,
-    pub status: String,
+    pub status: ScheduleStatus,
     pub next_run_at: Option<i64>,
     /// The chat whose agent proposed it; `None` when the user made it.
     pub created_by_session: Option<String>,
@@ -245,7 +342,7 @@ pub struct Run {
     pub owner_user: String,
     /// The fire time it belongs to (for a manual run, when it was asked for).
     pub due_at: i64,
-    pub status: String,
+    pub status: RunStatus,
     pub session_id: Option<String>,
     pub result: Option<String>,
     pub started_at: Option<i64>,
@@ -909,8 +1006,8 @@ impl Ctx<'_> {
 
     fn pause(&mut self, user: &str, id: &str) -> ApiResult<Schedule> {
         let schedule = self.get(user, id)?;
-        if schedule.status == "active" {
-            self.set_status(&schedule, "paused", schedule.next_run_at)?;
+        if schedule.status == ScheduleStatus::Active {
+            self.set_status(&schedule, ScheduleStatus::Paused, schedule.next_run_at)?;
         }
         self.must_row(id)
     }
@@ -918,7 +1015,7 @@ impl Ctx<'_> {
     /// Runs again from now on; fire times while paused are not made up.
     fn resume(&mut self, user: &str, id: &str) -> ApiResult<Schedule> {
         let schedule = self.get(user, id)?;
-        if schedule.status == "active" {
+        if schedule.status == ScheduleStatus::Active {
             return Ok(schedule);
         }
         self.require_capability(&schedule)?;
@@ -929,7 +1026,7 @@ impl Ctx<'_> {
                 "Its one-shot time has passed: give it a new time (at) instead",
             ));
         };
-        self.set_status(&schedule, "active", Some(next))?;
+        self.set_status(&schedule, ScheduleStatus::Active, Some(next))?;
         self.must_row(id)
     }
 
@@ -987,10 +1084,10 @@ impl Ctx<'_> {
 
     fn apply(&mut self, schedule: &Schedule, spec: &Spec) -> ApiResult<Schedule> {
         // A new one-shot time makes a finished one-shot active again.
-        let status = if schedule.status == "done" {
-            "active"
+        let status = if schedule.status == ScheduleStatus::Done {
+            ScheduleStatus::Active
         } else {
-            schedule.status.as_str()
+            schedule.status
         };
         self.conn.execute(
             "UPDATE schedules SET workspace_id=?,title=?,prompt=?,cron=?,run_at=?,timezone=?,model_json=?,thinking=?,notify=?,status=?,next_run_at=?,updated_at=? WHERE id=?",
@@ -1017,7 +1114,7 @@ impl Ctx<'_> {
     fn set_status(
         &mut self,
         schedule: &Schedule,
-        status: &str,
+        status: ScheduleStatus,
         next_run_at: Option<i64>,
     ) -> ApiResult<()> {
         self.conn.execute(
@@ -1453,7 +1550,11 @@ impl Ctx<'_> {
             "UPDATE schedules SET next_run_at=?, status=?, updated_at=? WHERE id=?",
             params![
                 next,
-                if next.is_none() { "done" } else { "active" },
+                if next.is_none() {
+                    ScheduleStatus::Done
+                } else {
+                    ScheduleStatus::Active
+                },
                 at,
                 schedule.id
             ],
@@ -1472,14 +1573,21 @@ impl Ctx<'_> {
             } else {
                 "Its workspace no longer exists; the schedule is paused."
             };
-            self.insert_run(schedule, latest, "failed", Some(result), None, Some(at))?;
-            return self.set_status(schedule, "paused", next);
+            self.insert_run(
+                schedule,
+                latest,
+                RunStatus::Failed,
+                Some(result),
+                None,
+                Some(at),
+            )?;
+            return self.set_status(schedule, ScheduleStatus::Paused, next);
         }
         if at - latest > grace {
             self.insert_run(
                 schedule,
                 latest,
-                "missed",
+                RunStatus::Missed,
                 Some("The gateway was not running at this time. Allow the run to start it now."),
                 None,
                 None,
@@ -1500,7 +1608,7 @@ impl Ctx<'_> {
         let mut due_at = now_ms();
         if let Some(missed_id) = missed_run_id {
             match self.run_row(missed_id)? {
-                Some(missed) if missed.schedule_id == id && missed.status == "missed" => {
+                Some(missed) if missed.schedule_id == id && missed.status == RunStatus::Missed => {
                     due_at = missed.due_at;
                 }
                 _ => {
@@ -1553,12 +1661,12 @@ impl Ctx<'_> {
             let run = self.insert_run(
                 schedule,
                 due_at,
-                "failed",
+                RunStatus::Failed,
                 Some(&error.message),
                 None,
                 Some(now_ms()),
             )?;
-            self.set_status(schedule, "paused", schedule.next_run_at)?;
+            self.set_status(schedule, ScheduleStatus::Paused, schedule.next_run_at)?;
             self.fx.hint(&schedule.owner_user);
             return Ok(run);
         }
@@ -1592,7 +1700,7 @@ impl Ctx<'_> {
             let run = self.insert_run(
                 schedule,
                 due_at,
-                "skipped",
+                RunStatus::Skipped,
                 Some(&format!("The previous run ({open}) was still going.")),
                 None,
                 Some(now_ms()),
@@ -1604,7 +1712,7 @@ impl Ctx<'_> {
             let run = self.insert_run(
                 schedule,
                 due_at,
-                "missed",
+                RunStatus::Missed,
                 Some(&format!(
                     "{} was offline. Allow the run to start it now.",
                     workspace.host_id
@@ -1623,7 +1731,14 @@ impl Ctx<'_> {
                 )?;
                 self.run_row(existing)?.ok_or_else(ApiError::internal)?
             }
-            None => self.insert_run(schedule, due_at, "running", None, Some(now_ms()), None)?,
+            None => self.insert_run(
+                schedule,
+                due_at,
+                RunStatus::Running,
+                None,
+                Some(now_ms()),
+                None,
+            )?,
         };
         if manual && existing_run_id.is_none() {
             self.conn.execute(
@@ -1640,7 +1755,7 @@ impl Ctx<'_> {
         Ok(run)
     }
 
-    fn set_run_status(&mut self, run: &Run, status: &str) -> ApiResult<()> {
+    fn set_run_status(&mut self, run: &Run, status: RunStatus) -> ApiResult<()> {
         // A progress snapshot can arrive after deletion has settled this run.
         let changed = self.conn.execute(
             "UPDATE schedule_runs SET status=? WHERE id=? AND session_id=? AND status=?",
@@ -1664,22 +1779,26 @@ impl Ctx<'_> {
         if schedule.spec.notify == "none" {
             return Ok(());
         }
-        let problem = ["failed", "waiting_input", "missed"].contains(&run.status.as_str());
-        if !problem && !(run.status == "completed" && schedule.spec.notify == "all") {
+        let problem = matches!(
+            run.status,
+            RunStatus::Failed | RunStatus::WaitingInput | RunStatus::Missed
+        );
+        if !problem && !(run.status == RunStatus::Completed && schedule.spec.notify == "all") {
             return Ok(());
         }
-        let what = match run.status.as_str() {
-            "completed" => "finished",
-            "failed" => "failed",
-            "missed" => "was missed",
-            "waiting_input" => "is waiting for you",
-            other => other,
+        let what = match run.status {
+            RunStatus::Completed => "finished",
+            RunStatus::Failed => "failed",
+            RunStatus::Missed => "was missed",
+            RunStatus::WaitingInput => "is waiting for you",
+            // Not announced (the check above).
+            RunStatus::Running | RunStatus::Dismissed | RunStatus::Skipped => run.status.as_str(),
         };
         let message = PushMessage {
             title: format!("{} {what}", schedule.spec.title),
-            body: match run.status.as_str() {
-                "missed" => "Allow it to run it now, or dismiss it.",
-                "waiting_input" => "The scheduled run needs your answer to go on.",
+            body: match run.status {
+                RunStatus::Missed => "Allow it to run it now, or dismiss it.",
+                RunStatus::WaitingInput => "The scheduled run needs your answer to go on.",
                 _ => "Scheduled run: open it to read the result.",
             }
             .to_owned(),
@@ -1689,7 +1808,9 @@ impl Ctx<'_> {
                 None => format!("run:{}", run.id),
             },
             target: match &run.session_id {
-                Some(session_id) if run.status != "missed" => json!({ "sessionId": session_id }),
+                Some(session_id) if run.status != RunStatus::Missed => {
+                    json!({ "sessionId": session_id })
+                }
                 _ => json!({ "schedules": true, "scheduleId": schedule.id }),
             },
             interaction: None,
@@ -1700,7 +1821,7 @@ impl Ctx<'_> {
         Ok(())
     }
 
-    fn finish(&mut self, id: &str, status: &str, result: &str) -> ApiResult<()> {
+    fn finish(&mut self, id: &str, status: RunStatus, result: &str) -> ApiResult<()> {
         let run = self.run_row(id)?;
         let changed = self.conn.execute(
             &format!(
@@ -1726,7 +1847,7 @@ impl Ctx<'_> {
         &mut self,
         schedule: &Schedule,
         due_at: i64,
-        status: &str,
+        status: RunStatus,
         result: Option<&str>,
         started_at: Option<i64>,
         finished_at: Option<i64>,
@@ -1753,7 +1874,7 @@ impl Ctx<'_> {
             ),
             params![schedule.id, schedule.id],
         )?;
-        if status == "missed" || status == "failed" {
+        if matches!(status, RunStatus::Missed | RunStatus::Failed) {
             self.announce(&id)?;
         }
         self.run_row(&id)?.ok_or_else(ApiError::internal)

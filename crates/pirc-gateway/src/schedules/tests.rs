@@ -10,7 +10,7 @@ use pirc_providers::backends::BackendService;
 use serde_json::{Value, json};
 
 use super::fields::object;
-use super::{Ctx, Input, Spec, with};
+use super::{Ctx, Input, RunStatus, ScheduleStatus, Spec, with};
 use crate::agent_ops::OpContext;
 use crate::app::{App, AppState};
 use crate::db::{Db, ModeId, Store};
@@ -273,7 +273,7 @@ async fn validates_input() {
     .unwrap();
     assert_eq!(schedule.spec.title, "Check it.");
     assert_eq!(schedule.spec.timezone, "asia/taipei");
-    assert_eq!(schedule.status, "active");
+    assert_eq!(schedule.status, ScheduleStatus::Active);
     assert!(schedule.next_run_at.unwrap() > now_ms());
     // A one-shot's zone cannot change without its time.
     let once = create(
@@ -328,7 +328,7 @@ async fn records_missed_runs_after_downtime() {
         "several slept-through fire times count once"
     );
     let missed = &listed[0];
-    assert_eq!(missed.status, "missed");
+    assert_eq!(missed.status, RunStatus::Missed);
     assert_eq!(missed.session_id, None);
     assert!(now_ms() - missed.due_at < 3_600_000);
     assert!(now_ms() - missed.due_at > 20 * 60_000);
@@ -358,7 +358,7 @@ async fn records_missed_runs_after_downtime() {
         )
     );
     let dismissed = with(&f.app, |ctx| ctx.dismiss(USER, &schedule.id, &missed.id)).unwrap();
-    assert_eq!(dismissed.status, "dismissed");
+    assert_eq!(dismissed.status, RunStatus::Dismissed);
     assert!(
         with(&f.app, |ctx| ctx.dismiss(USER, &schedule.id, &missed.id)).is_err(),
         "a run is dismissed once"
@@ -384,7 +384,7 @@ async fn records_offline_skipped_and_failed_runs() {
     // Its node is offline at the fire time: missed.
     due(&f.app);
     let offline = runs(&f.app, &schedule.id).remove(0);
-    assert_eq!(offline.status, "missed");
+    assert_eq!(offline.status, RunStatus::Missed);
     assert_eq!(
         offline.result.as_deref(),
         Some("work was offline. Allow the run to start it now.")
@@ -397,7 +397,7 @@ async fn records_offline_skipped_and_failed_runs() {
     );
     due(&f.app);
     let skipped = runs(&f.app, &schedule.id).remove(0);
-    assert_eq!(skipped.status, "skipped");
+    assert_eq!(skipped.status, RunStatus::Skipped);
     assert_eq!(
         skipped.result,
         Some(format!(
@@ -431,7 +431,7 @@ async fn records_offline_skipped_and_failed_runs() {
     sql(&f.app, "DELETE FROM workspaces WHERE id='work:test'", []);
     due(&f.app);
     let failed = runs(&f.app, &schedule.id).remove(0);
-    assert_eq!(failed.status, "failed");
+    assert_eq!(failed.status, RunStatus::Failed);
     assert_eq!(
         failed.result.as_deref(),
         Some("Its workspace no longer exists; the schedule is paused.")
@@ -440,7 +440,7 @@ async fn records_offline_skipped_and_failed_runs() {
         with(&f.app, |ctx| ctx.get(USER, &schedule.id))
             .unwrap()
             .status,
-        "paused"
+        ScheduleStatus::Paused
     );
 }
 
@@ -666,7 +666,14 @@ async fn agents_propose_within_their_scope() {
     // A scheduled run's session cannot schedule more.
     let schedule = with(app, |ctx| ctx.get(USER, &id)).unwrap();
     with(app, |ctx| {
-        ctx.insert_run(&schedule, now_ms(), "completed", Some("ok"), None, None)?;
+        ctx.insert_run(
+            &schedule,
+            now_ms(),
+            RunStatus::Completed,
+            Some("ok"),
+            None,
+            None,
+        )?;
         Ok(())
     })
     .unwrap();
@@ -812,10 +819,20 @@ async fn pages_through_long_results() {
     .unwrap();
     let long: String = (0..3000).map(|i| format!("line {i:04}\n")).collect();
     let run = with(&f.app, |ctx| {
-        ctx.insert_run(&schedule, now_ms(), "running", None, Some(now_ms()), None)
+        ctx.insert_run(
+            &schedule,
+            now_ms(),
+            RunStatus::Running,
+            None,
+            Some(now_ms()),
+            None,
+        )
     })
     .unwrap();
-    with(&f.app, |ctx| ctx.finish(&run.id, "completed", &long)).unwrap();
+    with(&f.app, |ctx| {
+        ctx.finish(&run.id, RunStatus::Completed, &long)
+    })
+    .unwrap();
     let run = with(&f.app, |ctx| ctx.get_run(USER, &run.id)).unwrap();
     assert_eq!(run.result.as_deref(), Some(long.as_str()));
     let view = with(&f.app, |ctx| Ok(ctx.run_view(&run))).unwrap();
@@ -903,7 +920,7 @@ async fn pending_workspace_removal_does_not_advance_pause_or_fail_due_schedules(
     assert_eq!(super::timer::next_due(&f.app).unwrap(), None);
     tick(&f.app);
     let checking = with(&f.app, |ctx| ctx.get(USER, &schedule.id)).unwrap();
-    assert_eq!(checking.status, "active");
+    assert_eq!(checking.status, ScheduleStatus::Active);
     assert_eq!(checking.next_run_at, Some(due));
     assert_eq!(checking.updated_at, before.updated_at);
     assert!(runs(&f.app, &schedule.id).is_empty());
@@ -916,6 +933,6 @@ async fn pending_workspace_removal_does_not_advance_pause_or_fail_due_schedules(
     tick(&f.app);
     assert_eq!(runs(&f.app, &schedule.id).len(), 1);
     let after = with(&f.app, |ctx| ctx.get(USER, &schedule.id)).unwrap();
-    assert_eq!(after.status, "active");
+    assert_eq!(after.status, ScheduleStatus::Active);
     assert!(after.next_run_at.unwrap() > now_ms());
 }
