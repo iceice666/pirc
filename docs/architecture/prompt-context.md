@@ -14,6 +14,7 @@ The same agent loop (`crates/pirc-agent`) runs in two hosts, and each puts its s
 | -------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | `soul`               | `SOUL.md` in the gateway's `PIRC_CONFIG_DIR`                                                              | a built-in household-assistant identity                         |
 | `room`               | built-in: the room's name and how batches read                                                            | always present                                                  |
+| `talking`            | built-in default: a chat register (short plain messages, no narration of tools, a view, one question when unsure); `CHAT.md` comes after it and wins | always present                                                  |
 | `face`, `face-rules` | built-in: the face it speaks as now and the other faces, and the default "Faces" rules (`brain/faces.rs`) | always present (plans/rewrite/10-faces.md)                      |
 | `wake`, `wake-rules` | built-in: waking up, and the default "When to speak after waking" (`brain/waking.rs`)                     | only in a wake turn (plans/rewrite/05-self-wake.md)             |
 | `worker-reports`     | built-in: workers ended and the room has not been told; say what came of them (`brain/scheduler.rs`)      | only in a report turn (plans/rewrite/06-workers.md)             |

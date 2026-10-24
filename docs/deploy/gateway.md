@@ -90,7 +90,7 @@ The gateway runs the brain, the agent that answers in the rooms ([reference](../
 | File         | Meaning                                                                                                                                              |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SOUL.md`    | Its persona, replacing the built-in identity. At most 8000 characters. Editable in the web UI unless it is a Nix store link, a symlink or read-only. |
-| `CHAT.md`    | House rules for talking in the rooms, after the persona. Same limits.                                                                                |
+| `CHAT.md`    | House rules for talking in the rooms, after the persona and the built-in chat defaults (short plain messages, no narration of its tools); where they differ, the house rules win. Same limits. |
 | `brain.json` | Settings: `{"debounceSeconds": 3}`, how long it waits after someone's last message or keystroke (0 to 60).                                           |
 
 | Variable                     | Default  | Meaning                                                                                                                               |
