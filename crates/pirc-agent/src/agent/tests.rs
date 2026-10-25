@@ -576,6 +576,416 @@ async fn the_agent_loop_sees_block_snapshots_and_the_running_calls_waits() {
     );
 }
 
+type Replies = std::collections::VecDeque<(Vec<AssistantContent>, StopReason)>;
+/// Steps, each with the agent loop's waits at that point.
+type Looked = RefCell<Vec<(String, Vec<(CallKey, WaitReason)>)>>;
+
+/// Each model call takes the next scripted reply, after recording the
+/// request's messages and the agent loop's call outcomes at that point.
+#[derive(Default)]
+struct Scripted {
+    agent: RefCell<Weak<Agent>>,
+    replies: RefCell<Replies>,
+    requests: RefCell<Vec<String>>,
+    tool_statuses: RefCell<Vec<Vec<pirc_agent_loop::ToolStatus>>>,
+}
+
+impl crate::stream::StreamFn for Scripted {
+    fn stream<'a>(
+        &'a self,
+        request: StreamRequest,
+        _on_delta: &'a mut dyn FnMut(&pirc_protocol::AssistantDelta),
+    ) -> LocalBoxFuture<'a, AssistantMessage> {
+        Box::pin(async move {
+            let agent = self.agent.borrow().upgrade().unwrap();
+            self.requests
+                .borrow_mut()
+                .push(serde_json::to_string(&request.messages).unwrap());
+            let statuses = agent
+                .run_loop
+                .borrow()
+                .as_ref()
+                .map(RunLoop::tool_statuses)
+                .unwrap_or_default();
+            self.tool_statuses.borrow_mut().push(statuses);
+            let (content, stop) = self
+                .replies
+                .borrow_mut()
+                .pop_front()
+                .expect("a scripted reply");
+            let mut reply = agent.empty_assistant();
+            reply.provider = request.provider_name;
+            reply.model = request.model.id;
+            reply.content = content;
+            reply.stop_reason = stop;
+            reply
+        })
+    }
+}
+
+/// Answers confirmations in order, recording each with the agent loop's
+/// waits while it is open; records statuses.
+#[derive(Default)]
+struct ScriptedUi {
+    agent: RefCell<Weak<Agent>>,
+    answers: RefCell<std::collections::VecDeque<Option<bool>>>,
+    confirms: Looked,
+    statuses: RefCell<Vec<(String, Option<String>)>>,
+}
+
+impl Ui for ScriptedUi {
+    fn select<'a>(
+        &'a self,
+        _title: &'a str,
+        _options: &'a [String],
+        _opts: DialogOptions,
+    ) -> LocalBoxFuture<'a, Option<String>> {
+        Box::pin(async { None })
+    }
+    fn choose<'a>(
+        &'a self,
+        _title: &'a str,
+        _options: &'a [Choice],
+        _multiple: bool,
+        _opts: DialogOptions,
+    ) -> LocalBoxFuture<'a, Option<Vec<String>>> {
+        Box::pin(async { None })
+    }
+    fn confirm<'a>(
+        &'a self,
+        title: &'a str,
+        _message: &'a str,
+        _opts: DialogOptions,
+    ) -> LocalBoxFuture<'a, Option<bool>> {
+        let waits = loop_waits(&self.agent.borrow());
+        self.confirms.borrow_mut().push((title.to_owned(), waits));
+        let answer = self.answers.borrow_mut().pop_front().flatten();
+        Box::pin(async move { answer })
+    }
+    fn input<'a>(
+        &'a self,
+        _title: &'a str,
+        _placeholder: Option<&'a str>,
+        _opts: DialogOptions,
+    ) -> LocalBoxFuture<'a, Option<String>> {
+        Box::pin(async { None })
+    }
+    fn editor<'a>(
+        &'a self,
+        _title: &'a str,
+        _prefill: Option<&'a str>,
+        _opts: DialogOptions,
+    ) -> LocalBoxFuture<'a, Option<String>> {
+        Box::pin(async { None })
+    }
+    fn notify(&self, _message: &str, _level: NotifyLevel) {}
+    fn set_status(&self, key: &str, text: Option<&str>) {
+        self.statuses
+            .borrow_mut()
+            .push((key.to_owned(), text.map(str::to_owned)));
+    }
+    fn set_widget(&self, _key: &str, _lines: Option<&[String]>) {}
+}
+
+/// An agent on the fake model `stream`, with `ui`; the agent loop's
+/// status when the run ends is put in `ended`.
+struct ScriptedRun {
+    ui: Rc<ScriptedUi>,
+    has_ui: bool,
+    tools: Vec<Rc<dyn Tool>>,
+    features: Vec<Rc<dyn Feature>>,
+    acquire_write: Option<AcquireWrite>,
+    stream: Rc<Scripted>,
+    ended: Rc<RefCell<Vec<pirc_agent_loop::Status>>>,
+}
+
+impl ScriptedRun {
+    fn new(replies: Vec<(Vec<AssistantContent>, StopReason)>) -> Self {
+        Self {
+            ui: Rc::default(),
+            has_ui: false,
+            tools: Vec::new(),
+            features: Vec::new(),
+            acquire_write: None,
+            stream: Rc::new(Scripted {
+                replies: RefCell::new(replies.into()),
+                ..Scripted::default()
+            }),
+            ended: Rc::default(),
+        }
+    }
+
+    fn agent(&self, dir: &std::path::Path, mut config: AgentConfig) -> Rc<Agent> {
+        config.models = serde_json::from_value(json!({"providers":{"fake":{"api":"openai-completions","baseUrl":"https://example.test","models":[{"id":"main","contextWindow":8192,"maxTokens":512}]}},"defaultModel":{"provider":"fake","id":"main"}})).unwrap();
+        let weak: Rc<RefCell<Weak<Agent>>> = Rc::default();
+        let ended = self.ended.clone();
+        let emitter = weak.clone();
+        let emit: crate::rpc::Write = Rc::new(move |event: Value| {
+            if event["type"] == "agent_end"
+                && let Some(agent) = emitter.borrow().upgrade()
+                && let Some(run_loop) = agent.run_loop.borrow().as_ref()
+            {
+                ended.borrow_mut().push(run_loop.status());
+            }
+        });
+        let workspace = config.workspace.clone();
+        let agent = Agent::new(AgentOptions {
+            store: SessionStore::open(dir.join("session"), &workspace).unwrap(),
+            config,
+            capabilities: Default::default(),
+            project_instructions: None,
+            role: None,
+            emit,
+            ui: self.ui.clone(),
+            has_ui: self.has_ui,
+            tools: self.tools.clone(),
+            features: self.features.clone(),
+            acquire_write: self.acquire_write.clone(),
+            allowed_tools: None,
+            stream_override: Some(self.stream.clone()),
+        });
+        *weak.borrow_mut() = Rc::downgrade(&agent);
+        *self.stream.agent.borrow_mut() = Rc::downgrade(&agent);
+        *self.ui.agent.borrow_mut() = Rc::downgrade(&agent);
+        agent
+    }
+}
+
+/// Prompt, then wait (in tokio time, up to 200 s) for the run to end.
+async fn run_prompt(agent: &Rc<Agent>, text: &str) {
+    agent.prompt(text.to_owned(), Vec::new()).unwrap();
+    for _ in 0..20_000 {
+        if !agent.running.get() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert!(!agent.running.get(), "the run did not end");
+    assert!(agent.run_loop.borrow().is_none());
+}
+
+/// A `bash` that runs nothing: it records each command it was given, with
+/// the agent loop's waits at that point.
+#[derive(Default)]
+struct Shell {
+    agent: RefCell<Weak<Agent>>,
+    ran: Looked,
+}
+
+impl Tool for Shell {
+    fn name(&self) -> &str {
+        "bash"
+    }
+    fn description(&self) -> &str {
+        "shell probe"
+    }
+    fn parameters(&self) -> &Map<String, Value> {
+        static PARAMETERS: std::sync::LazyLock<Map<String, Value>> =
+            std::sync::LazyLock::new(|| {
+                json!({
+                    "type": "object",
+                    "properties": { "command": { "type": "string" } },
+                    "required": ["command"]
+                })
+                .as_object()
+                .unwrap()
+                .clone()
+            });
+        &PARAMETERS
+    }
+    fn execute<'a>(
+        &'a self,
+        args: Map<String, Value>,
+        _ctx: ToolContext,
+    ) -> LocalBoxFuture<'a, Result<ToolResult, String>> {
+        Box::pin(async move {
+            let command = args["command"].as_str().unwrap_or_default().to_owned();
+            let waits = loop_waits(&self.agent.borrow());
+            self.ran.borrow_mut().push((command, waits));
+            Ok(ToolResult::text("ran"))
+        })
+    }
+}
+
+fn bash(id: &str, command: &str) -> AssistantContent {
+    AssistantContent::ToolCall {
+        id: id.to_owned(),
+        name: "bash".to_owned(),
+        arguments: json!({ "command": command }).as_object().unwrap().clone(),
+        thought_signature: None,
+    }
+}
+
+fn reply_text(text: &str) -> AssistantContent {
+    AssistantContent::Text {
+        text: text.to_owned(),
+        text_signature: None,
+    }
+}
+
+#[tokio::test]
+async fn a_model_call_passes_the_auto_mode_gate_as_its_own_approval_wait() {
+    use pirc_agent_loop::{Status, TerminalReason, ToolStatus};
+    let dir = tempfile::tempdir().unwrap();
+    // The deny-list makes both commands dangerous without a classifier
+    // model: the gate asks the user, then leases the working directory.
+    let config = crate::tools::testing::config(
+        &dir.path().display().to_string(),
+        json!({ "autoMode": { "deny": ["forbidden"] } }),
+    );
+    let workspace = config.workspace.clone();
+    let mut run = ScriptedRun::new(vec![
+        (
+            vec![bash("c1", "forbidden one"), bash("c2", "forbidden two")],
+            StopReason::ToolUse,
+        ),
+        (vec![reply_text("Done.")], StopReason::Stop),
+    ]);
+    run.has_ui = true;
+    *run.ui.answers.borrow_mut() = [Some(false), Some(true)].into();
+    let shell = Rc::new(Shell::default());
+    run.tools = vec![shell.clone()];
+    let weak: Rc<RefCell<Weak<Agent>>> = Rc::default();
+    let leases: Seen = Rc::default();
+    let (lease_agent, lease_seen) = (weak.clone(), leases.clone());
+    run.acquire_write = Some(Rc::new(move |root: String| {
+        let waits = loop_waits(&lease_agent.borrow());
+        lease_seen.borrow_mut().push((root, waits));
+        Box::pin(async { Ok(()) })
+    }));
+    tokio::task::LocalSet::new()
+        .run_until(async {
+            let agent = run.agent(dir.path(), config);
+            *weak.borrow_mut() = Rc::downgrade(&agent);
+            *shell.agent.borrow_mut() = Rc::downgrade(&agent);
+            run_prompt(&agent, "Run them").await;
+        })
+        .await;
+
+    // Each dialog is the gate's, so an approval wait of the call asking.
+    let confirms = run.ui.confirms.borrow();
+    assert_eq!(confirms.len(), 2);
+    let keys: Vec<CallKey> = confirms
+        .iter()
+        .map(|(title, waits)| {
+            assert_eq!(title, "Auto mode: allow a potentially dangerous action?");
+            assert_eq!(waits.len(), 1, "{waits:?}");
+            assert_eq!(waits[0].1, WaitReason::Approval);
+            waits[0].0
+        })
+        .collect();
+    assert_eq!((keys[0].index, keys[1].index), (0, 1));
+    // Only the approved call takes the lease, as its own resource wait.
+    assert_eq!(
+        *leases.borrow(),
+        [(
+            workspace.clone(),
+            vec![(
+                keys[1],
+                WaitReason::Resource(format!("write lease: {workspace}"))
+            )]
+        )]
+    );
+    // The declined call never ran; the approved one ran with no wait open.
+    assert_eq!(*shell.ran.borrow(), [("forbidden two".to_owned(), vec![])]);
+
+    // The refusal is the declined call's failed result, in the core too.
+    let requests = run.stream.requests.borrow();
+    assert_eq!(requests.len(), 2);
+    assert!(
+        requests[1].contains("Blocked by auto mode: "),
+        "{}",
+        requests[1]
+    );
+    assert!(
+        requests[1].contains("The user declined it."),
+        "{}",
+        requests[1]
+    );
+    assert_eq!(
+        *run.stream.tool_statuses.borrow(),
+        [vec![], vec![ToolStatus::Failed, ToolStatus::Completed]]
+    );
+    assert_eq!(
+        *run.ended.borrow(),
+        [Status::Done(TerminalReason::Completed)]
+    );
+}
+
+/// Work that never completes.
+struct Blocked;
+
+impl Feature for Blocked {
+    fn name(&self) -> &'static str {
+        "blocked"
+    }
+    fn completion_blockers(&self, _agent: &Rc<Agent>) -> Vec<String> {
+        vec!["helper (running)".to_owned()]
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_completion_wait_times_out_once_and_the_run_reports_it() {
+    use pirc_agent_loop::{Status, TerminalReason, ToolStatus};
+    let dir = tempfile::tempdir().unwrap();
+    let mut config = crate::tools::testing::config(&dir.path().display().to_string(), json!({}));
+    config.limits.completion_wait_ms = 30_000;
+    let mut run = ScriptedRun::new(vec![
+        (vec![reply_text("Done.")], StopReason::Stop),
+        (
+            vec![reply_text("The helper is still running.")],
+            StopReason::Stop,
+        ),
+    ]);
+    run.features = vec![Rc::new(Blocked)];
+    let started = tokio::time::Instant::now();
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async {
+            let agent = run.agent(dir.path(), config);
+            run_prompt(&agent, "Finish up").await;
+            assert!(agent.completion_waiting.borrow().is_empty());
+        })
+        .await;
+    let waited = started.elapsed();
+    // One wait of the configured length: the reply to the timeout ends the
+    // run although the helper is still running.
+    assert!(
+        waited >= Duration::from_millis(30_000) && waited < Duration::from_millis(60_000),
+        "{waited:?}"
+    );
+
+    let timeout =
+        "Team completion wait timed out. These workers have NOT completed: helper (running).";
+    let requests = run.stream.requests.borrow();
+    assert_eq!(requests.len(), 2);
+    assert!(!requests[0].contains(timeout));
+    assert!(requests[1].contains(timeout), "{}", requests[1]);
+    // Shown while waiting (refreshed on each check), cleared after.
+    let statuses = run.ui.statuses.borrow();
+    let (cleared, shown) = statuses.split_last().unwrap();
+    assert_eq!(*cleared, ("completion-wait".to_owned(), None));
+    assert!(!shown.is_empty());
+    for status in shown {
+        assert_eq!(
+            *status,
+            (
+                "completion-wait".to_owned(),
+                Some("Waiting for team: helper (running)".to_owned())
+            )
+        );
+    }
+    // The core went on to the timeout's turn and completed.
+    assert_eq!(
+        *run.stream.tool_statuses.borrow(),
+        [Vec::<ToolStatus>::new(), vec![]]
+    );
+    assert_eq!(
+        *run.ended.borrow(),
+        [Status::Done(TerminalReason::Completed)]
+    );
+}
+
 fn call(id: &str) -> AssistantContent {
     AssistantContent::ToolCall {
         id: id.to_owned(),

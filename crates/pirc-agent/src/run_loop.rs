@@ -115,8 +115,18 @@ impl RunLoop {
     }
 
     #[cfg(test)]
-    fn status(&self) -> Status {
+    pub(crate) fn status(&self) -> Status {
         self.core.status()
+    }
+
+    /// The core's outcome of each call so far, in call order.
+    #[cfg(test)]
+    pub(crate) fn tool_statuses(&self) -> Vec<ToolStatus> {
+        self.core
+            .tool_records()
+            .iter()
+            .map(|record| record.outcome.status)
+            .collect()
     }
 
     /// The ticket of the model call about to be made: the one the last

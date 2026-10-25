@@ -54,7 +54,9 @@ ordering this gate protects: persistence before `message_end` (and no
 `message_end` when persistence fails), serial tool calls with send-now/abort
 interruption records, retry/fallback/exhaustion events around unpersisted
 attempts, and at most one overflow compaction per run. Completion waits are
-covered by the team scenarios except the `completionWaitMs` timeout path.
+covered by the team scenarios; the `completionWaitMs` timeout path and the
+auto-mode gate's approval/lease waits are covered by adapter tests in
+`crates/pirc-agent/src/agent/tests.rs`.
 In particular, accepting parallel results here does not switch pirc tools to
 parallel scheduling or grant permission to run them.
 
