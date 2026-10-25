@@ -556,6 +556,7 @@ describe('Calendar page', () => {
   });
 
   it('aborts and ignores a previous account response while a new account loads', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-10-21T04:00:00Z'));
     let resolveOld!: (value: Response) => void;
     let rangeNumber = 0;
     const newAccount = {
