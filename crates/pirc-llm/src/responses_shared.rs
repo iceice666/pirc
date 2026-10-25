@@ -2,6 +2,8 @@
 //! with its tool call id normalization, `convertResponsesTools`,
 //! `processResponsesStream`) and the pi-adapter state both Responses
 //! transports keep around it.
+use crate::outcome::{ErrorKind, LlmError};
+use crate::runtime::RunRequest as StreamRequest;
 
 use pirc_llm_types::{AssistantContent, AssistantDelta, AssistantMessage, StopReason, UserBlock};
 use serde_json::{Map, Value, json};
@@ -13,7 +15,7 @@ use crate::json_parse::parse_streaming_json;
 use crate::pi::{
     NO_KEY, PiMessage, PiModel, Source, api_name, history_message, pi_api, transform_messages,
 };
-use crate::stream::{StreamRequest, assistant, content_index, empty_usage};
+use crate::stream::{Emitter, assistant, content_index, empty_usage, usage_total};
 use pirc_llm_types::UserContent;
 
 /// Providers whose tool call ids keep their `call|item` form
@@ -410,28 +412,99 @@ fn parse_arguments(value: &Value) -> Result<Value, String> {
 }
 
 /// Arguments as the wire carries them (an object).
-fn wire_arguments(value: &Value) -> Map<String, Value> {
-    value.as_object().cloned().unwrap_or_default()
+fn wire_arguments(value: Value) -> Map<String, Value> {
+    match value {
+        Value::Object(object) => object,
+        _ => Map::new(),
+    }
+}
+
+/// A tracked item retains its raw wire fields for reasoning signatures.
+struct TrackedItem {
+    item: Value,
+    block: Option<usize>,
+}
+
+#[derive(Default)]
+enum ActiveItem {
+    #[default]
+    None,
+    Reasoning(TrackedItem),
+    Message(TrackedItem),
+    Tool {
+        tracked: TrackedItem,
+        partial_json: String,
+    },
+}
+
+impl ActiveItem {
+    fn tracked(&self) -> Option<&TrackedItem> {
+        match self {
+            Self::None => None,
+            Self::Reasoning(item) | Self::Message(item) | Self::Tool { tracked: item, .. } => {
+                Some(item)
+            }
+        }
+    }
+
+    fn tracked_mut(&mut self) -> Option<&mut TrackedItem> {
+        match self {
+            Self::None => None,
+            Self::Reasoning(item) | Self::Message(item) | Self::Tool { tracked: item, .. } => {
+                Some(item)
+            }
+        }
+    }
+
+    fn item_mut(&mut self) -> Option<&mut Value> {
+        self.tracked_mut().map(|tracked| &mut tracked.item)
+    }
+
+    fn block_index(&self) -> Option<usize> {
+        self.tracked().and_then(|tracked| tracked.block)
+    }
+
+    fn close(&mut self) {
+        if let Some(tracked) = self.tracked_mut() {
+            tracked.block = None;
+        }
+    }
+
+    fn partial_json(&self) -> &str {
+        match self {
+            Self::Tool { partial_json, .. } => partial_json,
+            _ => "",
+        }
+    }
+
+    fn partial_json_mut(&mut self) -> Option<&mut String> {
+        match self {
+            Self::Tool { partial_json, .. } => Some(partial_json),
+            _ => None,
+        }
+    }
 }
 
 /// `processResponsesStream`: one event at a time, into the Pi output.
 #[derive(Default)]
 pub struct Processor {
-    /// `currentItem`: the item of the last `output_item.added` we track.
-    item: Option<Value>,
-    /// `currentBlock`: always the last block of the output when set.
-    block: Option<usize>,
-    /// The current tool call block's `partialJson`.
-    partial_json: String,
+    active: ActiveItem,
 }
 
 impl Processor {
     fn item_type(&self) -> Option<&str> {
-        type_of(self.item.as_ref())
+        match self.active {
+            ActiveItem::None => None,
+            ActiveItem::Reasoning(_) => Some("reasoning"),
+            ActiveItem::Message(_) => Some("message"),
+            ActiveItem::Tool { .. } => Some("function_call"),
+        }
     }
 
     fn block<'a>(&self, out: &'a mut AssistantMessage) -> Option<&'a mut AssistantContent> {
-        self.block.and_then(|index| out.content.get_mut(index))
+        self.active
+            .block_index()
+            .and_then(|index| out.content.get_mut(index))
     }
 
     fn last_index(out: &AssistantMessage) -> u32 {
@@ -487,10 +560,6 @@ impl Processor {
                             .filter(|n| !n.is_null())
                             .map(js::to_js_string)
                             .unwrap_or_default();
-                        self.partial_json = match get(Some(&item), "arguments") {
-                            Some(args) if truthy(Some(args)) => js::to_js_string(args),
-                            _ => String::new(),
-                        };
                         out.content.push(AssistantContent::ToolCall {
                             id: id.clone(),
                             name: name.clone(),
@@ -505,13 +574,28 @@ impl Processor {
                     }
                     _ => return Ok(None),
                 };
-                self.item = Some(item);
-                self.block = Some(out.content.len() - 1);
+                let partial_json = match get(Some(&item), "arguments") {
+                    Some(args) if truthy(Some(args)) => js::to_js_string(args),
+                    _ => String::new(),
+                };
+                let tracked = TrackedItem {
+                    item,
+                    block: Some(out.content.len() - 1),
+                };
+                self.active = match item_type {
+                    Some("reasoning") => ActiveItem::Reasoning(tracked),
+                    Some("message") => ActiveItem::Message(tracked),
+                    Some("function_call") => ActiveItem::Tool {
+                        tracked,
+                        partial_json,
+                    },
+                    _ => unreachable!("only recognized items create blocks"),
+                };
                 return Ok(Some(delta));
             }
             "response.reasoning_summary_part.added" => {
                 if self.item_type() == Some("reasoning")
-                    && let Some(item) = self.item.as_mut()
+                    && let Some(item) = self.active.item_mut()
                 {
                     let part = get(event_ref, "part").cloned().unwrap_or_default();
                     ensure_list(item, "summary")?.push(part);
@@ -528,7 +612,8 @@ impl Processor {
                 } else {
                     delta_text()
                 };
-                let Some(item) = self.item.as_mut() else {
+                let block_index = self.active.block_index();
+                let Some(item) = self.active.item_mut() else {
                     return Ok(None);
                 };
                 let summary = ensure_list(item, "summary")?;
@@ -536,7 +621,7 @@ impl Processor {
                     return Ok(None);
                 };
                 if let Some(AssistantContent::Thinking { thinking, .. }) =
-                    self.block.and_then(|index| out.content.get_mut(index))
+                    block_index.and_then(|index| out.content.get_mut(index))
                 {
                     thinking.push_str(&delta);
                 }
@@ -560,7 +645,7 @@ impl Processor {
             }
             "response.content_part.added" => {
                 if self.item_type() == Some("message")
-                    && let Some(item) = self.item.as_mut()
+                    && let Some(item) = self.active.item_mut()
                 {
                     let part = get(event_ref, "part");
                     let content = ensure_list(item, "content")?;
@@ -581,9 +666,10 @@ impl Processor {
                 {
                     return Ok(None);
                 }
+                let block_index = self.active.block_index();
                 let Some(last) = self
-                    .item
-                    .as_mut()
+                    .active
+                    .item_mut()
                     .and_then(|item| item.get_mut("content"))
                     .and_then(Value::as_array_mut)
                     .and_then(|content| content.last_mut())
@@ -595,7 +681,7 @@ impl Processor {
                 }
                 let delta = delta_text();
                 if let Some(AssistantContent::Text { text, .. }) =
-                    self.block.and_then(|index| out.content.get_mut(index))
+                    block_index.and_then(|index| out.content.get_mut(index))
                 {
                     text.push_str(&delta);
                 }
@@ -610,8 +696,11 @@ impl Processor {
                     && matches!(self.block(out), Some(AssistantContent::ToolCall { .. }))
                 {
                     let delta = delta_text();
-                    self.partial_json.push_str(&delta);
-                    let parsed = wire_arguments(&parse_streaming_json(&self.partial_json));
+                    let Some(partial_json) = self.active.partial_json_mut() else {
+                        return Ok(None);
+                    };
+                    partial_json.push_str(&delta);
+                    let parsed = wire_arguments(parse_streaming_json(partial_json));
                     if let Some(AssistantContent::ToolCall { arguments, .. }) = self.block(out) {
                         *arguments = parsed;
                     }
@@ -631,15 +720,18 @@ impl Processor {
                         if let (Ok(parsed), Some(AssistantContent::ToolCall { arguments, .. })) =
                             (parsed, self.block(out))
                         {
-                            *arguments = wire_arguments(&parsed);
+                            *arguments = wire_arguments(parsed);
                         }
                         return Err(TYPE_ERROR.to_owned());
                     };
-                    let previous = std::mem::replace(&mut self.partial_json, done.clone());
+                    let Some(partial_json) = self.active.partial_json_mut() else {
+                        return Ok(None);
+                    };
+                    let previous = std::mem::replace(partial_json, done.clone());
                     if let (Ok(parsed), Some(AssistantContent::ToolCall { arguments, .. })) =
                         (parsed, self.block(out))
                     {
-                        *arguments = wire_arguments(&parsed);
+                        *arguments = wire_arguments(parsed);
                     }
                     if let Some(delta) = done.strip_prefix(previous.as_str())
                         && !delta.is_empty()
@@ -667,7 +759,7 @@ impl Processor {
                     parsed.input = js::to_u64(input);
                     parsed.output = js::to_u64(output);
                     parsed.cache_read = js::to_u64(cached);
-                    parsed.total_tokens = parsed.input + parsed.output + parsed.cache_read;
+                    parsed.total_tokens = usage_total(&parsed, false);
                     out.usage = parsed;
                 }
                 out.stop_reason = map_stop_reason(get(response, "status"))?;
@@ -737,7 +829,7 @@ impl Processor {
                 }
                 *block_signature = Some(signature);
                 let content = thinking.clone();
-                self.block = None;
+                self.active.close();
                 Ok(Some(AssistantDelta::ThinkingEnd {
                     content_index: index,
                     content,
@@ -769,7 +861,7 @@ impl Processor {
                     *text = joined.clone();
                     *text_signature = Some(signature);
                 }
-                self.block = None;
+                self.active.close();
                 Ok(Some(AssistantDelta::TextEnd {
                     content_index: index,
                     content: joined,
@@ -777,8 +869,8 @@ impl Processor {
             }
             (Some("function_call"), current) => {
                 let is_call = matches!(current, Some(AssistantContent::ToolCall { .. }));
-                let args = if is_call && !self.partial_json.is_empty() {
-                    parse_streaming_json(&self.partial_json)
+                let args = if is_call && !self.active.partial_json().is_empty() {
+                    parse_streaming_json(self.active.partial_json())
                 } else {
                     let fallback = json!("{}");
                     parse_arguments(or(get(item, "arguments"), &fallback))?
@@ -788,7 +880,7 @@ impl Processor {
                         return Ok(None);
                     };
                     if let AssistantContent::ToolCall { arguments, .. } = block {
-                        *arguments = wire_arguments(&args);
+                        *arguments = wire_arguments(args);
                     }
                     block.clone()
                 } else {
@@ -798,11 +890,11 @@ impl Processor {
                             .filter(|n| !n.is_null())
                             .map(js::to_js_string)
                             .unwrap_or_default(),
-                        arguments: wire_arguments(&args),
+                        arguments: wire_arguments(args),
                         thought_signature: None,
                     }
                 };
-                self.block = None;
+                self.active.close();
                 Ok(Some(AssistantDelta::ToolcallEnd {
                     content_index: index,
                     tool_call,
@@ -835,7 +927,7 @@ pub struct Prepared {
 impl Shell {
     pub fn new(request: &StreamRequest<'_>) -> Self {
         let model = PiModel::new(request);
-        let api = pi_api(api_name(request.model.api.unwrap_or(request.provider.api)));
+        let api = pi_api(api_name(request.endpoint.api));
         let initial = assistant(
             api,
             request.provider_name,
@@ -898,28 +990,33 @@ impl Shell {
     }
 
     /// The adapter's checks and options before dispatch.
-    pub fn prepare(&self, request: &StreamRequest<'_>) -> Result<Prepared, Box<AssistantMessage>> {
+    pub fn prepare(
+        &self,
+        request: &StreamRequest<'_>,
+        emit: &mut Emitter<'_>,
+    ) -> Result<Prepared, Box<AssistantMessage>> {
         // A managed subscription account never falls back to another credential.
-        let key = request.api_key.map(js::trim).filter(|key| !key.is_empty());
-        if request
-            .provider
-            .pi_provider
-            .as_deref()
-            .is_some_and(|p| !p.is_empty())
-            && key.is_none()
-        {
+        let key = request
+            .auth
+            .as_key()
+            .map(js::trim)
+            .filter(|key| !key.is_empty());
+        if request.endpoint.managed_credentials && key.is_none() {
+            emit.record_error(LlmError::new(ErrorKind::CredentialsUnavailable));
             return Err(Box::new(
                 self.early_error("Model credentials are unavailable.".to_owned()),
             ));
         }
         let Ok(headers) = opencode_headers(
-            request.provider.opencode_go,
+            request.endpoint.opencode_go,
             &self.model.base_url,
-            &request.session_id,
+            request.options.session_id,
         ) else {
+            emit.record_error(LlmError::new(ErrorKind::InvalidRequest));
             return Err(Box::new(self.early_error(self.failure(None))));
         };
         let context = request
+            .context
             .messages
             .iter()
             .map(|message| history_message(message, request.provider_name, &self.model))
@@ -966,6 +1063,205 @@ pub fn copilot_headers(context: &[PiMessage]) -> Vec<(&'static str, String)> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn unknown_added_item_preserves_open_tool_but_message_replaces_it() {
+        let mut processor = Processor::default();
+        let mut out = assistant("openai-responses", "test", "test", StopReason::Stop);
+        processor.event(&mut out, &json!({"type":"response.output_item.added","item":{"type":"function_call","arguments":"{\"a\":"}})).unwrap();
+        processor
+            .event(
+                &mut out,
+                &json!({"type":"response.output_item.added","item":{"type":"unknown"}}),
+            )
+            .unwrap();
+        processor
+            .event(
+                &mut out,
+                &json!({"type":"response.function_call_arguments.delta","delta":"1}"}),
+            )
+            .unwrap();
+        assert!(
+            matches!(&out.content[0], AssistantContent::ToolCall { arguments, .. } if arguments.get("a") == Some(&json!(1)))
+        );
+        processor.event(&mut out, &json!({"type":"response.output_item.done","item":{"type":"function_call","arguments":"{}"}})).unwrap();
+        processor.event(&mut out, &json!({"type":"response.output_item.added","item":{"type":"message","content":[]}})).unwrap();
+        let end = processor.event(&mut out, &json!({"type":"response.output_item.done","item":{"type":"function_call","arguments":"{\"fallback\":2}"}})).unwrap();
+        assert!(
+            matches!(end, Some(AssistantDelta::ToolcallEnd { tool_call: AssistantContent::ToolCall { arguments, .. }, .. }) if arguments.get("fallback") == Some(&json!(2)) && !arguments.contains_key("a"))
+        );
+        assert_eq!(out.content.len(), 2);
+        assert!(matches!(&out.content[1], AssistantContent::Text { .. }));
+    }
+    #[test]
+    fn active_tool_state_keeps_partial_updates_and_closed_item_semantics() {
+        let mut processor = Processor::default();
+        let mut out = assistant("openai-responses", "test", "test", StopReason::Stop);
+        let event = |kind: &str, fields: Value| {
+            let mut fields = fields.as_object().unwrap().clone();
+            fields.insert("type".to_owned(), json!(kind));
+            Value::Object(fields)
+        };
+        processor.event(&mut out, &event("response.output_item.added", json!({"item":{"type":"function_call","call_id":"c","id":"i","name":"f","arguments":""}}))).unwrap();
+        assert!(matches!(processor.active, ActiveItem::Tool { .. }));
+        processor
+            .event(
+                &mut out,
+                &event(
+                    "response.function_call_arguments.delta",
+                    json!({"delta":"{\"z\":1,"}),
+                ),
+            )
+            .unwrap();
+        let AssistantContent::ToolCall { arguments, .. } = &out.content[0] else {
+            panic!("tool");
+        };
+        assert_eq!(arguments.get("z"), Some(&json!(1)));
+        let delta = processor
+            .event(
+                &mut out,
+                &event(
+                    "response.function_call_arguments.done",
+                    json!({"arguments":"{\"z\":1,\"a\":2}"}),
+                ),
+            )
+            .unwrap();
+        assert!(
+            matches!(delta, Some(AssistantDelta::ToolcallDelta { delta, .. }) if delta == "\"a\":2}")
+        );
+        let AssistantContent::ToolCall { arguments, .. } = &out.content[0] else {
+            panic!("tool");
+        };
+        assert_eq!(
+            arguments.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["z", "a"]
+        );
+        processor
+            .event(
+                &mut out,
+                &event(
+                    "response.output_item.done",
+                    json!({"item":{"type":"function_call","arguments":"ignored"}}),
+                ),
+            )
+            .unwrap();
+        assert_eq!(processor.active.block_index(), None);
+        // Closing deletes currentBlock, not currentItem or partialJson.
+        assert_eq!(processor.item_type(), Some("function_call"));
+        assert_eq!(processor.active.partial_json(), "{\"z\":1,\"a\":2}");
+        assert!(
+            processor
+                .event(
+                    &mut out,
+                    &event(
+                        "response.function_call_arguments.delta",
+                        json!({"delta":"x"})
+                    )
+                )
+                .unwrap()
+                .is_none()
+        );
+        // An unknown added item leaves the previous tracked item intact.
+        processor
+            .event(
+                &mut out,
+                &event(
+                    "response.output_item.added",
+                    json!({"item":{"type":"future"}}),
+                ),
+            )
+            .unwrap();
+        assert_eq!(processor.item_type(), Some("function_call"));
+        // A done event with no active tool emits a detached end, without pushing content.
+        let end = processor
+            .event(
+                &mut out,
+                &event(
+                    "response.output_item.done",
+                    json!({"item":{"type":"function_call","arguments":"[]"}}),
+                ),
+            )
+            .unwrap();
+        assert!(matches!(end, Some(AssistantDelta::ToolcallEnd { .. })));
+        assert_eq!(out.content.len(), 1);
+    }
+
+    #[test]
+    fn invalid_done_arguments_update_falsy_object_before_legacy_type_error() {
+        let mut processor = Processor::default();
+        let mut out = assistant("openai-responses", "test", "test", StopReason::Stop);
+        processor.event(&mut out, &json!({"type":"response.output_item.added","item":{"type":"function_call","arguments":""}})).unwrap();
+        let error = processor.event(
+            &mut out,
+            &json!({"type":"response.function_call_arguments.done","arguments":null}),
+        );
+        assert_eq!(error.unwrap_err(), TYPE_ERROR);
+        assert!(
+            matches!(&out.content[0], AssistantContent::ToolCall { arguments, .. } if arguments.is_empty())
+        );
+        assert!(wire_arguments(json!(true)).is_empty());
+    }
+
+    #[test]
+    fn reasoning_state_retains_raw_signature_and_ignores_post_stop_text() {
+        let mut processor = Processor::default();
+        let mut out = assistant("openai-responses", "test", "test", StopReason::Stop);
+        processor.event(&mut out, &json!({"type":"response.output_item.added","item":{"type":"reasoning","summary":[]}})).unwrap();
+        processor.event(&mut out, &json!({"type":"response.reasoning_summary_part.added","part":{"type":"summary_text","text":""}})).unwrap();
+        processor
+            .event(
+                &mut out,
+                &json!({"type":"response.reasoning_summary_text.delta","delta":"partial"}),
+            )
+            .unwrap();
+        let item = json!({"type":"reasoning","id":"raw","summary":[{"text":"final"}],"custom":"preserved"});
+        processor
+            .event(
+                &mut out,
+                &json!({"type":"response.output_item.done","item":item}),
+            )
+            .unwrap();
+        let AssistantContent::Thinking {
+            thinking,
+            signature,
+            ..
+        } = &out.content[0]
+        else {
+            panic!("thinking");
+        };
+        assert_eq!(thinking, "final");
+        assert_eq!(signature.as_deref(), Some(item.to_string().as_str()));
+        assert!(
+            processor
+                .event(
+                    &mut out,
+                    &json!({"type":"response.reasoning_text.delta","delta":"ignored"})
+                )
+                .unwrap()
+                .is_none()
+        );
+        // currentItem survives a stop, including summary mutation without output mutation.
+        processor
+            .event(
+                &mut out,
+                &json!({"type":"response.reasoning_summary_part.added","part":{"text":"late"}}),
+            )
+            .unwrap();
+        assert_eq!(
+            processor.active.tracked().unwrap().item["summary"]
+                .as_array()
+                .unwrap()
+                .len(),
+            2
+        );
+    }
+
+    #[test]
+    fn responses_usage_saturates() {
+        let mut processor = Processor::default();
+        let mut out = assistant("openai-responses", "test", "test", StopReason::Stop);
+        processor.event(&mut out, &json!({"type":"response.completed","response":{"status":"completed","usage":{"input_tokens":1e30,"output_tokens":1e30}}})).unwrap();
+        assert_eq!(out.usage.total_tokens, u64::MAX);
+    }
     #[test]
     fn short_hash_matches_pi() {
         // Values from pi-ai's shortHash under Bun.

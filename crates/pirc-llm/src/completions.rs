@@ -3,6 +3,8 @@
 //! `fail`) around pi-ai 0.73.1's `streamOpenAICompletions` (request body,
 //! compat detection, message conversion, streaming) and the `openai` 6.26.0
 //! SDK it calls (headers, URL, error texts, SSE decoding).
+use crate::outcome::{ErrorKind, LlmError};
+use crate::runtime::RunRequest as StreamRequest;
 
 use crate::sdk::{SDK_TIMEOUT, SDK_USER_AGENT, api_error_message, cloudflare_base_url};
 use std::collections::HashMap;
@@ -23,7 +25,7 @@ use crate::pi::{
     transform_messages,
 };
 use crate::sse::{Event, SdkDecoder};
-use crate::stream::{Cancelled, Emitter, StreamRequest, assistant, content_index, empty_usage};
+use crate::stream::{Cancelled, Emitter, assistant, content_index, empty_usage, usage_total};
 
 fn has_tool_history(messages: &[PiMessage]) -> bool {
     messages.iter().any(|message| match message {
@@ -58,7 +60,53 @@ fn normalize_tool_call_id(id: &str, model: &PiModel) -> String {
 
 /// pi-ai's resolved `OpenAICompletionsCompat` (`getCompat`): explicit
 /// values win over detection; `null` counts as unset.
-pub struct Compat(Map<String, Value>);
+struct Compat {
+    supports_store: bool,
+    supports_developer_role: bool,
+    supports_reasoning_effort: bool,
+    requires_tool_result_name: bool,
+    requires_assistant_after_tool_result: bool,
+    requires_thinking_as_text: bool,
+    requires_reasoning_content_on_assistant_messages: bool,
+    zai_tool_stream: bool,
+    send_session_affinity_headers: bool,
+    supports_long_cache_retention: bool,
+    supports_usage_in_streaming: bool,
+    supports_strict_mode: bool,
+    max_tokens_field: MaxTokensField,
+    anthropic_cache_control: bool,
+    thinking_format: ThinkingFormat,
+}
+
+enum MaxTokensField {
+    Tokens,
+    CompletionTokens,
+}
+
+#[derive(PartialEq)]
+enum ThinkingFormat {
+    Openai,
+    Deepseek,
+    Zai,
+    Openrouter,
+    Qwen,
+    QwenChatTemplate,
+    Unknown,
+}
+
+impl ThinkingFormat {
+    fn from_wire(value: Option<&Value>) -> Self {
+        match value.and_then(Value::as_str) {
+            Some("openai") => Self::Openai,
+            Some("deepseek") => Self::Deepseek,
+            Some("zai") => Self::Zai,
+            Some("openrouter") => Self::Openrouter,
+            Some("qwen") => Self::Qwen,
+            Some("qwen-chat-template") => Self::QwenChatTemplate,
+            _ => Self::Unknown,
+        }
+    }
+}
 
 impl Compat {
     pub fn new(model: &PiModel) -> Self {
@@ -141,23 +189,40 @@ impl Compat {
                 detected.insert(key.to_owned(), value.clone());
             }
         }
-        Self(std::mem::take(detected))
+        Self::from_resolved(std::mem::take(detected))
     }
 
-    fn get(&self, key: &str) -> Option<&Value> {
-        self.0.get(key)
-    }
-
-    fn truthy(&self, key: &str) -> bool {
-        truthy(self.get(key))
-    }
-
-    fn is(&self, key: &str, value: &str) -> bool {
-        self.get(key).and_then(Value::as_str) == Some(value)
-    }
-
-    fn not_false(&self, key: &str) -> bool {
-        self.get(key) != Some(&Value::Bool(false))
+    // Unknown extension values remain in PiModel::compat, including routing payloads.
+    fn from_resolved(values: Map<String, Value>) -> Self {
+        Self {
+            supports_store: truthy(values.get("supportsStore")),
+            supports_developer_role: truthy(values.get("supportsDeveloperRole")),
+            supports_reasoning_effort: truthy(values.get("supportsReasoningEffort")),
+            requires_tool_result_name: truthy(values.get("requiresToolResultName")),
+            requires_assistant_after_tool_result: truthy(
+                values.get("requiresAssistantAfterToolResult"),
+            ),
+            requires_thinking_as_text: truthy(values.get("requiresThinkingAsText")),
+            requires_reasoning_content_on_assistant_messages: truthy(
+                values.get("requiresReasoningContentOnAssistantMessages"),
+            ),
+            zai_tool_stream: truthy(values.get("zaiToolStream")),
+            send_session_affinity_headers: truthy(values.get("sendSessionAffinityHeaders")),
+            supports_long_cache_retention: truthy(values.get("supportsLongCacheRetention")),
+            supports_usage_in_streaming: values.get("supportsUsageInStreaming")
+                != Some(&Value::Bool(false)),
+            supports_strict_mode: values.get("supportsStrictMode") != Some(&Value::Bool(false)),
+            max_tokens_field: if values.get("maxTokensField").and_then(Value::as_str)
+                == Some("max_tokens")
+            {
+                MaxTokensField::Tokens
+            } else {
+                MaxTokensField::CompletionTokens
+            },
+            anthropic_cache_control: values.get("cacheControlFormat").and_then(Value::as_str)
+                == Some("anthropic"),
+            thinking_format: ThinkingFormat::from_wire(values.get("thinkingFormat")),
+        }
     }
 }
 
@@ -175,7 +240,7 @@ fn convert_messages(
     let bridge = || json!({ "role": "assistant", "content": "I have processed the tool results." });
     let mut params = Vec::new();
     if !system_prompt.is_empty() {
-        let role = if model.reasoning && compat.truthy("supportsDeveloperRole") {
+        let role = if model.reasoning && compat.supports_developer_role {
             "developer"
         } else {
             "system"
@@ -186,7 +251,7 @@ fn convert_messages(
     let mut index = 0;
     while index < messages.len() {
         let message = &messages[index];
-        if compat.truthy("requiresAssistantAfterToolResult")
+        if compat.requires_assistant_after_tool_result
             && last_role == Some("toolResult")
             && matches!(message, PiMessage::User(_))
         {
@@ -243,7 +308,7 @@ fn convert_messages(
                     };
                     result.insert("content".to_owned(), json!(text));
                     result.insert("tool_call_id".to_owned(), json!(tool_call_id));
-                    if compat.truthy("requiresToolResultName") && !tool_name.is_empty() {
+                    if compat.requires_tool_result_name && !tool_name.is_empty() {
                         result.insert("name".to_owned(), json!(tool_name));
                     }
                     params.push(Value::Object(result));
@@ -260,7 +325,7 @@ fn convert_messages(
                 if images.is_empty() {
                     last_role = Some("toolResult");
                 } else {
-                    if compat.truthy("requiresAssistantAfterToolResult") {
+                    if compat.requires_assistant_after_tool_result {
                         params.push(bridge());
                     }
                     let mut content = vec![
@@ -284,7 +349,7 @@ fn convert_assistant(
 ) -> Option<Value> {
     let mut message = Map::new();
     message.insert("role".to_owned(), json!("assistant"));
-    let empty = if compat.truthy("requiresAssistantAfterToolResult") {
+    let empty = if compat.requires_assistant_after_tool_result {
         json!("")
     } else {
         Value::Null
@@ -312,7 +377,7 @@ fn convert_assistant(
         })
         .collect();
     if !thinking.is_empty() {
-        if compat.truthy("requiresThinkingAsText") {
+        if compat.requires_thinking_as_text {
             let joined = thinking
                 .iter()
                 .map(|(text, _)| *text)
@@ -374,7 +439,7 @@ fn convert_assistant(
             message.insert("reasoning_details".to_owned(), Value::Array(details));
         }
     }
-    if compat.truthy("requiresReasoningContentOnAssistantMessages")
+    if compat.requires_reasoning_content_on_assistant_messages
         && model.reasoning
         && !message.contains_key("reasoning_content")
     {
@@ -481,8 +546,8 @@ fn build_params(
     });
     let mut messages = convert_messages(model, system_prompt, &transformed, compat);
     let long = options.long_cache_retention;
-    let long_supported = compat.truthy("supportsLongCacheRetention");
-    let cache_control = compat.is("cacheControlFormat", "anthropic").then(|| {
+    let long_supported = compat.supports_long_cache_retention;
+    let cache_control = compat.anthropic_cache_control.then(|| {
         if long && long_supported {
             json!({ "type": "ephemeral", "ttl": "1h" })
         } else {
@@ -501,7 +566,7 @@ fn build_params(
                         "parameters".to_owned(),
                         Value::Object(tool.parameters.clone()),
                     );
-                    if compat.not_false("supportsStrictMode") {
+                    if compat.supports_strict_mode {
                         function.insert("strict".to_owned(), json!(false));
                     }
                     json!({ "type": "function", "function": function })
@@ -527,27 +592,26 @@ fn build_params(
     if long && long_supported {
         params.insert("prompt_cache_retention".to_owned(), json!("24h"));
     }
-    if compat.not_false("supportsUsageInStreaming") {
+    if compat.supports_usage_in_streaming {
         params.insert(
             "stream_options".to_owned(),
             json!({ "include_usage": true }),
         );
     }
-    if compat.truthy("supportsStore") {
+    if compat.supports_store {
         params.insert("store".to_owned(), json!(false));
     }
     if options.max_tokens > 0 {
-        let field = if compat.is("maxTokensField", "max_tokens") {
-            "max_tokens"
-        } else {
-            "max_completion_tokens"
+        let field = match compat.max_tokens_field {
+            MaxTokensField::Tokens => "max_tokens",
+            MaxTokensField::CompletionTokens => "max_completion_tokens",
         };
         params.insert(field.to_owned(), json!(options.max_tokens));
     }
     let has_tools = !tools.is_empty();
     if let Some(tool_params) = tool_params {
         params.insert("tools".to_owned(), Value::Array(tool_params));
-        if has_tools && compat.truthy("zaiToolStream") {
+        if has_tools && compat.zai_tool_stream {
             params.insert("tool_stream".to_owned(), json!(true));
         }
     }
@@ -555,15 +619,15 @@ fn build_params(
         params.insert("tool_choice".to_owned(), json!(tool_choice_name(choice)));
     }
     let effort = options.reasoning_effort.as_deref();
-    let format = |name: &str| compat.is("thinkingFormat", name) && model.reasoning;
-    if format("zai") || format("qwen") {
+    let format = |format: ThinkingFormat| compat.thinking_format == format && model.reasoning;
+    if format(ThinkingFormat::Zai) || format(ThinkingFormat::Qwen) {
         params.insert("enable_thinking".to_owned(), json!(effort.is_some()));
-    } else if format("qwen-chat-template") {
+    } else if format(ThinkingFormat::QwenChatTemplate) {
         params.insert(
             "chat_template_kwargs".to_owned(),
             json!({ "enable_thinking": effort.is_some(), "preserve_thinking": true }),
         );
-    } else if format("deepseek") {
+    } else if format(ThinkingFormat::Deepseek) {
         let kind = if effort.is_some() {
             "enabled"
         } else {
@@ -576,7 +640,7 @@ fn build_params(
                 json!(model.mapped_effort(effort)),
             );
         }
-    } else if format("openrouter") {
+    } else if format(ThinkingFormat::Openrouter) {
         if let Some(effort) = effort {
             params.insert(
                 "reasoning".to_owned(),
@@ -586,7 +650,7 @@ fn build_params(
             let off = model.level_map("off").flatten().unwrap_or("none");
             params.insert("reasoning".to_owned(), json!({ "effort": off }));
         }
-    } else if model.reasoning && compat.truthy("supportsReasoningEffort") {
+    } else if model.reasoning && compat.supports_reasoning_effort {
         if let Some(effort) = effort {
             params.insert(
                 "reasoning_effort".to_owned(),
@@ -666,7 +730,7 @@ fn prepare(
             defaults.insert("Copilot-Vision-Request".to_owned(), Some("true".to_owned()));
         }
     }
-    if compat.truthy("sendSessionAffinityHeaders") {
+    if compat.send_session_affinity_headers {
         for name in ["session_id", "x-client-request-id", "x-session-affinity"] {
             defaults.insert(name.to_owned(), Some(options.session_id.clone()));
         }
@@ -694,7 +758,7 @@ fn prepare(
         model.provider.as_str(),
         "cloudflare-workers-ai" | "cloudflare-ai-gateway"
     ) {
-        cloudflare_base_url(model, request.resolve_variable)?
+        cloudflare_base_url(model, request.options.resolve_variable)?
     } else {
         model.base_url.clone()
     };
@@ -705,9 +769,9 @@ fn prepare(
     };
     let body = build_params(
         model,
-        request.system_prompt,
+        request.context.system_prompt,
         context,
-        request.tools,
+        request.context.tools,
         options,
         &compat,
     );
@@ -739,8 +803,6 @@ fn http_error(status: u16, body: &str) -> String {
 struct ToolScratch {
     partial_args: String,
     stream_index: Option<f64>,
-    /// The parsed arguments, which need not be an object.
-    arguments: Value,
 }
 
 enum Pending {
@@ -771,14 +833,17 @@ pub struct PiRun {
 }
 
 /// Arguments as the wire carries them (an object).
-fn wire_arguments(value: &Value) -> Map<String, Value> {
-    value.as_object().cloned().unwrap_or_default()
+fn wire_arguments(value: Value) -> Map<String, Value> {
+    match value {
+        Value::Object(object) => object,
+        _ => Map::new(),
+    }
 }
 
 impl PiRun {
     pub fn new(request: &StreamRequest<'_>) -> Self {
         let model = PiModel::new(request);
-        let api = pi_api(api_name(request.model.api.unwrap_or(request.provider.api)));
+        let api = pi_api(api_name(request.endpoint.api));
         let initial = assistant(
             api,
             request.provider_name,
@@ -839,40 +904,47 @@ impl PiRun {
         emit: &mut Emitter<'_>,
     ) -> Result<AssistantMessage, Cancelled> {
         // A managed subscription account never falls back to another credential.
-        let key = request.api_key.map(js::trim).filter(|key| !key.is_empty());
-        if request
-            .provider
-            .pi_provider
-            .as_deref()
-            .is_some_and(|p| !p.is_empty())
-            && key.is_none()
-        {
+        let key = request
+            .auth
+            .as_key()
+            .map(js::trim)
+            .filter(|key| !key.is_empty());
+        if request.endpoint.managed_credentials && key.is_none() {
+            emit.record_error(LlmError::new(ErrorKind::CredentialsUnavailable));
             return Ok(self.error_without_request("Model credentials are unavailable."));
         }
         let Ok(headers) = opencode_headers(
-            request.provider.opencode_go,
+            request.endpoint.opencode_go,
             &self.model.base_url,
-            &request.session_id,
+            request.options.session_id,
         ) else {
+            emit.record_error(LlmError::new(ErrorKind::InvalidRequest));
             return Ok(self.error_without_request("Model provider request failed."));
         };
         let options = Options {
             api_key: key.unwrap_or(NO_KEY).to_owned(),
-            session_id: request.session_id.clone(),
-            max_tokens: request.max_tokens.unwrap_or(request.model.max_tokens),
+            session_id: request.options.session_id.to_owned(),
+            max_tokens: request
+                .options
+                .max_tokens
+                .unwrap_or(request.model.max_tokens),
             reasoning_effort: reasoning_effort(request, &self.model),
-            tool_choice: request.tool_choice,
+            tool_choice: request.options.tool_choice,
             headers,
             long_cache_retention,
         };
         let context: Vec<PiMessage> = request
+            .context
             .messages
             .iter()
             .map(|message| history_message(message, request.provider_name, &self.model))
             .collect();
         let http = match prepare(&self.model, request, &context, &options) {
             Ok(http) => http,
-            Err(upstream) => return Ok(self.failed(&upstream)),
+            Err(upstream) => {
+                emit.record_error(LlmError::diagnostic(ErrorKind::InvalidRequest, &upstream));
+                return Ok(self.failed(&upstream));
+            }
         };
         match self.stream(client, http, emit).await {
             Ok(result) => Ok(result),
@@ -887,23 +959,34 @@ impl PiRun {
         http: HttpRequest,
         emit: &mut Emitter<'_>,
     ) -> Result<AssistantMessage, Failure> {
-        let headers = http
-            .headers
-            .to_map()
-            .ok_or_else(|| Failure::upstream("Connection error."))?;
+        let headers = http.headers.to_map().ok_or_else(|| {
+            emit.record_error(LlmError::new(ErrorKind::InvalidRequest));
+            Failure::upstream("Connection error.")
+        })?;
         let body = serde_json::to_vec(&http.body).unwrap_or_default();
         let send = client.post(&http.url).headers(headers).body(body).send();
         let mut response = match tokio::time::timeout(SDK_TIMEOUT, send).await {
-            Err(_) => return Err(Failure::upstream("Request timed out.")),
-            Ok(Err(error)) if error.is_timeout() => {
+            Err(_) => {
+                emit.record_error(LlmError::new(ErrorKind::Timeout));
                 return Err(Failure::upstream("Request timed out."));
             }
-            Ok(Err(_)) => return Err(Failure::upstream("Connection error.")),
+            Ok(Err(error)) if error.is_timeout() => {
+                emit.record_error(LlmError::from_reqwest(&error));
+                return Err(Failure::upstream("Request timed out."));
+            }
+            Ok(Err(error)) => {
+                emit.record_error(LlmError::from_reqwest(&error));
+                return Err(Failure::upstream("Connection error."));
+            }
             Ok(Ok(response)) => response,
         };
         let status = response.status().as_u16();
         if !response.status().is_success() {
             let body = response.bytes().await.unwrap_or_default();
+            emit.record_error(LlmError::http(
+                status,
+                String::from_utf8_lossy(&body).into_owned(),
+            ));
             return Err(Failure::Upstream(http_error(
                 status,
                 &String::from_utf8_lossy(&body),
@@ -923,7 +1006,10 @@ impl PiRun {
             let (events, ended) = match response.chunk().await {
                 Ok(Some(bytes)) => (decoder.push(&bytes), false),
                 Ok(None) => (decoder.finish(), true),
-                Err(_) => return Err(Failure::upstream("terminated")),
+                Err(error) => {
+                    emit.record_error(LlmError::from_reqwest(&error));
+                    return Err(Failure::upstream("terminated"));
+                }
             };
             for event in events {
                 if done {
@@ -934,7 +1020,7 @@ impl PiRun {
                     continue;
                 }
                 let mut pending = Vec::new();
-                self.event(&event, &mut pending)?;
+                self.event(&event, &mut pending, emit)?;
                 self.flush(pending, emit)?;
             }
             if ended {
@@ -944,9 +1030,16 @@ impl PiRun {
         self.finish(emit)
     }
 
-    fn event(&mut self, event: &Event, pending: &mut Vec<Pending>) -> Result<(), Failure> {
-        let parsed: Value = crate::json_parse::parse_event(&event.data)
-            .map_err(|_| Failure::upstream("JSON Parse error: Unable to parse JSON string"))?;
+    fn event(
+        &mut self,
+        event: &Event,
+        pending: &mut Vec<Pending>,
+        emit: &mut Emitter<'_>,
+    ) -> Result<(), Failure> {
+        let parsed: Value = crate::json_parse::parse_event(&event.data).map_err(|error| {
+            emit.record_error(LlmError::diagnostic(ErrorKind::Protocol, error.to_string()));
+            Failure::upstream("JSON Parse error: Unable to parse JSON string")
+        })?;
         let thread = event
             .event
             .as_deref()
@@ -957,10 +1050,16 @@ impl PiRun {
         }
         let error = get(Some(&parsed), "error");
         if truthy(error) {
+            emit.record_error(LlmError::upstream(parsed.to_string()));
             let message = api_error_message(None, error, None);
             return Err(Failure::Upstream(with_raw_metadata(message, error)));
         }
-        self.chunk(&parsed, pending)
+        self.chunk(&parsed, pending).inspect_err(|_| {
+            emit.record_error(LlmError::diagnostic(
+                ErrorKind::Protocol,
+                parsed.to_string(),
+            ))
+        })
     }
 
     fn ensure_text(&mut self, pending: &mut Vec<Pending>) -> usize {
@@ -1123,7 +1222,6 @@ impl PiRun {
                 self.scratch[index] = Some(ToolScratch {
                     partial_args: String::new(),
                     stream_index,
-                    arguments: Value::Object(Map::new()),
                 });
                 if let Some(stream_index) = stream_index {
                     set_index(&mut self.by_index, stream_index, index);
@@ -1150,9 +1248,8 @@ impl PiRun {
             .map(js::to_js_string);
         if let Some(arguments_delta) = &arguments_delta {
             scratch.partial_args.push_str(arguments_delta);
-            scratch.arguments = parse_streaming_json(&scratch.partial_args);
         }
-        let parsed = wire_arguments(&scratch.arguments);
+        let parsed = wire_arguments(parse_streaming_json(&scratch.partial_args));
         if let AssistantContent::ToolCall {
             id: block_id,
             name,
@@ -1223,8 +1320,7 @@ impl PiRun {
         for index in 0..self.out.content.len() {
             let content_index = content_index(index);
             if let Some(scratch) = self.scratch[index].as_mut() {
-                scratch.arguments = parse_streaming_json(&scratch.partial_args);
-                let parsed = wire_arguments(&scratch.arguments);
+                let parsed = wire_arguments(parse_streaming_json(&scratch.partial_args));
                 if let AssistantContent::ToolCall { arguments, .. } = &mut self.out.content[index] {
                     *arguments = parsed;
                 }
@@ -1254,6 +1350,7 @@ impl PiRun {
                 .clone()
                 .filter(|error| !error.is_empty())
                 .unwrap_or_else(|| "Provider returned an error stop reason".to_owned());
+            emit.record_error(LlmError::upstream(&upstream));
             return Err(Failure::Upstream(upstream));
         }
         Ok(self.out.clone())
@@ -1307,7 +1404,7 @@ fn parse_usage(raw: Option<&Value>) -> pirc_llm_types::Usage {
     usage.output = js::to_u64(output);
     usage.cache_read = js::to_u64(cache_read);
     usage.cache_write = js::to_u64(cache_write);
-    usage.total_tokens = usage.input + usage.output + usage.cache_read + usage.cache_write;
+    usage.total_tokens = usage_total(&usage, true);
     usage
 }
 
@@ -1330,6 +1427,93 @@ fn map_stop_reason(reason: &Value) -> (StopReason, Option<String>) {
 mod tests {
     use super::*;
 
+    fn test_run() -> PiRun {
+        let endpoint = crate::runtime::ResolvedEndpoint::new(
+            pirc_llm_types::ModelApi::OpenaiCompletions,
+            "openai",
+            "http://localhost/v1",
+        );
+        let model = crate::runtime::ResolvedModel::new("test", 1024);
+        PiRun::new(&StreamRequest::new("test", &endpoint, &model))
+    }
+
+    #[test]
+    fn typed_compat_keeps_js_truthiness_defaults_and_extensions() {
+        let mut endpoint = crate::runtime::ResolvedEndpoint::new(
+            pirc_llm_types::ModelApi::OpenaiCompletions,
+            "openai",
+            "http://localhost/v1",
+        );
+        endpoint.compat = json!({
+            "supportsStore": 0, "supportsDeveloperRole": [], "supportsStrictMode": 0,
+            "supportsUsageInStreaming": false, "supportsReasoningEffort": null,
+            "thinkingFormat": "qwen-chat-template", "customExtension": {"x":1}
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        let model = crate::runtime::ResolvedModel::new("test", 1024);
+        let pi = PiModel::new(&StreamRequest::new("test", &endpoint, &model));
+        let compat = Compat::new(&pi);
+        assert!(!compat.supports_store);
+        assert!(compat.supports_developer_role);
+        assert!(compat.supports_strict_mode); // Only literal false disables this flag.
+        assert!(!compat.supports_usage_in_streaming);
+        assert!(compat.supports_reasoning_effort); // null uses provider detection.
+        assert!(compat.thinking_format == ThinkingFormat::QwenChatTemplate);
+        assert_eq!(pi.compat["customExtension"], json!({"x":1}));
+        endpoint
+            .compat
+            .insert("thinkingFormat".to_owned(), json!("future-format"));
+        let pi = PiModel::new(&StreamRequest::new("test", &endpoint, &model));
+        assert!(Compat::new(&pi).thinking_format == ThinkingFormat::Unknown);
+    }
+
+    #[test]
+    fn tool_arguments_are_reparsed_each_delta_without_duplicate_tree_storage() {
+        let mut run = test_run();
+        let mut pending = Vec::new();
+        run.tool_call(
+            &json!({"index":0,"id":"call","function":{"name":"f","arguments":"{\"z\":1,"}}),
+            &mut pending,
+        );
+        let AssistantContent::ToolCall { arguments, .. } = &run.out.content[0] else {
+            panic!("tool");
+        };
+        assert_eq!(arguments.get("z"), Some(&json!(1)));
+        run.tool_call(
+            &json!({"index":0,"function":{"arguments":"\"a\":2}"}}),
+            &mut pending,
+        );
+        let AssistantContent::ToolCall { arguments, .. } = &run.out.content[0] else {
+            panic!("tool");
+        };
+        assert_eq!(
+            arguments.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["z", "a"]
+        );
+        let before = arguments.clone();
+        run.tool_call(&json!({"index":0}), &mut pending);
+        let AssistantContent::ToolCall { arguments, .. } = &run.out.content[0] else {
+            panic!("tool");
+        };
+        assert_eq!(arguments, &before);
+        assert!(matches!(pending.last(), Some(Pending::ToolDelta(0, delta)) if delta.is_empty()));
+        assert!(wire_arguments(json!([1])).is_empty());
+        assert!(wire_arguments(Value::Null).is_empty());
+    }
+
+    #[test]
+    fn usage_total_saturates_for_extreme_provider_counts() {
+        let usage = parse_usage(Some(
+            &json!({"prompt_tokens":1e30,"completion_tokens":1e30}),
+        ));
+        assert_eq!(usage.input, u64::MAX);
+        assert_eq!(usage.output, u64::MAX);
+        assert_eq!(usage.total_tokens, u64::MAX);
+        let usage = parse_usage(Some(&json!({"prompt_tokens":-1,"completion_tokens":2.9})));
+        assert_eq!((usage.input, usage.output, usage.total_tokens), (0, 2, 2));
+    }
     #[test]
     fn api_error_messages_match_the_sdk() {
         assert_eq!(http_error(500, "boom"), "500 boom");

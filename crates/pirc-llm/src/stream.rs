@@ -27,6 +27,55 @@ pub struct StreamRequest<'a> {
     pub resolve_variable: &'a (dyn Fn(&str) -> Option<String> + Sync),
 }
 
+impl StreamRequest<'_> {
+    /// Project legacy catalog DTOs into the selected route's runtime configuration.
+    pub fn resolve(
+        &self,
+        route: crate::Route,
+    ) -> (
+        crate::runtime::ResolvedEndpoint,
+        crate::runtime::ResolvedModel,
+    ) {
+        (
+            crate::runtime::ResolvedEndpoint::from_legacy(
+                route,
+                self.provider_name,
+                self.provider,
+                self.model,
+            ),
+            crate::runtime::ResolvedModel::from(self.model),
+        )
+    }
+
+    /// Borrow conversation, authentication and options without cloning history or identity.
+    pub fn runtime<'a>(
+        &'a self,
+        endpoint: &'a crate::runtime::ResolvedEndpoint,
+        model: &'a crate::runtime::ResolvedModel,
+    ) -> crate::runtime::RunRequest<'a> {
+        use crate::runtime::{Auth, Context, RequestOptions, RunRequest};
+        RunRequest {
+            provider_name: self.provider_name,
+            endpoint,
+            model,
+            auth: self.api_key.map_or(Auth::None, Auth::Key),
+            context: Context {
+                system_prompt: self.system_prompt,
+                messages: self.messages,
+                tools: self.tools,
+            },
+            options: RequestOptions {
+                thinking: self.thinking,
+                session_id: &self.session_id,
+                codex_user_agent: self.codex_user_agent,
+                max_tokens: self.max_tokens,
+                tool_choice: self.tool_choice,
+                resolve_variable: self.resolve_variable,
+            },
+        }
+    }
+}
+
 /// The run was cancelled; the transport stops where it is.
 #[derive(Debug)]
 pub struct Cancelled;
@@ -34,10 +83,18 @@ pub struct Cancelled;
 /// Forwards deltas until the run is cancelled.
 pub struct Emitter<'a> {
     pub cancel: watch::Receiver<u64>,
+    pub(crate) error: Option<crate::outcome::LlmError>,
     pub on_delta: &'a mut (dyn FnMut(&AssistantDelta, &AssistantMessage) + Send),
 }
 
 impl Emitter<'_> {
+    /// Preserve the first structured failure rather than overwriting its cause during cleanup.
+    pub fn record_error(&mut self, error: crate::outcome::LlmError) {
+        if self.error.is_none() {
+            self.error = Some(error);
+        }
+    }
+
     pub fn cancelled(&self) -> bool {
         self.cancel.has_changed().unwrap_or(true)
     }
@@ -68,6 +125,19 @@ pub fn empty_usage() -> Usage {
         cache_read: 0,
         cache_write: 0,
         total_tokens: 0,
+    }
+}
+
+/// Provider-specific total accounting, saturating rather than overflowing on malformed usage.
+pub fn usage_total(usage: &Usage, include_cache_write: bool) -> u64 {
+    let total = usage
+        .input
+        .saturating_add(usage.output)
+        .saturating_add(usage.cache_read);
+    if include_cache_write {
+        total.saturating_add(usage.cache_write)
+    } else {
+        total
     }
 }
 
@@ -102,4 +172,45 @@ pub fn assistant(
 
 pub fn content_index(index: usize) -> u32 {
     u32::try_from(index).unwrap_or(u32::MAX)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn usage_totals_are_dialect_specific_and_saturating() {
+        let usage = Usage {
+            input: 2,
+            output: 3,
+            cache_read: 5,
+            cache_write: 7,
+            total_tokens: 999,
+        };
+        assert_eq!(usage_total(&usage, false), 10);
+        assert_eq!(usage_total(&usage, true), 17);
+        let large = Usage {
+            input: u64::MAX,
+            ..usage
+        };
+        assert_eq!(usage_total(&large, false), u64::MAX);
+        assert_eq!(usage_total(&large, true), u64::MAX);
+    }
+
+    #[test]
+    fn emitter_preserves_first_failure() {
+        use crate::outcome::{ErrorKind, LlmError};
+        let (_tx, rx) = watch::channel(0);
+        let mut callback = |_: &AssistantDelta, _: &AssistantMessage| {};
+        let mut emitter = Emitter {
+            cancel: rx,
+            error: None,
+            on_delta: &mut callback,
+        };
+        emitter.record_error(LlmError::http(401, "first"));
+        emitter.record_error(LlmError::new(ErrorKind::Protocol));
+        let error = emitter.error.unwrap();
+        assert_eq!(error.status(), Some(401));
+        assert_eq!(error.diagnostics(), Some("first"));
+    }
 }

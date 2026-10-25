@@ -70,9 +70,22 @@ pub fn supports_adaptive_thinking(model_id: &str) -> bool {
     .any(|part| model_id.contains(part))
 }
 
-/// `getAnthropicCompat`: unset (or `null`) means supported.
-fn compat_flag(model: &PiModel, key: &str) -> bool {
-    present(model.compat.get(key)).is_none_or(|value| truthy(Some(value)))
+/// Resolve compatibility coercion once; JSON extensions remain in PiModel.
+#[derive(Clone, Copy)]
+struct Compat {
+    eager_tool_input_streaming: bool,
+    long_cache_retention: bool,
+}
+
+impl Compat {
+    fn resolve(model: &PiModel) -> Self {
+        let flag =
+            |key: &str| present(model.compat.get(key)).is_none_or(|value| truthy(Some(value)));
+        Self {
+            eager_tool_input_streaming: flag("supportsEagerToolInputStreaming"),
+            long_cache_retention: flag("supportsLongCacheRetention"),
+        }
+    }
 }
 
 /// What the adapter's `streamOptions` passes for this API.
@@ -130,8 +143,9 @@ pub fn prepare(
     options: &Options,
     resolve_variable: &(dyn Fn(&str) -> Option<String> + Sync),
 ) -> Result<HttpRequest, String> {
+    let compat = Compat::resolve(model);
     let mut betas = Vec::new();
-    if !tools.is_empty() && !compat_flag(model, "supportsEagerToolInputStreaming") {
+    if !tools.is_empty() && !compat.eager_tool_input_streaming {
         betas.push(FINE_GRAINED_TOOL_STREAMING_BETA);
     }
     if !supports_adaptive_thinking(&model.id) {
@@ -239,12 +253,12 @@ fn build_params(
     is_oauth: bool,
     options: &Options,
 ) -> Map<String, Value> {
-    let cache_control =
-        if options.long_cache_retention && compat_flag(model, "supportsLongCacheRetention") {
-            json!({ "type": "ephemeral", "ttl": "1h" })
-        } else {
-            json!({ "type": "ephemeral" })
-        };
+    let compat = Compat::resolve(model);
+    let cache_control = if options.long_cache_retention && compat.long_cache_retention {
+        json!({ "type": "ephemeral", "ttl": "1h" })
+    } else {
+        json!({ "type": "ephemeral" })
+    };
     let max_tokens = if options.max_tokens > 0 {
         options.max_tokens
     } else {
@@ -269,7 +283,7 @@ fn build_params(
         params.insert("system".to_owned(), json!([text(system_prompt)]));
     }
     if !tools.is_empty() {
-        let eager = compat_flag(model, "supportsEagerToolInputStreaming");
+        let eager = compat.eager_tool_input_streaming;
         params.insert(
             "tools".to_owned(),
             Value::Array(convert_tools(tools, is_oauth, eager, &cache_control)),
@@ -570,5 +584,33 @@ mod tests {
         assert!(supports_adaptive_thinking("claude-opus-4-6-20260101"));
         assert!(supports_adaptive_thinking("anthropic/claude-sonnet-4.6"));
         assert!(!supports_adaptive_thinking("claude-sonnet-4-5"));
+    }
+    #[test]
+    fn typed_compat_preserves_absent_null_and_truthy_extensions() {
+        let mut model = PiModel {
+            id: "m".to_owned(),
+            api: "anthropic-messages".to_owned(),
+            provider: "p".to_owned(),
+            base_url: "http://localhost".to_owned(),
+            reasoning: false,
+            thinking_level_map: None,
+            input: vec![],
+            headers: Default::default(),
+            compat: Default::default(),
+        };
+        assert!(Compat::resolve(&model).eager_tool_input_streaming);
+        model
+            .compat
+            .insert("supportsEagerToolInputStreaming".to_owned(), Value::Null);
+        assert!(Compat::resolve(&model).eager_tool_input_streaming);
+        model
+            .compat
+            .insert("supportsEagerToolInputStreaming".to_owned(), json!([]));
+        assert!(Compat::resolve(&model).eager_tool_input_streaming);
+        model
+            .compat
+            .insert("supportsEagerToolInputStreaming".to_owned(), json!(0));
+        assert!(!Compat::resolve(&model).eager_tool_input_streaming);
+        assert!(Compat::resolve(&model).long_cache_retention);
     }
 }

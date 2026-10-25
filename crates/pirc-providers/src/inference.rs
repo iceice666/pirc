@@ -11,7 +11,10 @@ use pirc_protocol::{
 use tokio::sync::watch;
 
 use crate::errors::safe_inference_error;
-use pirc_llm::{Route, StreamRequest, Transport, api_name, assistant};
+use pirc_llm::{
+    Auth, Context, RequestOptions, ResolvedEndpoint, ResolvedModel, Route, RunRequest, Transport,
+    api_name, assistant,
+};
 
 const CANCELLED: &str = "Model request cancelled";
 
@@ -222,30 +225,38 @@ impl Inference {
         } else {
             String::new()
         };
-        let stream_request = StreamRequest {
+        let endpoint =
+            ResolvedEndpoint::from_legacy(route, &request.provider_name, provider, model);
+        let runtime_model = ResolvedModel::from(model);
+        let stream_request = RunRequest {
             provider_name: &request.provider_name,
-            provider,
-            model,
-            api_key: resolved.api_key.as_deref(),
-            system_prompt: &request.system_prompt,
-            messages: &request.messages,
-            tools: &request.tools,
-            thinking: if model.reasoning {
-                request.thinking
-            } else {
-                ThinkingLevel::Off
+            endpoint: &endpoint,
+            model: &runtime_model,
+            auth: resolved.api_key.as_deref().map_or(Auth::None, Auth::Key),
+            context: Context {
+                system_prompt: &request.system_prompt,
+                messages: &request.messages,
+                tools: &request.tools,
             },
-            session_id,
-            codex_user_agent: &codex_user_agent,
-            max_tokens: request.max_tokens,
-            tool_choice: request.tool_choice,
-            resolve_variable: &|name| std::env::var(name).ok(),
+            options: RequestOptions {
+                thinking: if model.reasoning {
+                    request.thinking
+                } else {
+                    ThinkingLevel::Off
+                },
+                session_id: &session_id,
+                codex_user_agent: &codex_user_agent,
+                max_tokens: request.max_tokens,
+                tool_choice: request.tool_choice,
+                resolve_variable: &|name| std::env::var(name).ok(),
+            },
         };
         let native = matches!(route, Route::Chat | Route::NativeAnthropic);
         let mut message = self
             .transport
-            .run(route, &stream_request, cancel, on_delta)
-            .await;
+            .run_request(route, &stream_request, cancel, on_delta)
+            .await
+            .into_legacy_message();
         // Native errors may contain upstream bodies; only fixed classifications
         // leave the gateway. Pi paths retain their compatibility classifications.
         if native

@@ -29,6 +29,53 @@ construction can consult system/environment proxy and trust settings: that is
 a caller-owned decision, not something Transport performs. Explicit test clients
 use `no_proxy()` and a supplied ring ClientConfig, without global installation.
 
+## Rust runtime API
+
+New Rust consumers can execute without constructing a provider catalog:
+
+- `ResolvedEndpoint` holds one selected route's URL, headers, canonical provider
+  and compatibility extensions; it contains no model list or credential field.
+- `ResolvedModel` holds one model's generation metadata.
+- `RunRequest` borrows endpoint/model plus `Auth::Key`, `Context` (system prompt,
+  messages, tools) and `RequestOptions`. Default context/options are empty/off;
+  cache identity, URL lookups and Codex fingerprint remain explicit host inputs.
+- `Transport::run_request(Route, &RunRequest, receiver, callback) -> RunOutcome`
+  returns the partial/final message and `Termination::{Finished, Cancelled, Failed}`.
+  `LlmError` exposes a category and actual HTTP status; Display/Debug omit raw
+  diagnostics. `diagnostics()` is an explicit, potentially secret-bearing accessor.
+  This metadata does not prescribe retries, fallback or presentation policy.
+
+See the executable example on `RunRequest` in the API docs. The production
+pirc-providers adapter uses the same resolved execution path.
+
+### Compatibility and safety
+
+`StreamRequest` and `Transport::run` remain available. `run_outcome` accepts the
+legacy request but returns structured metadata. `RunOutcome::into_legacy_message`
+explicitly restores the original native/Pi error text; native errors can contain
+upstream bodies and require host redaction. Only the final typed error summary
+is sanitized: model content, identifiers and callback snapshots are not a
+redaction boundary. Cancellation is separate from failure and keeps the existing
+per-route partial-content and usage rules. Callbacks remain synchronous and
+ordered, with no spawned producer or channel buffering.
+
+`ResolvedEndpoint::from_legacy` preserves native/Pi URL and header override
+differences. Resolution does not perform HTTP, parse URLs, validate headers or
+invoke variable lookup: these remain lazy after the cancellation fence. Native
+routes retain separate actual-POST and OpenCode-detection URLs. Keep endpoint
+resolution paired with its selected route; no route inference or fallback occurs.
+Headers/compat/URLs are not secret-free even though authentication is separate.
+
+Known compatibility flags are resolved into private Rust bools/enums at codec
+boundaries; legacy truthiness and missing/null behavior remain supported, as do
+opaque provider extensions and signatures. Stream state uses typed active/block
+variants instead of unrelated optional scratch fields where possible. SSE cursor
+scanning and owned argument-map conversion reduce copying while retaining each
+dialect's EOF/CRLF quirks and per-delta argument/partial updates. Usage totals use
+saturating arithmetic and retain route-specific cache accounting.
+
+OAuth and the serializable pirc-llm-types DTOs are unchanged.
+
 ## Features
 
 Default features are empty, with only the pure types/serde graph. Enable wire
@@ -61,10 +108,16 @@ check/test/clippy (`-D warnings`) for default, each wire API, OAuth-only and all
 features, checks normal dependency trees, and removes disposable builds. This
 avoids hiding missing dependencies via workspace feature unification.
 
-The checkpoint also passes `cargo test -p pirc-llm -p pirc-providers
---all-features`: 50 library unit tests, 2 direct-boundary regressions, 47 adapter
-unit tests, 5 cancellation/drop tests, all 260 recorded TS parity scenarios
+The runtime checkpoint passes `cargo test --locked --offline -p pirc-llm
+-p pirc-providers --all-features`: 85 library unit tests, 2 original direct-boundary
+regressions, 13 runtime/outcome tests, a complete callback-snapshot test (including
+cancellation at all 12 callbacks), an API doctest, 47 adapter unit tests, 5
+cancellation/drop tests, all 260 recorded TS parity scenarios
 (requests/headers/deltas/messages), and 3 offline TLS distrust regressions.
-Synthetic OAuth tests cover PKCE, browser/pasted callbacks, device flow, refresh,
-explicit discovery opt-out, cancellation and callback cleanup. No real provider
-login, deployment or publication was performed.
+Runtime tests distinguish HTTP status from body text, provider errors, malformed
+streams, network failures, caller timeouts and cancellation; Codex transient
+retries cannot contaminate a later success or terminal failure. Decoder tests
+exercise byte splits through UTF-8 and CRLF without erasing dialect quirks.
+Synthetic OAuth tests remain unchanged and cover PKCE, browser/pasted callbacks,
+device flow, refresh, explicit discovery opt-out, cancellation and callback cleanup.
+No real provider login, deployment, benchmark claim or publication was performed.

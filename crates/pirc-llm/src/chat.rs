@@ -1,6 +1,8 @@
 //! The gateway's native Chat Completions transport for providers configured
 //! with the legacy `openai-chat` API (`agent/providers/openai-chat.ts`).
 
+use crate::outcome::{ErrorKind, LlmError};
+use crate::runtime::RunRequest as StreamRequest;
 use pirc_llm_types::{
     AssistantContent, AssistantDelta, AssistantMessage, Message, StopReason, ThinkingLevel,
     UserBlock, UserContent,
@@ -11,18 +13,26 @@ use crate::http::{Headers, opencode_headers};
 use crate::js::{self, get, non_empty_str, present, truthy};
 use crate::native::parse_tool_arguments;
 use crate::sse::NativeDecoder;
-use crate::stream::{Cancelled, Emitter, StreamRequest, assistant, content_index, now_ms};
+use crate::stream::{Cancelled, Emitter, assistant, content_index, now_ms};
 
-fn flags(request: &StreamRequest<'_>) -> Map<String, Value> {
-    let mut flags = request.provider.compat.clone();
-    flags.extend(
-        request
-            .model
-            .compat
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone())),
-    );
-    flags
+#[derive(Clone, Copy)]
+struct Compat {
+    developer_role: bool,
+    reasoning_effort: bool,
+    session_affinity: bool,
+    long_cache: bool,
+}
+
+impl Compat {
+    fn resolve(request: &StreamRequest<'_>) -> Self {
+        let flags = &request.endpoint.compat;
+        Self {
+            developer_role: truthy(flags.get("supportsDeveloperRole")),
+            reasoning_effort: flags.get("supportsReasoningEffort") != Some(&Value::Bool(false)),
+            session_affinity: truthy(flags.get("sendSessionAffinityHeaders")),
+            long_cache: truthy(flags.get("supportsLongCacheRetention")),
+        }
+    }
 }
 
 fn image_url(mime_type: &str, data: &str) -> Value {
@@ -51,17 +61,17 @@ fn assistant_text(content: &[AssistantContent]) -> String {
 }
 
 /// `toOpenAIMessages`.
-fn to_openai_messages(request: &StreamRequest<'_>, flags: &Map<String, Value>) -> Vec<Value> {
+fn to_openai_messages(request: &StreamRequest<'_>, flags: &Compat) -> Vec<Value> {
     let mut out = Vec::new();
-    if !request.system_prompt.is_empty() {
-        let role = if truthy(flags.get("supportsDeveloperRole")) {
+    if !request.context.system_prompt.is_empty() {
+        let role = if flags.developer_role {
             "developer"
         } else {
             "system"
         };
-        out.push(json!({ "role": role, "content": request.system_prompt }));
+        out.push(json!({ "role": role, "content": request.context.system_prompt }));
     }
-    for message in request.messages {
+    for message in request.context.messages {
         match message {
             Message::User { content, .. } => {
                 let content = match content {
@@ -167,7 +177,7 @@ fn effort(level: ThinkingLevel) -> &'static str {
 }
 
 /// `openAIBody`.
-fn openai_body(request: &StreamRequest<'_>, flags: &Map<String, Value>) -> Map<String, Value> {
+fn openai_body(request: &StreamRequest<'_>, flags: &Compat) -> Map<String, Value> {
     let mut body = Map::new();
     body.insert("model".to_owned(), json!(request.model.id));
     body.insert(
@@ -181,10 +191,16 @@ fn openai_body(request: &StreamRequest<'_>, flags: &Map<String, Value>) -> Map<S
     );
     body.insert(
         "max_completion_tokens".to_owned(),
-        json!(request.max_tokens.unwrap_or(request.model.max_tokens)),
+        json!(
+            request
+                .options
+                .max_tokens
+                .unwrap_or(request.model.max_tokens)
+        ),
     );
-    if !request.tools.is_empty() {
+    if !request.context.tools.is_empty() {
         let tools: Vec<Value> = request
+            .context
             .tools
             .iter()
             .map(|tool| {
@@ -193,24 +209,26 @@ fn openai_body(request: &StreamRequest<'_>, flags: &Map<String, Value>) -> Map<S
             })
             .collect();
         body.insert("tools".to_owned(), Value::Array(tools));
-        if let Some(choice) = request.tool_choice {
+        if let Some(choice) = request.options.tool_choice {
             body.insert(
                 "tool_choice".to_owned(),
                 serde_json::to_value(choice).unwrap_or_default(),
             );
         }
     }
-    if request.model.reasoning && flags.get("supportsReasoningEffort") != Some(&Value::Bool(false))
-    {
+    if request.model.reasoning && flags.reasoning_effort {
         body.insert(
             "reasoning_effort".to_owned(),
-            json!(effort(request.thinking)),
+            json!(effort(request.options.thinking)),
         );
     }
-    if truthy(flags.get("sendSessionAffinityHeaders")) {
-        body.insert("prompt_cache_key".to_owned(), json!(request.session_id));
+    if flags.session_affinity {
+        body.insert(
+            "prompt_cache_key".to_owned(),
+            json!(request.options.session_id),
+        );
     }
-    if truthy(flags.get("supportsLongCacheRetention")) {
+    if flags.long_cache {
         body.insert("prompt_cache_retention".to_owned(), json!("24h"));
     }
     body
@@ -222,11 +240,16 @@ struct Call {
     raw: String,
 }
 
+/// At most one text/reasoning block is open; switching closes the previous kind.
+enum ActiveBlock {
+    Text(usize),
+    Thinking(usize),
+}
+
 pub struct ChatRun {
     message: AssistantMessage,
     calls: Vec<Call>,
-    text_index: Option<usize>,
-    thinking_index: Option<usize>,
+    active: Option<ActiveBlock>,
 }
 
 impl ChatRun {
@@ -239,15 +262,15 @@ impl ChatRun {
                 StopReason::Stop,
             ),
             calls: Vec::new(),
-            text_index: None,
-            thinking_index: None,
+            active: None,
         }
     }
 
     fn close_text(&mut self, emit: &mut Emitter<'_>) -> Result<(), Cancelled> {
-        let Some(index) = self.text_index.take() else {
+        let Some(ActiveBlock::Text(index)) = self.active else {
             return Ok(());
         };
+        self.active = None;
         let content = match &self.message.content[index] {
             AssistantContent::Text { text, .. } => text.clone(),
             _ => String::new(),
@@ -262,9 +285,10 @@ impl ChatRun {
     }
 
     fn close_thinking(&mut self, emit: &mut Emitter<'_>) -> Result<(), Cancelled> {
-        let Some(index) = self.thinking_index.take() else {
+        let Some(ActiveBlock::Thinking(index)) = self.active else {
             return Ok(());
         };
+        self.active = None;
         let content = match &self.message.content[index] {
             AssistantContent::Thinking { thinking, .. } => thinking.clone(),
             _ => String::new(),
@@ -281,7 +305,7 @@ impl ChatRun {
     fn fix_total(mut message: AssistantMessage) -> AssistantMessage {
         let usage = &mut message.usage;
         if usage.total_tokens == 0 {
-            usage.total_tokens = usage.input + usage.output + usage.cache_read;
+            usage.total_tokens = crate::stream::usage_total(usage, false);
         }
         message
     }
@@ -332,6 +356,7 @@ impl ChatRun {
             }
             Err(Failure::Cancelled) => Err(Cancelled),
             Err(Failure::Upstream(error)) => {
+                emit.record_error(LlmError::diagnostic(ErrorKind::Protocol, error.clone()));
                 let _ = self.close_text(emit);
                 let _ = self.close_thinking(emit);
                 if emit.cancelled() {
@@ -354,8 +379,8 @@ impl ChatRun {
         request: &StreamRequest<'_>,
         emit: &mut Emitter<'_>,
     ) -> Result<(), Failure> {
-        let flags = flags(request);
-        let base = request.provider.base_url.as_str();
+        let flags = Compat::resolve(request);
+        let base = request.endpoint.base_url.as_str();
         let url = format!(
             "{}/chat/completions",
             base.strip_suffix('/').unwrap_or(base)
@@ -363,29 +388,32 @@ impl ChatRun {
         let mut headers = Headers::default();
         headers.set("content-type", "application/json");
         headers.set("accept", "text/event-stream");
-        for (name, value) in &request.provider.headers {
+        for (name, value) in &request.endpoint.headers {
             headers.set(name, value);
         }
-        let model_url = request
-            .model
-            .base_url
-            .as_deref()
-            .unwrap_or(&request.provider.base_url);
-        let opencode =
-            opencode_headers(request.provider.opencode_go, model_url, &request.session_id)
-                .map_err(|()| Failure::upstream("Invalid URL"))?;
+        let model_url = &request.endpoint.opencode_base_url;
+        let opencode = opencode_headers(
+            request.endpoint.opencode_go,
+            model_url,
+            request.options.session_id,
+        )
+        .map_err(|()| {
+            emit.record_error(LlmError::new(ErrorKind::InvalidRequest));
+            Failure::upstream("Invalid URL")
+        })?;
         for (name, value) in opencode {
             headers.set(name, &value);
         }
-        if let Some(key) = request.api_key.filter(|key| !key.is_empty()) {
+        if let Some(key) = request.auth.as_key().filter(|key| !key.is_empty()) {
             headers.set("authorization", &format!("Bearer {key}"));
         }
-        if truthy(flags.get("sendSessionAffinityHeaders")) {
-            headers.set("session_id", &request.session_id);
+        if flags.session_affinity {
+            headers.set("session_id", request.options.session_id);
         }
-        let header_map = headers
-            .to_map()
-            .ok_or_else(|| Failure::upstream("Invalid header"))?;
+        let header_map = headers.to_map().ok_or_else(|| {
+            emit.record_error(LlmError::new(ErrorKind::InvalidRequest));
+            Failure::upstream("Invalid header")
+        })?;
         let body = serde_json::to_vec(&openai_body(request, &flags)).unwrap_or_default();
         let mut response = client
             .post(&url)
@@ -394,6 +422,7 @@ impl ChatRun {
             .send()
             .await
             .map_err(|error| {
+                emit.record_error(LlmError::from_reqwest(&error));
                 Failure::upstream(if error.is_connect() {
                     "Unable to connect. Is the computer able to access the url?"
                 } else {
@@ -409,6 +438,7 @@ impl ChatRun {
             } else {
                 text
             };
+            emit.record_error(LlmError::http(status.as_u16(), text.clone()));
             return Err(Failure::Upstream(format!(
                 "HTTP {}: {text}",
                 status.as_u16()
@@ -420,7 +450,8 @@ impl ChatRun {
             let (events, ended) = match response.chunk().await {
                 Ok(Some(bytes)) => (decoder.push(&bytes), false),
                 Ok(None) => (decoder.finish().into_iter().collect(), true),
-                Err(_) => {
+                Err(error) => {
+                    emit.record_error(LlmError::from_reqwest(&error));
                     return Err(Failure::upstream(
                         "The socket connection was closed unexpectedly.",
                     ));
@@ -460,6 +491,7 @@ impl ChatRun {
                 Some(message) => js::to_js_string(message),
                 None => error.map(Value::to_string).unwrap_or_default(),
             };
+            emit.record_error(LlmError::upstream(message.clone()));
             return Err(Failure::Upstream(message));
         }
         let usage = get(chunk, "usage");
@@ -485,16 +517,16 @@ impl ChatRun {
             present(get(delta, "reasoning_content")).or(present(get(delta, "reasoning")));
         if let Some(reasoning) = non_empty_str(reasoning) {
             self.close_text(emit).map_err(Failure::from)?;
-            let index = match self.thinking_index {
-                Some(index) => index,
-                None => {
+            let index = match self.active {
+                Some(ActiveBlock::Thinking(index)) => index,
+                _ => {
                     self.message.content.push(AssistantContent::Thinking {
                         thinking: String::new(),
                         signature: None,
                         redacted: None,
                     });
                     let index = self.message.content.len() - 1;
-                    self.thinking_index = Some(index);
+                    self.active = Some(ActiveBlock::Thinking(index));
                     let start = AssistantDelta::ThinkingStart {
                         content_index: content_index(index),
                     };
@@ -513,15 +545,15 @@ impl ChatRun {
         }
         if let Some(text) = non_empty_str(get(delta, "content")) {
             self.close_thinking(emit)?;
-            let index = match self.text_index {
-                Some(index) => index,
-                None => {
+            let index = match self.active {
+                Some(ActiveBlock::Text(index)) => index,
+                _ => {
                     self.message.content.push(AssistantContent::Text {
                         text: String::new(),
                         text_signature: None,
                     });
                     let index = self.message.content.len() - 1;
-                    self.text_index = Some(index);
+                    self.active = Some(ActiveBlock::Text(index));
                     let start = AssistantDelta::TextStart {
                         content_index: content_index(index),
                     };
@@ -648,5 +680,38 @@ mod tests {
             Value::Object(parse_tool_arguments("nope")),
             json!({ "__invalid_json": "nope" })
         );
+    }
+    #[test]
+    fn compat_resolves_legacy_truthiness_not_strict_bool() {
+        let mut endpoint = crate::ResolvedEndpoint::new(
+            pirc_llm_types::ModelApi::OpenaiChat,
+            "p",
+            "http://localhost",
+        );
+        endpoint.compat = serde_json::from_value(json!({
+            "supportsDeveloperRole": [], "supportsReasoningEffort": null,
+            "sendSessionAffinityHeaders": "false", "supportsLongCacheRetention": 0
+        }))
+        .unwrap();
+        let model = crate::ResolvedModel::new("m", 10);
+        let request = crate::RunRequest::new("p", &endpoint, &model);
+        let flags = Compat::resolve(&request);
+        assert!(flags.developer_role);
+        assert!(flags.reasoning_effort);
+        assert!(flags.session_affinity);
+        assert!(!flags.long_cache);
+    }
+
+    #[test]
+    fn usage_fallback_saturates_without_replacing_reported_total() {
+        let mut message = assistant("a", "p", "m", StopReason::Stop);
+        message.usage.input = u64::MAX;
+        message.usage.output = 1;
+        assert_eq!(
+            ChatRun::fix_total(message.clone()).usage.total_tokens,
+            u64::MAX
+        );
+        message.usage.total_tokens = 7;
+        assert_eq!(ChatRun::fix_total(message).usage.total_tokens, 7);
     }
 }

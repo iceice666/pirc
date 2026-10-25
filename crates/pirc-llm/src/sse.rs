@@ -136,6 +136,8 @@ impl SdkDecoder {
 #[cfg(any(test, any(feature = "openai-chat", feature = "anthropic-messages")))]
 pub struct NativeDecoder {
     buffer: Vec<u8>,
+    /// Bytes already checked for a newline in the retained partial line.
+    scanned: usize,
     event: String,
     data: Vec<String>,
 }
@@ -145,13 +147,14 @@ impl NativeDecoder {
     pub fn push(&mut self, bytes: &[u8]) -> Vec<Event> {
         self.buffer.extend_from_slice(bytes);
         let mut events = Vec::new();
-        while let Some(newline) = self.buffer.iter().position(|&b| b == b'\n') {
-            let mut line: Vec<u8> = self.buffer.drain(..=newline).collect();
-            line.pop();
-            if line.last() == Some(&b'\r') {
-                line.pop();
-            }
-            let line = String::from_utf8_lossy(&line);
+        let mut start = 0;
+        while let Some(offset) = self.buffer[self.scanned..].iter().position(|&b| b == b'\n') {
+            let newline = self.scanned + offset;
+            let line = &self.buffer[start..newline];
+            let line = line.strip_suffix(b"\r").unwrap_or(line);
+            let line = String::from_utf8_lossy(line);
+            start = newline + 1;
+            self.scanned = start;
             if line.is_empty() {
                 if !self.data.is_empty() {
                     events.push(Event {
@@ -168,6 +171,12 @@ impl NativeDecoder {
                     _ => {}
                 }
             }
+        }
+        // Compact once per push, not once per line. On the next push only
+        // newly appended bytes need scanning; decode UTF-8 only at line ends.
+        self.scanned = self.buffer.len() - start;
+        if start != 0 {
+            self.buffer.drain(..start);
         }
         events
     }
@@ -186,6 +195,114 @@ mod tests {
 
     fn data(events: &[Event]) -> Vec<&str> {
         events.iter().map(|event| event.data.as_str()).collect()
+    }
+
+    fn sdk_chunks(chunks: &[&[u8]]) -> Vec<Event> {
+        let mut decoder = SdkDecoder::default();
+        let mut events = Vec::new();
+        for chunk in chunks {
+            events.extend(decoder.push(chunk));
+        }
+        events.extend(decoder.finish());
+        events
+    }
+
+    fn native_chunks(chunks: &[&[u8]]) -> Vec<Event> {
+        let mut decoder = NativeDecoder::default();
+        let mut events = Vec::new();
+        for chunk in chunks {
+            events.extend(decoder.push(chunk));
+        }
+        events.extend(decoder.finish());
+        events
+    }
+
+    #[test]
+    fn sdk_byte_partitions_preserve_crlf_utf8_and_eof() {
+        let bytes = b": hi\r\nevent: e\r\ndata: caf\xc3\xa9\r\ndata: \xff\xe2\x82\r\n\r\nevent: only\n\nevent: dropped\ndata: tail";
+        let expected = vec![
+            Event {
+                event: Some("e".to_owned()),
+                data: "caf\u{e9}\n\u{fffd}\u{fffd}".to_owned(),
+            },
+            Event {
+                event: Some("only".to_owned()),
+                data: String::new(),
+            },
+        ];
+        assert_eq!(sdk_chunks(&[bytes]), expected);
+        // Every pair of byte boundaries, including inside UTF-8 and CRLF.
+        // Chunks are nonempty: an empty push has its own after-CR behavior.
+        for first in 1..bytes.len() {
+            for second in first + 1..bytes.len() {
+                assert_eq!(
+                    sdk_chunks(&[&bytes[..first], &bytes[first..second], &bytes[second..]]),
+                    expected,
+                    "cuts {first}, {second}"
+                );
+            }
+        }
+        assert_eq!(sdk_chunks(&bytes.chunks(1).collect::<Vec<_>>()), expected);
+    }
+
+    #[test]
+    fn native_byte_partitions_preserve_utf8_and_unterminated_line_drop() {
+        let bytes = b"event: e\r\ndata: caf\xc3\xa9\r\ndata: \xff\xe2\x82\n\nevent: ignored\n\ndata: pending\ndata: unterminated";
+        let expected = vec![
+            Event {
+                event: Some("e".to_owned()),
+                data: "caf\u{e9}\n\u{fffd}\u{fffd}".to_owned(),
+            },
+            Event {
+                event: Some("message".to_owned()),
+                data: "pending".to_owned(),
+            },
+        ];
+        assert_eq!(native_chunks(&[bytes]), expected);
+        for first in 1..bytes.len() {
+            for second in first + 1..bytes.len() {
+                assert_eq!(
+                    native_chunks(&[&bytes[..first], &bytes[first..second], &bytes[second..]]),
+                    expected,
+                    "cuts {first}, {second}"
+                );
+            }
+        }
+        assert_eq!(
+            native_chunks(&bytes.chunks(1).collect::<Vec<_>>()),
+            expected
+        );
+    }
+
+    #[test]
+    fn native_only_lf_ends_lines_and_eof_does_not_parse_tail() {
+        assert_eq!(
+            native_chunks(&[b"event: e\ndata: a\rdata: b\n"]),
+            vec![Event {
+                event: Some("e".to_owned()),
+                data: "a\rdata: b".to_owned(),
+            }]
+        );
+        assert!(native_chunks(&[b"data: tail"]).is_empty());
+        assert_eq!(
+            sdk_chunks(&[b"data: a\r\r"]),
+            vec![Event {
+                event: None,
+                data: "a".to_owned(),
+            }]
+        );
+    }
+
+    #[test]
+    fn sdk_empty_push_after_cr_preserves_existing_behavior() {
+        // An empty read clears after_cr, so LF is a separate blank line.
+        assert_eq!(
+            sdk_chunks(&[b"event: e\r", b"", b"\ndata: tail"]),
+            vec![Event {
+                event: Some("e".to_owned()),
+                data: String::new(),
+            }]
+        );
     }
 
     #[test]

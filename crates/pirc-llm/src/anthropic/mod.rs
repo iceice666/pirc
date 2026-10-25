@@ -8,6 +8,8 @@
 mod request;
 mod sse;
 
+use crate::outcome::{ErrorKind, LlmError};
+use crate::runtime::RunRequest as StreamRequest;
 use std::time::Duration;
 
 use pirc_llm_types::{AssistantContent, AssistantDelta, AssistantMessage, StopReason, ToolSpec};
@@ -18,7 +20,7 @@ use crate::http::opencode_headers;
 use crate::js::{self, get, present, truthy};
 use crate::json_parse::{parse_streaming_json, repair_json};
 use crate::pi::{NO_KEY, PiMessage, PiModel, api_name, history_message, pi_api, reasoning_effort};
-use crate::stream::{Cancelled, Emitter, StreamRequest, assistant, content_index};
+use crate::stream::{Cancelled, Emitter, assistant, content_index};
 
 use request::{HttpRequest, Options, from_claude_code_name, prepare};
 use sse::{Decoder, SseMessage};
@@ -40,8 +42,23 @@ struct Scratch {
     /// `block.index`: the stream's block index, `None` when the event had
     /// none or once the block stopped (pi-ai deletes it).
     index: Option<Value>,
-    /// A tool call's `partialJson`; `None` once deleted at its stop.
-    partial_json: Option<String>,
+    state: ScratchState,
+}
+
+/// Scratch buffers belong only to tool calls; text/reasoning never carry JSON.
+enum ScratchState {
+    Text,
+    Thinking,
+    Tool { partial_json: Option<String> },
+}
+
+impl ScratchState {
+    fn partial(&mut self) -> &mut Option<String> {
+        let Self::Tool { partial_json } = self else {
+            unreachable!("scratch state follows its assistant content variant")
+        };
+        partial_json
+    }
 }
 
 enum Failure {
@@ -111,8 +128,11 @@ fn count(value: Option<&Value>) -> u64 {
 }
 
 /// Arguments as the wire carries them (an object).
-fn wire_arguments(value: &Value) -> Map<String, Value> {
-    value.as_object().cloned().unwrap_or_default()
+fn wire_arguments(value: Value) -> Map<String, Value> {
+    match value {
+        Value::Object(object) => object,
+        _ => Map::new(),
+    }
 }
 
 /// The adapter's `streamOptions` for `anthropic-messages`.
@@ -123,7 +143,10 @@ fn options(
     headers: Vec<(&'static str, String)>,
     long_cache_retention: bool,
 ) -> Options {
-    let max_tokens = request.max_tokens.unwrap_or(request.model.max_tokens);
+    let max_tokens = request
+        .options
+        .max_tokens
+        .unwrap_or(request.model.max_tokens);
     let level = reasoning_effort(request, model);
     let mut options = Options {
         api_key,
@@ -132,7 +155,7 @@ fn options(
         thinking_enabled: level.is_some(),
         effort: None,
         thinking_budget_tokens: 0,
-        tool_choice: request.tool_choice,
+        tool_choice: request.options.tool_choice,
         headers,
         long_cache_retention,
     };
@@ -185,7 +208,7 @@ pub struct AnthropicRun {
 impl AnthropicRun {
     pub fn new(request: &StreamRequest<'_>) -> Self {
         let model = PiModel::new(request);
-        let api = pi_api(api_name(request.model.api.unwrap_or(request.provider.api)));
+        let api = pi_api(api_name(request.endpoint.api));
         let initial = assistant(
             api,
             request.provider_name,
@@ -202,7 +225,7 @@ impl AnthropicRun {
             out,
             at_start: None,
             scratch: Vec::new(),
-            tools: request.tools.to_vec(),
+            tools: request.context.tools.to_vec(),
             is_oauth: false,
             started: false,
             saw_start: false,
@@ -246,21 +269,21 @@ impl AnthropicRun {
         emit: &mut Emitter<'_>,
     ) -> Result<AssistantMessage, Cancelled> {
         // A managed subscription account never falls back to another credential.
-        let key = request.api_key.map(js::trim).filter(|key| !key.is_empty());
-        if request
-            .provider
-            .pi_provider
-            .as_deref()
-            .is_some_and(|p| !p.is_empty())
-            && key.is_none()
-        {
+        let key = request
+            .auth
+            .as_key()
+            .map(js::trim)
+            .filter(|key| !key.is_empty());
+        if request.endpoint.managed_credentials && key.is_none() {
+            emit.record_error(LlmError::new(ErrorKind::CredentialsUnavailable));
             return Ok(self.error_without_request("Model credentials are unavailable."));
         }
         let Ok(headers) = opencode_headers(
-            request.provider.opencode_go,
+            request.endpoint.opencode_go,
             &self.model.base_url,
-            &request.session_id,
+            request.options.session_id,
         ) else {
+            emit.record_error(LlmError::new(ErrorKind::InvalidRequest));
             return Ok(self.error_without_request("Model provider request failed."));
         };
         let options = options(
@@ -271,26 +294,36 @@ impl AnthropicRun {
             long_cache_retention,
         );
         let context: Vec<PiMessage> = request
+            .context
             .messages
             .iter()
             .map(|message| history_message(message, request.provider_name, &self.model))
             .collect();
         let http = match prepare(
             &self.model,
-            request.system_prompt,
+            request.context.system_prompt,
             &context,
-            request.tools,
+            request.context.tools,
             &options,
-            request.resolve_variable,
+            request.options.resolve_variable,
         ) {
             Ok(http) => http,
-            Err(upstream) => return Ok(self.failed(&upstream)),
+            Err(upstream) => {
+                emit.record_error(LlmError::diagnostic(
+                    ErrorKind::InvalidRequest,
+                    upstream.clone(),
+                ));
+                return Ok(self.failed(&upstream));
+            }
         };
         self.is_oauth = http.is_oauth;
         match self.stream(client, http, emit).await {
             Ok(result) => Ok(result),
             Err(Failure::Cancelled) => Err(Cancelled),
-            Err(Failure::Upstream(upstream)) => Ok(self.failed(&upstream)),
+            Err(Failure::Upstream(upstream)) => {
+                emit.record_error(LlmError::diagnostic(ErrorKind::Protocol, upstream.clone()));
+                Ok(self.failed(&upstream))
+            }
         }
     }
 
@@ -300,23 +333,34 @@ impl AnthropicRun {
         http: HttpRequest,
         emit: &mut Emitter<'_>,
     ) -> Result<AssistantMessage, Failure> {
-        let headers = http
-            .headers
-            .to_map()
-            .ok_or_else(|| Failure::upstream("Connection error."))?;
+        let headers = http.headers.to_map().ok_or_else(|| {
+            emit.record_error(LlmError::new(ErrorKind::InvalidRequest));
+            Failure::upstream("Connection error.")
+        })?;
         let body = serde_json::to_vec(&http.body).unwrap_or_default();
         let send = client.post(&http.url).headers(headers).body(body).send();
         let mut response = match tokio::time::timeout(SDK_TIMEOUT, send).await {
-            Err(_) => return Err(Failure::upstream("Request timed out.")),
-            Ok(Err(error)) if error.is_timeout() => {
+            Err(_) => {
+                emit.record_error(LlmError::new(ErrorKind::Timeout));
                 return Err(Failure::upstream("Request timed out."));
             }
-            Ok(Err(_)) => return Err(Failure::upstream("Connection error.")),
+            Ok(Err(error)) if error.is_timeout() => {
+                emit.record_error(LlmError::from_reqwest(&error));
+                return Err(Failure::upstream("Request timed out."));
+            }
+            Ok(Err(error)) => {
+                emit.record_error(LlmError::from_reqwest(&error));
+                return Err(Failure::upstream("Connection error."));
+            }
             Ok(Ok(response)) => response,
         };
         let status = response.status().as_u16();
         if !response.status().is_success() {
             let body = response.bytes().await.unwrap_or_default();
+            emit.record_error(LlmError::http(
+                status,
+                String::from_utf8_lossy(&body).into_owned(),
+            ));
             return Err(Failure::Upstream(http_error(
                 status,
                 &String::from_utf8_lossy(&body),
@@ -336,7 +380,10 @@ impl AnthropicRun {
             let (messages, ended) = match response.chunk().await {
                 Ok(Some(bytes)) => (decoder.push(&bytes), false),
                 Ok(None) => (decoder.finish(), true),
-                Err(_) => return Err(Failure::upstream("terminated")),
+                Err(error) => {
+                    emit.record_error(LlmError::from_reqwest(&error));
+                    return Err(Failure::upstream("terminated"));
+                }
             };
             for message in messages {
                 self.sse(&message, emit)?;
@@ -354,6 +401,7 @@ impl AnthropicRun {
             self.out.stop_reason,
             StopReason::Aborted | StopReason::Error
         ) {
+            emit.record_error(LlmError::new(ErrorKind::Provider));
             return Err(Failure::upstream("An unknown error occurred"));
         }
         Ok(self.out.clone())
@@ -363,6 +411,7 @@ impl AnthropicRun {
     fn sse(&mut self, message: &SseMessage, emit: &mut Emitter<'_>) -> Result<(), Failure> {
         let name = message.event.as_deref().unwrap_or_default();
         if name == "error" {
+            emit.record_error(LlmError::upstream(message.data.clone()));
             return Err(Failure::Upstream(message.data.clone()));
         }
         if !MESSAGE_EVENTS.contains(&name) {
@@ -404,10 +453,17 @@ impl AnthropicRun {
     }
 
     fn push_block(&mut self, block: AssistantContent, index: Option<&Value>) -> u32 {
+        let state = match &block {
+            AssistantContent::Text { .. } => ScratchState::Text,
+            AssistantContent::Thinking { .. } => ScratchState::Thinking,
+            AssistantContent::ToolCall { .. } => ScratchState::Tool {
+                partial_json: Some(String::new()),
+            },
+        };
         self.out.content.push(block);
         self.scratch.push(Scratch {
             index: index.cloned(),
-            partial_json: None,
+            state,
         });
         content_index(self.out.content.len() - 1)
     }
@@ -432,7 +488,7 @@ impl AnthropicRun {
                 out.output = field("output_tokens");
                 out.cache_read = field("cache_read_input_tokens");
                 out.cache_write = field("cache_creation_input_tokens");
-                out.total_tokens = out.input + out.output + out.cache_read + out.cache_write;
+                out.total_tokens = crate::stream::usage_total(out, true);
             }
             Some("content_block_start") => {
                 let block = Some(object_of(get(event, "content_block"))?);
@@ -480,13 +536,10 @@ impl AnthropicRun {
                         let call = AssistantContent::ToolCall {
                             id: id.clone(),
                             name: name.clone(),
-                            arguments: wire_arguments(&input),
+                            arguments: wire_arguments(input),
                             thought_signature: None,
                         };
                         let content_index = self.push_block(call, index);
-                        if let Some(scratch) = self.scratch.last_mut() {
-                            scratch.partial_json = Some(String::new());
-                        }
                         self.emit(
                             AssistantDelta::ToolcallStart {
                                 content_index,
@@ -542,10 +595,11 @@ impl AnthropicRun {
                         {
                             let delta = js_concat(get(delta, "partial_json"));
                             let partial = self.scratch[position]
-                                .partial_json
+                                .state
+                                .partial()
                                 .get_or_insert_with(String::new);
                             partial.push_str(&delta);
-                            *arguments = wire_arguments(&parse_streaming_json(partial));
+                            *arguments = wire_arguments(parse_streaming_json(partial));
                             self.emit(
                                 AssistantDelta::ToolcallDelta {
                                     content_index,
@@ -582,9 +636,9 @@ impl AnthropicRun {
                         content: thinking.clone(),
                     },
                     call @ AssistantContent::ToolCall { .. } => {
-                        let partial = self.scratch[position].partial_json.take();
+                        let partial = self.scratch[position].state.partial().take();
                         if let AssistantContent::ToolCall { arguments, .. } = call {
-                            *arguments = wire_arguments(&parse_streaming_json(
+                            *arguments = wire_arguments(parse_streaming_json(
                                 partial.as_deref().unwrap_or_default(),
                             ));
                         }
@@ -615,7 +669,7 @@ impl AnthropicRun {
                         *slot = count(Some(value));
                     }
                 }
-                out.total_tokens = out.input + out.output + out.cache_read + out.cache_write;
+                out.total_tokens = crate::stream::usage_total(out, true);
             }
             _ => {}
         }
@@ -685,5 +739,16 @@ mod tests {
             map_stop_reason(&json!(5)),
             Err(Failure::Upstream(text)) if text == "Unhandled stop reason: 5"
         ));
+    }
+    #[test]
+    fn owned_arguments_keep_order_and_reject_non_objects() {
+        assert_eq!(
+            Value::Object(wire_arguments(
+                serde_json::from_str(r#"{"z":1,"a":2}"#).unwrap()
+            ))
+            .to_string(),
+            r#"{"z":1,"a":2}"#
+        );
+        assert!(wire_arguments(json!([1])).is_empty());
     }
 }

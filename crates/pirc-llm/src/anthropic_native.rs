@@ -2,6 +2,8 @@
 //! `anthropic-messages` providers (`agent/providers/anthropic.ts`): no
 //! `piProvider` and no model-level `api`.
 
+use crate::outcome::{ErrorKind, LlmError};
+use crate::runtime::RunRequest as StreamRequest;
 use pirc_llm_types::{
     AssistantContent, AssistantDelta, AssistantMessage, Message, StopReason, ThinkingLevel,
     ToolChoice, UserBlock, UserContent,
@@ -13,19 +15,21 @@ use crate::http::opencode_headers;
 use crate::js::{self, get, present, truthy};
 use crate::native::parse_tool_arguments;
 use crate::sse::NativeDecoder;
-use crate::stream::{Cancelled, Emitter, StreamRequest, assistant, content_index};
+use crate::stream::{Cancelled, Emitter, assistant, content_index};
 
 /// `{ ...provider.compat, ...model.compat }`.
-fn flags(request: &StreamRequest<'_>) -> Map<String, Value> {
-    let mut flags = request.provider.compat.clone();
-    flags.extend(
-        request
-            .model
-            .compat
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone())),
-    );
-    flags
+#[derive(Clone, Copy)]
+struct Compat {
+    adaptive_thinking: bool,
+}
+
+impl Compat {
+    fn resolve(request: &StreamRequest<'_>) -> Self {
+        let flags = &request.endpoint.compat;
+        Self {
+            adaptive_thinking: truthy(flags.get("forceAdaptiveThinking")),
+        }
+    }
 }
 
 fn ephemeral() -> Value {
@@ -165,24 +169,28 @@ fn effort(level: ThinkingLevel) -> Value {
 
 /// `anthropicBody`.
 fn anthropic_body(request: &StreamRequest<'_>) -> Map<String, Value> {
-    let flags = flags(request);
-    let max_tokens = request.max_tokens.unwrap_or(request.model.max_tokens);
+    let flags = Compat::resolve(request);
+    let max_tokens = request
+        .options
+        .max_tokens
+        .unwrap_or(request.model.max_tokens);
     let mut body = Map::new();
     body.insert("model".to_owned(), json!(request.model.id));
     body.insert("max_tokens".to_owned(), json!(max_tokens));
     body.insert("stream".to_owned(), json!(true));
     body.insert(
         "messages".to_owned(),
-        Value::Array(to_anthropic_messages(request.messages)),
+        Value::Array(to_anthropic_messages(request.context.messages)),
     );
-    if !request.system_prompt.is_empty() {
+    if !request.context.system_prompt.is_empty() {
         body.insert(
             "system".to_owned(),
-            json!([{ "type": "text", "text": request.system_prompt, "cache_control": ephemeral() }]),
+            json!([{ "type": "text", "text": request.context.system_prompt, "cache_control": ephemeral() }]),
         );
     }
-    if !request.tools.is_empty() {
+    if !request.context.tools.is_empty() {
         let mut tools: Vec<Value> = request
+            .context
             .tools
             .iter()
             .map(|tool| {
@@ -194,19 +202,20 @@ fn anthropic_body(request: &StreamRequest<'_>) -> Map<String, Value> {
             last.insert("cache_control".to_owned(), ephemeral());
         }
         body.insert("tools".to_owned(), Value::Array(tools));
-        if request.tool_choice == Some(ToolChoice::None) {
+        if request.options.tool_choice == Some(ToolChoice::None) {
             body.insert("tool_choice".to_owned(), json!({ "type": "none" }));
         }
     }
-    if request.model.reasoning && request.thinking != ThinkingLevel::Off {
-        if truthy(flags.get("forceAdaptiveThinking")) {
+    if request.model.reasoning && request.options.thinking != ThinkingLevel::Off {
+        if flags.adaptive_thinking {
             body.insert("thinking".to_owned(), json!({ "type": "adaptive" }));
             body.insert(
                 "output_config".to_owned(),
-                json!({ "effort": effort(request.thinking) }),
+                json!({ "effort": effort(request.options.thinking) }),
             );
         } else {
-            let budget = budget(request.thinking).min((i128::from(max_tokens) - 1).max(1024));
+            let budget =
+                budget(request.options.thinking).min((i128::from(max_tokens) - 1).max(1024));
             body.insert(
                 "thinking".to_owned(),
                 json!({ "type": "enabled", "budget_tokens": budget }),
@@ -291,20 +300,36 @@ fn same_key(a: Option<&Value>, b: Option<&Value>) -> bool {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
-enum Kind {
-    Text,
-    Thinking,
-    Tool,
-    ToolDone,
+/// A block's type and lifecycle are fixed by its start event, not its deltas.
+#[derive(Debug)]
+enum BlockState {
+    Text {
+        content_index: usize,
+    },
+    Thinking {
+        content_index: usize,
+    },
+    Tool {
+        content_index: usize,
+        raw: String,
+        finished: bool,
+    },
 }
 
-/// An Anthropic content block: our content index and raw tool JSON.
+impl BlockState {
+    fn content_index(&self) -> usize {
+        match self {
+            Self::Text { content_index }
+            | Self::Thinking { content_index }
+            | Self::Tool { content_index, .. } => *content_index,
+        }
+    }
+}
+
+/// An Anthropic content block, keyed with JavaScript Map semantics.
 struct Block {
     key: Option<Value>,
-    content_index: usize,
-    raw: String,
-    kind: Kind,
+    state: BlockState,
 }
 
 pub struct NativeAnthropicRun {
@@ -341,8 +366,14 @@ impl NativeAnthropicRun {
         let unfinished: Vec<usize> = self
             .blocks
             .iter()
-            .filter(|block| block.kind == Kind::Tool)
-            .map(|block| block.content_index)
+            .filter_map(|block| match block.state {
+                BlockState::Tool {
+                    content_index,
+                    finished: false,
+                    ..
+                } => Some(content_index),
+                _ => None,
+            })
             .collect();
         let mut index = 0;
         message.content.retain(|part| {
@@ -371,6 +402,7 @@ impl NativeAnthropicRun {
             Ok(()) => Ok(Self::fix_total(self.message.clone())),
             Err(Failure::Cancelled) => Err(Cancelled),
             Err(Failure::Upstream(error)) => {
+                emit.record_error(LlmError::diagnostic(ErrorKind::Protocol, error.clone()));
                 if emit.cancelled() {
                     return Err(Cancelled);
                 }
@@ -390,32 +422,35 @@ impl NativeAnthropicRun {
         request: &StreamRequest<'_>,
         emit: &mut Emitter<'_>,
     ) -> Result<(), Failure> {
-        let base = request.provider.base_url.as_str();
+        let base = request.endpoint.base_url.as_str();
         let url = format!("{}/v1/messages", base.strip_suffix('/').unwrap_or(base));
         let mut headers = HeaderObject::default();
         headers.set("content-type", "application/json");
         headers.set("accept", "text/event-stream");
         headers.set("anthropic-version", "2023-06-01");
-        for (name, value) in &request.provider.headers {
+        for (name, value) in &request.endpoint.headers {
             headers.set(name, value);
         }
-        let model_url = request
-            .model
-            .base_url
-            .as_deref()
-            .unwrap_or(&request.provider.base_url);
-        let opencode =
-            opencode_headers(request.provider.opencode_go, model_url, &request.session_id)
-                .map_err(|()| Failure::upstream("Invalid URL"))?;
+        let model_url = &request.endpoint.opencode_base_url;
+        let opencode = opencode_headers(
+            request.endpoint.opencode_go,
+            model_url,
+            request.options.session_id,
+        )
+        .map_err(|()| {
+            emit.record_error(LlmError::new(ErrorKind::InvalidRequest));
+            Failure::upstream("Invalid URL")
+        })?;
         for (name, value) in opencode {
             headers.set(name, &value);
         }
-        if let Some(key) = request.api_key.filter(|key| !key.is_empty()) {
+        if let Some(key) = request.auth.as_key().filter(|key| !key.is_empty()) {
             headers.set("x-api-key", key);
         }
-        let header_map = headers
-            .to_map()
-            .ok_or_else(|| Failure::upstream("Invalid header"))?;
+        let header_map = headers.to_map().ok_or_else(|| {
+            emit.record_error(LlmError::new(ErrorKind::InvalidRequest));
+            Failure::upstream("Invalid header")
+        })?;
         let body = serde_json::to_vec(&anthropic_body(request)).unwrap_or_default();
         let mut response = client
             .post(&url)
@@ -424,6 +459,7 @@ impl NativeAnthropicRun {
             .send()
             .await
             .map_err(|error| {
+                emit.record_error(LlmError::from_reqwest(&error));
                 Failure::upstream(if error.is_connect() {
                     "Unable to connect. Is the computer able to access the url?"
                 } else {
@@ -433,6 +469,10 @@ impl NativeAnthropicRun {
         let status = response.status();
         if !status.is_success() {
             let body = response.bytes().await.unwrap_or_default();
+            emit.record_error(LlmError::http(
+                status.as_u16(),
+                String::from_utf8_lossy(&body).into_owned(),
+            ));
             return Err(Failure::Upstream(http_error(status, &body)));
         }
         let mut decoder = NativeDecoder::default();
@@ -441,7 +481,8 @@ impl NativeAnthropicRun {
             let (events, ended) = match response.chunk().await {
                 Ok(Some(bytes)) => (decoder.push(&bytes), false),
                 Ok(None) => (decoder.finish().into_iter().collect(), true),
-                Err(_) => {
+                Err(error) => {
+                    emit.record_error(LlmError::from_reqwest(&error));
                     return Err(Failure::upstream(
                         "The socket connection was closed unexpectedly.",
                     ));
@@ -469,12 +510,10 @@ impl NativeAnthropicRun {
     }
 
     /// `blocks.set`: an existing key keeps its place.
-    fn set_block(&mut self, key: Option<&Value>, content_index: usize, kind: Kind) {
+    fn set_block(&mut self, key: Option<&Value>, state: BlockState) {
         let block = Block {
             key: key.cloned(),
-            content_index,
-            raw: String::new(),
-            kind,
+            state,
         };
         match self.block(key) {
             Some(position) => self.blocks[position] = block,
@@ -533,6 +572,7 @@ impl NativeAnthropicRun {
                     // `JSON.stringify(undefined)` makes `new Error(undefined)`.
                     None => error.map(Value::to_string).unwrap_or_default(),
                 };
+                emit.record_error(LlmError::upstream(message.clone()));
                 return Err(Failure::Upstream(message));
             }
             _ => {}
@@ -547,13 +587,16 @@ impl NativeAnthropicRun {
     ) -> Result<(), Failure> {
         let block = present(get(event, "content_block"));
         let key = get(event, "index");
-        let (part, kind) = match get(block, "type").and_then(Value::as_str) {
+        let index = self.message.content.len();
+        let (part, state) = match get(block, "type").and_then(Value::as_str) {
             Some("text") => (
                 AssistantContent::Text {
                     text: String::new(),
                     text_signature: None,
                 },
-                Kind::Text,
+                BlockState::Text {
+                    content_index: index,
+                },
             ),
             Some(kind @ ("thinking" | "redacted_thinking")) => {
                 let redacted = kind == "redacted_thinking";
@@ -567,7 +610,9 @@ impl NativeAnthropicRun {
                         },
                         redacted: redacted.then_some(true),
                     },
-                    Kind::Thinking,
+                    BlockState::Thinking {
+                        content_index: index,
+                    },
                 )
             }
             Some("tool_use") => {
@@ -583,7 +628,11 @@ impl NativeAnthropicRun {
                         arguments: Map::new(),
                         thought_signature: None,
                     },
-                    Kind::Tool,
+                    BlockState::Tool {
+                        content_index: index,
+                        raw: String::new(),
+                        finished: false,
+                    },
                 )
             }
             _ => return Ok(()),
@@ -602,7 +651,7 @@ impl NativeAnthropicRun {
             },
         };
         self.message.content.push(part);
-        self.set_block(key, self.message.content.len() - 1, kind);
+        self.set_block(key, state);
         emit.emit(delta, &self.message)?;
         Ok(())
     }
@@ -616,7 +665,7 @@ impl NativeAnthropicRun {
             return Ok(());
         };
         let delta = present(get(event, "delta"));
-        let index = self.blocks[position].content_index;
+        let index = self.blocks[position].state.content_index();
         let part = &mut self.message.content[index];
         let delta = match get(delta, "type").and_then(Value::as_str) {
             Some("text_delta") => {
@@ -649,7 +698,11 @@ impl NativeAnthropicRun {
             }
             Some("input_json_delta") => {
                 let piece = concat(get(delta, "partial_json"));
-                self.blocks[position].raw.push_str(&piece);
+                // The legacy reducer emits cross-type deltas too. Non-tool raw
+                // JSON is never consumed, so only tool states need retain it.
+                if let BlockState::Tool { raw, .. } = &mut self.blocks[position].state {
+                    raw.push_str(&piece);
+                }
                 AssistantDelta::ToolcallDelta {
                     content_index: content_index(index),
                     delta: piece,
@@ -666,25 +719,27 @@ impl NativeAnthropicRun {
             return Ok(());
         };
         let block = &mut self.blocks[position];
-        let index = block.content_index;
-        let delta = match block.kind {
-            Kind::Text => AssistantDelta::TextEnd {
+        let index = block.state.content_index();
+        let delta = match &mut block.state {
+            BlockState::Text { .. } => AssistantDelta::TextEnd {
                 content_index: content_index(index),
                 content: match &self.message.content[index] {
                     AssistantContent::Text { text, .. } => text.clone(),
                     _ => String::new(),
                 },
             },
-            Kind::Thinking => AssistantDelta::ThinkingEnd {
+            BlockState::Thinking { .. } => AssistantDelta::ThinkingEnd {
                 content_index: content_index(index),
                 content: match &self.message.content[index] {
                     AssistantContent::Thinking { thinking, .. } => thinking.clone(),
                     _ => String::new(),
                 },
             },
-            Kind::Tool | Kind::ToolDone => {
-                let parsed = parse_tool_arguments(&block.raw);
-                block.kind = Kind::ToolDone;
+            BlockState::Tool { raw, finished, .. } => {
+                let parsed = parse_tool_arguments(raw);
+                // Finish before emission: cancellation by the end callback must
+                // retain the tool. Keep raw for repeated stops/post-stop deltas.
+                *finished = true;
                 let part = &mut self.message.content[index];
                 if let AssistantContent::ToolCall { arguments, .. } = part {
                     *arguments = parsed;
@@ -720,6 +775,243 @@ impl From<Cancelled> for Failure {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::{ResolvedEndpoint, ResolvedModel};
+    use pirc_llm_types::ModelApi;
+    use tokio::sync::watch;
+
+    struct RuntimeFixture {
+        endpoint: ResolvedEndpoint,
+        model: ResolvedModel,
+    }
+
+    impl RuntimeFixture {
+        fn new() -> Self {
+            Self {
+                endpoint: ResolvedEndpoint::new(
+                    ModelApi::AnthropicMessages,
+                    "anthropic",
+                    "https://example.invalid",
+                ),
+                model: ResolvedModel::new("test", 8192),
+            }
+        }
+
+        fn request(&self) -> StreamRequest<'_> {
+            StreamRequest::new("anthropic", &self.endpoint, &self.model)
+        }
+    }
+
+    fn events(run: &mut NativeAnthropicRun, events: &[Value]) -> Vec<AssistantDelta> {
+        let (_tx, cancel) = watch::channel(0);
+        let mut deltas = Vec::new();
+        let mut callback =
+            |delta: &AssistantDelta, _: &AssistantMessage| deltas.push(delta.clone());
+        let mut emit = Emitter {
+            cancel,
+            error: None,
+            on_delta: &mut callback,
+        };
+        let mut stop = None;
+        for event in events {
+            assert!(run.event(&event.to_string(), &mut stop, &mut emit).is_ok());
+        }
+        deltas
+    }
+
+    #[test]
+    fn adaptive_compat_preserves_javascript_truthiness() {
+        let mut fixture = RuntimeFixture::new();
+        fixture.model.reasoning = true;
+        for (flag, adaptive) in [
+            (None, false),
+            (Some(json!(null)), false),
+            (Some(json!(false)), false),
+            (Some(json!(0)), false),
+            (Some(json!("")), false),
+            (Some(json!(true)), true),
+            (Some(json!(-1)), true),
+            (Some(json!("false")), true),
+            (Some(json!([])), true),
+            (Some(json!({})), true),
+        ] {
+            fixture.endpoint.compat.clear();
+            if let Some(flag) = flag {
+                fixture
+                    .endpoint
+                    .compat
+                    .insert("forceAdaptiveThinking".to_owned(), flag);
+            }
+            let mut request = fixture.request();
+            request.options.thinking = ThinkingLevel::High;
+            assert_eq!(Compat::resolve(&request).adaptive_thinking, adaptive);
+            let body = anthropic_body(&request);
+            assert_eq!(
+                body["thinking"]["type"],
+                if adaptive { "adaptive" } else { "enabled" }
+            );
+            assert_eq!(body.contains_key("output_config"), adaptive);
+            if adaptive {
+                assert_eq!(body["output_config"], json!({"effort": "high"}));
+            } else {
+                assert_eq!(body["thinking"]["budget_tokens"], 8191);
+            }
+            request.options.thinking = ThinkingLevel::Off;
+            assert!(!anthropic_body(&request).contains_key("thinking"));
+        }
+    }
+
+    #[test]
+    fn malformed_cross_type_deltas_emit_without_retyping_blocks() {
+        let fixture = RuntimeFixture::new();
+        let mut run = NativeAnthropicRun::new(&fixture.request());
+        let deltas = events(
+            &mut run,
+            &[
+                json!({"type":"content_block_start","index":0,"content_block":{"type":"text"}}),
+                json!({"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"ignored"}}),
+                json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{}"}}),
+                json!({"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"ignored"}}),
+                json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"text"}}),
+                json!({"type":"content_block_stop","index":0}),
+                json!({"type":"content_block_start","index":1,"content_block":{"type":"thinking"}}),
+                json!({"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"ignored"}}),
+                json!({"type":"content_block_delta","index":1,"delta":{"type":"thinking_delta","thinking":"thought"}}),
+                json!({"type":"content_block_delta","index":1,"delta":{"type":"signature_delta","signature":"sig"}}),
+                json!({"type":"content_block_stop","index":1}),
+            ],
+        );
+        assert!(
+            matches!(&deltas[1], AssistantDelta::ThinkingDelta { content_index: 0, delta } if delta == "ignored")
+        );
+        assert!(
+            matches!(&deltas[2], AssistantDelta::ToolcallDelta { content_index: 0, delta } if delta == "{}")
+        );
+        assert!(
+            matches!(&deltas[4], AssistantDelta::TextEnd { content_index: 0, content } if content == "text")
+        );
+        assert!(
+            matches!(&deltas[6], AssistantDelta::TextDelta { content_index: 1, delta } if delta == "ignored")
+        );
+        assert!(
+            matches!(&deltas[8], AssistantDelta::ThinkingEnd { content_index: 1, content } if content == "thought")
+        );
+        assert!(
+            matches!(&run.message.content[1], AssistantContent::Thinking { signature: Some(signature), .. } if signature == "sig")
+        );
+        assert!(matches!(
+            run.blocks[0].state,
+            BlockState::Text { content_index: 0 }
+        ));
+        assert!(matches!(
+            run.blocks[1].state,
+            BlockState::Thinking { content_index: 1 }
+        ));
+    }
+
+    #[test]
+    fn tool_state_retains_raw_after_stop_and_ignores_cross_type_mutation() {
+        let fixture = RuntimeFixture::new();
+        let mut run = NativeAnthropicRun::new(&fixture.request());
+        let deltas = events(
+            &mut run,
+            &[
+                json!({"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"id","name":"tool"}}),
+                json!({"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ignored"}}),
+                json!({"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"ignored"}}),
+                json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"a\":1"}}),
+                json!({"type":"content_block_stop","index":0}),
+                json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":",\"b\":2}"}}),
+                json!({"type":"content_block_stop","index":0}),
+            ],
+        );
+        assert!(matches!(
+            &deltas[1],
+            AssistantDelta::TextDelta {
+                content_index: 0,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &deltas[2],
+            AssistantDelta::ThinkingDelta {
+                content_index: 0,
+                ..
+            }
+        ));
+        assert!(
+            matches!(&deltas[4], AssistantDelta::ToolcallEnd { tool_call: AssistantContent::ToolCall { arguments, .. }, .. } if arguments == json!({"__invalid_json":"{\"a\":1"}).as_object().unwrap())
+        );
+        assert!(
+            matches!(&run.message.content[0], AssistantContent::ToolCall { arguments, .. } if arguments == json!({"a":1,"b":2}).as_object().unwrap())
+        );
+        assert!(
+            matches!(&run.blocks[0].state, BlockState::Tool { finished: true, raw, .. } if raw == "{\"a\":1,\"b\":2}")
+        );
+        assert_eq!(run.aborted().content.len(), 1);
+    }
+
+    #[test]
+    fn unfinished_cleanup_follows_current_map_entries_after_key_replacement() {
+        let fixture = RuntimeFixture::new();
+        let mut run = NativeAnthropicRun::new(&fixture.request());
+        events(
+            &mut run,
+            &[
+                json!({"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"orphaned"}}),
+                json!({"type":"content_block_start","index":1.0,"content_block":{"type":"text"}}),
+                json!({"type":"content_block_start","content_block":{"type":"tool_use","id":"unfinished"}}),
+                json!({"type":"content_block_start","index":null,"content_block":{"type":"text"}}),
+            ],
+        );
+        assert_eq!(run.blocks.len(), 3);
+        assert!(matches!(
+            run.blocks[0].state,
+            BlockState::Text { content_index: 1 }
+        ));
+        let aborted = run.aborted();
+        // Replacing the map key leaves the old tool in content, but no longer
+        // tracks it as unfinished. This intentionally mirrors legacy cleanup.
+        assert_eq!(aborted.content.len(), 3);
+        assert!(
+            matches!(&aborted.content[0], AssistantContent::ToolCall { id, .. } if id == "orphaned")
+        );
+        assert_eq!(aborted.stop_reason, StopReason::Aborted);
+    }
+
+    #[test]
+    fn tool_end_is_finished_before_callback_cancels() {
+        let fixture = RuntimeFixture::new();
+        let mut run = NativeAnthropicRun::new(&fixture.request());
+        events(
+            &mut run,
+            &[
+                json!({"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"id","name":"tool"}}),
+                json!({"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{}"}}),
+            ],
+        );
+        assert!(run.aborted().content.is_empty());
+        let (tx, cancel) = watch::channel(0);
+        let mut callback = |delta: &AssistantDelta, _: &AssistantMessage| {
+            assert!(matches!(delta, AssistantDelta::ToolcallEnd { .. }));
+            tx.send(1).unwrap();
+        };
+        let mut emit = Emitter {
+            cancel,
+            error: None,
+            on_delta: &mut callback,
+        };
+        let result = run.event(
+            r#"{"type":"content_block_stop","index":0}"#,
+            &mut None,
+            &mut emit,
+        );
+        assert!(matches!(result, Err(Failure::Cancelled)));
+        assert_eq!(run.aborted().content.len(), 1);
+        assert!(matches!(
+            run.blocks[0].state,
+            BlockState::Tool { finished: true, .. }
+        ));
+    }
 
     #[test]
     fn map_keys_follow_same_value_zero() {

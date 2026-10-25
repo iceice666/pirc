@@ -44,7 +44,7 @@ mod shared {
 
     use super::api_name;
     use crate::js;
-    use crate::stream::StreamRequest;
+    use crate::runtime::RunRequest as StreamRequest;
 
     /// Placeholder bearer for user-configured keyless endpoints.
     pub const NO_KEY: &str = "pirc-no-api-key";
@@ -89,35 +89,23 @@ mod shared {
 
     impl PiModel {
         pub fn new(request: &StreamRequest<'_>) -> Self {
-            let (model, provider) = (request.model, request.provider);
-            let mut headers = provider.headers.clone();
-            if let Some(extra) = &model.headers {
-                headers.extend(extra.iter().map(|(k, v)| (k.clone(), v.clone())));
-            }
-            let mut compat = provider.compat.clone();
-            compat.extend(model.compat.iter().map(|(k, v)| (k.clone(), v.clone())));
+            let model = request.model;
+            let endpoint = request.endpoint;
             Self {
                 id: model.id.clone(),
-                api: pi_api(api_name(model.api.unwrap_or(provider.api))).to_owned(),
-                provider: model
-                    .canonical_provider
-                    .clone()
-                    .or_else(|| provider.pi_provider.clone())
-                    .unwrap_or_else(|| request.provider_name.to_owned()),
-                base_url: model
-                    .base_url
-                    .clone()
-                    .unwrap_or_else(|| provider.base_url.clone()),
+                api: pi_api(api_name(endpoint.api)).to_owned(),
+                provider: endpoint.canonical_provider.clone(),
+                base_url: endpoint.base_url.clone(),
                 reasoning: model.reasoning,
                 thinking_level_map: model.thinking_level_map.clone(),
                 input: model.input.clone(),
-                headers,
+                headers: endpoint.headers.clone(),
                 #[cfg(any(
                     feature = "anthropic-messages",
                     feature = "openai-completions",
                     feature = "openai-responses"
                 ))]
-                compat,
+                compat: endpoint.compat.clone(),
             }
         }
 
@@ -150,7 +138,7 @@ mod shared {
     /// The effective reasoning level (`streamOptions`): the requested level or
     /// the next one the model supports.
     pub fn reasoning_effort(request: &StreamRequest<'_>, model: &PiModel) -> Option<String> {
-        let enabled = model.reasoning && request.thinking != ThinkingLevel::Off;
+        let enabled = model.reasoning && request.options.thinking != ThinkingLevel::Off;
         if !enabled {
             return None;
         }
@@ -166,7 +154,7 @@ mod shared {
             .collect();
         let requested = levels
             .iter()
-            .position(|level| *level == level_name(request.thinking));
+            .position(|level| *level == level_name(request.options.thinking));
         let requested = requested.unwrap_or(0);
         available
             .iter()

@@ -18,6 +18,14 @@ pub use pirc_llm_types as types;
 pub mod oauth;
 
 #[cfg(feature = "_transport")]
+mod outcome;
+#[cfg(feature = "_transport")]
+mod runtime;
+#[cfg(feature = "_transport")]
+pub use outcome::{ErrorKind, LlmError, RunOutcome, Termination};
+#[cfg(feature = "_transport")]
+pub use runtime::{Auth, Context, RequestOptions, ResolvedEndpoint, ResolvedModel, RunRequest};
+#[cfg(feature = "_transport")]
 mod transport;
 #[cfg(feature = "_transport")]
 pub use http::is_opencode_endpoint;

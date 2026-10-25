@@ -6,10 +6,12 @@
 //! mapping), reusing `openai-responses-shared`. The WebSocket transport is
 //! never selected by the adapter and is not ported.
 
+use crate::outcome::{ErrorKind, LlmError};
+use crate::runtime::RunRequest as StreamRequest;
 use std::sync::LazyLock;
 use std::time::Duration;
 
-use pirc_llm_types::AssistantMessage;
+use pirc_llm_types::{AssistantMessage, StopReason};
 use regex_lite::Regex;
 use serde_json::{Map, Value, json};
 
@@ -20,7 +22,7 @@ use crate::responses_common::{Failure, tool_choice_name};
 use crate::responses_shared::{
     Prepared, Processor, Shell, TYPE_ERROR, convert_messages, convert_tools,
 };
-use crate::stream::{Cancelled, Emitter, StreamRequest, now_ms};
+use crate::stream::{Cancelled, Emitter, now_ms};
 
 const DEFAULT_CODEX_BASE_URL: &str = "https://chatgpt.com/backend-api";
 const JWT_CLAIM_PATH: &str = "https://api.openai.com/auth";
@@ -155,10 +157,10 @@ fn build_body(
     prepared: &Prepared,
 ) -> Result<Map<String, Value>, String> {
     let input = convert_messages(model, None, &prepared.context)?;
-    let instructions = if request.system_prompt.is_empty() {
+    let instructions = if request.context.system_prompt.is_empty() {
         "You are a helpful assistant."
     } else {
-        request.system_prompt
+        request.context.system_prompt
     };
     let mut body = Map::new();
     body.insert("model".to_owned(), json!(model.id));
@@ -168,14 +170,17 @@ fn build_body(
     body.insert("input".to_owned(), Value::Array(input));
     body.insert("text".to_owned(), json!({ "verbosity": "low" }));
     body.insert("include".to_owned(), json!(["reasoning.encrypted_content"]));
-    body.insert("prompt_cache_key".to_owned(), json!(request.session_id));
-    let choice = request.tool_choice.map_or("auto", tool_choice_name);
+    body.insert(
+        "prompt_cache_key".to_owned(),
+        json!(request.options.session_id),
+    );
+    let choice = request.options.tool_choice.map_or("auto", tool_choice_name);
     body.insert("tool_choice".to_owned(), json!(choice));
     body.insert("parallel_tool_calls".to_owned(), json!(true));
-    if !request.tools.is_empty() {
+    if !request.context.tools.is_empty() {
         body.insert(
             "tools".to_owned(),
-            Value::Array(convert_tools(request.tools, &Value::Null)),
+            Value::Array(convert_tools(request.context.tools, &Value::Null)),
         );
     }
     // The adapter asks for 'none' when thinking is off but the model can
@@ -434,14 +439,17 @@ impl CodexRun {
         _long_cache_retention: bool,
         emit: &mut Emitter<'_>,
     ) -> Result<AssistantMessage, Cancelled> {
-        let prepared = match self.shell.prepare(request) {
+        let prepared = match self.shell.prepare(request, emit) {
             Ok(prepared) => prepared,
             Err(result) => return Ok(*result),
         };
         match self.stream(client, request, &prepared, emit).await {
             Ok(result) => Ok(result),
             Err(Failure::Cancelled) => Err(Cancelled),
-            Err(Failure::Upstream(upstream)) => Ok(self.shell.failed(&upstream)),
+            Err(Failure::Upstream(upstream)) => {
+                emit.record_error(LlmError::upstream(upstream.clone()));
+                Ok(self.shell.failed(&upstream))
+            }
         }
     }
 
@@ -453,17 +461,32 @@ impl CodexRun {
         emit: &mut Emitter<'_>,
     ) -> Result<AssistantMessage, Failure> {
         let model = &self.shell.model;
-        let account_id = extract_account_id(&prepared.api_key).map_err(Failure::Upstream)?;
-        let body = build_body(model, request, prepared).map_err(Failure::Upstream)?;
+        let account_id = extract_account_id(&prepared.api_key).map_err(|error| {
+            emit.record_error(LlmError::diagnostic(
+                ErrorKind::CredentialsUnavailable,
+                error.clone(),
+            ));
+            Failure::Upstream(error)
+        })?;
+        let body = build_body(model, request, prepared).map_err(|error| {
+            emit.record_error(LlmError::diagnostic(
+                ErrorKind::InvalidRequest,
+                error.clone(),
+            ));
+            Failure::Upstream(error)
+        })?;
         let headers = sse_headers(
             model,
             prepared,
             &account_id,
-            &request.session_id,
-            request.codex_user_agent,
+            request.options.session_id,
+            request.options.codex_user_agent,
         )
         .to_map()
-        .ok_or_else(|| Failure::upstream(TYPE_ERROR))?;
+        .ok_or_else(|| {
+            emit.record_error(LlmError::new(ErrorKind::InvalidRequest));
+            Failure::upstream(TYPE_ERROR)
+        })?;
         let body = serde_json::to_vec(&body).unwrap_or_default();
         let url = resolve_url(&model.base_url);
 
@@ -475,8 +498,12 @@ impl CodexRun {
                 .body(body.clone())
                 .send()
                 .await;
+            let failure;
             let error = match sent {
-                Err(_) => FETCH_FAILED.to_owned(),
+                Err(error) => {
+                    failure = LlmError::from_reqwest(&error);
+                    FETCH_FAILED.to_owned()
+                }
                 Ok(response) => {
                     let status = response.status();
                     self.shell.saw_status(status.as_u16());
@@ -484,7 +511,10 @@ impl CodexRun {
                         break response;
                     }
                     match response.bytes().await {
-                        Err(_) => "terminated".to_owned(),
+                        Err(error) => {
+                            failure = LlmError::from_reqwest(&error).with_status(status.as_u16());
+                            "terminated".to_owned()
+                        }
                         Ok(bytes) => {
                             let text = String::from_utf8_lossy(&bytes);
                             if attempt < MAX_RETRIES && is_retryable(status.as_u16(), &text) {
@@ -492,6 +522,7 @@ impl CodexRun {
                                 attempt += 1;
                                 continue;
                             }
+                            failure = LlmError::http(status.as_u16(), text.to_string());
                             parse_error_response(
                                 status.as_u16(),
                                 status.canonical_reason().unwrap_or_default(),
@@ -508,6 +539,7 @@ impl CodexRun {
                 attempt += 1;
                 continue;
             }
+            emit.record_error(failure);
             return Err(Failure::Upstream(error));
         };
         if emit.cancelled() {
@@ -520,29 +552,61 @@ impl CodexRun {
             let bytes = match response.chunk().await {
                 Ok(Some(bytes)) => bytes,
                 Ok(None) => break,
-                Err(_) => return Err(Failure::upstream("terminated")),
+                Err(error) => {
+                    emit.record_error(LlmError::from_reqwest(&error));
+                    return Err(Failure::upstream("terminated"));
+                }
             };
             for event in parser.push(&bytes) {
-                let event = event.map_err(Failure::Upstream)?;
-                let (event, last) = match map_event(event).map_err(Failure::Upstream)? {
-                    Mapped::Skip => continue,
-                    Mapped::Event(event) => (event, false),
-                    Mapped::Last(event) => (event, true),
-                };
-                let delta = self
-                    .processor
-                    .event(&mut self.shell.out, &event)
-                    .map_err(Failure::Upstream)?;
-                if let Some(delta) = delta {
-                    emit.emit(delta, &self.shell.out)
-                        .map_err(|Cancelled| Failure::Cancelled)?;
-                }
-                if last {
+                let event = event.map_err(|error| {
+                    emit.record_error(LlmError::diagnostic(ErrorKind::Protocol, error.clone()));
+                    Failure::Upstream(error)
+                })?;
+                if self.event(event, emit)? {
                     return Ok(self.shell.out.clone());
                 }
             }
         }
         Ok(self.shell.out.clone())
+    }
+
+    /// Map and process one event without changing the compatibility error text.
+    fn event(&mut self, event: Value, emit: &mut Emitter<'_>) -> Result<bool, Failure> {
+        let mapping_error = if event.is_null() {
+            Some(LlmError::diagnostic(ErrorKind::Protocol, TYPE_ERROR))
+        } else if matches!(
+            get(Some(&event), "type").and_then(Value::as_str),
+            Some("error" | "response.failed")
+        ) {
+            Some(LlmError::upstream(event.to_string()))
+        } else {
+            None
+        };
+        let (event, last) = match map_event(event).map_err(|error| {
+            emit.record_error(mapping_error.unwrap_or_else(|| LlmError::upstream(error.clone())));
+            Failure::Upstream(error)
+        })? {
+            Mapped::Skip => return Ok(false),
+            Mapped::Event(event) => (event, false),
+            Mapped::Last(event) => (event, true),
+        };
+        let delta = self
+            .processor
+            .event(&mut self.shell.out, &event)
+            .map_err(|error| {
+                emit.record_error(LlmError::diagnostic(ErrorKind::Protocol, error.clone()));
+                Failure::Upstream(error)
+            })?;
+        // A terminal status can mark the message failed without throwing.
+        // Keep that legacy result, but retain the actual event for typed callers.
+        if last && self.shell.out.stop_reason == StopReason::Error {
+            emit.record_error(LlmError::upstream(event.to_string()));
+        }
+        if let Some(delta) = delta {
+            emit.emit(delta, &self.shell.out)
+                .map_err(|Cancelled| Failure::Cancelled)?;
+        }
+        Ok(last)
     }
 }
 
@@ -553,6 +617,153 @@ fn delay(attempt: u32) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn endpoint() -> crate::ResolvedEndpoint {
+        crate::ResolvedEndpoint::new(
+            pirc_llm_types::ModelApi::OpenaiCodexResponses,
+            "openai-codex",
+            "http://localhost",
+        )
+    }
+
+    #[test]
+    fn null_event_is_protocol_and_retains_legacy_text() {
+        let endpoint = endpoint();
+        let model = crate::ResolvedModel::new("test", 128);
+        let request = StreamRequest::new("host", &endpoint, &model);
+        let mut run = CodexRun::new(&request);
+        let (_cancel, cancel) = tokio::sync::watch::channel(0);
+        let mut on_delta = |_: &_, _: &_| panic!("null event must not emit");
+        let mut emit = Emitter {
+            cancel,
+            error: None,
+            on_delta: &mut on_delta,
+        };
+        assert!(
+            matches!(run.event(Value::Null, &mut emit), Err(Failure::Upstream(error)) if error == TYPE_ERROR)
+        );
+        let error = emit.error.unwrap();
+        assert_eq!(error.kind(), ErrorKind::Protocol);
+        assert_eq!(error.diagnostics(), Some(TYPE_ERROR));
+    }
+
+    #[test]
+    fn failed_terminal_status_retains_diagnostics_without_changing_legacy() {
+        let endpoint = endpoint();
+        let model = crate::ResolvedModel::new("test", 128);
+        let request = StreamRequest::new("host", &endpoint, &model);
+        for status in ["failed", "cancelled"] {
+            let mut run = CodexRun::new(&request);
+            let (_cancel, cancel) = tokio::sync::watch::channel(0);
+            let mut on_delta = |_: &_, _: &_| panic!("terminal event must not emit");
+            let mut emit = Emitter {
+                cancel,
+                error: None,
+                on_delta: &mut on_delta,
+            };
+            let event = json!({"type":"response.completed", "response":{
+                "status":status, "error":{"code":"context_length_exceeded", "message":"private-diagnostic"}
+            }});
+            assert!(matches!(run.event(event.clone(), &mut emit), Ok(true)));
+            assert_eq!(run.shell.out.stop_reason, StopReason::Error);
+            assert_eq!(run.shell.out.error_message, None);
+            let outcome = crate::RunOutcome::new(run.shell.out.clone(), emit.error);
+            let crate::Termination::Failed(error) = &outcome.termination else {
+                panic!("expected typed failure")
+            };
+            assert_eq!(error.kind(), ErrorKind::ContextWindow);
+            assert_eq!(error.diagnostics(), Some(event.to_string().as_str()));
+            assert!(!format!("{error:?} {error}").contains("private-diagnostic"));
+            assert_eq!(outcome.into_legacy_message(), run.shell.out);
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn retried_http_failure_does_not_poison_success_or_later_protocol_error() {
+        use axum::{
+            Router, extract::State, http::StatusCode, response::IntoResponse, routing::post,
+        };
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        async fn respond(
+            State((attempts, null_event)): State<(Arc<AtomicUsize>, bool)>,
+        ) -> axum::response::Response {
+            if attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                return (StatusCode::SERVICE_UNAVAILABLE, "transient-secret").into_response();
+            }
+            let body = if null_event {
+                "data: null\n\n"
+            } else {
+                "data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[]}}\n\n"
+            };
+            ([("content-type", "text/event-stream")], body).into_response()
+        }
+        let tls = rustls::ClientConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_root_certificates(rustls::RootCertStore::empty())
+        .with_no_client_auth();
+        let client = reqwest::Client::builder()
+            .no_proxy()
+            .tls_backend_preconfigured(tls)
+            .build()
+            .unwrap();
+        for null_event in [false, true] {
+            let attempts = Arc::new(AtomicUsize::new(0));
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let state = (attempts.clone(), null_event);
+            let server = tokio::spawn(async move {
+                axum::serve(
+                    listener,
+                    Router::new()
+                        .route("/codex/responses", post(respond))
+                        .with_state(state),
+                )
+                .await
+                .unwrap();
+            });
+            let mut endpoint = endpoint();
+            endpoint.base_url = format!("http://{address}");
+            let model = crate::ResolvedModel::new("test", 128);
+            let mut request = StreamRequest::new("host", &endpoint, &model);
+            request.auth = crate::Auth::Key(
+                "h.eyJodHRwczovL2FwaS5vcGVuYWkuY29tL2F1dGgiOnsiY2hhdGdwdF9hY2NvdW50X2lkIjoiYWNjdF8xIn19.s",
+            );
+            let (_cancel, receiver) = tokio::sync::watch::channel(0);
+            let mut run = CodexRun::new(&request);
+            let mut on_delta = |_: &_, _: &_| {};
+            let mut emit = Emitter {
+                cancel: receiver,
+                error: None,
+                on_delta: &mut on_delta,
+            };
+            let result = tokio::time::timeout(
+                Duration::from_secs(5),
+                run.run(&client, &request, false, &mut emit),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert_eq!(attempts.load(Ordering::SeqCst), 2);
+            if null_event {
+                assert_eq!(result.stop_reason, StopReason::Error);
+                let error = emit.error.unwrap();
+                assert_eq!(error.kind(), ErrorKind::Protocol);
+                assert_eq!(error.status(), None);
+                assert_eq!(error.diagnostics(), Some(TYPE_ERROR));
+            } else {
+                assert_eq!(result.stop_reason, StopReason::Stop);
+                assert!(emit.error.is_none());
+            }
+            server.abort();
+        }
+    }
 
     #[test]
     fn resolves_codex_urls() {
