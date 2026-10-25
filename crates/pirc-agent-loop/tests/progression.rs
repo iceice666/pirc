@@ -179,6 +179,41 @@ fn generation_change_during_stream_fences_late_tool_reply_and_progress() {
 }
 
 #[test]
+fn requests_share_the_history_and_copy_only_while_held() {
+    // Room to grow without reallocating, so the buffer's address tells a
+    // copy apart from an in-place push.
+    let mut history = Vec::with_capacity(16);
+    history.push(user("go"));
+    let mut core = Loop::new(0, history);
+    let first = model(core.advance(vec![]).unwrap());
+    assert_eq!(first.messages.as_ptr(), core.history().as_ptr());
+    let shared = core.history().as_ptr();
+    // Held while the reply is recorded: the request keeps its snapshot.
+    let calls = tools(
+        core.finish_model(first.ticket, reply(StopReason::ToolUse, &["a"]), None)
+            .unwrap(),
+    );
+    assert_eq!(*first.messages, [user("go")]);
+    assert_eq!(core.history().len(), 2);
+    assert_ne!(core.history().as_ptr(), shared);
+    drop(first);
+    // Dropped before the next push: the history grows in place.
+    let own = core.history().as_ptr();
+    let second = model(
+        core.resume_tool(calls[0].key, outcome(ToolStatus::Completed, "A"))
+            .unwrap(),
+    );
+    assert_eq!(core.history().as_ptr(), own);
+    assert_eq!(second.messages.as_ptr(), own);
+    let ticket = second.ticket;
+    drop(second);
+    core.finish_model(ticket, text_reply(StopReason::Stop, "done"), None)
+        .unwrap();
+    assert_eq!(core.history().as_ptr(), own);
+    assert_eq!(core.history().len(), 4);
+}
+
+#[test]
 fn a_wait_can_end_while_its_call_stays_pending() {
     let mut core = Loop::new(0, vec![]);
     let request = model(core.advance(vec![]).unwrap());
@@ -375,7 +410,7 @@ fn explicit_retry_and_compaction_use_new_tickets_and_never_replay_old_resume() {
         core.recover(second.ticket, Recovery::ReplaceHistory(compacted.clone()))
             .unwrap(),
     );
-    assert_eq!(third.messages, compacted);
+    assert_eq!(*third.messages, compacted);
     assert_eq!(core.failures().len(), 2);
     core.fail_model(third.ticket, failure(FailureKind::Transport))
         .unwrap();

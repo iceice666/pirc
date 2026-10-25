@@ -16,7 +16,9 @@ reply goes through `finish_model`, tool calls are taken from the validated
 `Step::Tools` batch and each result is fenced by its call key, an overflow
 compaction is `ReplaceHistory`, and the run ends in an explicit terminal state.
 The adapter emits and writes nothing. Its core history is a record of the run,
-**not** the request context: requests are still built from the session store.
+**not** the request context: requests are still built from the session store,
+and the adapter drops each `ModelRequest` at once, so the history is never
+copied per request (only once when an overflow compaction hands it back).
 Where the core is stricter than the agent, the agent's behavior wins (rejected
 call ids still run, unfenced, and the reply is kept with `supersede`; an
 interrupted reply supersedes its request instead of cancelling; retries stay
@@ -61,6 +63,9 @@ parallel scheduling or grant permission to run them.
 1. Create `Loop` with a host generation and initial history. `advance` admits
    input at Idle and returns one `Step::Model`. Host constructs the prompt/tools,
    chooses its adapter and performs I/O; core holds no credentials or callbacks.
+   The request's messages share the core's history (`Arc`, copied on write only
+   while a request is still held when the history grows), so a host that builds
+   its context elsewhere and drops the request copies nothing.
 2. Supply ordered `Progress` deltas **and full snapshots** while streaming. The
    adapter owns their consistency; core does not implement provider delta parsing.
    Snapshots retain partial usage and are not appended repeatedly to history.

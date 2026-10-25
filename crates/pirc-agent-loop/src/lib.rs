@@ -9,6 +9,7 @@
 
 use std::collections::HashSet;
 use std::fmt;
+use std::sync::Arc;
 
 use pirc_llm_types::{
     AssistantContent, AssistantDelta, AssistantMessage, Message, StopReason, UserBlock,
@@ -36,10 +37,15 @@ pub struct CallKey {
 }
 
 /// One model effect. Host adds model configuration, prompt and tool definitions.
+///
+/// `messages` is the history when the request was issued, shared with the
+/// core rather than copied: the core copies it only if it must grow while a
+/// request still holds it. A host that builds its context elsewhere drops
+/// the request and pays nothing.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelRequest {
     pub ticket: Ticket,
-    pub messages: Vec<Message>,
+    pub messages: Arc<Vec<Message>>,
 }
 
 /// A requested tool effect. The provider ID is preserved in subsequent history.
@@ -212,7 +218,8 @@ pub struct Loop {
     generation: u64,
     sequence: u64,
     state: State,
-    history: Vec<Message>,
+    /// Shared with issued requests; copied on write only while one holds it.
+    history: Arc<Vec<Message>>,
     tool_records: Vec<ToolRecord>,
     failures: Vec<FailureRecord>,
 }
@@ -223,7 +230,7 @@ impl Loop {
             generation,
             sequence: 0,
             state: State::Idle,
-            history,
+            history: Arc::new(history),
             tool_records: Vec::new(),
             failures: Vec::new(),
         }
@@ -241,6 +248,10 @@ impl Loop {
 
     pub fn history(&self) -> &[Message] {
         &self.history
+    }
+
+    fn history_mut(&mut self) -> &mut Vec<Message> {
+        Arc::make_mut(&mut self.history)
     }
 
     pub fn tool_records(&self) -> &[ToolRecord] {
@@ -265,7 +276,7 @@ impl Loop {
             return Err(ResumeError::WrongState);
         }
         self.ensure_sequence()?;
-        self.history.extend(input);
+        self.history_mut().extend(input);
         Ok(self.request_model())
     }
 
@@ -293,7 +304,7 @@ impl Loop {
             return Err(ResumeError::WrongState);
         }
         if reply.stop_reason == StopReason::Aborted {
-            self.history.push(Message::Assistant(reply));
+            self.history_mut().push(Message::Assistant(reply));
             self.state = State::Done(TerminalReason::Cancelled);
             return Ok(Step::Done(TerminalReason::Cancelled));
         }
@@ -336,7 +347,7 @@ impl Loop {
                 return Err(ResumeError::InvalidCallIds);
             }
         }
-        self.history.push(Message::Assistant(reply));
+        self.history_mut().push(Message::Assistant(reply));
         if calls.is_empty() {
             self.state = State::Idle;
             Ok(Step::Idle)
@@ -443,7 +454,7 @@ impl Loop {
                     return Err(ResumeError::UnsafeRetry);
                 }
                 self.ensure_sequence()?;
-                self.history = history;
+                self.history = Arc::new(history);
                 Ok(self.request_model())
             }
         }
@@ -487,7 +498,7 @@ impl Loop {
         }
         let invalidated = self.invalidate(timestamp);
         self.generation = generation;
-        self.history.push(notice);
+        self.history_mut().push(notice);
         Ok(invalidated)
     }
 
@@ -512,7 +523,7 @@ impl Loop {
         }
         self.state = State::Idle;
         self.generation = generation;
-        self.history.push(Message::Assistant(reply));
+        self.history_mut().push(Message::Assistant(reply));
         Ok(Invalidation {
             model: Some(ticket),
             tools: Vec::new(),
@@ -538,7 +549,7 @@ impl Loop {
         };
         Step::Model(ModelRequest {
             ticket,
-            messages: self.history.clone(),
+            messages: Arc::clone(&self.history),
         })
     }
 
@@ -586,7 +597,7 @@ impl Loop {
     }
 
     fn record_tool(&mut self, call: ToolCall, outcome: ToolOutcome) {
-        self.history.push(Message::ToolResult {
+        self.history_mut().push(Message::ToolResult {
             tool_call_id: call.id.clone(),
             tool_name: call.name.clone(),
             content: outcome.content.clone(),
@@ -609,7 +620,7 @@ impl Loop {
                 if let Some(mut partial) = partial {
                     partial.stop_reason = StopReason::Aborted;
                     partial.completed_at = Some(timestamp);
-                    self.history.push(Message::Assistant(partial));
+                    self.history_mut().push(Message::Assistant(partial));
                 }
             }
             State::Tools { calls, .. } => {
