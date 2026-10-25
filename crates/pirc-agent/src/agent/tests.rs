@@ -1106,18 +1106,3 @@ fn parses_slash_commands() {
         assert_eq!(parsed(text), None, "{text:?}");
     }
 }
-
-#[test]
-fn retryable_errors() {
-    for text in [
-        "Model request failed (HTTP 503)",
-        "Inference request timed out",
-        "rate limit",
-    ] {
-        assert!(is_retryable(Some(text)), "{text}");
-    }
-    for text in ["Gateway inference is unavailable", "HTTP 400", ""] {
-        assert!(!is_retryable(Some(text)), "{text}");
-    }
-    assert!(!is_retryable(None));
-}

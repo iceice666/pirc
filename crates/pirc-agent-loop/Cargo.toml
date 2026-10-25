@@ -8,6 +8,8 @@ publish.workspace = true
 
 [dependencies]
 pirc-llm-types = { path = "../pirc-llm-types" }
+# Error classification patterns (retryable, context overflow).
+regex-lite = "0.1"
 serde_json.workspace = true
 
 [dev-dependencies]

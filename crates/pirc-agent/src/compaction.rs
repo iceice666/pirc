@@ -111,19 +111,6 @@ Use this structure:
 
 Be concrete and complete; omit pleasantries. Do not call tools.";
 
-/// `isContextOverflow`.
-pub fn is_context_overflow(message: &AssistantMessage) -> bool {
-    use std::sync::LazyLock;
-    static PATTERN: LazyLock<regex_lite::Regex> = LazyLock::new(|| {
-        regex_lite::Regex::new(
-            r"(?i)context.?length|context.?window|maximum context|too many tokens|prompt is too long|input is too long|exceeds? the (?:model'?s? )?(?:maximum|context)|max_tokens.*exceed|request too large|HTTP 413",
-        )
-        .unwrap()
-    });
-    message.stop_reason == StopReason::Error
-        && PATTERN.is_match(message.error_message.as_deref().unwrap_or_default())
-}
-
 /// `contextTokens`: provider-reported usage of the latest assistant message
 /// plus an estimate for anything appended after it.
 pub fn context_tokens(entries: &[(String, Message)]) -> u64 {

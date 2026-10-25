@@ -1,6 +1,8 @@
 //! Shared task admissions and issued-tool classification. Recovery is a projection,
 //! never a fabricated successful result or a mutation of the original journal.
-use pirc_protocol::{AssistantContent, Message, StopReason, UserBlock};
+use pirc_agent_loop::history::Pairing;
+pub use pirc_agent_loop::history::issued;
+use pirc_protocol::Message;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 
@@ -8,22 +10,6 @@ pub fn task_start(message: &Message) -> bool {
     matches!(message, Message::User { .. })
         || matches!(message, Message::Custom {custom_type,..}
             if matches!(custom_type.as_str(), "assistant-delegation" | "scheduled-run"))
-}
-pub fn issued(message: &Message) -> Vec<(&str, &str)> {
-    match message {
-        Message::Assistant(m) if m.stop_reason == StopReason::ToolUse => m
-            .content
-            .iter()
-            .filter_map(|p| {
-                if let AssistantContent::ToolCall { id, name, .. } = p {
-                    Some((id.as_str(), name.as_str()))
-                } else {
-                    None
-                }
-            })
-            .collect(),
-        _ => Vec::new(),
-    }
 }
 /// Calls are identified by their occurrence, because providers may reuse IDs
 /// after a completed group. An unfinished/unknown occurrence keeps its ID reserved.
@@ -55,45 +41,34 @@ struct Evidence<'a> {
 impl<'a> Evidence<'a> {
     fn collect(events: impl IntoIterator<Item = Event<'a>>) -> Self {
         let events: Vec<_> = events.into_iter().collect();
-        let mut evidence = Self::default();
-        let mut active = HashMap::new();
-        let mut executions = HashMap::new();
-        let mut call_executions = HashMap::new();
+        let pairing = Pairing::collect(events.iter().map(|event| match event {
+            Event::Message(m) => Some(*m),
+            Event::Operation(_) | Event::Other => None,
+        }));
+        let mut evidence = Self {
+            calls: pairing.calls,
+            results: pairing.results,
+            ..Self::default()
+        };
         // The outer result already stores the stable executionId. Index it
         // before associating operations, including ones arriving after that result.
-        for (at, event) in events.iter().copied().enumerate() {
-            if let Event::Message(m) = event {
-                for (i, (id, name)) in issued(m).into_iter().enumerate() {
-                    if let std::collections::hash_map::Entry::Vacant(entry) = active.entry(id) {
-                        let key = (at, i);
-                        entry.insert((key, name));
-                        evidence.calls.insert(key, (id, name));
-                    }
-                }
-                if let Message::ToolResult {
-                    tool_call_id,
-                    tool_name,
-                    details,
-                    ..
-                } = m
-                    && let Some(&(key, name)) = active.get(tool_call_id.as_str())
-                    && name == tool_name
-                {
-                    active.remove(tool_call_id.as_str());
-                    evidence.results.insert(key, (at, m));
-                    if name == "ptc"
-                        && let Some(id) = details
-                            .as_ref()
-                            .and_then(|d| d["executionId"].as_str())
-                            .filter(|id| !id.is_empty())
-                    {
-                        call_executions.insert(key, id);
-                        executions
-                            .entry(id)
-                            .and_modify(|old| *old = None)
-                            .or_insert(Some(key));
-                    }
-                }
+        let mut executions = HashMap::new();
+        let mut call_executions = HashMap::new();
+        for (&key, &(_, m)) in &evidence.results {
+            if let Message::ToolResult {
+                tool_name, details, ..
+            } = m
+                && tool_name == "ptc"
+                && let Some(id) = details
+                    .as_ref()
+                    .and_then(|d| d["executionId"].as_str())
+                    .filter(|id| !id.is_empty())
+            {
+                call_executions.insert(key, id);
+                executions
+                    .entry(id)
+                    .and_modify(|old| *old = None)
+                    .or_insert(Some(key));
             }
         }
         let mut active = HashMap::new();
@@ -352,47 +327,6 @@ impl Groups {
         Ok(())
     }
 }
-/// Provider-only ordering: attach recorded results to their issued occurrence,
-/// then continue with interleaved tasks/reports. Never change the durable session.
-pub fn project(messages: &[Message]) -> Vec<Message> {
-    let evidence = Evidence::collect(messages.iter().map(Event::Message));
-    let mut out = Vec::with_capacity(messages.len());
-    for (at, message) in messages.iter().enumerate() {
-        if matches!(message, Message::ToolResult { .. }) {
-            continue;
-        }
-        let mut projected = message.clone();
-        let mut emitted = Vec::new();
-        if let Message::Assistant(assistant) = &mut projected {
-            let issued = assistant.stop_reason == StopReason::ToolUse;
-            let mut i = 0;
-            assistant.content.retain(|part| {
-                if let AssistantContent::ToolCall { id, name, .. } = part {
-                    let key = (at, i);
-                    i += 1;
-                    if !issued || !evidence.calls.contains_key(&key) {
-                        return false;
-                    }
-                    emitted.push((key, id.clone(), name.clone()));
-                }
-                true
-            });
-        }
-        out.push(projected);
-        let mut completed: Vec<_> = emitted
-            .iter()
-            .filter_map(|(key, _, _)| evidence.results.get(key))
-            .collect();
-        completed.sort_by_key(|(at, _)| *at);
-        out.extend(completed.into_iter().map(|(_, m)| (*m).clone()));
-        for (key, id, name) in emitted {
-            if !evidence.results.contains_key(&key) {
-                out.push(interrupted_result(id, name));
-            }
-        }
-    }
-    out
-}
 pub fn message_boundaries(entries: &[(String, Message)]) -> Result<HashSet<usize>, String> {
     let mut groups = Groups::for_messages(entries.iter().map(|(_, m)| m));
     let mut safe = HashSet::new();
@@ -406,20 +340,6 @@ pub fn message_boundaries(entries: &[(String, Message)]) -> Result<HashSet<usize
     }
     Ok(safe)
 }
-pub fn interrupted_result(id: String, name: String) -> Message {
-    Message::ToolResult {
-        tool_call_id: id,
-        tool_name: name,
-        content: vec![UserBlock::Text {
-            text: "Tool call was interrupted before producing a result.".into(),
-            text_signature: None,
-        }],
-        details: None,
-        is_error: true,
-        timestamp: crate::now_ms(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -620,7 +540,9 @@ mod interleaving_tests {
 #[cfg(test)]
 mod recovery_tests {
     use super::*;
+    use crate::agent::sanitize_history as project;
     use crate::session_store::{EntryData, SessionEntry};
+    use pirc_protocol::AssistantContent;
     use serde_json::json;
     fn user() -> Message {
         Message::User {

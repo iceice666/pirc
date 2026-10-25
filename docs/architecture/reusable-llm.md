@@ -108,9 +108,11 @@ checkpoint.
 The new reducer returns effects; it never executes a tool itself:
 
 1. At Idle, `advance` admits host input and yields one `Step::Model`.
-2. Streaming `Progress` carries a delta and full canonical partial snapshot.
-   Partial content does not authorize tools; a successful final ToolUse reply
-   yields correlated calls once.
+2. While streaming, the core builds the attempt's partial from the deltas it is
+   given (`stream_start`/`stream_delta`, block boundaries only), or the host
+   supplies `Progress` with a delta and its own full snapshot. Partial content
+   does not authorize tools; a successful final ToolUse reply yields correlated
+   calls once.
 3. Host code validates authority, obtains approval/resources and executes effects.
    Results can arrive in parallel order, but history retains call order and the
    next model effect waits for every result. Duplicate/stale resumes are rejected.
@@ -134,7 +136,8 @@ Each model call takes a ticket; the final reply goes through `finish_model`; too
 calls come from the validated `Step::Tools` batch and each result is fenced by its
 call key; an overflow compaction is `ReplaceHistory`; and the run ends in an
 explicit terminal state (`Completed`, `Cancelled` or `Failed`). The adapter also
-reports streaming progress at content-block boundaries and the running call's
+feeds the core each streamed delta (the core keeps the partial at content-block
+boundaries, so neither copies it per delta) and reports the running call's
 waits: dialogs (`Approval` inside the auto-mode gate, otherwise
 `Other("dialog")`) and the write lease (`Resource`). The adapter emits and
 writes nothing: the event trace and the session store are unchanged, and requests
@@ -149,9 +152,20 @@ instead of cancelling the run. Retries stay inside the agent's `stream`, so the
 core never sees `Recovery::Retry`. A session that refuses a write ends the run at
 once (`3914e9ec`).
 
+The crate also holds the message-only helpers the agent used to carry itself:
+error classification (`Failure::of_reply`, `is_retryable`,
+`is_context_overflow`, which the agent's retry and overflow decisions call),
+provider-facing history repair (`history::project`, behind the agent's
+`sanitize_history`; the agent's `tool_history` pairs calls through
+`history::Pairing` and adds its `ptc` operation evidence), the streamed
+`Partial`, and the not-run tool outcome texts (`ToolOutcome::not_run`). They
+classify and repair; they decide nothing. Token estimation and compaction cut
+points stay in the agent: they need pirc's JavaScript-compatible text helpers
+(`pirc-config`) and pirc's custom message types.
+
 The adapter has moved none of the following; they remain host-owned production
 logic: before-end persistence/message ordering, role fallback, retry
-classification/backoff, redaction, context preparation/compaction, sequential
+decisions/backoff, redaction, context preparation/compaction, sequential
 tools through validation/hooks/approval/write leases, feature hooks, queues,
 budgets and completion waits. Progress and waits are bookkeeping the agent does
 not read; a refused update is dropped, not a run error. Fake parallel-result
@@ -216,7 +230,7 @@ than suppressed. Disposable matrix outputs are removed on exit.
 - Production loop adapter follow-ups: waits of unchecked calls (rejected call
   ids) are not tracked; the core keeps the run's replies and tool results
   alongside the session store until the run ends (tool results twice: history
-  and tool records), and the adapter and core both copy partials. The prompt
+  and tool records). The prompt
   command still answers `true` after a write-refused session ends its run,
   pending a Web/Android decision, and such a session has no reopen path.
   Revocation/rebind fences are not used by the production host yet. The five

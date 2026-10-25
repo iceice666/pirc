@@ -39,7 +39,7 @@ use crate::stream::{StreamFn, StreamRequest};
 use crate::tools::{AcquireWrite, HumanWait, Tool, ToolContext, ToolResult};
 use crate::ui::{Choice, DialogOptions, NotifyLevel, Ui};
 use crate::{LocalBoxFuture, now_ms};
-use pirc_agent_loop::{CallKey, ToolCall, WaitReason};
+use pirc_agent_loop::{CallKey, NotRun, ToolCall, ToolOutcome, WaitReason, is_context_overflow};
 
 /// Session entry recording the role a session started in.
 const ROLE_ENTRY: &str = "agent.role";
@@ -255,7 +255,7 @@ pub type ScriptCapabilities = Rc<RefCell<Vec<String>>>;
 /// `sanitizeHistory`: every tool call has a result and no result is
 /// orphaned, so providers accept the history.
 pub fn sanitize_history(messages: &[Message]) -> Vec<Message> {
-    crate::tool_history::project(messages)
+    pirc_agent_loop::history::project(messages, now_ms())
 }
 
 /// JavaScript's `String.prototype.length` slicing, by UTF-16 units.
@@ -2594,7 +2594,10 @@ impl Agent {
             let retryable = message.stop_reason == StopReason::Error
                 && !options.no_retries
                 && !signal.aborted()
-                && is_retryable(message.error_message.as_deref())
+                && message
+                    .error_message
+                    .as_deref()
+                    .is_some_and(pirc_agent_loop::is_retryable)
                 && !message.content.iter().any(
                     |part| matches!(part, AssistantContent::Text { text, .. } if !text.is_empty()),
                 );
@@ -2735,7 +2738,7 @@ impl Agent {
             self.emit(json!({ "type": "turn_start" }));
             let settings = self.compaction_settings();
             let compacts_instead = |reply: &AssistantMessage, retried: bool| {
-                compaction::is_context_overflow(reply) && !retried && settings.enabled
+                is_context_overflow(reply) && !retried && settings.enabled
             };
             let persisted = Rc::new(Cell::new(false));
             let marker = persisted.clone();
@@ -2743,7 +2746,7 @@ impl Agent {
             let retried = overflow_retried;
             let settings_enabled = settings.enabled;
             let before_end: BeforeEnd = Box::new(move |reply| {
-                if compaction::is_context_overflow(reply) && !retried && settings_enabled {
+                if is_context_overflow(reply) && !retried && settings_enabled {
                     return Ok(());
                 }
                 agent.append(EntryData::Message(Message::Assistant(reply.clone())))?;
@@ -2895,12 +2898,14 @@ impl Agent {
         signal: &AbortSignal,
     ) -> Result<(Message, CallEnd), String> {
         if turn_signal.aborted() {
-            let text = if signal.aborted() {
-                "Aborted by the user before this tool ran."
+            let reason = if signal.aborted() {
+                NotRun::Aborted
             } else {
-                "Interrupted: the user sent a message before this tool ran."
+                NotRun::Interrupted
             };
-            let result = self.record_result(id, name, ToolResult::error(text))?;
+            let result = ToolOutcome::not_run(reason, now_ms()).message(id, name);
+            self.append_message(result.clone())?;
+            self.admitted(&result);
             return Ok((result, CallEnd::Skipped));
         }
         let execute = self.execute_tool(id, name, arguments, turn_signal);
@@ -3521,18 +3526,6 @@ impl Agent {
             response_model: None,
         }
     }
-}
-
-/// `isRetryable`: rate limits, overload, 5xx, dropped connections.
-pub fn is_retryable(message: Option<&str>) -> bool {
-    use std::sync::LazyLock;
-    static PATTERN: LazyLock<regex_lite::Regex> = LazyLock::new(|| {
-        regex_lite::Regex::new(
-            r"(?i)HTTP (408|409|429|5\d\d)|rate.?limit|overloaded|timeout|timed out|ECONNRESET|ECONNREFUSED|socket|network|fetch failed|terminated|unable to connect",
-        )
-        .unwrap()
-    });
-    message.is_some_and(|text| !text.is_empty() && PATTERN.is_match(text))
 }
 
 /// No inference configured (a standalone agent; the node always sends one).

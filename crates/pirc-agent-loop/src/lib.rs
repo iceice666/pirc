@@ -16,6 +16,13 @@ use pirc_llm_types::{
 };
 use serde_json::{Map, Value};
 
+mod failure;
+pub mod history;
+mod partial;
+
+pub use failure::{is_context_overflow, is_retryable};
+pub use partial::Partial;
+
 /// Opaque correlation identifier, scoped to one live [Loop]. Not a durable ID.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Ticket {
@@ -73,6 +80,47 @@ pub struct ToolOutcome {
     pub content: Vec<UserBlock>,
     pub details: Option<Value>,
     pub timestamp: u64,
+}
+
+/// Why a call was not run at all.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NotRun {
+    /// The run was aborted before it.
+    Aborted,
+    /// Its turn was interrupted before it: the user sent a message.
+    Interrupted,
+}
+
+impl ToolOutcome {
+    /// The outcome of a call that was not run, as the model is told.
+    pub fn not_run(reason: NotRun, timestamp: u64) -> Self {
+        let text = match reason {
+            NotRun::Aborted => "Aborted by the user before this tool ran.",
+            NotRun::Interrupted => "Interrupted: the user sent a message before this tool ran.",
+        };
+        Self {
+            status: ToolStatus::Interrupted,
+            content: vec![UserBlock::Text {
+                text: text.to_owned(),
+                text_signature: None,
+            }],
+            details: None,
+            timestamp,
+        }
+    }
+
+    /// This outcome as the tool result message of call `id` of tool `name`:
+    /// an error unless the call completed.
+    pub fn message(&self, id: &str, name: &str) -> Message {
+        Message::ToolResult {
+            tool_call_id: id.to_owned(),
+            tool_name: name.to_owned(),
+            content: self.content.clone(),
+            details: self.details.clone(),
+            is_error: self.status != ToolStatus::Completed,
+            timestamp: self.timestamp,
+        }
+    }
 }
 
 /// Host-specific reason a call is still pending, not a failed result or approval.
@@ -201,7 +249,7 @@ enum State {
     Idle,
     Streaming {
         ticket: Ticket,
-        partial: Option<AssistantMessage>,
+        partial: Option<Partial>,
     },
     Tools {
         ticket: Ticket,
@@ -264,7 +312,7 @@ impl Loop {
 
     pub fn partial(&self) -> Option<&AssistantMessage> {
         match &self.state {
-            State::Streaming { partial, .. } => partial.as_ref(),
+            State::Streaming { partial, .. } => partial.as_ref().map(Partial::message),
             State::Suspended(record) => record.partial.as_ref(),
             _ => None,
         }
@@ -287,8 +335,40 @@ impl Loop {
         let State::Streaming { partial, .. } = &mut self.state else {
             return Err(ResumeError::WrongState);
         };
-        *partial = Some(update.partial.clone());
+        *partial = Some(Partial::snapshot(update.partial.clone()));
         Ok(update)
+    }
+
+    /// An attempt at the request started streaming; `skeleton` is its reply
+    /// without content. The core builds the partial from the deltas given
+    /// to [`Loop::stream_delta`] (see [`Partial`]), so the host copies
+    /// nothing per delta. A retry starts over.
+    pub fn stream_start(
+        &mut self,
+        ticket: Ticket,
+        skeleton: AssistantMessage,
+    ) -> Result<(), ResumeError> {
+        self.check_ticket(ticket)?;
+        let State::Streaming { partial, .. } = &mut self.state else {
+            return Err(ResumeError::WrongState);
+        };
+        *partial = Some(Partial::new(skeleton));
+        Ok(())
+    }
+
+    /// A delta of the attempt [`Loop::stream_start`] began: whether it
+    /// changed the partial (a content delta does not, nor does anything
+    /// after a boundary out of order, nor a delta of no attempt).
+    pub fn stream_delta(
+        &mut self,
+        ticket: Ticket,
+        delta: &AssistantDelta,
+    ) -> Result<bool, ResumeError> {
+        self.check_ticket(ticket)?;
+        let State::Streaming { partial, .. } = &mut self.state else {
+            return Err(ResumeError::WrongState);
+        };
+        Ok(partial.as_mut().is_some_and(|partial| partial.apply(delta)))
     }
 
     /// Complete a model request. Duplicate/stale replies cannot issue tools again.
@@ -374,7 +454,8 @@ impl Loop {
         let State::Streaming { partial, .. } = &self.state else {
             return Err(ResumeError::WrongState);
         };
-        Ok(self.suspend(ticket, failure, partial.clone()))
+        let partial = partial.as_ref().map(Partial::message).cloned();
+        Ok(self.suspend(ticket, failure, partial))
     }
 
     pub fn wait_tool(&mut self, key: CallKey, reason: WaitReason) -> Result<(), ResumeError> {
@@ -597,14 +678,8 @@ impl Loop {
     }
 
     fn record_tool(&mut self, call: ToolCall, outcome: ToolOutcome) {
-        self.history_mut().push(Message::ToolResult {
-            tool_call_id: call.id.clone(),
-            tool_name: call.name.clone(),
-            content: outcome.content.clone(),
-            details: outcome.details.clone(),
-            is_error: outcome.status != ToolStatus::Completed,
-            timestamp: outcome.timestamp,
-        });
+        let message = outcome.message(&call.id, &call.name);
+        self.history_mut().push(message);
         self.tool_records.push(ToolRecord { call, outcome });
     }
 
@@ -617,7 +692,7 @@ impl Loop {
         match old {
             State::Streaming { ticket, partial } => {
                 invalidated.model = Some(ticket);
-                if let Some(mut partial) = partial {
+                if let Some(mut partial) = partial.map(Partial::into_message) {
                     partial.stop_reason = StopReason::Aborted;
                     partial.completed_at = Some(timestamp);
                     self.history_mut().push(Message::Assistant(partial));

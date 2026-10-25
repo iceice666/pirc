@@ -25,10 +25,13 @@ interrupted reply supersedes its request instead of cancelling; retries stay
 inside the agent's `stream`, so the core only sees final attempts and never
 `Recovery::Retry`).
 
-The adapter also feeds the core `Progress` at content block boundaries only
-(`*Start`, and `*End`, which carries the block's whole content), so a
-snapshot lags at most the block being streamed and no delta is copied; a retry
-restarts the snapshot, and tool-call arguments stay empty until the call ends.
+The adapter also feeds the core each streamed delta (`stream_start`,
+`stream_delta`), and the core builds the attempt's partial reply itself
+(`Partial`): only block boundaries change it (`*Start`, and `*End`, which
+carries the block's whole content), so the partial lags at most the block
+being streamed, no delta is copied and the host copies nothing per delta; a
+retry restarts the partial, and tool-call arguments stay empty until the call
+ends.
 Waits of the running checked call are labelled and ended with `end_wait`:
 dialogs (`Approval` inside the auto-mode gate, otherwise `Other("dialog")`)
 and the write lease (`Resource`). A wait is the call's when the waiting
@@ -68,9 +71,11 @@ parallel scheduling or grant permission to run them.
    The request's messages share the core's history (`Arc`, copied on write only
    while a request is still held when the history grows), so a host that builds
    its context elsewhere and drops the request copies nothing.
-2. Supply ordered `Progress` deltas **and full snapshots** while streaming. The
-   adapter owns their consistency; core does not implement provider delta parsing.
-   Snapshots retain partial usage and are not appended repeatedly to history.
+2. While streaming, either give the core the attempt's skeleton and its ordered
+   deltas (`stream_start`, `stream_delta`) and let it build the partial at
+   block boundaries (`Partial`), or supply ordered `Progress` deltas **with
+   full snapshots** you built yourself. Partials retain usage and are not
+   appended repeatedly to history.
 3. `finish_model` consumes a canonical final reply. Tools are emitted only on
    successful ToolUse, never on progressive partials/error/aborted responses.
    Empty/duplicate provider IDs within one batch fail atomically. Provider IDs
@@ -81,14 +86,17 @@ parallel scheduling or grant permission to run them.
    `resume_tool` accepts one terminal result per call in any order. Only after
    all results does it return the next model effect; history is always call-order.
    Denied/interrupted/failed/unknown statuses are retained in `tool_records` and
-   mapped to error results in neutral message history.
+   mapped to error results in neutral message history (`ToolOutcome::message`;
+   `ToolOutcome::not_run` is the outcome of a call its host never ran).
 5. A successful non-tool reply returns Idle, **not Done**. The host can deliver
    more input or call `complete` after its own feature/completion checks.
 6. Failure suspends with typed reason/retry hint, raw error and optional partial
-   reply/usage retained in `failures`. No automatic retry, sleep or compaction
-   occurs. Explicit retry refuses partial content or unknown outcomes; overflow
-   recovery accepts host-compacted history. Host remains responsible for retry
-   budgets, safe retry classification, error masking and progress publication.
+   reply/usage retained in `failures`. `Failure::of_reply` classifies an error
+   reply by its message (`is_retryable`, `is_context_overflow`): a class, not
+   a decision. No automatic retry, sleep or compaction occurs. Explicit retry
+   refuses partial content or unknown outcomes; overflow recovery accepts
+   host-compacted history. Host remains responsible for retry budgets, safe
+   retry classification, error masking and progress publication.
 7. `cancel` is terminal/idempotent and returns operations the host must abort.
    Suspended errors/partials stay in failure records. `rebind` requires a strictly
    greater generation, invalidates in-flight work, appends a trusted host notice,
@@ -98,6 +106,14 @@ parallel scheduling or grant permission to run them.
    `supersede` instead settles a streaming request with a host-kept reply
    (recorded as given, replacing the partial, issuing no tools) and fences the
    old ticket with a strictly greater generation.
+
+The `history` module is the provider-facing repair of a message history
+(`project`): each tool-use reply is followed by its results in order, a call
+without one gets an interrupted error result, and orphan results and calls of
+no tool-use reply are dropped. Calls are paired by occurrence (`Pairing`), so a
+provider may reuse an id after a completed group. It reads messages only; a
+host with a richer journal (pirc's `ptc` operations) pairs through it and adds
+its own evidence.
 
 Tickets are scoped to one live core instance. They are not durable globally unique
 IDs. This core has no restart protocol, journal or exactly-once external effect
@@ -129,8 +145,9 @@ cargo run -p pirc-agent-loop --example send
 cargo clippy -p pirc-agent-loop --all-targets -- -D warnings
 ```
 
-The tests exercise model/tool round trips, progressive snapshots, blocked/denied
-results, parallel call correlation/order, duplicate/stale resume rejection,
-streaming/tool-wait generation changes, ending waits, superseded streams,
-suspended/streaming cancellation, partial usage/errors, explicit retry/overflow
-handoff, and Idle versus terminal Done.
+The tests exercise model/tool round trips, progressive snapshots, the
+core-built partial and its attempt restarts, blocked/denied results, parallel
+call correlation/order, duplicate/stale resume rejection, streaming/tool-wait
+generation changes, ending waits, superseded streams, suspended/streaming
+cancellation, partial usage/errors, error classification, history repair,
+explicit retry/overflow handoff, and Idle versus terminal Done.

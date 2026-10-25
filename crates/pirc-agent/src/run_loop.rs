@@ -8,10 +8,10 @@
 //! calls are taken from the core's validated batch, each result is fenced
 //! by its call key, and the run ends in an explicit terminal state.
 //!
-//! It also tells the core what the run is doing meanwhile: the streaming
-//! reply's snapshot at each content block boundary (a block's end carries
-//! its whole content, so a snapshot lags at most the block being streamed),
-//! and the waits of the running call (a dialog, the write lease).
+//! It also tells the core what the run is doing meanwhile: each streamed
+//! delta, from which the core builds the attempt's partial reply at block
+//! boundaries ([`pirc_agent_loop::Partial`]), and the waits of the running
+//! call (a dialog, the write lease).
 //!
 //! It emits nothing and writes nothing, so the agent's event trace is the
 //! one `pirc-conformance/tests/agent_loop_order.rs` records. The core's
@@ -32,8 +32,8 @@
 //!   final attempt, and a failure never asks it for a retry.
 
 use pirc_agent_loop::{
-    CallKey, Failure, FailureKind, Loop, Progress, Recovery, ResumeError, Status, Step, Ticket,
-    ToolCall, ToolOutcome, ToolStatus, WaitReason,
+    CallKey, Failure, Loop, Recovery, ResumeError, Status, Step, Ticket, ToolCall, ToolOutcome,
+    ToolStatus, WaitReason,
 };
 use pirc_protocol::{AssistantContent, AssistantDelta, AssistantMessage, Message, StopReason};
 use serde_json::{Map, Value};
@@ -70,14 +70,6 @@ fn state_error(error: ResumeError) -> String {
     format!("agent loop state: {error}")
 }
 
-/// The streaming attempt's snapshot, built from block boundaries.
-struct Snapshot {
-    ticket: Ticket,
-    message: AssistantMessage,
-    /// A boundary out of order: no more snapshots for this attempt.
-    broken: bool,
-}
-
 /// One open wait of a call; several can overlap (a script's operations).
 struct OpenWait {
     token: u64,
@@ -94,7 +86,6 @@ pub(crate) struct RunLoop {
     suspended: Option<Ticket>,
     /// Results of unchecked calls, admitted with the next request.
     input: Vec<Message>,
-    snapshot: Option<Snapshot>,
     /// The checked call running now, and its provider id.
     running: Option<(CallKey, String)>,
     waits: Vec<OpenWait>,
@@ -108,7 +99,6 @@ impl RunLoop {
             pending: None,
             suspended: None,
             input: Vec::new(),
-            snapshot: None,
             running: None,
             waits: Vec::new(),
         }
@@ -155,106 +145,15 @@ impl RunLoop {
     /// An attempt at the pending request started streaming; `skeleton` is
     /// its message without content. A retry starts over.
     pub(crate) fn attempt(&mut self, skeleton: AssistantMessage) {
-        self.snapshot = self.pending.map(|ticket| Snapshot {
-            ticket,
-            message: AssistantMessage {
-                content: Vec::new(),
-                ..skeleton
-            },
-            broken: false,
-        });
+        if let Some(ticket) = self.pending {
+            let _ = self.core.stream_start(ticket, skeleton);
+        }
     }
 
-    /// A streamed delta. Only block starts and ends change the snapshot.
+    /// A streamed delta of the attempt.
     pub(crate) fn delta(&mut self, delta: &AssistantDelta) {
-        let Some(snapshot) = self.snapshot.as_mut() else {
-            return;
-        };
-        if snapshot.broken || self.pending != Some(snapshot.ticket) {
-            return;
-        }
-        let (index, block) = match delta {
-            AssistantDelta::TextStart { content_index } => (
-                content_index,
-                AssistantContent::Text {
-                    text: String::new(),
-                    text_signature: None,
-                },
-            ),
-            AssistantDelta::TextEnd {
-                content_index,
-                content,
-            } => (
-                content_index,
-                AssistantContent::Text {
-                    text: content.clone(),
-                    text_signature: None,
-                },
-            ),
-            AssistantDelta::ThinkingStart { content_index } => (
-                content_index,
-                AssistantContent::Thinking {
-                    thinking: String::new(),
-                    signature: None,
-                    redacted: None,
-                },
-            ),
-            AssistantDelta::ThinkingEnd {
-                content_index,
-                content,
-            } => (
-                content_index,
-                AssistantContent::Thinking {
-                    thinking: content.clone(),
-                    signature: None,
-                    redacted: None,
-                },
-            ),
-            // Arguments stream as unparsed JSON: empty until the call ends.
-            AssistantDelta::ToolcallStart {
-                content_index,
-                id,
-                tool_name,
-            } => (
-                content_index,
-                AssistantContent::ToolCall {
-                    id: id.clone(),
-                    name: tool_name.clone(),
-                    arguments: Map::new(),
-                    thought_signature: None,
-                },
-            ),
-            AssistantDelta::ToolcallEnd {
-                content_index,
-                tool_call,
-            } => (content_index, tool_call.clone()),
-            AssistantDelta::TextDelta { .. }
-            | AssistantDelta::ThinkingDelta { .. }
-            | AssistantDelta::ToolcallDelta { .. } => return,
-        };
-        let index = *index as usize;
-        let content = &mut snapshot.message.content;
-        let starts = matches!(
-            delta,
-            AssistantDelta::TextStart { .. }
-                | AssistantDelta::ThinkingStart { .. }
-                | AssistantDelta::ToolcallStart { .. }
-        );
-        if starts && index == content.len() {
-            content.push(block);
-        } else if !starts && index < content.len() {
-            content[index] = block;
-        } else {
-            snapshot.broken = true;
-            return;
-        }
-        let update = Progress {
-            ticket: snapshot.ticket,
-            delta: delta.clone(),
-            partial: snapshot.message.clone(),
-        };
-        if self.core.progress(update).is_err() {
-            snapshot.broken = true;
+        if let Some(ticket) = self.pending {
+            let _ = self.core.stream_delta(ticket, delta);
         }
     }
 
@@ -275,23 +174,13 @@ impl RunLoop {
             return Err("agent loop state: a reply to no pending request".to_owned());
         }
         self.pending = None;
-        self.snapshot = None;
         if reply.stop_reason == StopReason::Aborted && interrupted {
             self.supersede(ticket, reply)?;
             return Ok(Reply::Nothing);
         }
-        let failure = (reply.stop_reason == StopReason::Error).then(|| Failure {
-            kind: if crate::compaction::is_context_overflow(reply) {
-                FailureKind::ContextOverflow
-            } else {
-                FailureKind::Other
-            },
-            message: reply.error_message.clone().unwrap_or_default(),
-            // The agent's `stream` already retried what it retries.
-            retryable: false,
-            retry_after_ms: None,
-            outcome_unknown: false,
-        });
+        // `retryable` is the message's class; the agent's `stream` already
+        // retried what it retries, so the core is never asked to.
+        let failure = Failure::of_reply(reply);
         match self.core.finish_model(ticket, reply.clone(), failure) {
             Ok(Step::Tools(calls)) => Ok(Reply::Tools(calls)),
             Ok(Step::Suspended(record)) => {
@@ -444,7 +333,6 @@ impl RunLoop {
     pub(crate) fn close(&mut self, cancelled: bool, timestamp: u64) -> Result<(), String> {
         self.pending = None;
         self.input.clear();
-        self.snapshot = None;
         self.running = None;
         self.waits.clear();
         if cancelled {

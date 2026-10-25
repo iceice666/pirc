@@ -1986,6 +1986,7 @@ name = "pirc-agent-loop"
 version = "0.9.3"
 dependencies = [
  "pirc-llm-types",
+ "regex-lite",
  "serde_json",
  "tokio",
 ]

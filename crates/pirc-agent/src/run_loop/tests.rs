@@ -1,5 +1,5 @@
 use super::*;
-use pirc_agent_loop::TerminalReason;
+use pirc_agent_loop::{FailureKind, TerminalReason};
 use pirc_protocol::UserBlock;
 use serde_json::json;
 
