@@ -11,6 +11,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Fixed
 
+- After a session write fails, later prompts end at once instead of calling the model for a reply that could not be saved.
 - Android removes already-missing terminal tabs correctly in Traditional Chinese while preserving genuine close errors.
 - Android keeps standard keyboard event names and key codes in Traditional Chinese, restoring native document shortcuts and remote browser Enter/Tab/Escape, deletion and IME submit.
 - Android native modal dialogs with author `inset:auto` position independently of their former DOM parent layout, keeping controls aligned with their hit targets.

@@ -209,7 +209,8 @@ async fn agent_loop_persistence_before_message_end() {
     r.note("session afterwards", session_outline(&agent));
     agent.take_requests();
 
-    // The store refuses further writes until it is reopened.
+    // The store refuses further writes until it is reopened: the run ends
+    // without asking the model for a turn it could not record.
     agent
         .command(json!({ "type": "prompt", "message": "Again" }))
         .await;

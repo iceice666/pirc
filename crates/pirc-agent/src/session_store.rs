@@ -799,6 +799,12 @@ impl SessionStore {
         }
     }
 
+    /// A write failed: every later append is refused until the session is
+    /// reopened.
+    pub fn write_failed(&self) -> bool {
+        self.write_failed
+    }
+
     /// `isNew`: only the header so far.
     pub fn is_new(&self) -> bool {
         self.entries.len() <= 1

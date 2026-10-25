@@ -73,22 +73,13 @@ expression: r.into_value()
       "agent_start",
       "notify error: Failed to start run: commit_outcome_unknown_reopen",
       "response prompt true",
-      "turn_start",
-      "message_start assistant",
-      "panel_changed",
-      "message_update text_start",
-      "message_update text_delta",
-      "message_update text_delta",
-      "message_update text_end",
-      "panel_changed",
-      "agent_error Agent loop crashed: commit_outcome_unknown_reopen",
-      "notify error: Agent loop crashed: commit_outcome_unknown_reopen",
+      "agent_end",
       "agent_settled"
     ],
     "step": "the next prompt"
   },
   {
-    "observed": 1,
+    "observed": 0,
     "step": "model requests for it"
   },
   {

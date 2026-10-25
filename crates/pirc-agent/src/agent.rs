@@ -2620,6 +2620,14 @@ impl Agent {
             }
         }
         drop(extra_prompt);
+        // After a failed write the store refuses every append until it is
+        // reopened: no turn could be recorded, so none is asked for.
+        if self.store.borrow().write_failed() {
+            *self.turn.borrow_mut() = None;
+            self.interrupt_pending.set(false);
+            self.emit(json!({ "type": "agent_end", "willRetry": false }));
+            return Ok(());
+        }
         let max_turns = self.config.limits.max_turns;
         let mut turns: u64 = 0;
         let mut overflow_retried = false;
