@@ -751,7 +751,7 @@ impl Runner {
         }
         let reason = match args.get("reason") {
             Some(Value::String(reason)) if !trim(reason).is_empty() => {
-                utf16_prefix(trim(reason), 500)
+                utf16_prefix(trim(reason), 500).to_owned()
             }
             _ => "(no reason given)".to_owned(),
         };

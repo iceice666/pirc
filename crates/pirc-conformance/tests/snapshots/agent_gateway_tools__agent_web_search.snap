@@ -1,5 +1,6 @@
 ---
 source: crates/pirc-conformance/tests/agent_gateway_tools.rs
+assertion_line: 123
 expression: r.into_value()
 ---
 [
@@ -7,6 +8,12 @@ expression: r.into_value()
     "observed": [
       {
         "type": "agent_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c1",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {
@@ -23,12 +30,6 @@ expression: r.into_value()
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
-      },
-      {
-        "command": "prompt",
-        "id": "c1",
-        "success": true,
-        "type": "response"
       },
       {
         "type": "turn_start"
@@ -950,6 +951,12 @@ expression: r.into_value()
         "type": "agent_start"
       },
       {
+        "command": "prompt",
+        "id": "c2",
+        "success": true,
+        "type": "response"
+      },
+      {
         "message": {
           "content": "Search for nothing",
           "role": "user",
@@ -964,12 +971,6 @@ expression: r.into_value()
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
-      },
-      {
-        "command": "prompt",
-        "id": "c2",
-        "success": true,
-        "type": "response"
       },
       {
         "type": "turn_start"
@@ -1572,6 +1573,12 @@ expression: r.into_value()
         "type": "agent_start"
       },
       {
+        "command": "prompt",
+        "id": "c3",
+        "success": true,
+        "type": "response"
+      },
+      {
         "message": {
           "content": "Search again",
           "role": "user",
@@ -1586,12 +1593,6 @@ expression: r.into_value()
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
-      },
-      {
-        "command": "prompt",
-        "id": "c3",
-        "success": true,
-        "type": "response"
       },
       {
         "type": "turn_start"
@@ -2331,6 +2332,12 @@ expression: r.into_value()
         "type": "agent_start"
       },
       {
+        "command": "prompt",
+        "id": "c4",
+        "success": true,
+        "type": "response"
+      },
+      {
         "message": {
           "content": "Search again",
           "role": "user",
@@ -2345,12 +2352,6 @@ expression: r.into_value()
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
-      },
-      {
-        "command": "prompt",
-        "id": "c4",
-        "success": true,
-        "type": "response"
       },
       {
         "type": "turn_start"

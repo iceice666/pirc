@@ -53,12 +53,9 @@ pub(crate) fn feature_enabled(agent: &Agent, key: &str) -> bool {
         != Some(&Value::Bool(false))
 }
 
-/// Today in UTC (`new Date().toISOString().slice(0, 10)`).
+/// Today in UTC, `YYYY-MM-DD`.
 pub(crate) fn today() -> String {
-    let now = crate::now_ms() as f64;
-    js::iso_string(now)
-        .map(|iso| iso[..10].to_owned())
-        .unwrap_or_default()
+    crate::iso_now()[..10].to_owned()
 }
 
 /// `sanitize`: neutralize anything in page text that could pass for the

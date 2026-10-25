@@ -177,9 +177,7 @@ fn row_of(row: &rusqlite::Row<'_>) -> rusqlite::Result<Delegation> {
 
 // ---------- strings as JavaScript sees them ----------
 
-fn utf16_len(text: &str) -> usize {
-    text.encode_utf16().count()
-}
+use pirc_config::text::{trim as js_trim, utf16_len, value_text as js_string};
 
 /// `text.slice(start, end)` in UTF-16 units.
 fn utf16_slice(text: &str, start: usize, end: usize) -> String {
@@ -191,36 +189,6 @@ fn utf16_slice(text: &str, start: usize, end: usize) -> String {
     let end = end.min(units.len());
     String::from_utf16_lossy(&units[start.min(end)..end])
 }
-
-fn js_trim(text: &str) -> &str {
-    text.trim_matches(pirc_config::js_space)
-}
-
-/// `String(value)`.
-fn js_string(value: &Value) -> String {
-    match value {
-        Value::String(text) => text.clone(),
-        Value::Null => "null".into(),
-        Value::Bool(flag) => flag.to_string(),
-        Value::Number(number) => match number.as_f64() {
-            Some(float) if number.is_f64() && float.fract() == 0.0 && float.abs() < 1e21 => {
-                format!("{}", float as i64)
-            }
-            _ => number.to_string(),
-        },
-        Value::Array(items) => items
-            .iter()
-            .map(|item| match item {
-                Value::Null => String::new(),
-                other => js_string(other),
-            })
-            .collect::<Vec<_>>()
-            .join(","),
-        Value::Object(_) => value.to_string(),
-    }
-}
-
-// ---------- per-gateway state ----------
 
 /// What the TS `Delegations` instance kept in memory.
 #[derive(Default)]
@@ -2210,7 +2178,7 @@ mod tests {
             check_thinking(Some("loud".into())).unwrap_err().message,
             "thinking is one of off, minimal, low, medium, high, xhigh, max"
         );
-        assert_eq!(js_string(&json!(["high"])), "high");
+        assert_eq!(js_string(&json!(["high"])), "[\"high\"]");
         assert_eq!(js_string(&json!(2)), "2");
         assert_eq!(js_string(&json!({})), "{}");
     }

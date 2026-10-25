@@ -5,10 +5,7 @@
 use pirc_protocol::{ModelApi, ModelRef, ThinkingLevel};
 use serde_json::{Map, Value};
 
-/// `value.length` of a JavaScript string.
-pub fn len16(text: &str) -> usize {
-    text.encode_utf16().count()
-}
+pub use pirc_config::text::utf16_len as len16;
 
 /// A strict object: `None` when `value` is not an object or has a key
 /// outside `allowed`.

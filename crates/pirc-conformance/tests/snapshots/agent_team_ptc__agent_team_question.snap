@@ -1,5 +1,6 @@
 ---
 source: crates/pirc-conformance/tests/agent_team_ptc.rs
+assertion_line: 518
 expression: r.into_value()
 ---
 [
@@ -161,14 +162,6 @@ expression: r.into_value()
         "sections": [
           "team"
         ],
-        "type": "panel_changed"
-      },
-      {
-        "sections": [],
-        "type": "panel_changed"
-      },
-      {
-        "sections": [],
         "type": "panel_changed"
       },
       {
@@ -664,10 +657,6 @@ expression: r.into_value()
         "type": "panel_changed"
       },
       {
-        "sections": [],
-        "type": "panel_changed"
-      },
-      {
         "assistantMessageEvent": {
           "contentIndex": 0,
           "id": "answer",
@@ -786,10 +775,6 @@ expression: r.into_value()
         "sections": [
           "team"
         ],
-        "type": "panel_changed"
-      },
-      {
-        "sections": [],
         "type": "panel_changed"
       },
       {
@@ -1342,10 +1327,6 @@ expression: r.into_value()
         "sections": [
           "team"
         ],
-        "type": "panel_changed"
-      },
-      {
-        "sections": [],
         "type": "panel_changed"
       },
       {

@@ -19,6 +19,7 @@ pub mod frontmatter;
 pub mod modes;
 pub mod node;
 pub mod registry;
+pub mod text;
 
 pub use node::{
     BrowserSettings, CHAT_WORKSPACE_ID, ConfigWorkspace, NodeConfig, SandboxSettings, Viewport,
@@ -155,22 +156,6 @@ fn js_positive_integer(text: &str) -> Option<u64> {
     };
     // Larger than u64 saturates, so a limit check still refuses it.
     (number.is_finite() && number > 0.0 && number.fract() == 0.0).then_some(number as u64)
-}
-
-/// JavaScript's `\\s`: unlike `char::is_whitespace`, it includes U+FEFF and
-/// leaves out U+0085.
-pub fn js_space(c: char) -> bool {
-    matches!(
-        c,
-        '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'
-            ..='\u{200a}'
-                | '\u{2028}'
-                | '\u{2029}'
-                | '\u{202f}'
-                | '\u{205f}'
-                | '\u{3000}'
-                | '\u{feff}'
-    )
 }
 
 /// `^[a-zA-Z0-9_-]{1,100}$`: node and workspace IDs.
@@ -434,7 +419,7 @@ fn vapid_subject(value: Option<&str>, origin: &str) -> Result<String, ConfigErro
         .map(str::trim)
         .filter(|subject| !subject.is_empty())
         .unwrap_or(origin);
-    let no_space = |text: &str| !text.is_empty() && !text.chars().any(js_space);
+    let no_space = |text: &str| !text.is_empty() && !text.chars().any(text::is_space);
     let valid = if let Some(address) = subject.strip_prefix("mailto:") {
         // `\S+@\S+`: some `@` with non-space text on both sides.
         no_space(address)

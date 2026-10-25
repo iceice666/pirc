@@ -299,16 +299,16 @@ impl State {
         );
     }
 
-    /// `schedule`: after the other features settled (`setTimeout(…, 0)`).
+    /// `schedule`: after the other features settled.
     fn schedule(self: &Rc<Self>, agent: &Rc<Agent>) {
         if self.scheduled.get() {
             return;
         }
         self.scheduled.set(true);
         let (state, agent) = (self.clone(), agent.clone());
-        // Behind timeouts set earlier while settling: memory's automatic
+        // Behind work deferred earlier while settling: memory's automatic
         // compaction starts first, and the round waits for it.
-        crate::set_timeout_zero(async move {
+        crate::spawn_deferred(async move {
             state.try_continue(&agent);
         });
     }

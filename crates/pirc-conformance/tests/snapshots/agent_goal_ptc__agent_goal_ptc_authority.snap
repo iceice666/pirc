@@ -1,5 +1,6 @@
 ---
 source: crates/pirc-conformance/tests/agent_goal_ptc.rs
+assertion_line: 219
 expression: value
 ---
 [
@@ -16,6 +17,12 @@ expression: value
         "type": "agent_start"
       },
       {
+        "command": "prompt",
+        "id": "c1",
+        "success": true,
+        "type": "response"
+      },
+      {
         "message": {
           "content": "Do the hard thing",
           "role": "user",
@@ -30,12 +37,6 @@ expression: value
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
-      },
-      {
-        "command": "prompt",
-        "id": "c1",
-        "success": true,
-        "type": "response"
       },
       {
         "type": "turn_start"
@@ -5839,46 +5840,46 @@ expression: value
         "type": "agent_start"
       },
       {
-        "message": {
-          "content": "Raise the limit to 3 and go on",
-          "role": "user",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_start"
-      },
-      {
-        "message": {
-          "content": "Raise the limit to 3 and go on",
-          "role": "user",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_end"
-      },
-      {
-        "message": {
-          "content": "Goal state (replaces earlier goal state):\nGoal <hex12:1> (revision 3) — paused\nObjective: Hard thing\nContinuation rounds: 1 / 1\nPaused: Used all 1 continuation rounds.",
-          "customType": "goal-context",
-          "display": false,
-          "role": "custom",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_start"
-      },
-      {
-        "message": {
-          "content": "Goal state (replaces earlier goal state):\nGoal <hex12:1> (revision 3) — paused\nObjective: Hard thing\nContinuation rounds: 1 / 1\nPaused: Used all 1 continuation rounds.",
-          "customType": "goal-context",
-          "display": false,
-          "role": "custom",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_end"
-      },
-      {
         "command": "prompt",
         "id": "c2",
         "success": true,
         "type": "response"
+      },
+      {
+        "message": {
+          "content": "Raise the limit to 3 and go on",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "Raise the limit to 3 and go on",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "message": {
+          "content": "Goal state (replaces earlier goal state):\nGoal <hex12:1> (revision 3) — paused\nObjective: Hard thing\nContinuation rounds: 1 / 1\nPaused: Used all 1 continuation rounds.",
+          "customType": "goal-context",
+          "display": false,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "Goal state (replaces earlier goal state):\nGoal <hex12:1> (revision 3) — paused\nObjective: Hard thing\nContinuation rounds: 1 / 1\nPaused: Used all 1 continuation rounds.",
+          "customType": "goal-context",
+          "display": false,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
       },
       {
         "type": "turn_start"
@@ -13300,6 +13301,12 @@ expression: value
         "type": "agent_start"
       },
       {
+        "command": "prompt",
+        "id": "c3",
+        "success": true,
+        "type": "response"
+      },
+      {
         "message": {
           "content": "Try plan B",
           "role": "user",
@@ -13314,12 +13321,6 @@ expression: value
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
-      },
-      {
-        "command": "prompt",
-        "id": "c3",
-        "success": true,
-        "type": "response"
       },
       {
         "type": "turn_start"

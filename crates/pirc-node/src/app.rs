@@ -1036,15 +1036,8 @@ async fn live_agent(runner: &crate::runner::Runner) -> Option<Value> {
     Some(agent)
 }
 
-/// JS truthiness of a JSON value.
 fn truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(value) => *value,
-        Value::Number(number) => number.as_f64().is_some_and(|n| n != 0.0),
-        Value::String(text) => !text.is_empty(),
-        Value::Array(_) | Value::Object(_) => true,
-    }
+    pirc_config::text::truthy(Some(value))
 }
 
 async fn snapshot(node: Node, request: Request) -> ApiResult<Response> {

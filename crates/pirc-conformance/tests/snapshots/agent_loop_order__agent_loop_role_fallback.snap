@@ -1,5 +1,6 @@
 ---
 source: crates/pirc-conformance/tests/agent_loop_order.rs
+assertion_line: 476
 expression: r.into_value()
 ---
 [
@@ -15,7 +16,6 @@ expression: r.into_value()
       "notify warning: Model fake/fake-model failed (Model provider request failed (HTTP 429).); switching to fake/backup-model",
       "message_end assistant error (not persisted)",
       "message_start assistant",
-      "panel_changed",
       "panel_changed",
       "message_update text_start",
       "message_update text_delta",

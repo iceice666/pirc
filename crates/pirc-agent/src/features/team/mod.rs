@@ -512,7 +512,7 @@ struct State {
     /// Events `agent_inbox` operations returned whole, by the `ptc` call
     /// they ran in.
     inbox_reads: RefCell<IndexMap<String, Vec<(String, String)>>>,
-    /// A panel flush is queued (the TS agent's microtask).
+    /// A panel flush task is queued.
     flush_queued: Cell<bool>,
     /// The executable children run (`selfCommand()`).
     command: Vec<String>,
@@ -572,7 +572,8 @@ impl State {
         }
     }
 
-    /// `panelChanged('team')`, flushed as the TS agent's microtask would be.
+    /// The team section changed; flushed by a task, so a burst of events
+    /// gives one `panel_changed`.
     fn panel_changed(&self, agent: &Rc<Agent>) {
         agent.panel_changed("team");
         if !self.flush_queued.replace(true) {
@@ -885,8 +886,7 @@ impl TeamTool {
     async fn run(&self, args: Map<String, Value>, ctx: ToolContext) -> Result<ToolResult, String> {
         let agent = self.agent.upgrade().ok_or("Aborted")?;
         let outcome = self.dispatch(&agent, args, ctx).await;
-        // The panel changes queued as microtasks ran before the awaiting
-        // tool went on, even when the broker answered synchronously.
+        // The client sees the panel changes before the tool's result.
         agent.flush_panel();
         outcome
     }

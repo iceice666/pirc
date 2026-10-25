@@ -11,10 +11,7 @@ use crate::error::{ApiError, ApiResult};
 /// What a password's value becomes in a snapshot.
 pub const MASK: &str = "••••••";
 
-/// `value.length` of a JS string.
-pub fn utf16_len(text: &str) -> usize {
-    text.encode_utf16().count()
-}
+pub use pirc_config::text::utf16_len;
 
 /// `args[name]`: `undefined` unless `args` is an object (the runner passes
 /// arrays through as TS did; their named properties are all `undefined`).

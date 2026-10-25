@@ -1,6 +1,7 @@
 ---
 source: crates/pirc-conformance/tests/agent_goal_ptc.rs
-expression: r.into_value()
+assertion_line: 73
+expression: "feature_support::without_ptc_progress(r.into_value())"
 ---
 [
   {
@@ -14,6 +15,12 @@ expression: r.into_value()
       },
       {
         "type": "agent_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c1",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {
@@ -30,12 +37,6 @@ expression: r.into_value()
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
-      },
-      {
-        "command": "prompt",
-        "id": "c1",
-        "success": true,
-        "type": "response"
       },
       {
         "type": "turn_start"

@@ -116,7 +116,7 @@ fn is_device_bearer(authorization: &str) -> bool {
     let Some(rest) = after_bearer(authorization) else {
         return false;
     };
-    let token = rest.trim_start_matches(pirc_config::js_space);
+    let token = rest.trim_start_matches(pirc_config::text::is_space);
     token.len() < rest.len()
         && token
             .get(..9)
@@ -128,8 +128,9 @@ fn bearer_token(authorization: &str) -> &str {
     let Some(rest) = after_bearer(authorization) else {
         return "";
     };
-    let token = rest.trim_start_matches(pirc_config::js_space);
-    if token.len() == rest.len() || token.is_empty() || token.contains(pirc_config::js_space) {
+    let token = rest.trim_start_matches(pirc_config::text::is_space);
+    if token.len() == rest.len() || token.is_empty() || token.contains(pirc_config::text::is_space)
+    {
         return "";
     }
     token

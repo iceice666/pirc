@@ -91,18 +91,7 @@ pub fn safe_json(text: &str, fallback: Value) -> Value {
     serde_json::from_str(text).unwrap_or(fallback)
 }
 
-/// `String.prototype.slice(0, max)`: at most `max` UTF-16 code units, never
-/// splitting a surrogate pair (TS would leave half of one).
-pub fn head16(text: &str, max: usize) -> &str {
-    let mut units = 0;
-    for (index, c) in text.char_indices() {
-        units += c.len_utf16();
-        if units > max {
-            return &text[..index];
-        }
-    }
-    text
-}
+pub use pirc_config::text::utf16_head as head16;
 
 #[cfg(test)]
 mod tests {

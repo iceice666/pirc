@@ -30,9 +30,9 @@ use serde_json::Map;
 /// account identity and safe error presentation; values may contain secrets.
 pub type Credentials = Map<String, Value>;
 
-// JS trimming is protocol compatibility, not environment policy.
+/// Trim white space and a BOM (`js` is not built without `_transport`).
 fn trim(text: &str) -> &str {
-    text.trim_matches(|c: char| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}')
+    text.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
 }
 
 fn now_ms() -> u64 {

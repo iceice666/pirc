@@ -1,5 +1,6 @@
 ---
 source: crates/pirc-conformance/tests/agent_background.rs
+assertion_line: 301
 expression: run.r.into_value()
 ---
 [
@@ -109,6 +110,12 @@ expression: run.r.into_value()
         "type": "agent_start"
       },
       {
+        "command": "prompt",
+        "id": "c3",
+        "success": true,
+        "type": "response"
+      },
+      {
         "message": {
           "content": "work",
           "role": "user",
@@ -123,12 +130,6 @@ expression: run.r.into_value()
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
-      },
-      {
-        "command": "prompt",
-        "id": "c3",
-        "success": true,
-        "type": "response"
       },
       {
         "type": "turn_start"

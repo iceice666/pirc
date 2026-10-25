@@ -87,10 +87,7 @@ pub fn project_instructions_path(workspace: &Workspace, mode: &Mode) -> Option<P
         .then(|| Path::new(&workspace.canonical_path).join(INSTRUCTIONS_FILE))
 }
 
-/// `String.prototype.trim`: JS whitespace, which includes the BOM.
-pub fn js_trim(text: &str) -> &str {
-    text.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
-}
+pub use pirc_config::text::trim as js_trim;
 
 /// `readProjectInstructions`: trimmed and cut to the limit; `""` for none.
 pub fn read_project_instructions(workspace: &Workspace, mode: &Mode) -> String {

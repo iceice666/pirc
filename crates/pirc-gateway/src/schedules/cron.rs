@@ -250,15 +250,8 @@ pub struct Pattern {
     use_and_logic: bool,
 }
 
-/// JavaScript's `\s`.
-fn js_space(c: char) -> bool {
-    pirc_config::js_space(c) || c == '\u{3000}' || c == '\u{feff}'
-}
-
-/// `String.prototype.trim`.
-pub fn js_trim(text: &str) -> &str {
-    text.trim_matches(js_space)
-}
+use pirc_config::text::is_space as js_space;
+pub use pirc_config::text::trim as js_trim;
 
 /// `text.split(/\s+/).length` of a trimmed, non-empty text.
 pub fn field_count(text: &str) -> usize {

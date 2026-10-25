@@ -208,7 +208,7 @@ pub fn read_assistant_prompt(file: &str) -> Result<String, String> {
         Err(error) => return Err(js::node_error(&error, "open", Some(path))),
     };
     let text = text.replace("\r\n", "\n");
-    Ok(js::utf16_prefix(js::trim(&text), PROMPT_MAX_CHARS))
+    Ok(js::utf16_prefix(js::trim(&text), PROMPT_MAX_CHARS).to_owned())
 }
 
 /// The node's settings (`globalSchema`).

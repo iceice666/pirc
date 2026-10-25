@@ -1,5 +1,6 @@
 ---
 source: crates/pirc-conformance/tests/agent_background.rs
+assertion_line: 408
 expression: run.r.into_value()
 ---
 [
@@ -299,6 +300,18 @@ expression: run.r.into_value()
         "type": "panel_changed"
       },
       {
+        "id": "<uuid:6>",
+        "method": "setStatus",
+        "statusKey": "background-task",
+        "type": "extension_ui_request"
+      },
+      {
+        "sections": [
+          "background"
+        ],
+        "type": "panel_changed"
+      },
+      {
         "message": {
           "content": "1 background task finished:\n<task:1> · stopped\nUse background_task list/output to inspect results.",
           "customType": "background-task-finished",
@@ -353,18 +366,6 @@ expression: run.r.into_value()
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
-      },
-      {
-        "id": "<uuid:6>",
-        "method": "setStatus",
-        "statusKey": "background-task",
-        "type": "extension_ui_request"
-      },
-      {
-        "sections": [
-          "background"
-        ],
-        "type": "panel_changed"
       },
       {
         "type": "turn_start"

@@ -199,7 +199,7 @@ impl App {
         let trimmed = data
             .get("name")
             .and_then(Value::as_str)
-            .map(|name| name.trim_matches(pirc_config::js_space))
+            .map(|name| name.trim_matches(pirc_config::text::is_space))
             .unwrap_or_default();
         let units: Vec<u16> = trimmed.encode_utf16().take(200).collect();
         let name = String::from_utf16_lossy(&units);

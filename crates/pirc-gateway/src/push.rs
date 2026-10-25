@@ -26,7 +26,8 @@ use p256::ecdsa::signature::Signer;
 use p256::ecdsa::{Signature, SigningKey};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use p256::{PublicKey, SecretKey};
-use pirc_config::{Env, js_space};
+use pirc_config::Env;
+use pirc_config::text::is_space as js_space;
 use rusqlite::{OptionalExtension, Row, params};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -518,9 +519,7 @@ fn key_shaped(text: &str, min: usize, max: usize) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
 }
 
-fn utf16_len(text: &str) -> usize {
-    text.encode_utf16().count()
-}
+use pirc_config::text::utf16_len;
 
 impl SubscriptionInput {
     /// The zod schema's checks; `name` comes back trimmed.

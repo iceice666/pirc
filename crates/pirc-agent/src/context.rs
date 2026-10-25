@@ -255,13 +255,7 @@ pub fn read_context(dir: &Path) -> Result<Option<Value>, String> {
 }
 
 fn truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(flag) => *flag,
-        Value::Number(number) => number.as_f64().is_some_and(|n| n != 0.0),
-        Value::String(text) => !text.is_empty(),
-        Value::Array(_) | Value::Object(_) => true,
-    }
+    crate::tools::js::truthy(Some(value))
 }
 
 /// The public fields of a snapshot's usage (for tests and callers).

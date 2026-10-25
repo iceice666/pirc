@@ -22,6 +22,12 @@ expression: "feature_support::without_ptc_progress(run.r.into_value())"
         "type": "agent_start"
       },
       {
+        "command": "prompt",
+        "id": "c1",
+        "success": true,
+        "type": "response"
+      },
+      {
         "message": {
           "content": "Use background tasks",
           "role": "user",
@@ -36,12 +42,6 @@ expression: "feature_support::without_ptc_progress(run.r.into_value())"
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
-      },
-      {
-        "command": "prompt",
-        "id": "c1",
-        "success": true,
-        "type": "response"
       },
       {
         "type": "turn_start"
@@ -311,10 +311,6 @@ expression: "feature_support::without_ptc_progress(run.r.into_value())"
         "sections": [
           "background"
         ],
-        "type": "panel_changed"
-      },
-      {
-        "sections": [],
         "type": "panel_changed"
       },
       {
@@ -1800,10 +1796,6 @@ expression: "feature_support::without_ptc_progress(run.r.into_value())"
         "sections": [
           "background"
         ],
-        "type": "panel_changed"
-      },
-      {
-        "sections": [],
         "type": "panel_changed"
       },
       {

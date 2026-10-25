@@ -15,9 +15,9 @@ use std::time::Duration;
 
 use nix::sys::signal::{Signal, killpg};
 use nix::unistd::Pid;
-use pirc_agent::messages::js::utf16_len;
 use pirc_config::Env;
 use pirc_config::env_allowlist::without_secrets;
+use pirc_config::text::{utf16_head, utf16_len, utf16_tail as tail16};
 use process_wrap::tokio::{CommandWrap, ProcessSession};
 use serde_json::{Value, json};
 use tokio::io::AsyncReadExt;
@@ -26,25 +26,9 @@ use tokio::sync::watch;
 /// Output kept from an unsandboxed command (head and tail).
 const HOST_EXEC_OUTPUT_BYTES: usize = 1_000_000;
 
-/// `text` split after `units` UTF-16 units (a pair is never split).
+/// `text` split after at most `units` UTF-16 units (a pair is never split).
 fn split16(text: &str, units: usize) -> (&str, &str) {
-    let mut used = 0;
-    for (index, c) in text.char_indices() {
-        if used + c.len_utf16() > units {
-            return text.split_at(index);
-        }
-        used += c.len_utf16();
-    }
-    (text, "")
-}
-
-/// `text.slice(-units)`.
-fn tail16(text: &str, units: usize) -> &str {
-    let total = utf16_len(text);
-    if total <= units {
-        return text;
-    }
-    split16(text, total - units).1
+    text.split_at(utf16_head(text, units).len())
 }
 
 #[derive(Default)]

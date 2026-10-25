@@ -104,15 +104,7 @@ fn gateway_message(content: &str) -> String {
     format!("{GATEWAY_MESSAGE_LABEL}\n{content}")
 }
 
-fn truthy(value: Option<&Value>) -> bool {
-    match value {
-        None | Some(Value::Null) => false,
-        Some(Value::Bool(value)) => *value,
-        Some(Value::Number(number)) => number.as_f64().is_some_and(|n| n != 0.0 && !n.is_nan()),
-        Some(Value::String(text)) => !text.is_empty(),
-        Some(_) => true,
-    }
-}
+use crate::tools::js::truthy;
 
 fn string_value(response: &Value) -> Option<String> {
     if truthy(response.get("cancelled")) {
@@ -779,9 +771,9 @@ pub(crate) async fn serve<A: Commands>(
         match kind {
             "extension_ui_response" => {
                 ui.respond(&command);
-                // What the answer resolved runs before the next line, as TS
-                // ran its microtasks between stdin lines: a dialog that lost
-                // a race is cancelled before a late answer to it is read.
+                // What the answer resolved runs before the next line is read:
+                // a dialog that lost a race is cancelled before a late answer
+                // to it is read.
                 tokio::task::yield_now().await;
                 continue;
             }

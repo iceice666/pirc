@@ -4,10 +4,7 @@
 
 use serde_json::{Map, Value};
 
-/// `text.length` in JavaScript.
-pub fn len16(text: &str) -> usize {
-    text.encode_utf16().count()
-}
+pub use pirc_config::text::utf16_len as len16;
 
 /// `Number.isInteger(value)`, as an `i64` (saturating beyond its range).
 pub fn int(value: &Value) -> Option<i64> {

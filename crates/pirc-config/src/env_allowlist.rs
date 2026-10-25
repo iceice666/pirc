@@ -133,7 +133,7 @@ pub fn operator_allowed_env(env: &Env) -> Vec<String> {
         .unwrap_or_default()
         .split(',')
         // `String.prototype.trim` (JS whitespace).
-        .map(|name| name.trim_matches(crate::js_space))
+        .map(|name| name.trim_matches(crate::text::is_space))
         .filter(|name| valid_name(name))
         .map(str::to_owned)
         .collect()

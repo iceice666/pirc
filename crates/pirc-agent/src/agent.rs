@@ -205,10 +205,8 @@ pub struct Agent {
     thinking: Cell<ThinkingLevel>,
     session_name: RefCell<Option<String>>,
     name_source: Cell<Option<NameSource>>,
-    /// Side-panel sections changed since the last flush (`panelChanged`).
+    /// Side-panel sections changed since the last [`Agent::flush_panel`].
     changed_sections: RefCell<Vec<String>>,
-    /// Flushes the TS agent would have queued as microtasks by now.
-    scheduled_flushes: Cell<usize>,
     /// Operations still running (`activeOperations`). Work an operation
     /// started may outlive it and keep its scope ([`OPERATION_SCOPE`]); only
     /// a live operation is named on a dialog.
@@ -246,8 +244,6 @@ enum Start {
     Admit(Option<Vec<QueueItem>>),
     /// The features' start, under way.
     Starting(LocalBoxFuture<'static, StartResult>),
-    /// The features' start, done before the command was answered.
-    Started(StartResult),
 }
 
 /// Told whether a human is being asked (`onHumanWait`).
@@ -322,10 +318,7 @@ fn parse_command(text: &str) -> Option<(String, String)> {
     Some((name, args))
 }
 
-/// `String.prototype.trim`.
-fn js_trim(text: &str) -> &str {
-    text.trim_matches(|c: char| (c.is_whitespace() && c != '\u{85}') || c == '\u{feff}')
-}
+use crate::tools::js::trim as js_trim;
 
 /// `lenientArgs`: a direct call's arguments as `main` accepted them before
 /// schemas were checked: null for an optional argument means absent, and a
@@ -749,7 +742,6 @@ impl Agent {
                 session_name: RefCell::new(None),
                 name_source: Cell::new(None),
                 changed_sections: RefCell::new(Vec::new()),
-                scheduled_flushes: Cell::new(0),
                 active_operations: RefCell::new(HashSet::new()),
                 operation_parents: RefCell::new(HashMap::new()),
                 run_loop: RefCell::new(None),
@@ -986,10 +978,9 @@ impl Agent {
         }
         self.completion_waiting.borrow_mut().clear();
         if waited {
-            // Woken by a feature (team events): what it queued as TS
-            // microtasks (panel flushes, a broker's next step) ran before
-            // `await waitForCompletion()` returned.
-            crate::tick().await;
+            // Woken by a feature (team events): let what it spawned (panel
+            // flushes, a broker's next step) run before the run goes on.
+            crate::yield_once().await;
         }
         self.completion_waited.set(waited);
         timed_out
@@ -1635,29 +1626,22 @@ impl Agent {
         Value::Object(out)
     }
 
-    /// `panelChanged`: coalesced until [`Agent::flush_panel`], where the TS
-    /// agent's microtask ran.
+    /// A side-panel section changed; the client hears about it at the next
+    /// [`Agent::flush_panel`], once for all sections changed by then.
     pub fn panel_changed(&self, section: &str) {
-        let size = {
-            let mut sections = self.changed_sections.borrow_mut();
-            if !sections.iter().any(|s| s == section) {
-                sections.push(section.to_owned());
-            }
-            sections.len()
-        };
-        // `if (size > 1) return; queueMicrotask(flush)`: one flush per call
-        // that leaves a single section; the later ones find nothing.
-        if size == 1 {
-            self.scheduled_flushes.set(self.scheduled_flushes.get() + 1);
+        let mut sections = self.changed_sections.borrow_mut();
+        if !sections.iter().any(|s| s == section) {
+            sections.push(section.to_owned());
         }
     }
 
-    /// Emit the coalesced `panel_changed` events now: where the TS agent's
-    /// microtask ran, or where a feature's code ends a synchronous stretch
-    /// outside a run (team events, background tasks).
+    /// Emit one `panel_changed` for the sections changed since the last
+    /// flush, if any. Called where a stretch of work ends and the client
+    /// should refresh: before the model request, after a stream, at a
+    /// retry's wait, after a tool or command, after a feature's event.
     pub fn flush_panel(&self) {
-        for _ in 0..self.scheduled_flushes.replace(0) {
-            let sections = std::mem::take(&mut *self.changed_sections.borrow_mut());
+        let sections = std::mem::take(&mut *self.changed_sections.borrow_mut());
+        if !sections.is_empty() {
             self.emit(json!({ "type": "panel_changed", "sections": sections }));
         }
     }
@@ -1853,12 +1837,11 @@ impl Agent {
         let controller = AbortController::new();
         *self.controller.borrow_mut() = Some(controller.clone());
         self.emit(json!({ "type": "agent_start" }));
-        // Features' `beforeAgentStart` comes first and is awaited (in TS
-        // even a feature without one is an await), so with features
-        // everything is admitted in the run task.
+        // Features' `before_model_start` comes first and may wait, so with
+        // features everything is admitted in the run task.
         let with_features = !self.features.is_empty();
-        // Microtasks queued before `run()` (a feature's `panelChanged` that
-        // led to this run) run at its first await, before admission.
+        // Panel changes that led to this run (a feature's wake-up) reach
+        // the client before the run's own events.
         if with_features {
             self.flush_panel();
         }
@@ -1885,27 +1868,14 @@ impl Agent {
             }
         };
         let start = if with_features {
-            // TS answers the command one microtask after `run()` started,
-            // and `run()` awaits each feature's `beforeAgentStart` once
-            // before admitting: with a single feature whose hook needs no
-            // I/O, the admitted messages precede the response.
             let agent = self.clone();
-            let mut started: LocalBoxFuture<'static, StartResult> = Box::pin(async move {
+            Start::Starting(Box::pin(async move {
                 let mut extra_prompt = Vec::new();
                 let result = agent
                     .start_features(pending.unwrap_or_default(), &mut extra_prompt)
                     .await;
                 (result, extra_prompt)
-            });
-            if self.features.len() == 1 {
-                let mut context = std::task::Context::from_waker(std::task::Waker::noop());
-                match started.as_mut().poll(&mut context) {
-                    std::task::Poll::Ready(result) => Start::Started(result),
-                    std::task::Poll::Pending => Start::Starting(started),
-                }
-            } else {
-                Start::Starting(started)
-            }
+            }))
         } else {
             Start::Admit(pending)
         };
@@ -2572,7 +2542,7 @@ impl Agent {
             });
             let snapshot_id = snapshot.get("id").cloned();
             self.save_context(snapshot.clone());
-            // The TS agent's microtask: the network call is its first await.
+            // Panel changes so far reach the client before the stream.
             self.flush_panel();
             let thinking = if resolved.model.reasoning {
                 options.thinking.unwrap_or(self.thinking.get())
@@ -2659,7 +2629,6 @@ impl Agent {
                 if emit {
                     self.emit_end(&message);
                 }
-                // The TS agent's microtask after `stream` returned.
                 self.flush_panel();
                 return Ok(message);
             }
@@ -2670,7 +2639,6 @@ impl Agent {
             self.emit(json!({ "type": "auto_retry_start", "attempt": attempt + 1,
                 "maxAttempts": RETRY_DELAYS.len(), "delayMs": delay,
                 "errorMessage": message.error_message }));
-            // The TS agent's microtask ran at the retry's sleep.
             self.flush_panel();
             sleep_or_abort(delay, signal).await;
             self.emit(
@@ -2710,7 +2678,6 @@ impl Agent {
                 None
             }
             Start::Starting(started) => Some(started.await),
-            Start::Started(result) => Some(result),
         };
         if let Some((result, extra)) = started {
             extra_prompt = extra;
@@ -2901,9 +2868,8 @@ impl Agent {
                 self.emit_queue();
                 self.admit(items).await?;
                 if self.completion_waited.replace(false) {
-                    // `await this.admit(items)`: the microtasks the woken
-                    // features queued meanwhile run first.
-                    crate::tick().await;
+                    // What the woken features spawned meanwhile runs first.
+                    crate::yield_once().await;
                 }
                 continue;
             }

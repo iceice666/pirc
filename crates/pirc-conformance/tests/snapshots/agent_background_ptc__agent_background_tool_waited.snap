@@ -1,6 +1,7 @@
 ---
 source: crates/pirc-conformance/tests/agent_background_ptc.rs
-expression: run.r.into_value()
+assertion_line: 253
+expression: "feature_support::without_ptc_progress(run.r.into_value())"
 ---
 [
   {
@@ -21,6 +22,12 @@ expression: run.r.into_value()
         "type": "agent_start"
       },
       {
+        "command": "prompt",
+        "id": "c1",
+        "success": true,
+        "type": "response"
+      },
+      {
         "message": {
           "content": "quick task",
           "role": "user",
@@ -35,12 +42,6 @@ expression: run.r.into_value()
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
-      },
-      {
-        "command": "prompt",
-        "id": "c1",
-        "success": true,
-        "type": "response"
       },
       {
         "type": "turn_start"
@@ -635,10 +636,6 @@ expression: run.r.into_value()
         "sections": [
           "background"
         ],
-        "type": "panel_changed"
-      },
-      {
-        "sections": [],
         "type": "panel_changed"
       },
       {

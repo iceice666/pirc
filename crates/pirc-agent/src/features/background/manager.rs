@@ -213,9 +213,9 @@ pub struct Hooks {
     pub on_match: Option<Box<dyn Fn(TaskInfo, String)>>,
     /// Extra environment for new tasks (over the agent's own).
     pub env: Option<EnvFn>,
-    /// A driver ran callbacks and ended its synchronous stretch, where the
-    /// TS microtasks those callbacks queued ran; not called when a finish
-    /// woke a `wait`, whose continuation TS ran first.
+    /// A driver ran callbacks and ended its synchronous stretch (the
+    /// feature flushes its panel changes here); not called when a finish
+    /// woke a `wait`, whose continuation flushes itself.
     pub settled: Option<Box<dyn Fn()>>,
 }
 
@@ -1048,9 +1048,8 @@ fn scan(state: &mut State, data: &[u8], flush: bool) -> Vec<(TaskInfo, String)> 
     out
 }
 
-/// `new Date().toISOString()`.
 fn now_iso() -> String {
-    js::iso_string(crate::now_ms() as f64).unwrap_or_default()
+    crate::iso_now()
 }
 
 enum Spawned {

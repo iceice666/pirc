@@ -5,10 +5,9 @@
 //! monitor matches are coalesced into one steering message while the agent
 //! is idle.
 //!
-//! Panel updates: TS flushed `panelChanged` in a microtask. The feature
-//! flushes where those microtasks ran relative to the lines around them:
-//! at the end of a synchronous stretch (a command, a tool call, a driver's
-//! callbacks), and after the RPC response when a command awaited first.
+//! Panel updates are coalesced and flushed where a stretch of work ends:
+//! a command, a tool call, a driver's callbacks; and after the RPC response
+//! when a command awaited first.
 
 pub mod manager;
 
@@ -919,7 +918,6 @@ impl BackgroundTool {
             .upgrade()
             .ok_or_else(|| "Background task runtime has shut down.".to_owned())?;
         let result = self.state.execute(&agent, &args, &ctx).await;
-        // TS's microtasks ran before the agent saw the result.
         agent.flush_panel();
         result
     }

@@ -98,7 +98,7 @@ async fn expect_ok(
 
 /// `z.string().trim().min(1).max(n)`: the trimmed text.
 fn trimmed(text: &str, max: usize) -> Result<String, ApiError> {
-    let text = text.trim_matches(pirc_config::js_space);
+    let text = text.trim_matches(pirc_config::text::is_space);
     let length = text.encode_utf16().count();
     if length == 0 || length > max {
         return Err(ApiError::invalid_input());

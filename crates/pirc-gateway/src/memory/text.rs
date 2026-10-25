@@ -4,7 +4,7 @@
 use std::sync::LazyLock;
 
 use icu_normalizer::ComposingNormalizerBorrowed;
-use pirc_config::js_space;
+use pirc_config::text::is_space as js_space;
 use tz::TimeZone;
 use tz::timezone::TimeZoneSettings;
 

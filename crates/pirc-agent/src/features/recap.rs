@@ -221,8 +221,8 @@ fn string_field<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
 fn iso_field(value: &Value, key: &str) -> Result<String, String> {
     value
         .get(key)
-        .and_then(Value::as_f64)
-        .and_then(js::iso_string)
+        .and_then(Value::as_u64)
+        .map(crate::iso_time)
         .ok_or_else(|| "Invalid time value".to_owned())
 }
 
@@ -288,7 +288,7 @@ Limitations: bounded sampling, not a complete audit. Only eligible same-workspac
         iso_field(scope, "until")?,
         sessions.len(),
         skipped.len(),
-        js::locale_string_en_us(scanned),
+        js::grouped(scanned),
         if js::truthy(evidence.get("truncated")) {
             "yes"
         } else {

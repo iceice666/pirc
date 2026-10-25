@@ -10,7 +10,7 @@ use serde_json::{Value, json};
 
 use super::broker::{
     Defaults, INBOX_CHUNK_CHARS, Json, OutcomeStatus, SubagentResult, Team, TeamOptions,
-    compact_result, iso_time, read_event, text, user_question,
+    compact_result, read_event, text, user_question,
 };
 use super::full_events;
 use crate::features::ask_question::{QuestionResult, QuestionStatus};
@@ -36,14 +36,6 @@ fn children_inherit_the_frozen_mode_not_project_or_process_overrides() {
 
 fn map(value: Value) -> Json {
     value.as_object().cloned().unwrap()
-}
-
-#[test]
-fn writes_times_as_to_iso_string_does() {
-    assert_eq!(iso_time(0), "1970-01-01T00:00:00.000Z");
-    assert_eq!(iso_time(951_782_400_000), "2000-02-29T00:00:00.000Z");
-    assert_eq!(iso_time(1_791_624_628_720), "2026-10-10T09:30:28.720Z");
-    assert_eq!(iso_time(4_102_444_799_999), "2099-12-31T23:59:59.999Z");
 }
 
 #[test]

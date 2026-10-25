@@ -43,7 +43,7 @@ pub fn is_watched_event(event: &GatewayEvent) -> bool {
 
 /// `text.replace(/\s+/g, ' ').trim()` with JavaScript's whitespace.
 pub fn one_line(text: &str) -> String {
-    text.split(pirc_config::js_space)
+    text.split(pirc_config::text::is_space)
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>()
         .join(" ")
@@ -56,20 +56,20 @@ pub fn clip(text: &str, max: usize) -> String {
         return text.to_owned();
     }
     let kept = String::from_utf16_lossy(&units[..max.saturating_sub(1)]);
-    format!("{}…", kept.trim_end_matches(pirc_config::js_space))
+    format!("{}…", kept.trim_end_matches(pirc_config::text::is_space))
 }
 
 /// The text of a history message (an agent's answer).
 pub fn text_of(message: &Value) -> String {
     match message.get("content") {
-        Some(Value::String(text)) => text.trim_matches(pirc_config::js_space).to_owned(),
+        Some(Value::String(text)) => text.trim_matches(pirc_config::text::is_space).to_owned(),
         Some(Value::Array(blocks)) => blocks
             .iter()
             .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
             .filter_map(|block| block.get("text").and_then(Value::as_str))
             .collect::<Vec<_>>()
             .join("\n")
-            .trim_matches(pirc_config::js_space)
+            .trim_matches(pirc_config::text::is_space)
             .to_owned(),
         _ => String::new(),
     }
@@ -295,14 +295,7 @@ pub async fn read_progress(
     })
 }
 
-/// `String(value)` for the values a run status can be.
-fn js_string(value: &Value) -> String {
-    match value {
-        Value::String(text) => text.clone(),
-        Value::Null => "null".into(),
-        other => other.to_string(),
-    }
-}
+use pirc_config::text::value_text as js_string;
 
 /// A directory workspace by id, or by a name only one of them has.
 pub fn resolve_directory_workspace(app: &App, reference: &str) -> ApiResult<Workspace> {

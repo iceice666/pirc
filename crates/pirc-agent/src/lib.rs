@@ -45,9 +45,8 @@ pub use run::run_agent;
 /// A boxed future that need not be `Send` (the agent is single-threaded).
 pub type LocalBoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + 'a>>;
 
-/// Run `future` at once up to its first pending await, then as a task: a
-/// JavaScript `void promise()` call, whose synchronous part runs before the
-/// caller goes on.
+/// Run `future` at once up to its first pending await, then as a task:
+/// its synchronous part runs before the caller goes on.
 pub fn spawn_eager(future: impl Future<Output = ()> + 'static) {
     let mut future = Box::pin(future);
     let mut context = std::task::Context::from_waker(std::task::Waker::noop());
@@ -57,22 +56,22 @@ pub fn spawn_eager(future: impl Future<Output = ()> + 'static) {
     }
 }
 
-/// `setTimeout(work, 0)`: `work` runs as a task after the runtime polled
-/// its drivers, behind what is runnable now, and timeouts set earlier run
-/// first (a later timeout never overtakes an earlier one).
-pub fn set_timeout_zero(work: impl Future<Output = ()> + 'static) {
+/// Run `work` as a task after the runtime polled its drivers, behind
+/// what is runnable now; work deferred earlier runs first (a later deferral
+/// never overtakes an earlier one).
+pub fn spawn_deferred(work: impl Future<Output = ()> + 'static) {
     tokio::task::spawn_local(async move {
         tokio::task::yield_now().await;
         work.await;
     });
 }
 
-/// One microtask tick: the task goes to the back of the ready queue at
-/// once, behind what is already runnable (tasks spawned or woken before
-/// it), as a JavaScript `await` lets the queued microtasks run first.
-/// `tokio::task::yield_now` defers the wake until the runtime has polled
-/// its drivers, which lets tasks woken later overtake it.
-pub async fn tick() {
+/// Go to the back of the ready queue at once, behind what is already
+/// runnable (tasks spawned or woken before this point), so that work this
+/// task caused runs before it goes on. Unlike `tokio::task::yield_now`,
+/// the wake is not deferred until the runtime has polled its drivers, so
+/// tasks woken later cannot overtake.
+pub async fn yield_once() {
     let mut ready = false;
     std::future::poll_fn(|cx| {
         if ready {
@@ -91,6 +90,34 @@ pub fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as u64)
+}
+
+/// The current time as `YYYY-MM-DDTHH:MM:SS.mmmZ`.
+pub fn iso_now() -> String {
+    iso_time(now_ms())
+}
+
+/// Epoch milliseconds as `YYYY-MM-DDTHH:MM:SS.mmmZ` (proleptic Gregorian).
+pub fn iso_time(epoch_ms: u64) -> String {
+    let days = (epoch_ms / 86_400_000) as i64;
+    let rest = epoch_ms % 86_400_000;
+    // Howard Hinnant's civil_from_days.
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{:03}Z",
+        rest / 3_600_000,
+        rest / 60_000 % 60,
+        rest / 1000 % 60,
+        rest % 1000
+    )
 }
 
 /// A random RFC 4122 version 4 UUID (`crypto.randomUUID()`).

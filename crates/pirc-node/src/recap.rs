@@ -512,7 +512,7 @@ fn sample(session_id: &str, candidates: Vec<Source>) -> Value {
             && utf16_len(text) > MAX_TEXT
         {
             truncated = true;
-            let cut = utf16_prefix(text, MAX_TEXT);
+            let cut = utf16_prefix(text, MAX_TEXT).to_owned();
             item.insert("text".into(), Value::String(cut));
         }
         let item = Value::Object(item);

@@ -33,7 +33,7 @@ use crate::redact::redact_secrets;
 use crate::roles::{RoleBrief, describe_roles};
 use crate::session_store::{EntryData, SessionEntry};
 use crate::signal::{AbortController, AbortSignal};
-use crate::tools::js::{self, js_regex, locale_string_en_us};
+use crate::tools::js::{self, js_regex};
 use crate::tools::prompts::{PromptVar, tool_prompt};
 use crate::tools::result_schema::{arr, bool_, fields, int, nullable, obj, str_};
 use crate::tools::{Tool, ToolContext, ToolResult, typed};
@@ -60,9 +60,11 @@ const CONTEXT_TIMEOUT_MS: u64 = 10_000;
 /// held up by the gateway.
 const USER_TIMEOUT_MS: u64 = 3_000;
 
-/// `number(value)`: `toLocaleString('en-US')`.
+/// A count with grouped thousands (`2,000`), `?` when not a number.
 fn number(value: Option<&Value>) -> String {
-    locale_string_en_us(value.and_then(Value::as_f64).unwrap_or(f64::NAN))
+    value
+        .and_then(Value::as_f64)
+        .map_or_else(|| "?".to_owned(), js::grouped)
 }
 
 /// A field as text, [`js::MISSING`] when absent.

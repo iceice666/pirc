@@ -44,7 +44,7 @@ fn parse_file(text: &str, strict: bool) -> Result<MarkdownFile, String> {
         }
         return Ok(MarkdownFile {
             meta: IndexMap::new(),
-            body: text.trim_matches(crate::js_space).to_owned(),
+            body: text.trim_matches(crate::text::is_space).to_owned(),
         });
     };
     let whole = found.get(0).map_or(0, |m| m.end());
@@ -64,7 +64,7 @@ fn parse_file(text: &str, strict: bool) -> Result<MarkdownFile, String> {
     };
     Ok(MarkdownFile {
         meta,
-        body: text[whole..].trim_matches(crate::js_space).to_owned(),
+        body: text[whole..].trim_matches(crate::text::is_space).to_owned(),
     })
 }
 
@@ -131,7 +131,7 @@ mod tests {
     }
 
     #[test]
-    fn preserves_delimiters_and_javascript_trimming() {
+    fn preserves_delimiters_and_trims_space_and_bom() {
         for text in [
             "---\nname: x",
             " ---\nname: x\n---\nbody",
@@ -139,10 +139,9 @@ mod tests {
         ] {
             let file = parse(text).unwrap();
             assert!(file.meta.is_empty(), "{text:?}");
-            assert_eq!(file.body, text.trim_matches(crate::js_space));
+            assert_eq!(file.body, text.trim_matches(crate::text::is_space));
         }
         assert_eq!(parse("\u{feff} body \u{a0}").unwrap().body, "body");
-        assert_eq!(parse("\u{85}body\u{85}").unwrap().body, "\u{85}body\u{85}");
         assert_eq!(
             parse("---\na: 1\n---\n\u{feff}body\u{a0}").unwrap().body,
             "body"

@@ -60,22 +60,7 @@ pub async fn run_op(app: &AppState, _context: &OpContext, op: Op) -> ApiResult<V
     }
 }
 
-fn utf16_len(text: &str) -> usize {
-    text.encode_utf16().count()
-}
-
-/// The first `max` UTF-16 units (`text.slice(0, max)`).
-fn utf16_prefix(text: &str, max: usize) -> String {
-    if text.len() <= max {
-        return text.to_owned();
-    }
-    let units: Vec<u16> = text.encode_utf16().take(max).collect();
-    String::from_utf16_lossy(&units)
-}
-
-fn js_trim(text: &str) -> &str {
-    text.trim_matches(pirc_config::js_space)
-}
+use pirc_config::text::{trim as js_trim, utf16_head as utf16_prefix, utf16_len};
 
 /// `/^(?:\*\.)?[a-zA-Z0-9.-]+(?:\/[^\s]*)?$/`
 fn domain_shape(text: &str) -> bool {
@@ -87,7 +72,7 @@ fn domain_shape(text: &str) -> bool {
         return false;
     }
     let path = &rest[host_end..];
-    path.is_empty() || (path.starts_with('/') && !path.chars().any(pirc_config::js_space))
+    path.is_empty() || (path.starts_with('/') && !path.chars().any(pirc_config::text::is_space))
 }
 
 /// `/^\d{4}-\d{2}-\d{2}$/`
@@ -408,21 +393,21 @@ fn exa_results(body: &Value) -> Option<Vec<ExaResult<'_>>> {
 /// `httpUrl`: the normalized URL if it is http(s), at most 2048 characters.
 fn http_url(value: &str) -> Option<String> {
     let url = reqwest::Url::parse(value).ok()?;
-    matches!(url.scheme(), "http" | "https").then(|| utf16_prefix(url.as_str(), 2048))
+    matches!(url.scheme(), "http" | "https").then(|| utf16_prefix(url.as_str(), 2048).to_owned())
 }
 
 /// A result as agents see it; `None` for URLs that are not http(s).
 fn shape_result(item: ExaResult<'_>) -> Option<Value> {
     let url = http_url(item.url)?;
     let mut result = Map::new();
-    let title = utf16_prefix(js_trim(item.title.unwrap_or_default()), 300);
+    let title = utf16_prefix(js_trim(item.title.unwrap_or_default()), 300).to_owned();
     result.insert(
         "title".into(),
         json!(if title.is_empty() { url.clone() } else { title }),
     );
     result.insert("url".into(), json!(url));
     if let Some(published) = item.published_date.map(|date| utf16_prefix(date, 10))
-        && date_shape(&published)
+        && date_shape(published)
     {
         result.insert("published".into(), json!(published));
     }
@@ -435,7 +420,7 @@ fn shape_result(item: ExaResult<'_>) -> Option<Value> {
         .map(js_trim)
         .filter(|text| !text.is_empty())
         .take(5)
-        .map(|text| utf16_prefix(text, HIGHLIGHT_CHARS))
+        .map(|text| utf16_prefix(text, HIGHLIGHT_CHARS).to_owned())
         .collect();
     result.insert("highlights".into(), json!(highlights));
     Some(Value::Object(result))

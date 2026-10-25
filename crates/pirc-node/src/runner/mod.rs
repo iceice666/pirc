@@ -195,16 +195,7 @@ impl Failure {
     }
 }
 
-/// JS truthiness of a JSON value (`!response.success`).
-fn truthy(value: Option<&Value>) -> bool {
-    match value {
-        None | Some(Value::Null) => false,
-        Some(Value::Bool(flag)) => *flag,
-        Some(Value::Number(number)) => number.as_f64().is_some_and(|n| n != 0.0 && !n.is_nan()),
-        Some(Value::String(text)) => !text.is_empty(),
-        Some(_) => true,
-    }
-}
+use pirc_config::text::truthy;
 
 /// `response.error ?? fallback`, as stored text.
 fn error_text(response: &Map<String, Value>, fallback: &str) -> String {

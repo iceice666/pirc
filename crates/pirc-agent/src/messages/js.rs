@@ -1,62 +1,12 @@
-//! JavaScript semantics the agent's observable output depends on: string
-//! lengths in UTF-16 code units, `String.prototype.trim`, `Number#toString`
-//! and `JSON.stringify` (whose number formatting differs from serde_json's).
+//! Text helpers for the agent's output: UTF-16 lengths and trimming (from
+//! `pirc_config::text`), `Number#toString` and `JSON.stringify` (whose
+//! number formatting differs from serde_json's).
 
 pub use pirc_config::frontmatter::js::{number_text, number_value, string_literal, stringify};
 
-/// `string.length`: UTF-16 code units.
-pub fn utf16_len(text: &str) -> usize {
-    text.chars().map(char::len_utf16).sum()
-}
-
-/// `string.slice(0, units)`. A cut through a surrogate pair keeps U+FFFD in
-/// place of the lone high surrogate JS would keep.
-pub fn utf16_prefix(text: &str, units: usize) -> String {
-    let mut out = String::new();
-    let mut used = 0;
-    for c in text.chars() {
-        let width = c.len_utf16();
-        if used + width > units {
-            if used < units {
-                out.push('\u{fffd}');
-            }
-            break;
-        }
-        used += width;
-        out.push(c);
-    }
-    out
-}
-
-/// JavaScript's white space and line terminators (`\s`, `trim`).
-pub fn is_space(c: char) -> bool {
-    matches!(
-        c,
-        '\t' | '\n' | '\u{b}' | '\u{c}' | '\r' | ' ' | '\u{a0}' | '\u{1680}' | '\u{2000}'
-            ..='\u{200a}'
-                | '\u{2028}'
-                | '\u{2029}'
-                | '\u{202f}'
-                | '\u{205f}'
-                | '\u{3000}'
-                | '\u{feff}'
-    )
-}
-
-/// `String.prototype.trim`.
-pub fn trim(text: &str) -> &str {
-    text.trim_matches(is_space)
-}
-
-/// `String.prototype.trimStart`.
-pub fn trim_start(text: &str) -> &str {
-    text.trim_start_matches(is_space)
-}
-
-/// `String.prototype.trimEnd`.
-pub fn trim_end(text: &str) -> &str {
-    text.trim_end_matches(is_space)
-}
+pub use pirc_config::text::{
+    is_space, trim, trim_end, trim_start, utf16_head as utf16_prefix, utf16_len,
+};
 
 /// A failed file system call as text: `open '/x': No such file or
 /// directory (os error 2)` (without the path where the call has none).
@@ -232,12 +182,11 @@ mod tests {
     }
 
     #[test]
-    fn measures_and_trims_like_javascript() {
+    fn measures_and_trims() {
         assert_eq!(utf16_len("a😀é"), 4);
-        assert_eq!(utf16_prefix("a😀b", 2), "a\u{fffd}");
+        assert_eq!(utf16_prefix("a😀b", 2), "a");
         assert_eq!(utf16_prefix("a😀b", 3), "a😀");
         assert_eq!(trim("\u{feff} x \u{a0}\n"), "x");
-        assert_eq!(trim("\u{85}x"), "\u{85}x");
         assert_eq!(compare_utf16("\u{ffff}", "😀"), std::cmp::Ordering::Greater);
     }
 }

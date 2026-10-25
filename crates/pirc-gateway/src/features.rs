@@ -105,7 +105,7 @@ async fn pair_device(
 ) -> Handled {
     let user = owner(&identity)?;
     let PairBody { name } = body.parse()?;
-    let name = name.trim_matches(pirc_config::js_space);
+    let name = name.trim_matches(pirc_config::text::is_space);
     if !(1..=100).contains(&name.encode_utf16().count()) {
         return Err(ApiError::invalid_input().into());
     }

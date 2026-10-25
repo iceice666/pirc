@@ -1,5 +1,6 @@
 ---
 source: crates/pirc-conformance/tests/agent_goal.rs
+assertion_line: 126
 expression: r.into_value()
 ---
 [
@@ -1004,46 +1005,46 @@ expression: r.into_value()
         "type": "agent_start"
       },
       {
-        "message": {
-          "content": "What is the goal?",
-          "role": "user",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_start"
-      },
-      {
-        "message": {
-          "content": "What is the goal?",
-          "role": "user",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_end"
-      },
-      {
-        "message": {
-          "content": "Goal state (replaces earlier goal state):\nNo goal.",
-          "customType": "goal-context",
-          "display": false,
-          "role": "custom",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_start"
-      },
-      {
-        "message": {
-          "content": "Goal state (replaces earlier goal state):\nNo goal.",
-          "customType": "goal-context",
-          "display": false,
-          "role": "custom",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_end"
-      },
-      {
         "command": "prompt",
         "id": "c18",
         "success": true,
         "type": "response"
+      },
+      {
+        "message": {
+          "content": "What is the goal?",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "What is the goal?",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "message": {
+          "content": "Goal state (replaces earlier goal state):\nNo goal.",
+          "customType": "goal-context",
+          "display": false,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "Goal state (replaces earlier goal state):\nNo goal.",
+          "customType": "goal-context",
+          "display": false,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
       },
       {
         "type": "turn_start"

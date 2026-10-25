@@ -1,5 +1,6 @@
 ---
 source: crates/pirc-conformance/tests/agent_browser.rs
+assertion_line: 143
 expression: r.into_value()
 ---
 [
@@ -7,6 +8,12 @@ expression: r.into_value()
     "observed": [
       {
         "type": "agent_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c1",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {
@@ -23,12 +30,6 @@ expression: r.into_value()
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
-      },
-      {
-        "command": "prompt",
-        "id": "c1",
-        "success": true,
-        "type": "response"
       },
       {
         "type": "turn_start"

@@ -1,5 +1,6 @@
 ---
 source: crates/pirc-conformance/tests/agent_gateway_tools.rs
+assertion_line: 267
 expression: r.into_value()
 ---
 [
@@ -303,6 +304,12 @@ expression: r.into_value()
         "type": "agent_start"
       },
       {
+        "command": "prompt",
+        "id": "c12",
+        "success": true,
+        "type": "response"
+      },
+      {
         "message": {
           "content": "Show the schedule tool",
           "role": "user",
@@ -317,12 +324,6 @@ expression: r.into_value()
           "timestamp": "<epoch-ms>"
         },
         "type": "message_end"
-      },
-      {
-        "command": "prompt",
-        "id": "c12",
-        "success": true,
-        "type": "response"
       },
       {
         "type": "turn_start"

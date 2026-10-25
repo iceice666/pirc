@@ -36,33 +36,7 @@ const TASK_LIMIT: usize = 200;
 const THINKING: [&str; 7] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 const SUBAGENT_PREAMBLE: &str = "You are a one-shot subagent started by a parent agent. Complete the task below on your own; you cannot talk to the parent or the user. Your run ends as soon as you stop calling tools, and your final message is returned to the parent as your result, so make it a self-contained report. Stop any background jobs you start before finishing.";
 
-/// `new Date().toISOString()`.
-pub fn iso_now() -> String {
-    iso_time(crate::now_ms())
-}
-
-/// An epoch-millisecond time as `toISOString` writes it.
-pub fn iso_time(ms: u64) -> String {
-    let days = (ms / 86_400_000) as i64;
-    let rest = ms % 86_400_000;
-    // Howard Hinnant's `civil_from_days`.
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    format!(
-        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{:03}Z",
-        rest / 3_600_000,
-        rest / 60_000 % 60,
-        rest / 1000 % 60,
-        rest % 1000
-    )
-}
+pub use crate::{iso_now, iso_time};
 
 /// `text(value, label, max)`: a nonblank string of at most `max` UTF-16
 /// units.
@@ -1776,9 +1750,9 @@ impl Team {
         let mut data = Json::new();
         data.insert("message_id".to_owned(), id);
         let delivered = self.deliver(&entry).await;
-        // `await this.deliver(entry)` takes a microtask tick even when the
-        // parent took the entry synchronously.
-        crate::tick().await;
+        // Let the receiver's handling of the entry run before the outcome
+        // is recorded, even when it took the entry synchronously.
+        crate::yield_once().await;
         match delivered {
             Ok(()) => {
                 self.record("accepted", data)?;

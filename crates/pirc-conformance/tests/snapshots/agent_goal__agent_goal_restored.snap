@@ -1,5 +1,6 @@
 ---
 source: crates/pirc-conformance/tests/agent_goal.rs
+assertion_line: 255
 expression: r.into_value()
 ---
 [
@@ -59,46 +60,46 @@ expression: r.into_value()
         "type": "agent_start"
       },
       {
-        "message": {
-          "content": "Status?",
-          "role": "user",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_start"
-      },
-      {
-        "message": {
-          "content": "Status?",
-          "role": "user",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_end"
-      },
-      {
-        "message": {
-          "content": "Goal state (replaces earlier goal state):\nGoal <hex12:1> (revision 2) — active\nObjective: Survive\nContinuation rounds: 1 / 1\n(Disarmed after a restart: it continues once the user asks to resume.)",
-          "customType": "goal-context",
-          "display": false,
-          "role": "custom",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_start"
-      },
-      {
-        "message": {
-          "content": "Goal state (replaces earlier goal state):\nGoal <hex12:1> (revision 2) — active\nObjective: Survive\nContinuation rounds: 1 / 1\n(Disarmed after a restart: it continues once the user asks to resume.)",
-          "customType": "goal-context",
-          "display": false,
-          "role": "custom",
-          "timestamp": "<epoch-ms>"
-        },
-        "type": "message_end"
-      },
-      {
         "command": "prompt",
         "id": "c2",
         "success": true,
         "type": "response"
+      },
+      {
+        "message": {
+          "content": "Status?",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "Status?",
+          "role": "user",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
+      },
+      {
+        "message": {
+          "content": "Goal state (replaces earlier goal state):\nGoal <hex12:1> (revision 2) — active\nObjective: Survive\nContinuation rounds: 1 / 1\n(Disarmed after a restart: it continues once the user asks to resume.)",
+          "customType": "goal-context",
+          "display": false,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_start"
+      },
+      {
+        "message": {
+          "content": "Goal state (replaces earlier goal state):\nGoal <hex12:1> (revision 2) — active\nObjective: Survive\nContinuation rounds: 1 / 1\n(Disarmed after a restart: it continues once the user asks to resume.)",
+          "customType": "goal-context",
+          "display": false,
+          "role": "custom",
+          "timestamp": "<epoch-ms>"
+        },
+        "type": "message_end"
       },
       {
         "type": "turn_start"
