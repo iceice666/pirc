@@ -286,6 +286,296 @@ async fn mode_denied_operations_cannot_execute_through_ptc() {
     assert!(empty.model_tool_list().is_empty());
 }
 
+/// What the probe tools saw of the run's agent loop.
+type Seen = Rc<RefCell<Vec<(String, Vec<(CallKey, WaitReason)>)>>>;
+
+fn loop_waits(agent: &Weak<Agent>) -> Vec<(CallKey, WaitReason)> {
+    let agent = agent.upgrade().unwrap();
+    let run_loop = agent.run_loop.borrow();
+    run_loop.as_ref().map(RunLoop::waiting).unwrap_or_default()
+}
+
+/// The first reply streams a text block and one `read` call, recording
+/// the agent loop's partial after each delta; the second just ends.
+struct Streamed {
+    agent: RefCell<Weak<Agent>>,
+    calls: Cell<usize>,
+    partials: RefCell<Vec<Vec<AssistantContent>>>,
+}
+
+impl crate::stream::StreamFn for Streamed {
+    fn stream<'a>(
+        &'a self,
+        request: StreamRequest,
+        on_delta: &'a mut dyn FnMut(&pirc_protocol::AssistantDelta),
+    ) -> LocalBoxFuture<'a, AssistantMessage> {
+        Box::pin(async move {
+            use pirc_protocol::AssistantDelta as D;
+            self.calls.set(self.calls.get() + 1);
+            let agent = self.agent.borrow().upgrade().unwrap();
+            let mut reply = agent.empty_assistant();
+            reply.provider = request.provider_name;
+            reply.model = request.model.id;
+            if self.calls.get() > 1 {
+                reply.content = vec![AssistantContent::Text {
+                    text: "Done.".to_owned(),
+                    text_signature: None,
+                }];
+                return reply;
+            }
+            let probe = AssistantContent::ToolCall {
+                id: "w1".to_owned(),
+                name: "read".to_owned(),
+                arguments: Map::new(),
+                thought_signature: None,
+            };
+            for delta in [
+                D::TextStart { content_index: 0 },
+                D::TextDelta {
+                    content_index: 0,
+                    delta: "Check".to_owned(),
+                },
+                D::TextEnd {
+                    content_index: 0,
+                    content: "Checking".to_owned(),
+                },
+                D::ToolcallStart {
+                    content_index: 1,
+                    id: "w1".to_owned(),
+                    tool_name: "read".to_owned(),
+                },
+                D::ToolcallEnd {
+                    content_index: 1,
+                    tool_call: probe.clone(),
+                },
+            ] {
+                on_delta(&delta);
+                let run_loop = agent.run_loop.borrow();
+                let partial = run_loop.as_ref().and_then(RunLoop::partial);
+                self.partials
+                    .borrow_mut()
+                    .push(partial.map(|p| p.content.clone()).unwrap_or_default());
+            }
+            reply.content = vec![
+                AssistantContent::Text {
+                    text: "Checking".to_owned(),
+                    text_signature: None,
+                },
+                probe,
+            ];
+            reply.stop_reason = StopReason::ToolUse;
+            reply
+        })
+    }
+}
+
+/// `read` (so the model calls it directly) opens dialogs and takes the
+/// write lease; `grep` is run by it as a ptc operation from another task.
+struct Probe {
+    name: &'static str,
+    agent: Rc<RefCell<Weak<Agent>>>,
+    seen: Seen,
+    parameters: Map<String, Value>,
+}
+
+impl Probe {
+    fn look(&self, step: &str) {
+        let waits = loop_waits(&self.agent.borrow());
+        self.seen.borrow_mut().push((step.to_owned(), waits));
+    }
+}
+
+impl Tool for Probe {
+    fn name(&self) -> &str {
+        self.name
+    }
+    fn description(&self) -> &str {
+        "probe"
+    }
+    fn parameters(&self) -> &Map<String, Value> {
+        &self.parameters
+    }
+    fn execute<'a>(
+        &'a self,
+        _args: Map<String, Value>,
+        ctx: ToolContext,
+    ) -> LocalBoxFuture<'a, Result<ToolResult, String>> {
+        Box::pin(async move {
+            if self.name == "grep" {
+                let dialog = ctx
+                    .ui
+                    .confirm("Probe", "op dialog", DialogOptions::default());
+                self.look("op dialog");
+                dialog.await;
+                return Ok(ToolResult::text("op"));
+            }
+            let dialog = ctx.ui.confirm("Probe", "dialog", DialogOptions::default());
+            self.look("dialog");
+            dialog.await;
+            self.look("dialog answered");
+            APPROVAL_GATE
+                .scope((), async {
+                    let dialog = ctx.ui.confirm("Probe", "approve", DialogOptions::default());
+                    self.look("approval");
+                    dialog.await;
+                })
+                .await;
+            (ctx.acquire_write)(format!("{}/out.txt", ctx.cwd)).await?;
+            self.look("lease acquired");
+            let agent = self.agent.borrow().upgrade().unwrap();
+            let signal = ctx.signal.clone();
+            let operation = agent.clone();
+            tokio::task::spawn_local(async move {
+                operation
+                    .run_operation(
+                        "w1",
+                        "grep",
+                        Map::new(),
+                        &signal,
+                        "w1:op1",
+                        OperationOptions::default(),
+                    )
+                    .await
+            })
+            .await
+            .unwrap();
+            // Work of no call (another task, no operation) waits for no call.
+            let seen = self.seen.clone();
+            let weak = Rc::downgrade(&agent);
+            tokio::task::spawn_local(async move {
+                let agent = weak.upgrade().unwrap();
+                let dialog = agent
+                    .ui
+                    .confirm("Probe", "background", DialogOptions::default());
+                seen.borrow_mut()
+                    .push(("background dialog".to_owned(), loop_waits(&weak)));
+                dialog.await;
+            })
+            .await
+            .unwrap();
+            Ok(ToolResult::text("probed"))
+        })
+    }
+}
+
+#[tokio::test]
+async fn the_agent_loop_sees_block_snapshots_and_the_running_calls_waits() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut config = crate::tools::testing::config(&dir.path().display().to_string(), json!({}));
+    config.models = serde_json::from_value(json!({"providers":{"fake":{"api":"openai-completions","baseUrl":"https://example.test","models":[{"id":"main","contextWindow":8192,"maxTokens":512}]}},"defaultModel":{"provider":"fake","id":"main"}})).unwrap();
+    let workspace = config.workspace.clone();
+    let weak = Rc::new(RefCell::new(Weak::new()));
+    let seen: Seen = Rc::default();
+    let probe = |name| -> Rc<dyn Tool> {
+        Rc::new(Probe {
+            name,
+            agent: weak.clone(),
+            seen: seen.clone(),
+            parameters: json!({ "type": "object" }).as_object().unwrap().clone(),
+        })
+    };
+    let lease_agent = weak.clone();
+    let lease_seen = seen.clone();
+    let lease: AcquireWrite = Rc::new(move |root: String| {
+        let waits = loop_waits(&lease_agent.borrow());
+        lease_seen
+            .borrow_mut()
+            .push((format!("lease {root}"), waits));
+        Box::pin(async { Ok(()) })
+    });
+    let stream = Rc::new(Streamed {
+        agent: RefCell::new(Weak::new()),
+        calls: Cell::new(0),
+        partials: RefCell::new(Vec::new()),
+    });
+    let local = tokio::task::LocalSet::new();
+    local
+        .run_until(async {
+            let agent = Agent::new(AgentOptions {
+                store: SessionStore::open(dir.path().join("session"), &workspace).unwrap(),
+                config,
+                capabilities: Default::default(),
+                project_instructions: None,
+                role: None,
+                emit: Rc::new(|_| {}),
+                ui: Rc::new(crate::tools::testing::TestUi::default()),
+                has_ui: false,
+                tools: vec![probe("read"), probe("grep")],
+                features: Vec::new(),
+                acquire_write: Some(lease),
+                allowed_tools: None,
+                stream_override: Some(stream.clone()),
+            });
+            *weak.borrow_mut() = Rc::downgrade(&agent);
+            *stream.agent.borrow_mut() = Rc::downgrade(&agent);
+            agent.prompt("Probe".to_owned(), Vec::new()).unwrap();
+            for _ in 0..500 {
+                if !agent.running.get() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            assert!(!agent.running.get(), "the run did not end");
+            assert!(agent.run_loop.borrow().is_none());
+        })
+        .await;
+
+    let text = |text: &str| AssistantContent::Text {
+        text: text.to_owned(),
+        text_signature: None,
+    };
+    let started = AssistantContent::ToolCall {
+        id: "w1".to_owned(),
+        name: "read".to_owned(),
+        arguments: Map::new(),
+        thought_signature: None,
+    };
+    assert_eq!(
+        *stream.partials.borrow(),
+        [
+            vec![text("")],
+            vec![text("")],
+            vec![text("Checking")],
+            vec![text("Checking"), started.clone()],
+            vec![text("Checking"), started],
+        ]
+    );
+    assert_eq!(stream.calls.get(), 2);
+
+    let seen = seen.borrow();
+    let steps: Vec<&str> = seen.iter().map(|(step, _)| step.as_str()).collect();
+    assert_eq!(
+        steps,
+        [
+            "dialog",
+            "dialog answered",
+            "approval",
+            &format!("lease {workspace}"),
+            "lease acquired",
+            "op dialog",
+            "background dialog",
+        ]
+    );
+    let key = seen[0].1[0].0;
+    assert_eq!(key.index, 0);
+    let reasons: Vec<Vec<(CallKey, WaitReason)>> = seen.iter().map(|(_, w)| w.clone()).collect();
+    assert_eq!(
+        reasons,
+        [
+            vec![(key, WaitReason::Other("dialog".to_owned()))],
+            vec![],
+            vec![(key, WaitReason::Approval)],
+            vec![(
+                key,
+                WaitReason::Resource(format!("write lease: {workspace}"))
+            )],
+            vec![],
+            vec![(key, WaitReason::Other("dialog".to_owned()))],
+            vec![],
+        ]
+    );
+}
+
 fn call(id: &str) -> AssistantContent {
     AssistantContent::ToolCall {
         id: id.to_owned(),

@@ -18,10 +18,22 @@ compaction is `ReplaceHistory`, and the run ends in an explicit terminal state.
 The adapter emits and writes nothing. Its core history is a record of the run,
 **not** the request context: requests are still built from the session store.
 Where the core is stricter than the agent, the agent's behavior wins (rejected
-call ids still run, unfenced; an interrupted reply rebinds instead of
-cancelling; retries stay inside the agent's `stream`, so the core only sees
-final attempts and never `Recovery::Retry`). Progress snapshots and tool waits
-are not fed to the core yet.
+call ids still run, unfenced, and the reply is kept with `supersede`; an
+interrupted reply supersedes its request instead of cancelling; retries stay
+inside the agent's `stream`, so the core only sees final attempts and never
+`Recovery::Retry`).
+
+The adapter also feeds the core `Progress` at content block boundaries only
+(`*Start`, and `*End`, which carries the block's whole content), so a
+snapshot lags at most the block being streamed and no delta is copied; a retry
+restarts the snapshot, and tool-call arguments stay empty until the call ends.
+Waits of the running checked call are labelled and ended with `end_wait`:
+dialogs (`Approval` inside the auto-mode gate, otherwise `Other("dialog")`)
+and the write lease (`Resource`). A wait is the call's when the waiting
+future runs in the call's task, or carries the id of the call or of one of its
+`ptc` operations; work of no call (other tasks, no operation) is not
+labelled. Progress and waits are bookkeeping: the agent reads neither, and one
+the core refuses is dropped rather than failing the run.
 
 The source inventory for this checkpoint was the production agent's `stream`
 and `run` implementations. The existing host still owns all of the following;
@@ -57,7 +69,8 @@ parallel scheduling or grant permission to run them.
    Empty/duplicate provider IDs within one batch fail atomically. Provider IDs
    are preserved; opaque model tickets plus call indexes correlate each effect.
 4. Host validates/approves/dispatches tools. It may label a pending call with an
-   approval/resource wait without recording a failure or reissuing the effect.
+   approval/resource wait without recording a failure or reissuing the effect,
+   and clear the label with `end_wait` when the call goes on waiting for nothing.
    `resume_tool` accepts one terminal result per call in any order. Only after
    all results does it return the next model effect; history is always call-order.
    Denied/interrupted/failed/unknown statuses are retained in `tool_records` and
@@ -75,6 +88,9 @@ parallel scheduling or grant permission to run them.
    and returns Idle without silently restarting. Old callbacks/resumes cannot
    produce new tool effects. Already completed parallel outcomes are retained;
    unresolved ones become **Unknown**, never a claim that side effects rolled back.
+   `supersede` instead settles a streaming request with a host-kept reply
+   (recorded as given, replacing the partial, issuing no tools) and fences the
+   old ticket with a strictly greater generation.
 
 Tickets are scoped to one live core instance. They are not durable globally unique
 IDs. This core has no restart protocol, journal or exactly-once external effect
@@ -108,5 +124,6 @@ cargo clippy -p pirc-agent-loop --all-targets -- -D warnings
 
 The tests exercise model/tool round trips, progressive snapshots, blocked/denied
 results, parallel call correlation/order, duplicate/stale resume rejection,
-streaming/tool-wait generation changes, suspended/streaming cancellation, partial
-usage/errors, explicit retry/overflow handoff, and Idle versus terminal Done.
+streaming/tool-wait generation changes, ending waits, superseded streams,
+suspended/streaming cancellation, partial usage/errors, explicit retry/overflow
+handoff, and Idle versus terminal Done.

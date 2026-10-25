@@ -5,7 +5,7 @@
 //! called them (`crate::feature`).
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::rc::{Rc, Weak};
 use std::time::Duration;
 
@@ -39,6 +39,7 @@ use crate::stream::{StreamFn, StreamRequest};
 use crate::tools::{AcquireWrite, HumanWait, Tool, ToolContext, ToolResult};
 use crate::ui::{Choice, DialogOptions, NotifyLevel, Ui};
 use crate::{LocalBoxFuture, now_ms};
+use pirc_agent_loop::{CallKey, ToolCall, WaitReason};
 
 /// Session entry recording the role a session started in.
 const ROLE_ENTRY: &str = "agent.role";
@@ -141,6 +142,8 @@ pub struct StreamOptions {
     /// Persist the reply just before its `message_end`, so an event is never
     /// ahead of the session file.
     pub before_end: Option<BeforeEnd>,
+    /// The run's own reply: its progress goes to the run's agent loop.
+    pub progress: bool,
 }
 
 /// `Agent`.
@@ -210,6 +213,10 @@ pub struct Agent {
     /// started may outlive it and keep its scope ([`OPERATION_SCOPE`]); only
     /// a live operation is named on a dialog.
     active_operations: RefCell<HashSet<String>>,
+    /// The model call each running `ptc` operation belongs to.
+    operation_parents: RefCell<HashMap<String, String>>,
+    /// The running run's progression ([`crate::run_loop`]).
+    run_loop: RefCell<Option<RunLoop>>,
     features: Vec<Rc<dyn Feature>>,
     /// Wakes [`Agent::wait_for_completion`] (`completionWake`).
     completion_wake: Notify,
@@ -390,21 +397,55 @@ struct TrackingUi {
 impl TrackingUi {
     /// The linked options, and the wait counted from now until the dialog's
     /// future is done (or dropped).
-    fn link(&self, mut opts: DialogOptions) -> (DialogOptions, HumanWait) {
+    fn link(&self, mut opts: DialogOptions) -> (DialogOptions, DialogWait) {
         let Some(agent) = self.agent.upgrade() else {
-            return (opts, HumanWait::none());
+            return (opts, (HumanWait::none(), None));
         };
         if opts.tool_call_id.is_none() {
             opts.tool_call_id = agent.current_operation();
         }
-        (opts, agent.human_wait())
+        let reason = if APPROVAL_GATE.try_with(|()| ()).is_ok() {
+            WaitReason::Approval
+        } else {
+            WaitReason::Other("dialog".to_owned())
+        };
+        let call_wait = agent.loop_wait(reason, opts.tool_call_id.as_deref());
+        (opts, (agent.human_wait(), call_wait))
+    }
+}
+
+/// What a dialog holds while it is open: the human wait, and the running
+/// call's wait if the dialog is the call's.
+type DialogWait = (HumanWait, Option<LoopWait>);
+
+/// A wait of the run's running call, told to its agent loop; it ends when
+/// dropped.
+struct LoopWait {
+    agent: Weak<Agent>,
+    token: u64,
+}
+
+impl Drop for LoopWait {
+    fn drop(&mut self) {
+        if let Some(agent) = self.agent.upgrade() {
+            agent.with_run_loop(|run_loop| run_loop.end_wait(self.token));
+        }
+    }
+}
+
+/// Clears the run's agent loop when the run ends, however it ends.
+struct RunLoopGuard<'a>(&'a RefCell<Option<RunLoop>>);
+
+impl Drop for RunLoopGuard<'_> {
+    fn drop(&mut self) {
+        *self.0.borrow_mut() = None;
     }
 }
 
 /// `future`, holding `wait` until it is done.
 fn while_waiting<'a, T: 'a>(
     future: LocalBoxFuture<'a, T>,
-    wait: HumanWait,
+    wait: DialogWait,
 ) -> LocalBoxFuture<'a, T> {
     Box::pin(async move {
         let value = future.await;
@@ -565,6 +606,11 @@ tokio::task_local! {
     /// The `ptc` operation (or direct core call) running in this task's
     /// current future (`operationScope`): dialogs it opens are linked to it.
     static OPERATION_SCOPE: String;
+    /// The run's model call this task's current future runs: its waits are
+    /// told to the run's agent loop.
+    static LOOP_CALL: CallKey;
+    /// Inside the auto-mode gate: a dialog there asks for approval.
+    static APPROVAL_GATE: ();
 }
 
 /// Longest argument string kept in operation events and session entries,
@@ -705,6 +751,8 @@ impl Agent {
                 changed_sections: RefCell::new(Vec::new()),
                 scheduled_flushes: Cell::new(0),
                 active_operations: RefCell::new(HashSet::new()),
+                operation_parents: RefCell::new(HashMap::new()),
+                run_loop: RefCell::new(None),
                 features: options.features,
                 completion_wake: Notify::new(),
                 completion_waiting: RefCell::new(Vec::new()),
@@ -1000,6 +1048,39 @@ impl Agent {
     pub fn current_operation(&self) -> Option<String> {
         let id = OPERATION_SCOPE.try_with(Clone::clone).ok()?;
         self.active_operations.borrow().contains(&id).then_some(id)
+    }
+
+    /// `f` on the running run's agent loop, if a run is running.
+    fn with_run_loop<T>(&self, f: impl FnOnce(&mut RunLoop) -> T) -> Option<T> {
+        self.run_loop.try_borrow_mut().ok()?.as_mut().map(f)
+    }
+
+    /// A step of the run's agent loop; the run owns one while it runs.
+    fn progression<T>(
+        &self,
+        f: impl FnOnce(&mut RunLoop) -> Result<T, String>,
+    ) -> Result<T, String> {
+        self.with_run_loop(f)
+            .unwrap_or_else(|| Err("agent loop state: no run".to_owned()))
+    }
+
+    /// The running call waits for `reason` until the guard drops. The call
+    /// is the one this task runs, else the one `operation` (a dialog's or
+    /// lease's operation id) is or belongs to; other waits are not a call's.
+    fn loop_wait(&self, reason: WaitReason, operation: Option<&str>) -> Option<LoopWait> {
+        let key = LOOP_CALL.try_with(|key| *key).ok().or_else(|| {
+            let operation = operation?;
+            let parents = self.operation_parents.borrow();
+            let id = parents.get(operation).map_or(operation, String::as_str);
+            self.run_loop.try_borrow().ok()?.as_ref()?.running_call(id)
+        })?;
+        let token = self
+            .with_run_loop(|run_loop| run_loop.wait(key, reason))
+            .flatten()?;
+        Some(LoopWait {
+            agent: self.weak.clone(),
+            token,
+        })
     }
 
     /// Record a running `ptc` execution's capabilities (`runningScripts.add`).
@@ -2450,6 +2531,20 @@ impl Agent {
                     "model": resolved.model.id } }),
                 );
             }
+            if options.progress {
+                let api = resolved.model.api.unwrap_or(resolved.provider.api);
+                let skeleton = AssistantMessage {
+                    api: serde_json::to_value(api)
+                        .ok()
+                        .and_then(|api| api.as_str().map(str::to_owned))
+                        .unwrap_or_default(),
+                    provider: resolved.provider_name.clone(),
+                    model: resolved.model.id.clone(),
+                    timestamp,
+                    ..self.empty_assistant()
+                };
+                self.with_run_loop(|run_loop| run_loop.attempt(skeleton));
+            }
             let mut messages = sanitize_history(&self.context_for(options.up_to.as_deref()));
             messages.extend(options.extra_messages.iter().cloned());
             let tools = self.tool_specs();
@@ -2497,10 +2592,14 @@ impl Agent {
                 max_tokens: options.max_tokens.filter(|n| *n > 0),
                 tool_choice: options.tool_choice,
             };
+            let progress = options.progress;
             let mut on_delta = |delta: &pirc_protocol::AssistantDelta| {
                 if emit {
                     self.emit(json!({ "type": "message_update",
                         "assistantMessageEvent": delta }));
+                }
+                if progress {
+                    self.with_run_loop(|run_loop| run_loop.delta(delta));
                 }
             };
             let estimate = compaction::request_input(self, &request.messages);
@@ -2633,7 +2732,8 @@ impl Agent {
         let mut overflow_retried = false;
         let mut completion_timed_out = false;
         let mut produced: Vec<Message> = Vec::new();
-        let mut progression = RunLoop::new();
+        *self.run_loop.borrow_mut() = Some(RunLoop::new());
+        let _run_loop = RunLoopGuard(&self.run_loop);
         while !signal.aborted() {
             turns += 1;
             if turns > max_turns {
@@ -2684,7 +2784,7 @@ impl Agent {
                 Ok(())
             });
             let prompt = self.system_prompt();
-            let ticket = progression.request()?;
+            let ticket = self.progression(RunLoop::request)?;
             let message = self
                 .stream(
                     &prompt,
@@ -2692,11 +2792,13 @@ impl Agent {
                     StreamOptions {
                         before_end: Some(before_end),
                         refresh_prompt: true,
+                        progress: true,
                         ..StreamOptions::default()
                     },
                 )
                 .await?;
-            let reply = progression.reply(ticket, &message, interrupted())?;
+            let reply =
+                self.progression(|run_loop| run_loop.reply(ticket, &message, interrupted()))?;
             if !persisted.get() && compacts_instead(&message, overflow_retried) {
                 overflow_retried = true;
                 self.emit(json!({ "type": "turn_end" }));
@@ -2713,7 +2815,7 @@ impl Agent {
                     })
                     .await?;
                 if result.ok {
-                    progression.compacted()?;
+                    self.progression(RunLoop::compacted)?;
                     continue;
                 }
             }
@@ -2730,19 +2832,20 @@ impl Agent {
                                 &call.id,
                                 &call.name,
                                 call.arguments.clone(),
+                                Some(call),
                                 &turn_signal,
                                 &signal,
                             )
                             .await?;
-                        progression.tool_result(call, &result, end)?;
+                        self.progression(|run_loop| run_loop.tool_result(call, &result, end))?;
                     }
                 }
                 Reply::Unchecked(calls) => {
                     for (id, name, arguments) in calls {
                         let (result, _) = self
-                            .run_call(&id, &name, arguments, &turn_signal, &signal)
+                            .run_call(&id, &name, arguments, None, &turn_signal, &signal)
                             .await?;
-                        progression.unchecked_result(result);
+                        self.with_run_loop(|run_loop| run_loop.unchecked_result(result));
                     }
                 }
                 Reply::Nothing => {}
@@ -2806,7 +2909,7 @@ impl Agent {
             }
             break;
         }
-        progression.close(signal.aborted(), now_ms())?;
+        self.progression(|run_loop| run_loop.close(signal.aborted(), now_ms()))?;
         *self.turn.borrow_mut() = None;
         self.interrupt_pending.set(false);
         self.emit(json!({ "type": "agent_end", "willRetry": false }));
@@ -2814,12 +2917,14 @@ impl Agent {
     }
 
     /// One call of a reply: run, or recorded as not run once its turn was
-    /// aborted (`signal` is the run's).
+    /// aborted (`signal` is the run's). `checked`: the agent loop's call,
+    /// whose waits it is told.
     async fn run_call(
         &self,
         id: &str,
         name: &str,
         arguments: Map<String, Value>,
+        checked: Option<&ToolCall>,
         turn_signal: &AbortSignal,
         signal: &AbortSignal,
     ) -> Result<(Message, CallEnd), String> {
@@ -2832,7 +2937,14 @@ impl Agent {
             let result = self.record_result(id, name, ToolResult::error(text))?;
             return Ok((result, CallEnd::Skipped));
         }
-        let result = self.execute_tool(id, name, arguments, turn_signal).await?;
+        let execute = self.execute_tool(id, name, arguments, turn_signal);
+        let result = match checked {
+            Some(call) => {
+                self.with_run_loop(|run_loop| run_loop.start_call(call));
+                LOOP_CALL.scope(call.key, execute).await?
+            }
+            None => execute.await?,
+        };
         let end = if turn_signal.aborted() {
             CallEnd::RanAborted
         } else {
@@ -2872,6 +2984,10 @@ impl Agent {
         if signal.aborted() {
             return Err("The operation was aborted.".to_owned());
         }
+        let _wait = self.loop_wait(
+            WaitReason::Resource(format!("write lease: {root}")),
+            self.current_operation().as_deref(),
+        );
         tokio::select! {
             result = lease(root) => result,
             () = signal.cancelled() => Err("Aborted".to_owned()),
@@ -2997,6 +3113,9 @@ impl Agent {
         self.active_operations
             .borrow_mut()
             .insert(operation_id.to_owned());
+        self.operation_parents
+            .borrow_mut()
+            .insert(operation_id.to_owned(), parent_tool_call_id.to_owned());
         // Always ended for observers, even if the operation's future is
         // dropped (the TS `finally`).
         let ended = OperationEnd {
@@ -3031,6 +3150,7 @@ impl Agent {
         result: ToolResult,
     ) {
         self.active_operations.borrow_mut().remove(operation_id);
+        self.operation_parents.borrow_mut().remove(operation_id);
         let mut result = result.observed();
         if crate::handoff::replay_tool(name)
             || self
@@ -3157,7 +3277,10 @@ impl Agent {
         }
         // Auto mode judges the final (hook-rewritten) arguments and takes the
         // write lease.
-        let refusal = match self.auto_mode.gate(self, &name, &args, signal).await {
+        let refusal = match APPROVAL_GATE
+            .scope((), self.auto_mode.gate(self, &name, &args, signal))
+            .await
+        {
             Ok(refusal) => refusal,
             Err(error) => {
                 if signal.aborted() {

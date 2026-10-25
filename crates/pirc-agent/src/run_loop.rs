@@ -8,26 +8,40 @@
 //! calls are taken from the core's validated batch, each result is fenced
 //! by its call key, and the run ends in an explicit terminal state.
 //!
+//! It also tells the core what the run is doing meanwhile: the streaming
+//! reply's snapshot at each content block boundary (a block's end carries
+//! its whole content, so a snapshot lags at most the block being streamed),
+//! and the waits of the running call (a dialog, the write lease).
+//!
 //! It emits nothing and writes nothing, so the agent's event trace is the
 //! one `pirc-conformance/tests/agent_loop_order.rs` records. The core's
 //! history is not used for requests (the session store is the context);
 //! it holds the run's own replies and tool results, as the core keeps them.
+//! Progress and waits are bookkeeping: one the core refuses (stale, out of
+//! order) is dropped, never an error of the run.
 //!
 //! Where the core is stricter than the agent the agent's behavior wins:
 //! - a tool-use reply whose call ids are empty or repeated, or that has no
-//!   calls, is still run as listed ([`Reply::Unchecked`]); the core is
-//!   rebound past it and gets the results as the next request's input;
+//!   calls, is still run as listed ([`Reply::Unchecked`]); the core keeps
+//!   the reply ([`Loop::supersede`]) and gets the results as the next
+//!   request's input, and those calls' waits are not tracked;
 //! - an interrupted reply (a message sent now aborted the turn, not the run)
-//!   rebinds the core instead of cancelling it, since the run continues;
+//!   supersedes the request instead of cancelling the core, since the run
+//!   continues;
 //! - retries happen inside the agent's `stream`, so the core only sees the
 //!   final attempt, and a failure never asks it for a retry.
 
 use pirc_agent_loop::{
-    Failure, FailureKind, Loop, Recovery, ResumeError, Status, Step, Ticket, ToolCall, ToolOutcome,
-    ToolStatus,
+    CallKey, Failure, FailureKind, Loop, Progress, Recovery, ResumeError, Status, Step, Ticket,
+    ToolCall, ToolOutcome, ToolStatus, WaitReason,
 };
-use pirc_protocol::{AssistantContent, AssistantMessage, Message, StopReason};
+use pirc_protocol::{AssistantContent, AssistantDelta, AssistantMessage, Message, StopReason};
 use serde_json::{Map, Value};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+/// Wait tokens are unique across runs: a dialog may outlive its run, and
+/// must not end a wait of the next one.
+static NEXT_WAIT: AtomicU64 = AtomicU64::new(1);
 
 /// What a final reply leaves the run to do.
 #[derive(Debug, PartialEq)]
@@ -56,6 +70,21 @@ fn state_error(error: ResumeError) -> String {
     format!("agent loop state: {error}")
 }
 
+/// The streaming attempt's snapshot, built from block boundaries.
+struct Snapshot {
+    ticket: Ticket,
+    message: AssistantMessage,
+    /// A boundary out of order: no more snapshots for this attempt.
+    broken: bool,
+}
+
+/// One open wait of a call; several can overlap (a script's operations).
+struct OpenWait {
+    token: u64,
+    key: CallKey,
+    reason: WaitReason,
+}
+
 pub(crate) struct RunLoop {
     core: Loop,
     generation: u64,
@@ -65,6 +94,10 @@ pub(crate) struct RunLoop {
     suspended: Option<Ticket>,
     /// Results of unchecked calls, admitted with the next request.
     input: Vec<Message>,
+    snapshot: Option<Snapshot>,
+    /// The checked call running now, and its provider id.
+    running: Option<(CallKey, String)>,
+    waits: Vec<OpenWait>,
 }
 
 impl RunLoop {
@@ -75,6 +108,9 @@ impl RunLoop {
             pending: None,
             suspended: None,
             input: Vec::new(),
+            snapshot: None,
+            running: None,
+            waits: Vec::new(),
         }
     }
 
@@ -106,6 +142,117 @@ impl RunLoop {
         Ok(())
     }
 
+    /// An attempt at the pending request started streaming; `skeleton` is
+    /// its message without content. A retry starts over.
+    pub(crate) fn attempt(&mut self, skeleton: AssistantMessage) {
+        self.snapshot = self.pending.map(|ticket| Snapshot {
+            ticket,
+            message: AssistantMessage {
+                content: Vec::new(),
+                ..skeleton
+            },
+            broken: false,
+        });
+    }
+
+    /// A streamed delta. Only block starts and ends change the snapshot.
+    pub(crate) fn delta(&mut self, delta: &AssistantDelta) {
+        let Some(snapshot) = self.snapshot.as_mut() else {
+            return;
+        };
+        if snapshot.broken || self.pending != Some(snapshot.ticket) {
+            return;
+        }
+        let (index, block) = match delta {
+            AssistantDelta::TextStart { content_index } => (
+                content_index,
+                AssistantContent::Text {
+                    text: String::new(),
+                    text_signature: None,
+                },
+            ),
+            AssistantDelta::TextEnd {
+                content_index,
+                content,
+            } => (
+                content_index,
+                AssistantContent::Text {
+                    text: content.clone(),
+                    text_signature: None,
+                },
+            ),
+            AssistantDelta::ThinkingStart { content_index } => (
+                content_index,
+                AssistantContent::Thinking {
+                    thinking: String::new(),
+                    signature: None,
+                    redacted: None,
+                },
+            ),
+            AssistantDelta::ThinkingEnd {
+                content_index,
+                content,
+            } => (
+                content_index,
+                AssistantContent::Thinking {
+                    thinking: content.clone(),
+                    signature: None,
+                    redacted: None,
+                },
+            ),
+            // Arguments stream as unparsed JSON: empty until the call ends.
+            AssistantDelta::ToolcallStart {
+                content_index,
+                id,
+                tool_name,
+            } => (
+                content_index,
+                AssistantContent::ToolCall {
+                    id: id.clone(),
+                    name: tool_name.clone(),
+                    arguments: Map::new(),
+                    thought_signature: None,
+                },
+            ),
+            AssistantDelta::ToolcallEnd {
+                content_index,
+                tool_call,
+            } => (content_index, tool_call.clone()),
+            AssistantDelta::TextDelta { .. }
+            | AssistantDelta::ThinkingDelta { .. }
+            | AssistantDelta::ToolcallDelta { .. } => return,
+        };
+        let index = *index as usize;
+        let content = &mut snapshot.message.content;
+        let starts = matches!(
+            delta,
+            AssistantDelta::TextStart { .. }
+                | AssistantDelta::ThinkingStart { .. }
+                | AssistantDelta::ToolcallStart { .. }
+        );
+        if starts && index == content.len() {
+            content.push(block);
+        } else if !starts && index < content.len() {
+            content[index] = block;
+        } else {
+            snapshot.broken = true;
+            return;
+        }
+        let update = Progress {
+            ticket: snapshot.ticket,
+            delta: delta.clone(),
+            partial: snapshot.message.clone(),
+        };
+        if self.core.progress(update).is_err() {
+            snapshot.broken = true;
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn partial(&self) -> Option<&AssistantMessage> {
+        self.core.partial()
+    }
+
     /// The final reply to `ticket`. `interrupted`: the turn was aborted
     /// but the run goes on.
     pub(crate) fn reply(
@@ -118,8 +265,9 @@ impl RunLoop {
             return Err("agent loop state: a reply to no pending request".to_owned());
         }
         self.pending = None;
+        self.snapshot = None;
         if reply.stop_reason == StopReason::Aborted && interrupted {
-            self.rebind(reply)?;
+            self.supersede(ticket, reply)?;
             return Ok(Reply::Nothing);
         }
         let failure = (reply.stop_reason == StopReason::Error).then(|| Failure {
@@ -143,7 +291,7 @@ impl RunLoop {
             Ok(Step::Idle | Step::Done(_)) => Ok(Reply::Nothing),
             Ok(other) => Err(format!("agent loop state: unexpected {other:?}")),
             Err(ResumeError::InvalidCallIds) => {
-                self.rebind(reply)?;
+                self.supersede(ticket, reply)?;
                 Ok(Reply::Unchecked(
                     reply
                         .content
@@ -164,15 +312,56 @@ impl RunLoop {
         }
     }
 
-    /// Fence the streaming request off and keep `reply` as the core's
-    /// record of it: the core is idle, nothing was dispatched.
-    fn rebind(&mut self, reply: &AssistantMessage) -> Result<(), String> {
+    /// Keep `reply` as the core's record of `ticket`, fenced off: the core
+    /// is idle, nothing was dispatched for it.
+    fn supersede(&mut self, ticket: Ticket, reply: &AssistantMessage) -> Result<(), String> {
         self.generation += 1;
-        let at = reply.completed_at.unwrap_or(reply.timestamp);
         self.core
-            .rebind(self.generation, Message::Assistant(reply.clone()), at)
+            .supersede(ticket, self.generation, reply.clone())
             .map_err(state_error)?;
         Ok(())
+    }
+
+    /// `call` starts running: waits from now on are its own.
+    pub(crate) fn start_call(&mut self, call: &ToolCall) {
+        self.running = Some((call.key, call.id.clone()));
+    }
+
+    /// The running call's key, if `id` is its provider id.
+    pub(crate) fn running_call(&self, id: &str) -> Option<CallKey> {
+        self.running
+            .as_ref()
+            .filter(|(_, running)| running == id)
+            .map(|(key, _)| *key)
+    }
+
+    /// `key` waits for `reason` until [`RunLoop::end_wait`] with the token.
+    pub(crate) fn wait(&mut self, key: CallKey, reason: WaitReason) -> Option<u64> {
+        self.core.wait_tool(key, reason.clone()).ok()?;
+        let token = NEXT_WAIT.fetch_add(1, Ordering::Relaxed);
+        self.waits.push(OpenWait { token, key, reason });
+        Some(token)
+    }
+
+    /// A wait ended; the call still waits for the latest other one, if any.
+    pub(crate) fn end_wait(&mut self, token: u64) {
+        let Some(at) = self.waits.iter().position(|wait| wait.token == token) else {
+            return;
+        };
+        let key = self.waits.remove(at).key;
+        let _ = match self.waits.iter().rev().find(|wait| wait.key == key) {
+            Some(other) => self.core.wait_tool(key, other.reason.clone()),
+            None => self.core.end_wait(key),
+        };
+    }
+
+    #[cfg(test)]
+    pub(crate) fn waiting(&self) -> Vec<(CallKey, WaitReason)> {
+        self.core
+            .waiting()
+            .into_iter()
+            .map(|(key, reason)| (key, reason.clone()))
+            .collect()
     }
 
     /// `call` ended with the recorded tool result `result`.
@@ -182,6 +371,14 @@ impl RunLoop {
         result: &Message,
         end: CallEnd,
     ) -> Result<(), String> {
+        if self
+            .running
+            .as_ref()
+            .is_some_and(|(key, _)| *key == call.key)
+        {
+            self.running = None;
+        }
+        self.waits.retain(|wait| wait.key != call.key);
         let Message::ToolResult {
             content,
             details,
@@ -237,6 +434,9 @@ impl RunLoop {
     pub(crate) fn close(&mut self, cancelled: bool, timestamp: u64) -> Result<(), String> {
         self.pending = None;
         self.input.clear();
+        self.snapshot = None;
+        self.running = None;
+        self.waits.clear();
         if cancelled {
             self.core.cancel(timestamp);
             return Ok(());
@@ -266,240 +466,4 @@ impl RunLoop {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use pirc_agent_loop::TerminalReason;
-    use pirc_protocol::UserBlock;
-    use serde_json::json;
-
-    fn reply(stop: StopReason, content: Vec<AssistantContent>) -> AssistantMessage {
-        AssistantMessage {
-            content,
-            api: "openai-completions".to_owned(),
-            provider: "fake".to_owned(),
-            model: "fake-model".to_owned(),
-            usage: crate::messages::empty_usage(),
-            stop_reason: stop,
-            error_message: None,
-            timestamp: 1,
-            completed_at: Some(2),
-            canonical_provider: None,
-            response_id: None,
-            response_model: None,
-        }
-    }
-
-    fn text(text: &str) -> AssistantContent {
-        AssistantContent::Text {
-            text: text.to_owned(),
-            text_signature: None,
-        }
-    }
-
-    fn call(id: &str) -> AssistantContent {
-        AssistantContent::ToolCall {
-            id: id.to_owned(),
-            name: "read".to_owned(),
-            arguments: json!({ "path": id }).as_object().unwrap().clone(),
-            thought_signature: None,
-        }
-    }
-
-    fn result(id: &str, is_error: bool) -> Message {
-        Message::ToolResult {
-            tool_call_id: id.to_owned(),
-            tool_name: "read".to_owned(),
-            content: vec![UserBlock::Text {
-                text: format!("result of {id}"),
-                text_signature: None,
-            }],
-            details: None,
-            is_error,
-            timestamp: 3,
-        }
-    }
-
-    fn tools(run: &mut RunLoop, ids: &[&str]) -> Vec<ToolCall> {
-        let ticket = run.request().unwrap();
-        let content = ids.iter().map(|id| call(id)).collect();
-        match run
-            .reply(ticket, &reply(StopReason::ToolUse, content), false)
-            .unwrap()
-        {
-            Reply::Tools(calls) => calls,
-            other => panic!("not a tool batch: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn a_tool_round_then_a_text_reply_completes() {
-        let mut run = RunLoop::new();
-        let calls = tools(&mut run, &["a", "b"]);
-        assert_eq!(
-            calls.iter().map(|c| c.id.as_str()).collect::<Vec<_>>(),
-            ["a", "b"]
-        );
-        run.tool_result(&calls[0], &result("a", false), CallEnd::Ran)
-            .unwrap();
-        assert_eq!(run.status(), Status::WaitingTools);
-        run.tool_result(&calls[1], &result("b", true), CallEnd::Ran)
-            .unwrap();
-        // The next request was issued by the last result.
-        let next = run.request().unwrap();
-        assert_eq!(run.request().unwrap(), next);
-        let done = run
-            .reply(next, &reply(StopReason::Stop, vec![text("Done.")]), false)
-            .unwrap();
-        assert_eq!(done, Reply::Nothing);
-        assert_eq!(run.status(), Status::Idle);
-        run.close(false, 9).unwrap();
-        assert_eq!(run.status(), Status::Done(TerminalReason::Completed));
-        let records = run.core.tool_records();
-        assert_eq!(records[0].outcome.status, ToolStatus::Completed);
-        assert_eq!(records[1].outcome.status, ToolStatus::Failed);
-    }
-
-    #[test]
-    fn a_result_is_accepted_once_and_only_for_its_batch() {
-        let mut run = RunLoop::new();
-        let calls = tools(&mut run, &["a"]);
-        run.tool_result(&calls[0], &result("a", false), CallEnd::Ran)
-            .unwrap();
-        let error = run
-            .tool_result(&calls[0], &result("a", false), CallEnd::Ran)
-            .unwrap_err();
-        assert!(error.starts_with("agent loop state:"), "{error}");
-        assert!(
-            run.tool_result(&calls[0], &json_text(), CallEnd::Ran)
-                .is_err()
-        );
-    }
-
-    fn json_text() -> Message {
-        Message::User {
-            content: pirc_protocol::UserContent::Text("x".to_owned()),
-            timestamp: 1,
-        }
-    }
-
-    #[test]
-    fn interrupted_calls_and_an_aborted_running_call() {
-        let mut run = RunLoop::new();
-        let calls = tools(&mut run, &["a", "b"]);
-        run.tool_result(&calls[0], &result("a", true), CallEnd::RanAborted)
-            .unwrap();
-        run.tool_result(&calls[1], &result("b", true), CallEnd::Skipped)
-            .unwrap();
-        let statuses: Vec<ToolStatus> = run
-            .core
-            .tool_records()
-            .iter()
-            .map(|r| r.outcome.status)
-            .collect();
-        assert_eq!(statuses, [ToolStatus::Unknown, ToolStatus::Interrupted]);
-        // The run was aborted before its next model call.
-        run.close(true, 9).unwrap();
-        assert_eq!(run.status(), Status::Done(TerminalReason::Cancelled));
-    }
-
-    #[test]
-    fn an_interrupted_reply_rebinds_and_the_run_goes_on() {
-        let mut run = RunLoop::new();
-        let first = run.request().unwrap();
-        let aborted = reply(StopReason::Aborted, vec![text("Partial")]);
-        assert_eq!(run.reply(first, &aborted, true).unwrap(), Reply::Nothing);
-        assert_eq!(run.status(), Status::Idle);
-        let second = run.request().unwrap();
-        assert_ne!(first.generation(), second.generation());
-        // A late answer to the old request is refused.
-        assert!(run.reply(first, &aborted, false).is_err());
-        run.reply(second, &reply(StopReason::Stop, vec![text("Ok")]), false)
-            .unwrap();
-        assert_eq!(run.core.history().len(), 2);
-    }
-
-    #[test]
-    fn an_aborted_run_cancels_the_core() {
-        let mut run = RunLoop::new();
-        let ticket = run.request().unwrap();
-        run.reply(ticket, &reply(StopReason::Aborted, Vec::new()), false)
-            .unwrap();
-        assert_eq!(run.status(), Status::Done(TerminalReason::Cancelled));
-        run.close(true, 9).unwrap();
-        run.close(false, 9).unwrap();
-    }
-
-    #[test]
-    fn calls_the_core_rejects_still_run_as_listed() {
-        for content in [
-            vec![call("a"), call("a")],
-            vec![call("")],
-            vec![text("no calls")],
-        ] {
-            let mut run = RunLoop::new();
-            let ticket = run.request().unwrap();
-            let listed: Vec<String> = content
-                .iter()
-                .filter_map(|part| match part {
-                    AssistantContent::ToolCall { id, .. } => Some(id.clone()),
-                    _ => None,
-                })
-                .collect();
-            let Reply::Unchecked(calls) = run
-                .reply(ticket, &reply(StopReason::ToolUse, content), false)
-                .unwrap()
-            else {
-                panic!("not unchecked");
-            };
-            assert_eq!(
-                calls
-                    .iter()
-                    .map(|(id, _, _)| id.clone())
-                    .collect::<Vec<_>>(),
-                listed
-            );
-            for id in &listed {
-                run.unchecked_result(result(id, false));
-            }
-            let next = run.request().unwrap();
-            assert_eq!(next.generation(), 2);
-            // The reply and its results are in the core's record.
-            assert_eq!(run.core.history().len(), 1 + listed.len());
-        }
-    }
-
-    #[test]
-    fn an_overflow_is_compacted_once_or_stops() {
-        let mut overflow = reply(StopReason::Error, Vec::new());
-        overflow.error_message = Some("context length exceeded".to_owned());
-        let mut run = RunLoop::new();
-        let ticket = run.request().unwrap();
-        assert_eq!(run.reply(ticket, &overflow, false).unwrap(), Reply::Nothing);
-        assert_eq!(run.status(), Status::Suspended);
-        run.compacted().unwrap();
-        let again = run.request().unwrap();
-        run.reply(again, &overflow, false).unwrap();
-        run.close(false, 9).unwrap();
-        assert_eq!(run.status(), Status::Done(TerminalReason::Failed));
-        let kinds: Vec<FailureKind> = run.core.failures().iter().map(|f| f.failure.kind).collect();
-        assert_eq!(kinds, [FailureKind::ContextOverflow; 2]);
-
-        // Any other failure cannot be compacted.
-        let mut run = RunLoop::new();
-        let ticket = run.request().unwrap();
-        let mut failed = reply(StopReason::Error, Vec::new());
-        failed.error_message = Some("HTTP 400".to_owned());
-        run.reply(ticket, &failed, false).unwrap();
-        assert!(run.compacted().is_err());
-    }
-
-    #[test]
-    fn a_request_never_made_is_cancelled_at_the_end() {
-        let mut run = RunLoop::new();
-        let calls = tools(&mut run, &["a"]);
-        run.tool_result(&calls[0], &result("a", false), CallEnd::Ran)
-            .unwrap();
-        run.close(false, 9).unwrap();
-        assert_eq!(run.status(), Status::Done(TerminalReason::Cancelled));
-    }
-}
+mod tests;

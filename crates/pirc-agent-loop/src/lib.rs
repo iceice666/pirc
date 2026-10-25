@@ -372,6 +372,13 @@ impl Loop {
         Ok(())
     }
 
+    /// The call no longer waits (its approval was answered, its resource
+    /// acquired). It is still pending; only a result ends it.
+    pub fn end_wait(&mut self, key: CallKey) -> Result<(), ResumeError> {
+        self.pending_tool(key)?.wait = None;
+        Ok(())
+    }
+
     pub fn waiting(&self) -> Vec<(CallKey, &WaitReason)> {
         match &self.state {
             State::Tools { calls, .. } => calls
@@ -482,6 +489,34 @@ impl Loop {
         self.generation = generation;
         self.history.push(notice);
         Ok(invalidated)
+    }
+
+    /// The host settled the streaming request itself instead of
+    /// `finish_model`: it keeps `reply` (an interrupted reply it goes on
+    /// from, say, or one whose calls it ran although the core refused their
+    /// IDs). `reply` is recorded as given, replacing any partial, and no tool
+    /// effect is issued for it. The request is fenced by moving to the strictly
+    /// greater `generation`; the core is idle.
+    pub fn supersede(
+        &mut self,
+        ticket: Ticket,
+        generation: u64,
+        reply: AssistantMessage,
+    ) -> Result<Invalidation, ResumeError> {
+        self.check_ticket(ticket)?;
+        if !matches!(self.state, State::Streaming { .. }) {
+            return Err(ResumeError::WrongState);
+        }
+        if generation <= self.generation {
+            return Err(ResumeError::InvalidGeneration);
+        }
+        self.state = State::Idle;
+        self.generation = generation;
+        self.history.push(Message::Assistant(reply));
+        Ok(Invalidation {
+            model: Some(ticket),
+            tools: Vec::new(),
+        })
     }
 
     fn ensure_sequence(&self) -> Result<(), ResumeError> {

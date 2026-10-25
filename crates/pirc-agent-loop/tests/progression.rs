@@ -179,6 +179,71 @@ fn generation_change_during_stream_fences_late_tool_reply_and_progress() {
 }
 
 #[test]
+fn a_wait_can_end_while_its_call_stays_pending() {
+    let mut core = Loop::new(0, vec![]);
+    let request = model(core.advance(vec![]).unwrap());
+    let calls = tools(
+        core.finish_model(request.ticket, reply(StopReason::ToolUse, &["a"]), None)
+            .unwrap(),
+    );
+    core.wait_tool(calls[0].key, WaitReason::Approval).unwrap();
+    core.end_wait(calls[0].key).unwrap();
+    assert!(core.waiting().is_empty());
+    assert_eq!(core.status(), Status::WaitingTools);
+    // Ending no wait is fine; a call with a result has none to end.
+    core.end_wait(calls[0].key).unwrap();
+    model(
+        core.resume_tool(calls[0].key, outcome(ToolStatus::Completed, "A"))
+            .unwrap(),
+    );
+    assert_eq!(core.end_wait(calls[0].key), Err(ResumeError::StaleTicket));
+}
+
+#[test]
+fn a_superseded_stream_keeps_the_host_reply_and_fences_the_old_ticket() {
+    let mut core = Loop::new(3, vec![]);
+    let request = model(core.advance(vec![]).unwrap());
+    let progress = Progress {
+        ticket: request.ticket,
+        delta: AssistantDelta::TextStart { content_index: 0 },
+        partial: text_reply(StopReason::Stop, "part"),
+    };
+    core.progress(progress.clone()).unwrap();
+    let kept = reply(StopReason::ToolUse, &["same", "same"]);
+    assert_eq!(
+        core.supersede(request.ticket, 3, kept.clone()),
+        Err(ResumeError::InvalidGeneration)
+    );
+    let invalidated = core.supersede(request.ticket, 4, kept.clone()).unwrap();
+    assert_eq!(invalidated.model, Some(request.ticket));
+    assert!(invalidated.tools.is_empty());
+    // The reply as given, once: the partial is not recorded beside it.
+    assert_eq!(core.history(), [Message::Assistant(kept.clone())]);
+    assert_eq!(core.status(), Status::Idle);
+    assert!(core.partial().is_none());
+    assert_eq!(core.progress(progress), Err(ResumeError::StaleGeneration));
+    assert_eq!(
+        core.finish_model(request.ticket, kept.clone(), None),
+        Err(ResumeError::StaleGeneration)
+    );
+    let next = model(core.advance(vec![]).unwrap());
+    assert_eq!(next.ticket.generation(), 4);
+    // Only a streaming request can be superseded.
+    assert_eq!(
+        core.supersede(request.ticket, 5, kept.clone()),
+        Err(ResumeError::StaleGeneration)
+    );
+    let calls = tools(
+        core.finish_model(next.ticket, reply(StopReason::ToolUse, &["a"]), None)
+            .unwrap(),
+    );
+    assert_eq!(
+        core.supersede(calls[0].key.model, 5, kept),
+        Err(ResumeError::WrongState)
+    );
+}
+
+#[test]
 fn generation_change_during_tool_wait_records_partial_results_and_unknowns() {
     let mut core = Loop::new(1, vec![]);
     let request = model(core.advance(vec![]).unwrap());
