@@ -1,6 +1,5 @@
-//! The validation the TS agent did with zod 3, reproduced where its result
-//! is observable: which issues (code, path, bounds) a value gives, in zod's
-//! order, and `ZodError.message` (the issues as indented JSON).
+//! Checking `config.json` values: every problem is collected (not just the
+//! first), each with the path of the value it is about.
 
 use serde_json::{Map, Value};
 
@@ -14,36 +13,36 @@ pub enum PathPart {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum IssueKind {
-    /// `{code, expected, received}`.
+    /// A value of the wrong type (`received` is [`received`]'s name).
     InvalidType {
         expected: String,
         received: &'static str,
     },
-    /// `.int()` on a fraction: `{code, expected: 'integer', received: 'float', message}`.
+    /// A fraction where an integer is needed.
     NotInteger,
-    /// `z.enum` given a non-string: `{expected, received, code}`.
+    /// A non-string where one of `expected` (the options) is needed.
     EnumType {
         expected: String,
         received: &'static str,
     },
-    /// `{received, code, options}`.
+    /// A string outside the options.
     InvalidEnum {
         received: String,
         options: Vec<String>,
     },
-    /// `{code, minimum, type, inclusive, exact, message}`.
+    /// Below the minimum (`kind`: "string" for a length, "number").
     TooSmall {
         minimum: f64,
         kind: &'static str,
         inclusive: bool,
     },
-    /// `{code, maximum, type, inclusive, exact, message}`.
+    /// Above the maximum.
     TooBig {
         maximum: f64,
         kind: &'static str,
         inclusive: bool,
     },
-    /// `{code, keys}`.
+    /// Keys the object does not allow.
     UnrecognizedKeys { keys: Vec<String> },
 }
 
@@ -62,21 +61,21 @@ fn join_values(values: &[String], separator: &str) -> String {
 }
 
 impl Issue {
-    /// zod's default (English) message.
+    /// What is wrong, without the rejected value itself (except an enum's).
     pub fn message(&self) -> String {
         match &self.kind {
             IssueKind::InvalidType { expected, received }
             | IssueKind::EnumType { expected, received } => {
-                if *received == "undefined" {
-                    "Required".to_owned()
+                if *received == "nothing" {
+                    format!("Required ({expected})")
                 } else {
                     format!("Expected {expected}, received {received}")
                 }
             }
-            IssueKind::NotInteger => "Expected integer, received float".to_owned(),
+            IssueKind::NotInteger => "Expected an integer".to_owned(),
             IssueKind::InvalidEnum { received, options } => format!(
-                "Invalid enum value. Expected {}, received '{received}'",
-                join_values(options, " | ")
+                "Expected one of {}, received '{received}'",
+                join_values(options, ", ")
             ),
             IssueKind::TooSmall {
                 minimum,
@@ -84,16 +83,11 @@ impl Issue {
                 inclusive,
             } => {
                 let minimum = js::number_text(*minimum);
+                let bound = if *inclusive { "at least" } else { "more than" };
                 if *kind == "string" {
-                    let bound = if *inclusive { "at least" } else { "over" };
-                    format!("String must contain {bound} {minimum} character(s)")
+                    format!("Expected {bound} {minimum} characters")
                 } else {
-                    let bound = if *inclusive {
-                        "greater than or equal to "
-                    } else {
-                        "greater than "
-                    };
-                    format!("Number must be {bound}{minimum}")
+                    format!("Expected {bound} {minimum}")
                 }
             }
             IssueKind::TooBig {
@@ -102,111 +96,53 @@ impl Issue {
                 inclusive,
             } => {
                 let maximum = js::number_text(*maximum);
+                let bound = if *inclusive { "at most" } else { "less than" };
                 if *kind == "string" {
-                    let bound = if *inclusive { "at most" } else { "under" };
-                    format!("String must contain {bound} {maximum} character(s)")
+                    format!("Expected {bound} {maximum} characters")
                 } else {
-                    let bound = if *inclusive {
-                        "less than or equal to "
-                    } else {
-                        "less than "
-                    };
-                    format!("Number must be {bound}{maximum}")
+                    format!("Expected {bound} {maximum}")
                 }
             }
             IssueKind::UnrecognizedKeys { keys } => {
-                format!("Unrecognized key(s) in object: {}", join_values(keys, ", "))
+                format!("Unknown key(s): {}", join_values(keys, ", "))
             }
         }
     }
 
-    fn path_value(&self) -> Value {
-        Value::Array(
-            self.path
-                .iter()
-                .map(|part| match part {
-                    PathPart::Key(key) => Value::from(key.as_str()),
-                    PathPart::Index(index) => Value::from(*index),
-                })
-                .collect(),
-        )
-    }
-
-    /// The issue as zod builds it: its own fields, then `path` and
-    /// `message` (where the issue already had a `message` key, in place).
-    pub fn to_value(&self) -> Value {
-        let mut map = Map::new();
-        let mut put = |key: &str, value: Value| {
-            map.insert(key.to_owned(), value);
-        };
-        let message = Value::from(self.message());
-        match &self.kind {
-            IssueKind::InvalidType { expected, received } => {
-                put("code", "invalid_type".into());
-                put("expected", expected.as_str().into());
-                put("received", (*received).into());
-            }
-            IssueKind::NotInteger => {
-                put("code", "invalid_type".into());
-                put("expected", "integer".into());
-                put("received", "float".into());
-                put("message", message.clone());
-            }
-            IssueKind::EnumType { expected, received } => {
-                put("expected", expected.as_str().into());
-                put("received", (*received).into());
-                put("code", "invalid_type".into());
-            }
-            IssueKind::InvalidEnum { received, options } => {
-                put("received", received.as_str().into());
-                put("code", "invalid_enum_value".into());
-                put("options", options.clone().into());
-            }
-            IssueKind::TooSmall {
-                minimum,
-                kind,
-                inclusive,
-            } => {
-                put("code", "too_small".into());
-                put("minimum", js::number_value(*minimum));
-                put("type", (*kind).into());
-                put("inclusive", (*inclusive).into());
-                put("exact", false.into());
-                put("message", message.clone());
-            }
-            IssueKind::TooBig {
-                maximum,
-                kind,
-                inclusive,
-            } => {
-                put("code", "too_big".into());
-                put("maximum", js::number_value(*maximum));
-                put("type", (*kind).into());
-                put("inclusive", (*inclusive).into());
-                put("exact", false.into());
-                put("message", message.clone());
-            }
-            IssueKind::UnrecognizedKeys { keys } => {
-                put("code", "unrecognized_keys".into());
-                put("keys", keys.clone().into());
+    /// The path as `a.b[0].c` (`(root)` for the value itself).
+    pub fn path_text(&self) -> String {
+        let mut out = String::new();
+        for part in &self.path {
+            match part {
+                PathPart::Key(key) => {
+                    if !out.is_empty() {
+                        out.push('.');
+                    }
+                    out.push_str(key);
+                }
+                PathPart::Index(index) => out.push_str(&format!("[{index}]")),
             }
         }
-        map.insert("path".to_owned(), self.path_value());
-        map.insert("message".to_owned(), message);
-        Value::Object(map)
+        if out.is_empty() {
+            out.push_str("(root)");
+        }
+        out
     }
 }
 
-/// `ZodError.message`: `JSON.stringify(issues, null, 2)`.
+/// Every issue as `<path>: <message>`, one per line.
 pub fn error_message(issues: &[Issue]) -> String {
-    let values: Vec<Value> = issues.iter().map(Issue::to_value).collect();
-    serde_json::to_string_pretty(&values).unwrap_or_default()
+    issues
+        .iter()
+        .map(|issue| format!("{}: {}", issue.path_text(), issue.message()))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
-/// zod's `getParsedType` of a JSON value (`undefined` when absent).
+/// The type name of a JSON value (`nothing` when absent).
 pub fn received(value: Option<&Value>) -> &'static str {
     match value {
-        None => "undefined",
+        None => "nothing",
         Some(Value::Null) => "null",
         Some(Value::Bool(_)) => "boolean",
         Some(Value::Number(_)) => "number",
@@ -219,7 +155,7 @@ pub fn received(value: Option<&Value>) -> &'static str {
 /// A number check: `(bound, inclusive)`.
 pub type Bound = (f64, bool);
 
-/// Collects issues while a value is walked, like a zod parse context.
+/// Collects issues while a value is walked.
 #[derive(Default)]
 pub struct Checker {
     pub issues: Vec<Issue>,
@@ -431,89 +367,27 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn formats_zod_errors() {
+    fn lists_every_issue_with_its_path() {
         let mut checker = Checker::default();
-        let value = json!({"a": 1.5, "b": "x", "c": "q", "extra": 1});
+        let value = json!({"a": 1.5, "b": "x", "c": "q", "extra": 1, "f": [1, "y"]});
         let map = value.as_object().unwrap();
         checker.key(map, "a", |c, v| c.positive_int(v, Some(1.0)));
         checker.key(map, "b", |c, v| c.string(v, Some(2)));
         checker.key(map, "c", |c, v| c.enumeration(v, &["x", "y"]));
         checker.key(map, "d", |c, v| c.enumeration(v, &["x"]));
         checker.key(map, "e", |c, v| c.boolean(v));
-        checker.strict(map, &["a", "b", "c"]);
+        checker.key(map, "f", |c, v| c.string_array(v));
+        checker.strict(map, &["a", "b", "c", "f"]);
         assert_eq!(
             error_message(&checker.issues),
-            r#"[
-  {
-    "code": "invalid_type",
-    "expected": "integer",
-    "received": "float",
-    "message": "Expected integer, received float",
-    "path": [
-      "a"
-    ]
-  },
-  {
-    "code": "too_big",
-    "maximum": 1,
-    "type": "number",
-    "inclusive": true,
-    "exact": false,
-    "message": "Number must be less than or equal to 1",
-    "path": [
-      "a"
-    ]
-  },
-  {
-    "code": "too_small",
-    "minimum": 2,
-    "type": "string",
-    "inclusive": true,
-    "exact": false,
-    "message": "String must contain at least 2 character(s)",
-    "path": [
-      "b"
-    ]
-  },
-  {
-    "received": "q",
-    "code": "invalid_enum_value",
-    "options": [
-      "x",
-      "y"
-    ],
-    "path": [
-      "c"
-    ],
-    "message": "Invalid enum value. Expected 'x' | 'y', received 'q'"
-  },
-  {
-    "expected": "'x'",
-    "received": "undefined",
-    "code": "invalid_type",
-    "path": [
-      "d"
-    ],
-    "message": "Required"
-  },
-  {
-    "code": "invalid_type",
-    "expected": "boolean",
-    "received": "undefined",
-    "path": [
-      "e"
-    ],
-    "message": "Required"
-  },
-  {
-    "code": "unrecognized_keys",
-    "keys": [
-      "extra"
-    ],
-    "path": [],
-    "message": "Unrecognized key(s) in object: 'extra'"
-  }
-]"#
+            "a: Expected an integer\n\
+             a: Expected at most 1\n\
+             b: Expected at least 2 characters\n\
+             c: Expected one of 'x', 'y', received 'q'\n\
+             d: Required ('x')\n\
+             e: Required (boolean)\n\
+             f[0]: Expected string, received number\n\
+             (root): Unknown key(s): 'extra'"
         );
     }
 }

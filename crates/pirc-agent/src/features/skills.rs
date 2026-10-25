@@ -315,7 +315,10 @@ mod tests {
         let missing = skill_content(&skill("gone", "x", "/nonexistent/gone/SKILL.md"));
         assert_eq!(
             missing.unwrap_err(),
-            "ENOENT: no such file or directory, open '/nonexistent/gone/SKILL.md'"
+            format!(
+                "open '/nonexistent/gone/SKILL.md': {}",
+                std::io::Error::from_raw_os_error(2)
+            )
         );
     }
 }

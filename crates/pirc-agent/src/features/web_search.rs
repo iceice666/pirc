@@ -85,13 +85,6 @@ pub fn sanitize(value: &str) -> String {
     out
 }
 
-/// A string field of a result, as the TS code read it: `undefined` where
-/// absent (a template literal), `Err` where calling a string method on it
-/// threw.
-fn text_of(value: Option<&Value>) -> String {
-    value.map_or_else(|| "undefined".to_owned(), js::string_of)
-}
-
 fn sanitized(value: Option<&Value>, key: &str) -> Result<String, String> {
     match value {
         Some(Value::String(text)) => Ok(sanitize(text)),
@@ -114,7 +107,7 @@ pub fn format_results(query: &str, results: &[Value], cached: bool) -> Result<St
         let meta: Vec<String> = [result.get("published"), result.get("author")]
             .into_iter()
             .filter(|value| js::truthy(*value))
-            .map(text_of)
+            .map(js::shown)
             .collect();
         let meta = meta.join(" · ");
         let mut lines = vec![
@@ -123,7 +116,7 @@ pub fn format_results(query: &str, results: &[Value], cached: bool) -> Result<St
                 index + 1,
                 sanitized(result.get("title"), "title")?
             ),
-            format!("URL: {}", text_of(result.get("url"))),
+            format!("URL: {}", js::shown(result.get("url"))),
         ];
         if !meta.is_empty() {
             lines.push(sanitize(&meta));

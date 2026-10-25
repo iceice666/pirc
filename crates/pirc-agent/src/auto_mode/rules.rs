@@ -1655,11 +1655,11 @@ fn classify_git(args: &[Word], state: &State<'_>) -> Classification {
     let mut inner = classify_git_subcommand(sub, rest);
     // `git log/diff/show --output=FILE` writes a file.
     let written = option_values(rest, &["--output"]);
-    let shown_sub = sub.unwrap_or("undefined");
+    let shown_sub = sub.map_or("git".to_owned(), |sub| format!("git {sub}"));
     if !written.is_empty() && sub != Some("format-patch") {
         inner = worst(
             inner,
-            check_writes(&written, &here, false, &format!("git {shown_sub} writes")),
+            check_writes(&written, &here, false, &format!("{shown_sub} writes")),
         );
     }
     if sub == Some("format-patch") {
@@ -1737,7 +1737,7 @@ const GIT_WRITERS: &[&str] = &[
 fn classify_git_subcommand(sub: Option<&str>, rest: &[Word]) -> Classification {
     let words: Vec<&str> = rest.iter().map(|word| word.text.as_str()).collect();
     let s = sub.unwrap_or("");
-    let shown = sub.unwrap_or("undefined");
+    let shown = sub.map_or("git".to_owned(), |sub| format!("git {sub}"));
     // Options and subcommands that name a program for git to run.
     let runs = rest.iter().find(|word| {
         let text = word.text.as_str();
@@ -1750,7 +1750,7 @@ fn classify_git_subcommand(sub: Option<&str>, rest: &[Word]) -> Classification {
     });
     if let Some(runs) = runs {
         return unknown(format!(
-            "git {shown} {} may make git run another program",
+            "{shown} {} may make git run another program",
             runs.text
         ));
     }
@@ -1760,7 +1760,7 @@ fn classify_git_subcommand(sub: Option<&str>, rest: &[Word]) -> Classification {
         || (s == "submodule" && words.contains(&"foreach"))
         || (s == "bisect" && words.first() == Some(&"run"))
     {
-        return unknown(format!("git {shown} runs other programs"));
+        return unknown(format!("{shown} runs other programs"));
     }
     let first = words.first().copied();
     match sub {
@@ -2671,11 +2671,8 @@ fn classify_command(command: &Command, state: &mut State<'_>) -> Classification 
                 };
             }
             if matches!(action, Some("delete" | "merge" | "close")) || group == Some("release") {
-                return danger(format!(
-                    "gh {} {} changes shared GitHub state",
-                    group.unwrap_or("undefined"),
-                    action.unwrap_or("undefined")
-                ));
+                let command: Vec<&str> = ["gh"].into_iter().chain(group).chain(action).collect();
+                return danger(format!("{} changes shared GitHub state", command.join(" ")));
             }
             return worst(
                 result,

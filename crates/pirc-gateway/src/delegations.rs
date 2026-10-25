@@ -216,7 +216,7 @@ fn js_string(value: &Value) -> String {
             })
             .collect::<Vec<_>>()
             .join(","),
-        Value::Object(_) => "[object Object]".into(),
+        Value::Object(_) => value.to_string(),
     }
 }
 
@@ -2212,6 +2212,6 @@ mod tests {
         );
         assert_eq!(js_string(&json!(["high"])), "high");
         assert_eq!(js_string(&json!(2)), "2");
-        assert_eq!(js_string(&json!({})), "[object Object]");
+        assert_eq!(js_string(&json!({})), "{}");
     }
 }

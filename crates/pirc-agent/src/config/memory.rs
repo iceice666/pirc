@@ -49,7 +49,7 @@ fn workspace_fields(c: &mut Checker, value: Option<&Value>) {
     }
 }
 
-/// `memorySchema.safeParse(raw)`: its issues, in zod's order.
+/// The problems in `features.observationalMemory`, in schema order.
 fn memory_issues(raw: Option<&Value>) -> Vec<Issue> {
     let mut checker = Checker::default();
     let Some(map) = checker.object(raw) else {
@@ -288,7 +288,6 @@ mod tests {
         }))
         .unwrap();
         assert!(!text.contains("private-"));
-        // Recorded from the TS agent (zod 3.25.76).
         assert_eq!(
             text,
             "Observational memory configuration: invalid fields use defaults; valid settings, including explicit disable flags, remain in effect. features.observationalMemory.enabled: expected boolean; features.observationalMemory.compactAfterTokensMode: expected 'calibrated' | 'ratio'; features.observationalMemory.compactAfterTokensRatio: must be less than 1; features.observationalMemory.agentMaxTurns: expected integer; features.observationalMemory.model.thinking: expected a supported option; features.observationalMemory.workspace.enabled: expected boolean; features.observationalMemory.workspace.shutdownTimeoutMs: must be greater than 0 Fix features.observationalMemory in the node config.json and restart the agent. PIRC_MEMORY_PASSIVE still overrides passive."

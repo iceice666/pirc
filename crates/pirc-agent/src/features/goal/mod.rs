@@ -862,13 +862,7 @@ impl UpdateGoal {
             .get("action")
             .and_then(Value::as_str)
             .and_then(GoalAction::parse)
-            .ok_or_else(|| {
-                format!(
-                    "Unknown action {}",
-                    args.get("action")
-                        .map_or_else(|| "undefined".to_owned(), js::string_of)
-                )
-            })?;
+            .ok_or_else(|| format!("Unknown action {}", js::shown(args.get("action"))))?;
         let Some(goal) = state.goal() else {
             return Err("There is no goal.".to_owned());
         };

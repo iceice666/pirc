@@ -46,11 +46,6 @@ fn unreachable(code: &str) -> bool {
     )
 }
 
-/// A field as a template literal shows it (`undefined` when absent).
-fn shown(value: Option<&Value>) -> String {
-    value.map_or_else(|| "undefined".to_owned(), js::string_of)
-}
-
 /// `text.replace(/\s+/g, ' ')` with JavaScript's `\s`.
 fn squash(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
@@ -85,7 +80,7 @@ pub fn format_schedules(schedules: &[Value], timezone: &str) -> Result<String, S
     for item in schedules {
         let optional = |key: &str, label: &str| {
             if js::truthy(item.get(key)) {
-                format!("; {label}{}", shown(item.get(key)))
+                format!("; {label}{}", js::shown(item.get(key)))
             } else {
                 String::new()
             }
@@ -93,11 +88,11 @@ pub fn format_schedules(schedules: &[Value], timezone: &str) -> Result<String, S
         let mut block = vec![
             format!(
                 "- {} “{}” [{}] in {}: {}{}{}{}{}",
-                shown(item.get("id")),
-                shown(item.get("title")),
-                shown(item.get("status")),
-                shown(item.get("workspace")),
-                shown(item.get("when")),
+                js::shown(item.get("id")),
+                js::shown(item.get("title")),
+                js::shown(item.get("status")),
+                js::shown(item.get("workspace")),
+                js::shown(item.get("when")),
                 optional("nextRun", "next "),
                 optional("model", "model "),
                 optional("thinking", "thinking "),
@@ -114,17 +109,17 @@ pub fn format_schedules(schedules: &[Value], timezone: &str) -> Result<String, S
             let chars = if js::truthy(run.get("resultChars")) {
                 format!(
                     " [{} characters; read it with action result id={}]",
-                    shown(run.get("resultChars")),
-                    shown(run.get("id"))
+                    js::shown(run.get("resultChars")),
+                    js::shown(run.get("id"))
                 )
             } else {
                 String::new()
             };
             block.push(format!(
                 "  last run {} ({}): {}{result}{chars}",
-                shown(run.get("id")),
-                shown(run.get("due")),
-                shown(run.get("status")),
+                js::shown(run.get("id")),
+                js::shown(run.get("due")),
+                js::shown(run.get("status")),
             ));
         }
         lines.push(block.join("\n"));
@@ -137,40 +132,40 @@ pub fn format_schedules(schedules: &[Value], timezone: &str) -> Result<String, S
 pub fn format_run_result(run: &Value) -> String {
     let next = run.get("nextOffset");
     let end = match next {
-        None | Some(Value::Null) => shown(run.get("resultChars")),
+        None | Some(Value::Null) => js::shown(run.get("resultChars")),
         Some(next) => js::string_of(next),
     };
     let session = if js::truthy(run.get("session")) {
-        format!(" (session “{}”)", shown(run.get("session")))
+        format!(" (session “{}”)", js::shown(run.get("session")))
     } else {
         String::new()
     };
     let head = format!(
         "Run {} of {} [{}]{session}",
-        shown(run.get("id")),
-        shown(run.get("schedule")),
-        shown(run.get("status"))
+        js::shown(run.get("id")),
+        js::shown(run.get("schedule")),
+        js::shown(run.get("status"))
     );
     if !js::truthy(run.get("resultChars")) {
         return format!("{head}: no result.");
     }
-    let offset = shown(run.get("resultOffset"));
+    let offset = js::shown(run.get("resultOffset"));
     let whole = run.get("resultOffset").and_then(Value::as_f64) == Some(0.0) && next.is_none();
     let footer = if whole {
         String::new()
     } else if next.is_none() {
         format!(
             "\n[Result characters {offset}–{end} of {}; end of result]",
-            shown(run.get("resultChars"))
+            js::shown(run.get("resultChars"))
         )
     } else {
         format!(
             "\n[Result characters {offset}–{end} of {}; continue with action result id={} offset={end}]",
-            shown(run.get("resultChars")),
-            shown(run.get("id"))
+            js::shown(run.get("resultChars")),
+            js::shown(run.get("id"))
         )
     };
-    format!("{head}:\n{}{footer}", shown(run.get("result")))
+    format!("{head}:\n{}{footer}", js::shown(run.get("result")))
 }
 
 /// `BRIEF`.
@@ -440,7 +435,7 @@ impl ScheduleTool {
                     .and_then(Value::as_array)
                     .cloned()
                     .ok_or_else(|| "The schedule list has no schedules".to_owned())?;
-                let timezone = shown(result.get("timezone"));
+                let timezone = js::shown(result.get("timezone"));
                 let brief = brief_schema();
                 let mut data = Map::new();
                 data.insert("action".to_owned(), json!(action));
@@ -478,7 +473,7 @@ impl ScheduleTool {
                     Ok(result) => result,
                     Err(error) => return failure(error),
                 };
-                let title = shown(result.get("title"));
+                let title = js::shown(result.get("title"));
                 let text = if action == "create" {
                     format!(
                         "Asked the user to approve the schedule “{title}”. It does not exist until they do; check with list afterwards."
@@ -520,7 +515,7 @@ impl ScheduleTool {
                 Ok(typed(
                     format!(
                         "Asked the user to approve deleting “{}”. It stays, and keeps running, until they do; check with list afterwards.",
-                        shown(result.get("title"))
+                        js::shown(result.get("title"))
                     ),
                     Value::Object(data),
                     Some(Value::Object(details)),
@@ -551,7 +546,7 @@ impl ScheduleTool {
                 Ok(typed(
                     format!(
                         "{done} “{}”{}.",
-                        shown(result.get("title")),
+                        js::shown(result.get("title")),
                         next_run
                             .map(|next| format!("; next run {}", js::string_of(next)))
                             .unwrap_or_default()
@@ -650,8 +645,10 @@ async fn cron_command(agent: &Rc<Agent>, args: &str) -> Result<(), String> {
             let Some(schedules) = result.get("schedules").and_then(Value::as_array).cloned() else {
                 return Ok(Err("The schedule list has no schedules".to_owned()));
             };
-            return Ok(format_schedules(&schedules, &shown(result.get("timezone")))
-                .map(|text| ui.notify(&text, NotifyLevel::Info)));
+            return Ok(
+                format_schedules(&schedules, &js::shown(result.get("timezone")))
+                    .map(|text| ui.notify(&text, NotifyLevel::Info)),
+            );
         }
         if !matches!(verb, "pause" | "resume" | "delete" | "run") {
             ui.notify(HELP, NotifyLevel::Info);
@@ -670,18 +667,18 @@ async fn cron_command(agent: &Rc<Agent>, args: &str) -> Result<(), String> {
         let message = if verb == "run" {
             format!(
                 "Started run {} of {id} ({}).",
-                shown(result.get("runId")),
-                shown(result.get("status"))
+                js::shown(result.get("runId")),
+                js::shown(result.get("status"))
             )
         } else if verb == "delete" {
             // The gateway cannot tell this command from the model (L10).
             format!(
                 "Confirm deleting “{}” in this chat.",
-                shown(result.get("title"))
+                js::shown(result.get("title"))
             )
         } else {
             let done = if verb == "pause" { "Paused" } else { "Resumed" };
-            format!("{done} “{}”.", shown(result.get("title")))
+            format!("{done} “{}”.", js::shown(result.get("title")))
         };
         ui.notify(&message, NotifyLevel::Info);
         Ok(Ok(()))

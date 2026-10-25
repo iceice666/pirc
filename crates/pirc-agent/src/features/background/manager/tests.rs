@@ -311,9 +311,8 @@ async fn reports_output_lines_that_match_the_monitor_pattern() {
 
 #[test]
 fn compiles_monitors_as_javascript_regexes() {
-    assert_eq!(compile_monitor("a/b").unwrap().1, "a\\/b");
-    assert_eq!(compile_monitor("[/]").unwrap().1, "[/]");
-    assert_eq!(compile_monitor("a\nb").unwrap().1, "a\\nb");
+    assert_eq!(compile_monitor("a/b").unwrap().1, "a/b");
+    assert_eq!(compile_monitor("(?<=a)b").unwrap().1, "(?<=a)b");
     assert_eq!(
         compile_monitor("").unwrap_err(),
         "notify_on must be a regular expression of 1–500 characters"
@@ -321,7 +320,7 @@ fn compiles_monitors_as_javascript_regexes() {
     assert!(compile_monitor(&"a".repeat(501)).is_err());
     assert_eq!(
         compile_monitor("(").unwrap_err(),
-        "Invalid notify_on pattern: Invalid regular expression: missing )"
+        "Invalid notify_on pattern: Invalid regular expression: Unbalanced parenthesis"
     );
 }
 

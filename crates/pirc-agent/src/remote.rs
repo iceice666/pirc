@@ -63,31 +63,25 @@ pub fn parse_models(value: &Value) -> Result<Models, String> {
     for (name, provider) in &models.providers {
         let at = |field: &str| format!("providers.{name}.{field}");
         if !url_like(&provider.base_url) {
-            return Err(format!("{}: Invalid url", at("baseUrl")));
+            return Err(format!("{}: Expected a URL", at("baseUrl")));
         }
         if provider.models.is_empty() {
-            return Err(format!(
-                "{}: Array must contain at least 1 element(s)",
-                at("models")
-            ));
+            return Err(format!("{}: Expected at least one entry", at("models")));
         }
         for (index, model) in provider.models.iter().enumerate() {
             let at = |field: &str| format!("providers.{name}.models.{index}.{field}");
             if model.base_url.as_deref().is_some_and(|url| !url_like(url)) {
-                return Err(format!("{}: Invalid url", at("baseUrl")));
+                return Err(format!("{}: Expected a URL", at("baseUrl")));
             }
             if model.id.is_empty() {
-                return Err(format!(
-                    "{}: String must contain at least 1 character(s)",
-                    at("id")
-                ));
+                return Err(format!("{}: Expected a non-empty string", at("id")));
             }
             for (field, size) in [
                 ("contextWindow", model.context_window),
                 ("maxTokens", model.max_tokens),
             ] {
                 if size == 0 {
-                    return Err(format!("{}: Number must be greater than 0", at(field)));
+                    return Err(format!("{}: Expected a positive number", at(field)));
                 }
             }
             if let Some(input) = model
@@ -96,7 +90,7 @@ pub fn parse_models(value: &Value) -> Result<Models, String> {
                 .position(|input| input != "text" && input != "image")
             {
                 return Err(format!(
-                    "{}.{input}: Invalid enum value. Expected 'text' | 'image'",
+                    "{}.{input}: Expected 'text' or 'image'",
                     at("input")
                 ));
             }
@@ -108,9 +102,7 @@ pub fn parse_models(value: &Value) -> Result<Models, String> {
             ("token", &inference.token),
         ] {
             if value.is_empty() {
-                return Err(format!(
-                    "inference.{field}: String must contain at least 1 character(s)"
-                ));
+                return Err(format!("inference.{field}: Expected a non-empty string"));
             }
         }
     }

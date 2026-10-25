@@ -292,7 +292,7 @@ fn pathspecs_are_literal_and_contained() {
 }
 
 #[test]
-fn lists_directories_in_locale_order() {
+fn lists_directories_in_name_order() {
     let f = fixture();
     for dir in ["src", ".git", ".config", "Zeta", "alpha"] {
         std::fs::create_dir(f.ws.join(dir)).unwrap();
@@ -327,8 +327,8 @@ fn lists_directories_in_locale_order() {
         ("b10.txt", "file"),
         ("b2.txt", "file"),
         ("dangling", "symlink"),
-        ("émile.txt", "file"),
         ("leak", "symlink"),
+        ("émile.txt", "file"),
     ];
     assert_eq!(
         names,

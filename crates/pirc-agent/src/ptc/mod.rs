@@ -958,7 +958,7 @@ pub fn capability_index_prompt(host: &dyn AgentHost) -> Option<String> {
     others.sort_by(|a, b| {
         js::len16(&a.block)
             .cmp(&js::len16(&b.block))
-            .then_with(|| js::compare16(&a.name, &b.name))
+            .then_with(|| a.name.cmp(&b.name))
     });
     let fitted = fit_signatures(&core, &others, SIGNATURE_BUDGET_CHARS);
     if !fitted.core_listed.is_empty() {

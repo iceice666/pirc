@@ -1,5 +1,6 @@
 ---
 source: crates/pirc-conformance/tests/node_panels.rs
+assertion_line: 422
 expression: p.into_value()
 ---
 [
@@ -57,13 +58,13 @@ expression: p.into_value()
         },
         {
           "kind": "file",
-          "name": "_under.txt",
-          "size": 10
+          "name": ".hidden",
+          "size": 8
         },
         {
           "kind": "file",
-          "name": ".hidden",
-          "size": 8
+          "name": "_under.txt",
+          "size": 10
         },
         {
           "kind": "file",
@@ -98,16 +99,6 @@ expression: p.into_value()
         {
           "kind": "symlink",
           "name": "dangling"
-        },
-        {
-          "kind": "file",
-          "name": "émile.txt",
-          "size": 10
-        },
-        {
-          "kind": "file",
-          "name": "Émile2.txt",
-          "size": 11
         },
         {
           "kind": "file",
@@ -169,6 +160,16 @@ expression: p.into_value()
         {
           "kind": "file",
           "name": "utf8.txt",
+          "size": 11
+        },
+        {
+          "kind": "file",
+          "name": "émile.txt",
+          "size": 10
+        },
+        {
+          "kind": "file",
+          "name": "Émile2.txt",
           "size": 11
         }
       ],
@@ -211,13 +212,13 @@ expression: p.into_value()
         },
         {
           "kind": "file",
-          "name": "_under.txt",
-          "size": 10
+          "name": ".hidden",
+          "size": 8
         },
         {
           "kind": "file",
-          "name": ".hidden",
-          "size": 8
+          "name": "_under.txt",
+          "size": 10
         },
         {
           "kind": "file",
@@ -252,16 +253,6 @@ expression: p.into_value()
         {
           "kind": "symlink",
           "name": "dangling"
-        },
-        {
-          "kind": "file",
-          "name": "émile.txt",
-          "size": 10
-        },
-        {
-          "kind": "file",
-          "name": "Émile2.txt",
-          "size": 11
         },
         {
           "kind": "file",
@@ -323,6 +314,16 @@ expression: p.into_value()
         {
           "kind": "file",
           "name": "utf8.txt",
+          "size": 11
+        },
+        {
+          "kind": "file",
+          "name": "émile.txt",
+          "size": 10
+        },
+        {
+          "kind": "file",
+          "name": "Émile2.txt",
           "size": 11
         }
       ],
@@ -518,13 +519,13 @@ expression: p.into_value()
         },
         {
           "kind": "file",
-          "name": "_under.txt",
-          "size": 10
+          "name": ".hidden",
+          "size": 8
         },
         {
           "kind": "file",
-          "name": ".hidden",
-          "size": 8
+          "name": "_under.txt",
+          "size": 10
         },
         {
           "kind": "file",
@@ -559,16 +560,6 @@ expression: p.into_value()
         {
           "kind": "symlink",
           "name": "dangling"
-        },
-        {
-          "kind": "file",
-          "name": "émile.txt",
-          "size": 10
-        },
-        {
-          "kind": "file",
-          "name": "Émile2.txt",
-          "size": 11
         },
         {
           "kind": "file",
@@ -630,6 +621,16 @@ expression: p.into_value()
         {
           "kind": "file",
           "name": "utf8.txt",
+          "size": 11
+        },
+        {
+          "kind": "file",
+          "name": "émile.txt",
+          "size": 10
+        },
+        {
+          "kind": "file",
+          "name": "Émile2.txt",
           "size": 11
         }
       ],

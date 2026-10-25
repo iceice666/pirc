@@ -107,11 +107,6 @@ fn string_or_empty(value: Option<&Value>) -> String {
     }
 }
 
-/// A field as a template literal shows it.
-fn shown(value: Option<&Value>) -> String {
-    value.map_or_else(|| "undefined".to_owned(), js::string_of)
-}
-
 /// `a + b` in JavaScript, for an offset from the node and a length.
 fn plus(value: Option<&Value>, length: usize) -> String {
     match value {
@@ -174,8 +169,8 @@ fn tab_line(tab: &Value) -> String {
         } else {
             ' '
         },
-        shown(tab.get("index")),
-        shown(tab.get("url"))
+        js::shown(tab.get("index")),
+        js::shown(tab.get("url"))
     )
 }
 
@@ -189,9 +184,9 @@ fn range_note(label: &str, result: &Value) -> String {
     if js::truthy(result.get("offset")) || js::truthy(result.get("truncated")) {
         format!(
             "{label} (characters {}–{} of {}; untrusted):",
-            shown(result.get("offset")),
+            js::shown(result.get("offset")),
             plus(result.get("offset"), length),
-            shown(result.get("totalChars"))
+            js::shown(result.get("totalChars"))
         )
     } else {
         format!("{label} (untrusted):")
@@ -636,11 +631,11 @@ impl BrowserTool {
             Kind::Fetch => {
                 let page = self.call("fetch", args, &ctx).await?;
                 let mut header = vec![
-                    format!("URL: {}", shown(page.get("url"))),
-                    format!("Title: {}", shown(page.get("title"))),
+                    format!("URL: {}", js::shown(page.get("url"))),
+                    format!("Title: {}", js::shown(page.get("title"))),
                 ];
                 if js::truthy(page.get("status")) {
-                    header.push(format!("Status: {}", shown(page.get("status"))));
+                    header.push(format!("Status: {}", js::shown(page.get("status"))));
                 }
                 header.push(String::new());
                 header.push(range_note("Content", &page));
@@ -692,7 +687,7 @@ impl BrowserTool {
                     format!(
                         "{}\n{}{footer}",
                         header.join("\n"),
-                        shown(page.get("content"))
+                        js::shown(page.get("content"))
                     ),
                     subset(&page, &["url", "title", "status", "totalChars"]),
                     data,
@@ -711,8 +706,8 @@ impl BrowserTool {
                         UserBlock::Text {
                             text: format!(
                                 "URL: {}\nTitle: {}",
-                                shown(shot.get("url")),
-                                shown(shot.get("title"))
+                                js::shown(shot.get("url")),
+                                js::shown(shot.get("title"))
                             ),
                             text_signature: None,
                         },
@@ -762,7 +757,7 @@ impl BrowserTool {
                     return Ok(result(
                         format!(
                             "Recording to {}. Call browser_record with action \"stop\" to save it.",
-                            shown(answer.get("path"))
+                            js::shown(answer.get("path"))
                         ),
                         Value::Object(details),
                         data,
@@ -797,7 +792,7 @@ impl BrowserTool {
                 Ok(result(
                     format!(
                         "Saved recording {} ({} s, {} KiB). The user can play it from this tool call.",
-                        shown(answer.get("path")),
+                        js::shown(answer.get("path")),
                         js::float_text(round(duration / 1000.0)),
                         js::float_text(round(bytes / 1024.0))
                     ),

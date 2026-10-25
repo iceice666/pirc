@@ -69,42 +69,33 @@ fn valid_url(value: &str) -> bool {
 fn check_provider(name: &str, source: &ProviderSource) -> Result<(), String> {
     let at = |field: &str| format!("providers.{name}.{field}");
     if !valid_url(&source.base_url) {
-        return Err(format!("{}: Invalid url", at("baseUrl")));
+        return Err(format!("{}: Expected a URL", at("baseUrl")));
     }
     if source.models.is_empty() {
-        return Err(format!(
-            "{}: Array must contain at least 1 element(s)",
-            at("models")
-        ));
+        return Err(format!("{}: Expected at least one entry", at("models")));
     }
     if source.api_key_command.as_ref().is_some_and(Vec::is_empty) {
         return Err(format!(
-            "{}: Array must contain at least 1 element(s)",
+            "{}: Expected at least one entry",
             at("apiKeyCommand")
         ));
     }
     for (index, model) in source.models.iter().enumerate() {
         let at = |field: &str| format!("providers.{name}.models.{index}.{field}");
         if model.base_url.as_deref().is_some_and(|url| !valid_url(url)) {
-            return Err(format!("{}: Invalid url", at("baseUrl")));
+            return Err(format!("{}: Expected a URL", at("baseUrl")));
         }
         if model.id.is_empty() {
-            return Err(format!(
-                "{}: String must contain at least 1 character(s)",
-                at("id")
-            ));
+            return Err(format!("{}: Expected a non-empty string", at("id")));
         }
         if model.context_window == 0 {
             return Err(format!(
-                "{}: Number must be greater than 0",
+                "{}: Expected a positive number",
                 at("contextWindow")
             ));
         }
         if model.max_tokens == 0 {
-            return Err(format!(
-                "{}: Number must be greater than 0",
-                at("maxTokens")
-            ));
+            return Err(format!("{}: Expected a positive number", at("maxTokens")));
         }
         if let Some(input) = model
             .input
@@ -112,7 +103,7 @@ fn check_provider(name: &str, source: &ProviderSource) -> Result<(), String> {
             .position(|input| input != "text" && input != "image")
         {
             return Err(format!(
-                "{}.{input}: Invalid enum value. Expected 'text' | 'image'",
+                "{}.{input}: Expected 'text' or 'image'",
                 at("input")
             ));
         }
@@ -120,21 +111,9 @@ fn check_provider(name: &str, source: &ProviderSource) -> Result<(), String> {
     Ok(())
 }
 
-/// Node's error text for a failed read, which names only the path.
+/// A failed read as text, naming the path.
 fn read_error(error: &std::io::Error, path: &Path) -> String {
-    let path = path.display();
-    match error.kind() {
-        std::io::ErrorKind::NotFound => {
-            format!("ENOENT: no such file or directory, open '{path}'")
-        }
-        std::io::ErrorKind::PermissionDenied => {
-            format!("EACCES: permission denied, open '{path}'")
-        }
-        std::io::ErrorKind::IsADirectory => {
-            "EISDIR: illegal operation on a directory, read".to_owned()
-        }
-        _ => format!("{error}, open '{path}'"),
-    }
+    format!("open '{}': {error}", path.display())
 }
 
 /// The `apiKeyCommand` process: the gateway's environment without pirc's
@@ -535,7 +514,7 @@ mod tests {
             (json!({ "providers": {}, "other": 1 }), "unknown field"),
             (
                 json!({ "providers": { "p": provider(json!({ "baseUrl": "nope" })) } }),
-                "providers.p.baseUrl: Invalid url",
+                "providers.p.baseUrl: Expected a URL",
             ),
             (
                 json!({ "providers": { "p": provider(json!({ "models": [] })) } }),
@@ -553,7 +532,7 @@ mod tests {
             ),
             (
                 json!({ "providers": { "p": provider(json!({ "apiKeyFile": "~/missing" })) } }),
-                "ENOENT: no such file or directory",
+                "No such file or directory",
             ),
         ];
         for (index, (value, expected)) in cases.into_iter().enumerate() {

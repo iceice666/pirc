@@ -56,7 +56,7 @@ pub fn to_js_string(value: &Value) -> String {
             })
             .collect::<Vec<_>>()
             .join(","),
-        Value::Object(_) => "[object Object]".to_owned(),
+        Value::Object(_) => value.to_string(),
     }
 }
 
@@ -110,6 +110,6 @@ mod tests {
         assert_eq!(to_js_string(&json!(5)), "5");
         assert_eq!(to_js_string(&json!(5.5)), "5.5");
         assert_eq!(to_js_string(&json!([1, null, "a"])), "1,,a");
-        assert_eq!(to_js_string(&json!({ "a": 1 })), "[object Object]");
+        assert_eq!(to_js_string(&json!({ "a": 1 })), "{\"a\":1}");
     }
 }

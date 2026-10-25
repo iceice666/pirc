@@ -415,7 +415,7 @@ pub fn contract(capability: &Capability) -> Value {
 /// `version()`: content hash of the available contracts.
 pub fn version(available: &Available) -> String {
     let mut names: Vec<&String> = available.keys().collect();
-    names.sort_by(|a, b| js::compare16(a, b));
+    names.sort();
     let mut hash = Sha256::new();
     for name in names {
         hash.update(js::stringify(&contract(&available[name])).as_bytes());
@@ -441,11 +441,11 @@ pub fn index(available: &Available) -> Vec<(String, Vec<String>)> {
     let mut out: Vec<(String, Vec<String>)> = groups
         .into_iter()
         .map(|(category, mut names)| {
-            names.sort_by(|a, b| js::compare16(a, b));
+            names.sort();
             (category.to_owned(), names)
         })
         .collect();
-    out.sort_by(|a, b| js::locale_compare(&a.0, &b.0));
+    out.sort_by(|a, b| js::name_order(&a.0, &b.0));
     out
 }
 
@@ -475,8 +475,7 @@ impl CapabilityRegistry {
     pub fn summaries(&self, tools: &[Rc<dyn Tool>]) -> Value {
         let mut list: Vec<Capability> = available(tools).into_values().collect();
         list.sort_by(|a, b| {
-            js::locale_compare(a.category, b.category)
-                .then_with(|| js::locale_compare(&a.name, &b.name))
+            js::name_order(a.category, b.category).then_with(|| js::name_order(&a.name, &b.name))
         });
         Value::Array(
             list.iter()
@@ -687,7 +686,7 @@ impl CapabilityRegistry {
                 .values()
                 .filter(|capability| capability.category == category)
                 .collect();
-            all.sort_by(|a, b| js::locale_compare(&a.name, &b.name));
+            all.sort_by(|a, b| js::name_order(&a.name, &b.name));
             if all.is_empty() {
                 return Err(PtcError::new(
                     "CapabilityUnavailable",

@@ -309,10 +309,10 @@ impl UnsandboxedBashTool {
         } else if js::truthy(result.get("aborted")) {
             "[aborted]".to_owned()
         } else {
-            format!(
-                "[exit {}]",
-                exit_code.map_or_else(|| "undefined".to_owned(), js::string_of)
-            )
+            match exit_code {
+                Some(code) => format!("[exit {}]", js::string_of(code)),
+                None => "[exit code unknown]".to_owned(),
+            }
         };
         let newline = if output.ends_with('\n') || output.is_empty() {
             ""

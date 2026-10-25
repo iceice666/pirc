@@ -146,34 +146,13 @@ fn local_presets() -> [BackendPreset; 2] {
     ]
 }
 
-/// Primary weight of an ASCII character in ICU's root collation: white
-/// space, then punctuation and symbols in CLDR order, then digits and
-/// letters (case-insensitive).
-fn collation_weight(c: char) -> (u32, u32) {
-    const SYMBOLS: &str = "\t\n\u{b}\u{c}\r _-,;:!?.'\"()[]{}@*/\\&#%`^+<=>|~$";
-    if let Some(index) = SYMBOLS.find(c) {
-        return (0, index as u32);
-    }
-    if c.is_ascii_digit() {
-        return (1, c as u32);
-    }
-    let lower = c.to_lowercase().next().unwrap_or(c);
-    (2, lower as u32)
-}
-
-/// `a.localeCompare(b)` for the identifiers and names the settings sort:
-/// ICU root order for ASCII (punctuation before digits before letters,
-/// case only breaking ties, lowercase first), code points otherwise.
-pub fn locale_compare(a: &str, b: &str) -> Ordering {
-    let primary = |text: &str| text.chars().map(collation_weight).collect::<Vec<_>>();
-    primary(a).cmp(&primary(b)).then_with(|| {
-        let tertiary = |text: &str| {
-            text.chars()
-                .map(|c| u8::from(c.is_uppercase()))
-                .collect::<Vec<_>>()
-        };
-        tertiary(a).cmp(&tertiary(b)).then_with(|| a.cmp(b))
-    })
+/// The order identifiers and names are listed in: case-insensitively by
+/// code point, a lowercase name before its uppercase twin.
+pub fn name_order(a: &str, b: &str) -> Ordering {
+    a.chars()
+        .flat_map(char::to_lowercase)
+        .cmp(b.chars().flat_map(char::to_lowercase))
+        .then_with(|| b.cmp(a))
 }
 
 fn https_template_free(url: &str) -> bool {
@@ -253,7 +232,7 @@ pub fn catalog_presets<'a>(providers: impl Iterator<Item = &'a str>) -> Vec<Back
     presets.sort_by(|a, b| {
         rank(&a.id)
             .cmp(&rank(&b.id))
-            .then_with(|| locale_compare(&a.name, &b.name))
+            .then_with(|| name_order(&a.name, &b.name))
     });
     presets.extend(local_presets());
     presets
@@ -510,7 +489,7 @@ pub async fn discover_models(
             },
         })
         .collect();
-    models.sort_by(|a, b| locale_compare(&a.model.id, &b.model.id));
+    models.sort_by(|a, b| name_order(&a.model.id, &b.model.id));
     Ok(models)
 }
 
@@ -626,15 +605,15 @@ mod tests {
     }
 
     #[test]
-    fn locale_order() {
+    fn name_ordering() {
         let mut ids = vec![
             "gpt-4o", "GPT-4", "gpt_4", "gpt4", "gpt-4", "o1", "gpt-4.1", "a:b", "a0",
         ];
-        ids.sort_by(|a, b| locale_compare(a, b));
+        ids.sort_by(|a, b| name_order(a, b));
         assert_eq!(
             ids,
             [
-                "a:b", "a0", "gpt_4", "gpt-4", "GPT-4", "gpt-4.1", "gpt-4o", "gpt4", "o1"
+                "a0", "a:b", "gpt-4", "GPT-4", "gpt-4.1", "gpt-4o", "gpt4", "gpt_4", "o1"
             ]
         );
     }

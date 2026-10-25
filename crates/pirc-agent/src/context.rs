@@ -242,7 +242,7 @@ pub fn read_context(dir: &Path) -> Result<Option<Value>, String> {
         Err(error) => return Err(js::node_error(&error, "open", Some(&file))),
     };
     let value: Value =
-        serde_json::from_str(&text).map_err(|error| format!("JSON Parse error: {error}"))?;
+        serde_json::from_str(&text).map_err(|error| format!("Invalid JSON: {error}"))?;
     let valid = value.get("version").and_then(Value::as_f64) == Some(1.0)
         && value.get("sections").is_some_and(Value::is_array)
         && value.get("tools").is_some_and(Value::is_array)

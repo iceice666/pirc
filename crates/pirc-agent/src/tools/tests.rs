@@ -1,5 +1,4 @@
-//! The core tools (`agent-core.test.ts` tool parts); expected texts were
-//! recorded from the TS tools.
+//! The core tools.
 
 use std::fs;
 use std::os::unix::fs::symlink;
@@ -10,6 +9,11 @@ use super::bash::{BashTool, ShellOptions, run_shell};
 use super::testing::{self, args, text_of};
 use super::*;
 use crate::signal::{AbortController, AbortSignal};
+
+/// The text of an OS error, as the tools quote it.
+fn io_text(code: i32) -> String {
+    std::io::Error::from_raw_os_error(code).to_string()
+}
 
 struct Fixture {
     _dir: tempfile::TempDir,
@@ -143,7 +147,7 @@ async fn reports_read_errors_like_bun() {
         f.call("read", json!({ "path": "missing.txt" }))
             .await
             .unwrap_err(),
-        format!("ENOENT: no such file or directory, stat '{ws}/missing.txt'")
+        format!("stat '{ws}/missing.txt': {}", io_text(2))
     );
     assert_eq!(
         f.call("read", json!({ "path": "src" })).await.unwrap_err(),
@@ -198,12 +202,12 @@ fn lower_zeta(f: &Fixture) -> &'static str {
 }
 
 #[tokio::test]
-async fn lists_directories_in_locale_order() {
+async fn lists_directories_in_name_order() {
     let f = Fixture::new();
     assert_eq!(
         f.text("ls", json!({})).await,
         format!(
-            "_u/\n.hidden\na.txt\nB/\nbad.txt\nbin.dat\nhello.txt\nlink\nnode_modules/\nsrc/\n{}Zeta",
+            ".hidden\n_u/\na.txt\nB/\nbad.txt\nbin.dat\nhello.txt\nlink\nnode_modules/\nsrc/\n{}Zeta",
             lower_zeta(&f)
         )
     );
@@ -226,16 +230,13 @@ async fn lists_directories_in_locale_order() {
         f.call("ls", json!({ "path": "missing" }))
             .await
             .unwrap_err(),
-        format!(
-            "ENOENT: no such file or directory, scandir '{}/missing'",
-            f.ws()
-        )
+        format!("scandir '{}/missing': {}", f.ws(), io_text(2))
     );
     assert_eq!(
         f.call("ls", json!({ "path": "hello.txt" }))
             .await
             .unwrap_err(),
-        format!("ENOTDIR: not a directory, scandir '{}/hello.txt'", f.ws())
+        format!("scandir '{}/hello.txt': {}", f.ws(), io_text(20))
     );
 }
 
@@ -314,16 +315,13 @@ async fn greps_with_javascript_regexes() {
     );
     assert_eq!(
         f.call("grep", json!({ "pattern": "(" })).await.unwrap_err(),
-        "Invalid regular expression: missing )"
+        "Invalid regular expression: Unbalanced parenthesis"
     );
     assert_eq!(
         f.call("grep", json!({ "pattern": "x", "path": "missing" }))
             .await
             .unwrap_err(),
-        format!(
-            "ENOENT: no such file or directory, stat '{}/missing'",
-            f.ws()
-        )
+        format!("stat '{}/missing': {}", f.ws(), io_text(2))
     );
 }
 
@@ -385,7 +383,7 @@ async fn edits_files_and_reports_a_diff() {
         )
         .await
         .unwrap_err(),
-        "EISDIR: illegal operation on a directory, read"
+        format!("read: {}", io_text(21))
     );
 }
 
@@ -438,10 +436,7 @@ async fn writes_files_creating_parents_and_taking_the_lease() {
         f.call("write", json!({ "path": "src", "content": "x" }))
             .await
             .unwrap_err(),
-        format!(
-            "EISDIR: illegal operation on a directory, open '{}/src'",
-            f.ws()
-        )
+        format!("open '{}/src': {}", f.ws(), io_text(21))
     );
 }
 
@@ -677,7 +672,7 @@ async fn reports_a_missing_shell_like_bun() {
         tool.execute(args(json!({ "command": "true" })), f.context().ctx)
             .await
             .unwrap_err(),
-        "ENOENT: no such file or directory, posix_spawn '/nonexistent/bash'"
+        format!("posix_spawn '/nonexistent/bash': {}", io_text(2))
     );
 }
 

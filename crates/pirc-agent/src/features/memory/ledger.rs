@@ -173,7 +173,7 @@ pub fn merge_origins<'a>(sets: impl IntoIterator<Item = Option<&'a [String]>>) -
 
 /// `[...new Set(items)].sort()`.
 pub fn sort_unique(mut items: Vec<String>) -> Vec<String> {
-    items.sort_by(|a, b| js::compare16(a, b));
+    items.sort();
     items.dedup();
     items
 }

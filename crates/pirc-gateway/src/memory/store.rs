@@ -613,7 +613,7 @@ impl<'a> Store<'a> {
                     if !target.is(Kind::User) || target.status != EntryStatus::Active {
                         return Err(ApiError::not_found(format!(
                             "No USER entry {}",
-                            input.id.as_deref().unwrap_or("undefined")
+                            input.id.as_deref().unwrap_or("(no id)")
                         )));
                     }
                     Some(target)

@@ -496,11 +496,11 @@ mod tests {
             ("report".into(), report),
         ];
         assert_eq!(
-            crate::compaction::find_cut_point(&entries, 0.0).as_deref(),
+            crate::compaction::find_cut_point(&entries, 0).as_deref(),
             Some("next")
         );
         let open = vec![("first".into(), user()), ("tool".into(), call("toolUse"))];
-        assert!(crate::compaction::find_cut_point(&open, 0.0).is_none());
+        assert!(crate::compaction::find_cut_point(&open, 0).is_none());
     }
 }
 
@@ -586,7 +586,7 @@ mod interleaving_tests {
                 .map(|(i, m)| (format!("e{i}"), m))
                 .collect::<Vec<_>>();
             assert!(!message_boundaries(&entries).unwrap().contains(&2));
-            assert!(crate::compaction::find_cut_point(&entries, 0.0).is_none());
+            assert!(crate::compaction::find_cut_point(&entries, 0).is_none());
             let branch = entries
                 .into_iter()
                 .map(|(id, m)| SessionEntry {

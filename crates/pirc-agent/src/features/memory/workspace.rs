@@ -87,9 +87,7 @@ impl WorkspaceItem {
             timestamp: o.get("timestamp")?.as_str()?.to_owned(),
             session_dir: o.get("sessionDir")?.as_str()?.to_owned(),
             source_memory_ids: o.get("sourceMemoryIds")?.as_array()?.clone(),
-            session_id: o
-                .get("sessionId")
-                .map_or_else(|| "undefined".to_owned(), js::string_of),
+            session_id: o.get("sessionId").map(js::string_of).unwrap_or_default(),
             git: o
                 .get("git")
                 .filter(|git| js::truthy(Some(git)))

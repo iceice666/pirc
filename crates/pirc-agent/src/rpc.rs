@@ -395,39 +395,9 @@ impl Ui for RpcUi {
     }
 }
 
-/// `String(value)` for what JSON can hold (`undefined` when absent).
+/// A command field as text ([`js::MISSING`] when absent).
 pub(crate) fn js_string(value: Option<&Value>) -> String {
-    match value {
-        None => "undefined".to_owned(),
-        Some(Value::Null) => "null".to_owned(),
-        Some(Value::String(text)) => text.clone(),
-        Some(Value::Bool(value)) => value.to_string(),
-        Some(Value::Number(number)) => js_number(number),
-        Some(Value::Array(items)) => items
-            .iter()
-            .map(|item| match item {
-                Value::Null => String::new(),
-                item => js_string(Some(item)),
-            })
-            .collect::<Vec<_>>()
-            .join(","),
-        Some(Value::Object(_)) => "[object Object]".to_owned(),
-    }
-}
-
-fn js_number(number: &serde_json::Number) -> String {
-    if let Some(value) = number.as_i64() {
-        return value.to_string();
-    }
-    if let Some(value) = number.as_u64() {
-        return value.to_string();
-    }
-    let value = number.as_f64().unwrap_or(f64::NAN);
-    if value.fract() == 0.0 && value.abs() < 1e21 {
-        format!("{value:.0}")
-    } else {
-        value.to_string()
-    }
+    crate::tools::js::shown(value)
 }
 
 /// `images(command)`: image blocks the command carries.
@@ -675,10 +645,13 @@ pub(crate) async fn dispatch<A: Commands>(
         Some("get_commands") => Ok(Some(json!({ "commands": agent.command_list() }))),
         Some("get_available_models") => Ok(Some(json!({ "models": agent.available_models() }))),
         Some("set_model") => {
-            agent.set_model(
-                &js_string(command.get("provider")),
-                &js_string(command.get("modelId")),
-            )?;
+            let (Some(provider), Some(model_id)) = (
+                command.get("provider").and_then(Value::as_str),
+                command.get("modelId").and_then(Value::as_str),
+            ) else {
+                return Err("set_model needs provider and modelId".to_owned());
+            };
+            agent.set_model(provider, model_id)?;
             Ok(None)
         }
         Some("set_thinking_level") => {

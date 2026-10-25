@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 
 use indexmap::IndexMap;
-use pirc_agent::messages::js::{number_text, stringify, utf16_len, utf16_prefix};
+use pirc_agent::messages::js::{stringify, utf16_len, utf16_prefix};
 use serde::Serialize;
 use serde_json::{Map, Value};
 
@@ -113,24 +113,9 @@ pub struct RunningOperation {
     pub args: Value,
 }
 
-/// `String(value)` (`undefined` when absent).
+/// An agent-line field as text (`(missing)` when absent).
 pub(crate) fn js_string(value: Option<&Value>) -> String {
-    match value {
-        None => "undefined".to_owned(),
-        Some(Value::Null) => "null".to_owned(),
-        Some(Value::String(text)) => text.clone(),
-        Some(Value::Bool(value)) => value.to_string(),
-        Some(Value::Number(number)) => number_text(number.as_f64().unwrap_or(f64::NAN)),
-        Some(Value::Array(items)) => items
-            .iter()
-            .map(|item| match item {
-                Value::Null => String::new(),
-                item => js_string(Some(item)),
-            })
-            .collect::<Vec<_>>()
-            .join(","),
-        Some(Value::Object(_)) => "[object Object]".to_owned(),
-    }
+    pirc_agent::tools::js::shown(value)
 }
 
 /// `value ?? fallback` as a string in a template literal.
@@ -511,7 +496,7 @@ mod tests {
         widget(&mut state, json!("todo"), json!(["a", 1, null, [1, null]]));
         widget(&mut state, json!(null), json!(["x"]));
         widget(&mut state, json!("long"), json!(vec!["l"; 100]));
-        assert_eq!(state.widgets["todo"], ["a", "1", "null", "1,"]);
+        assert_eq!(state.widgets["todo"], ["a", "1", "null", "[1,null]"]);
         assert_eq!(state.widgets[""], ["x"]);
         assert_eq!(state.widgets["long"].len(), 64);
         widget(&mut state, json!("todo"), json!([]));

@@ -292,9 +292,9 @@ pub fn convert_tools(tools: &[pirc_llm_types::ToolSpec], strict: &Value) -> Vec<
         .collect()
 }
 
-/// A template literal's `${value}` (`undefined` when absent).
+/// A field as text (`(missing)` when absent).
 fn template(value: Option<&Value>) -> String {
-    value.map_or_else(|| "undefined".to_owned(), js::to_js_string)
+    value.map_or_else(|| "(missing)".to_owned(), js::to_js_string)
 }
 
 /// `a || b` on a property value.
@@ -352,8 +352,8 @@ fn append_to_part(part: &mut Value, key: &str, delta: &str) -> Result<(), String
     let Some(object) = part.as_object_mut() else {
         return Err(TYPE_ERROR.to_owned());
     };
-    let text = format!("{}{delta}", template(object.get(key)));
-    object.insert(key.to_owned(), Value::String(text));
+    let existing = object.get(key).map(js::to_js_string).unwrap_or_default();
+    object.insert(key.to_owned(), Value::String(format!("{existing}{delta}")));
     Ok(())
 }
 

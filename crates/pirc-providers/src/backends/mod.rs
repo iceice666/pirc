@@ -23,7 +23,7 @@ use serde_json::{Map, Value, json};
 
 pub use auth::{OAuthRunner, ProviderRunner};
 pub use discovery::{
-    BackendPreset, ConnectionResult, DiscoveredModel, UiModel, catalog_presets, locale_compare,
+    BackendPreset, ConnectionResult, DiscoveredModel, UiModel, catalog_presets, name_order,
     parse_model_list,
 };
 pub use oauth::flows::{BoxFuture, Endpoints, LoginHooks, Prompt};

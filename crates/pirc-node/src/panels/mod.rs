@@ -557,32 +557,9 @@ static DECIMAL: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"^[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?$").expect("decimal regex")
 });
 
-/// `Number(text)`: whitespace trimmed, empty is 0, decimal, `0x`/`0o`/`0b`
-/// integers and `Infinity`; anything else NaN.
+/// A decimal number in text (whitespace trimmed); anything else is NaN.
 pub(crate) fn js_number_of_str(text: &str) -> f64 {
-    let text = pirc_agent::tools::js::trim(text);
-    if text.is_empty() {
-        return 0.0;
-    }
-    for (prefixes, radix) in [(["0x", "0X"], 16), (["0o", "0O"], 8), (["0b", "0B"], 2)] {
-        if let Some(digits) = prefixes.iter().find_map(|prefix| text.strip_prefix(prefix)) {
-            if digits.is_empty() {
-                return f64::NAN;
-            }
-            return digits
-                .chars()
-                .try_fold(0.0, |value: f64, c| {
-                    c.to_digit(radix)
-                        .map(|digit| value * f64::from(radix) + f64::from(digit))
-                })
-                .unwrap_or(f64::NAN);
-        }
-    }
-    match text {
-        "Infinity" | "+Infinity" => return f64::INFINITY,
-        "-Infinity" => return f64::NEG_INFINITY,
-        _ => {}
-    }
+    let text = text.trim();
     if DECIMAL.is_match(text) {
         text.parse().unwrap_or(f64::NAN)
     } else {
@@ -590,16 +567,12 @@ pub(crate) fn js_number_of_str(text: &str) -> f64 {
     }
 }
 
-/// `Number(value)` of a JSON value.
+/// A JSON number, or a decimal number in a string; anything else is NaN.
 pub(crate) fn js_number(value: Option<&Value>) -> f64 {
     match value {
-        None => f64::NAN,
-        Some(Value::Null) => 0.0,
-        Some(Value::Bool(b)) => f64::from(u8::from(*b)),
         Some(Value::Number(n)) => n.as_f64().unwrap_or(f64::NAN),
         Some(Value::String(s)) => js_number_of_str(s),
-        Some(Value::Array(_)) => js_number_of_str(&string_of(value.expect("some"))),
-        Some(Value::Object(_)) => f64::NAN,
+        _ => f64::NAN,
     }
 }
 
@@ -608,31 +581,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn numbers_as_javascript_coerces_them() {
+    fn numbers_are_decimal_only() {
         for (text, expected) in [
-            ("", 0.0),
             ("  12 ", 12.0),
             ("1e2", 100.0),
-            ("0x1A", 26.0),
-            ("0b11", 3.0),
-            ("0o17", 15.0),
             ("1.", 1.0),
             (".5", 0.5),
             ("-3", -3.0),
             ("+4", 4.0),
-            ("Infinity", f64::INFINITY),
         ] {
             assert_eq!(js_number_of_str(text), expected, "{text:?}");
         }
-        for text in ["x", "inf", "NaN", "0x", "1e", "1 2", "--1", "-0x1"] {
+        for text in [
+            "", "x", "inf", "NaN", "0x1A", "0b11", "Infinity", "1e", "1 2", "--1",
+        ] {
             assert!(js_number_of_str(text).is_nan(), "{text:?}");
         }
-        assert_eq!(js_number(Some(&json!(null))), 0.0);
-        assert_eq!(js_number(Some(&json!(true))), 1.0);
-        assert_eq!(js_number(Some(&json!([7]))), 7.0);
-        assert_eq!(js_number(Some(&json!([]))), 0.0);
-        assert!(js_number(Some(&json!([1, 2]))).is_nan());
-        assert!(js_number(Some(&json!({}))).is_nan());
+        assert_eq!(js_number(Some(&json!(7))), 7.0);
+        assert_eq!(js_number(Some(&json!("7"))), 7.0);
+        for value in [json!(null), json!(true), json!([7]), json!({})] {
+            assert!(js_number(Some(&value)).is_nan(), "{value}");
+        }
         assert!(js_number(None).is_nan());
     }
 

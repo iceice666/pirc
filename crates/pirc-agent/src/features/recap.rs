@@ -267,7 +267,6 @@ pub fn recap_scope(evidence: &Value) -> Result<String, String> {
         .map(|(reason, count)| format!("{} ({count})", safe(reason)))
         .collect::<Vec<_>>()
         .join(", ");
-    let shown = |value: Option<&Value>| value.map_or_else(|| "undefined".to_owned(), js::string_of);
     let scanned = evidence
         .get("scannedBytes")
         .and_then(Value::as_f64)
@@ -284,7 +283,7 @@ pub fn recap_scope(evidence: &Value) -> Result<String, String> {
 
 Limitations: bounded sampling, not a complete audit. Only eligible same-workspace session evidence is considered; tool payloads, thinking and excluded sessions are omitted. Current AGENTS.md is the loaded snapshot (may be stale); skills/roles are summaries only. Current context is capped at 20,000 characters and individual sections may be truncated. Redaction is best effort. Recommendations require human review; nothing was changed or saved to memory.",
         safe(string_field(scope, "workspaceId")?),
-        shown(scope.get("days")),
+        js::shown(scope.get("days")),
         iso_field(scope, "since")?,
         iso_field(scope, "until")?,
         sessions.len(),

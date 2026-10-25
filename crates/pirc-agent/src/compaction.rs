@@ -13,15 +13,16 @@ use crate::messages::estimate_tokens;
 use crate::signal::{AbortController, AbortSignal};
 use crate::ui::NotifyLevel;
 
-/// `CompactionSettings`, as the TS agent used them: whatever the node's
-/// config holds, with JavaScript's truthiness and number coercion.
-#[derive(Clone, Copy, Debug, PartialEq)]
+/// `CompactionSettings`: the defaults, overridden by the node's
+/// `features.compaction` config where a value has the right type (anything
+/// else is ignored).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct CompactionSettings {
     pub enabled: bool,
     /// Compact when context exceeds `contextWindow - reserveTokens`.
-    pub reserve_tokens: f64,
+    pub reserve_tokens: u64,
     /// Recent context kept verbatim after the summary.
-    pub keep_recent_tokens: f64,
+    pub keep_recent_tokens: u64,
     /// Warm the provider prompt cache after compaction.
     pub warm_cache: bool,
     pub timeout_ms: u64,
@@ -32,8 +33,8 @@ impl Default for CompactionSettings {
     fn default() -> Self {
         Self {
             enabled: true,
-            reserve_tokens: 16_384.0,
-            keep_recent_tokens: 20_000.0,
+            reserve_tokens: 16_384,
+            keep_recent_tokens: 20_000,
             warm_cache: true,
             timeout_ms: 60_000,
             max_chunks: 16,
@@ -41,85 +42,10 @@ impl Default for CompactionSettings {
     }
 }
 
-/// JavaScript truthiness.
-fn truthy(value: &Value) -> bool {
-    match value {
-        Value::Null => false,
-        Value::Bool(value) => *value,
-        Value::Number(number) => number.as_f64().is_some_and(|n| n != 0.0 && !n.is_nan()),
-        Value::String(text) => !text.is_empty(),
-        Value::Array(_) | Value::Object(_) => true,
-    }
-}
-
-/// JavaScript `ToNumber`, as arithmetic and comparisons apply it.
-pub(crate) fn to_number(value: &Value) -> f64 {
-    match value {
-        Value::Null => 0.0,
-        Value::Bool(value) => f64::from(u8::from(*value)),
-        Value::Number(number) => number.as_f64().unwrap_or(f64::NAN),
-        Value::String(text) => string_to_number(text),
-        // Arrays go through `ToString` first; objects are NaN.
-        Value::Array(_) => string_to_number(&crate::tools::js::string_of(value)),
-        Value::Object(_) => f64::NAN,
-    }
-}
-
-/// JavaScript `StringToNumber`: JS whitespace trimmed, empty is 0,
-/// `Infinity` with an optional sign, `0x`/`0o`/`0b` integers, else a decimal
-/// literal; anything else is NaN.
-fn string_to_number(text: &str) -> f64 {
-    let text = crate::messages::js::trim(text);
-    if text.is_empty() {
-        return 0.0;
-    }
-    let (sign, unsigned) = match text.as_bytes()[0] {
-        b'+' => (1.0, &text[1..]),
-        b'-' => (-1.0, &text[1..]),
-        _ => (1.0, text),
-    };
-    if unsigned == "Infinity" {
-        return sign * f64::INFINITY;
-    }
-    let radix = match unsigned.get(..2) {
-        Some("0x" | "0X") => Some(16),
-        Some("0o" | "0O") => Some(8),
-        Some("0b" | "0B") => Some(2),
-        _ => None,
-    };
-    if let Some(radix) = radix {
-        // No sign before a radix prefix.
-        let digits = &unsigned[2..];
-        if unsigned.len() != text.len() || digits.is_empty() {
-            return f64::NAN;
-        }
-        return digits
-            .chars()
-            .try_fold(0.0f64, |n, c| {
-                c.to_digit(radix)
-                    .map(|d| n * f64::from(radix) + f64::from(d))
-            })
-            .unwrap_or(f64::NAN);
-    }
-    // A decimal literal: digits, at most one dot, an optional exponent.
-    let (mantissa, exponent) = match unsigned.find(['e', 'E']) {
-        Some(at) => (&unsigned[..at], Some(&unsigned[at + 1..])),
-        None => (unsigned, None),
-    };
-    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
-    let mantissa_ok = match mantissa.split_once('.') {
-        Some((whole, fraction)) => {
-            (whole.is_empty() || digits(whole))
-                && (fraction.is_empty() || digits(fraction))
-                && !(whole.is_empty() && fraction.is_empty())
-        }
-        None => digits(mantissa),
-    };
-    let exponent_ok = exponent.is_none_or(|e| digits(e.strip_prefix(['+', '-']).unwrap_or(e)));
-    if !mantissa_ok || !exponent_ok {
-        return f64::NAN;
-    }
-    text.parse().unwrap_or(f64::NAN)
+/// A non-negative integral JSON number.
+fn count(value: Option<&Value>) -> Option<u64> {
+    let number = value?.as_f64()?;
+    (number.fract() == 0.0 && number >= 0.0 && number <= u64::MAX as f64).then_some(number as u64)
 }
 
 impl CompactionSettings {
@@ -129,30 +55,22 @@ impl CompactionSettings {
         let Some(raw) = features.get("compaction").and_then(Value::as_object) else {
             return settings;
         };
-        if let Some(value) = raw.get("enabled") {
-            settings.enabled = truthy(value);
+        if let Some(value) = raw.get("enabled").and_then(Value::as_bool) {
+            settings.enabled = value;
         }
-        if let Some(value) = raw.get("warmCache") {
-            settings.warm_cache = truthy(value);
+        if let Some(value) = raw.get("warmCache").and_then(Value::as_bool) {
+            settings.warm_cache = value;
         }
-        if let Some(value) = raw.get("reserveTokens") {
-            settings.reserve_tokens = to_number(value);
+        if let Some(value) = count(raw.get("reserveTokens")) {
+            settings.reserve_tokens = value;
         }
-        if let Some(value) = raw.get("keepRecentTokens") {
-            settings.keep_recent_tokens = to_number(value);
+        if let Some(value) = count(raw.get("keepRecentTokens")) {
+            settings.keep_recent_tokens = value;
         }
-        if let Some(value) = raw
-            .get("timeoutMs")
-            .and_then(Value::as_u64)
-            .filter(|v| *v > 0)
-        {
+        if let Some(value) = count(raw.get("timeoutMs")).filter(|v| *v > 0) {
             settings.timeout_ms = value;
         }
-        if let Some(value) = raw
-            .get("maxChunks")
-            .and_then(Value::as_u64)
-            .filter(|v| *v > 0)
-        {
+        if let Some(value) = count(raw.get("maxChunks")).filter(|v| *v > 0) {
             settings.max_chunks = value as usize;
         }
         settings
@@ -230,7 +148,7 @@ pub fn context_tokens(entries: &[(String, Message)]) -> u64 {
 }
 
 /// Keep complete tool groups and the latest human or admitted task turn.
-pub fn find_cut_point(entries: &[(String, Message)], keep_recent_tokens: f64) -> Option<String> {
+pub fn find_cut_point(entries: &[(String, Message)], keep_recent_tokens: u64) -> Option<String> {
     let safe = crate::tool_history::message_boundaries(entries).ok()?;
     select_cut_point(entries, keep_recent_tokens, &safe)
 }
@@ -238,7 +156,7 @@ pub fn find_cut_point(entries: &[(String, Message)], keep_recent_tokens: f64) ->
 pub(crate) fn find_cut_point_in_branch(
     entries: &[(String, Message)],
     branch: &[crate::session_store::SessionEntry],
-    keep_recent_tokens: f64,
+    keep_recent_tokens: u64,
 ) -> Result<Option<String>, String> {
     let safe = crate::handoff::candidate_boundaries(branch)?;
     let ids: std::collections::HashSet<_> = safe
@@ -254,7 +172,7 @@ pub(crate) fn find_cut_point_in_branch(
 }
 fn select_cut_point(
     entries: &[(String, Message)],
-    keep_recent_tokens: f64,
+    keep_recent_tokens: u64,
     safe: &std::collections::HashSet<usize>,
 ) -> Option<String> {
     let latest = entries
@@ -274,7 +192,7 @@ fn select_cut_point(
     let mut cut = None;
     for (i, (_, m)) in entries.iter().enumerate().rev() {
         kept += estimate_tokens(m);
-        if kept as f64 >= keep_recent_tokens && candidates.binary_search(&i).is_ok() {
+        if kept >= keep_recent_tokens && candidates.binary_search(&i).is_ok() {
             cut = Some(i);
             break;
         }
@@ -384,54 +302,6 @@ pub fn warm_cache(agent: &Rc<Agent>) {
     });
 }
 
-#[cfg(test)]
-mod tests {
-    use serde_json::json;
-
-    use super::to_number;
-
-    #[test]
-    fn to_number_follows_javascript() {
-        let cases = [
-            (json!(null), 0.0),
-            (json!(true), 1.0),
-            (json!(" 12 "), 12.0),
-            (json!(""), 0.0),
-            (json!("\u{a0}\u{feff}7\n"), 7.0),
-            (json!("1e3"), 1000.0),
-            (json!("-.5"), -0.5),
-            (json!("5."), 5.0),
-            (json!("+Infinity"), f64::INFINITY),
-            (json!("-Infinity"), f64::NEG_INFINITY),
-            (json!("0x1F"), 31.0),
-            (json!("0o17"), 15.0),
-            (json!("0b101"), 5.0),
-            (json!([]), 0.0),
-            (json!(["8"]), 8.0),
-            (json!([null]), 0.0),
-            (json!([[3]]), 3.0),
-        ];
-        for (value, expected) in cases {
-            assert_eq!(to_number(&value), expected, "{value}");
-        }
-        for value in [
-            json!("inf"),
-            json!("infinity"),
-            json!("NaN"),
-            json!("-0x10"),
-            json!("0x"),
-            json!("."),
-            json!("1e"),
-            json!("1_000"),
-            json!([true]),
-            json!([1, 2]),
-            json!({}),
-        ] {
-            assert!(to_number(&value).is_nan(), "{value}");
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, serde::Serialize)]
 pub struct Budget {
     pub window: u64,
@@ -449,7 +319,7 @@ pub fn main_budget(
 ) -> Budget {
     let window = resolved.model.context_window;
     let output = resolved.model.max_tokens;
-    let reserve = (settings.reserve_tokens.max(0.0) as u64).max(output);
+    let reserve = settings.reserve_tokens.max(output);
     let handoff_output = 8192.min(output).min(window / 4);
     Budget {
         window,
@@ -565,5 +435,35 @@ pub fn input_tokens(agent: &Agent) -> u64 {
         estimate
     } else {
         estimate.max(context_tokens(&entries))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::CompactionSettings;
+
+    #[test]
+    fn settings_take_typed_values_and_ignore_the_rest() {
+        let features = json!({ "compaction": {
+            "enabled": "yes", "warmCache": false, "reserveTokens": 4096,
+            "keepRecentTokens": "12", "timeoutMs": 0, "maxChunks": 2.5
+        } });
+        let settings = CompactionSettings::from_features(features.as_object().unwrap());
+        let defaults = CompactionSettings::default();
+        assert_eq!(
+            settings,
+            CompactionSettings {
+                warm_cache: false,
+                reserve_tokens: 4096,
+                ..defaults
+            }
+        );
+        let none = json!({ "compaction": 5 });
+        assert_eq!(
+            CompactionSettings::from_features(none.as_object().unwrap()),
+            defaults
+        );
     }
 }

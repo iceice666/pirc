@@ -65,9 +65,10 @@ fn object_of(value: Option<&Value>) -> Result<&Value, Failure> {
     present(value).ok_or_else(type_error)
 }
 
-/// `a += b` on strings: `undefined` and other values as `String(b)`.
+/// A delta field appended to text: nothing when absent, other values as
+/// `String(b)`.
 fn js_concat(value: Option<&Value>) -> String {
-    value.map_or_else(|| "undefined".to_owned(), js::to_js_string)
+    value.map_or_else(String::new, js::to_js_string)
 }
 
 /// `===` between two `index` values (objects are never equal).
@@ -542,7 +543,7 @@ impl AnthropicRun {
                             let delta = js_concat(get(delta, "partial_json"));
                             let partial = self.scratch[position]
                                 .partial_json
-                                .get_or_insert_with(|| "undefined".to_owned());
+                                .get_or_insert_with(String::new);
                             partial.push_str(&delta);
                             *arguments = wire_arguments(&parse_streaming_json(partial));
                             self.emit(

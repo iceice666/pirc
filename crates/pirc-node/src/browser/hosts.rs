@@ -269,57 +269,17 @@ impl AllowRule {
     }
 }
 
-/// JavaScript's `Number(text)` for the prefix length of a CIDR entry
-/// (`Number('')` is 0, whitespace is trimmed, `0x`/`0o`/`0b` prefixes).
-fn js_number(text: Option<&str>) -> f64 {
-    let Some(text) = text else {
-        return f64::NAN; // `Number(undefined)`
-    };
-    let text = text.trim();
-    if text.is_empty() {
-        return 0.0;
-    }
-    for (prefix, radix) in [
-        ("0x", 16),
-        ("0X", 16),
-        ("0o", 8),
-        ("0O", 8),
-        ("0b", 2),
-        ("0B", 2),
-    ] {
-        if let Some(digits) = text.strip_prefix(prefix) {
-            return u64::from_str_radix(digits, radix)
-                .ok()
-                .filter(|_| !digits.starts_with(['+', '-']))
-                .map_or(f64::NAN, |value| value as f64);
-        }
-    }
-    let unsigned = text.strip_prefix(['+', '-']).unwrap_or(text);
-    if unsigned == "Infinity" {
-        return if text.starts_with('-') {
-            f64::NEG_INFINITY
-        } else {
-            f64::INFINITY
-        };
-    }
-    if !unsigned
-        .bytes()
-        .all(|b| b.is_ascii_digit() || matches!(b, b'.' | b'e' | b'E' | b'+' | b'-'))
-    {
-        return f64::NAN;
-    }
-    text.parse().unwrap_or(f64::NAN)
-}
-
-/// The prefix length for `cidr`: the default when absent, else an integer
-/// in `0..=max` (`Number.isInteger(bits) && 0 <= bits <= max`).
+/// The prefix length for `cidr`: the default when absent, else decimal
+/// digits for an integer in `0..=max`.
 fn prefix_bits(text: Option<&str>, max: u32) -> Option<u32> {
     let Some(text) = text else {
         return Some(max);
     };
-    let bits = js_number(Some(text));
-    (bits.is_finite() && bits.fract() == 0.0 && (0.0..=f64::from(max)).contains(&bits))
-        .then_some(bits as u32)
+    let text = text.trim();
+    if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    text.parse::<u32>().ok().filter(|bits| *bits <= max)
 }
 
 fn cidr(text: &str) -> Option<AllowRule> {
@@ -730,14 +690,18 @@ mod tests {
         assert!(!allowed("x", &["192.168.2.1"]));
     }
 
-    /// Edge cases of the JS parsing this port reproduces.
+    /// Edge cases of the allowlist parsing.
     #[test]
-    fn keeps_the_javascript_parsing_quirks() {
-        // `Number('')` is 0: an empty prefix length allows every IPv4 address.
-        let allow = parse_allow_rules(&["10.0.0.0/"]);
-        assert!(allow.matches("x", &["8.8.8.8".into()]));
-        assert!(parse_allow_rules(&["10.0.0.0/33"]).rules.len() == 1); // a host rule
-        assert!(parse_allow_rules(&["10.0.0.0/0x8"]).matches("x", &["10.9.9.9".into()]));
+    fn parses_prefix_lengths_strictly() {
+        // An empty or non-decimal prefix length is not a range (and never
+        // the "/0" that would allow every IPv4 address).
+        for entry in ["10.0.0.0/", "10.0.0.0/0x8", "10.0.0.0/ 8x", "10.0.0.0/33"] {
+            let allow = parse_allow_rules(&[entry]);
+            assert_eq!(allow.rules.len(), 1, "{entry}"); // a host rule
+            assert!(!allow.matches("x", &["8.8.8.8".into()]), "{entry}");
+            assert!(!allow.matches("x", &["10.9.9.9".into()]), "{entry}");
+        }
+        assert!(parse_allow_rules(&["10.0.0.0/ 8 "]).matches("x", &["10.9.9.9".into()]));
         // An IP literal is also matched as the URL host itself.
         assert!(parse_allow_rules(&["[::1]"]).matches("[::1]", &[]));
         // IPv4-mapped addresses match IPv4 ranges.

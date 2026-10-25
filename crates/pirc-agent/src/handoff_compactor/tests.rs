@@ -154,7 +154,7 @@ fn seed(agent: &Agent) {
 }
 fn settings(agent: &Agent) -> CompactionSettings {
     let mut s = agent.compaction_settings();
-    s.keep_recent_tokens = 1.0;
+    s.keep_recent_tokens = 1;
     s.warm_cache = false;
     s
 }
@@ -464,11 +464,11 @@ async fn ptc_interleaving_uses_raw_operation_boundaries_when_recent_budget_prefe
         }))
         .unwrap();
     assert_eq!(
-        compaction::find_cut_point(&agent.context_entries(), 100.0),
+        compaction::find_cut_point(&agent.context_entries(), 100),
         Some(unsafe_id.id)
     );
     let mut s = settings(&agent);
-    s.keep_recent_tokens = 100.0;
+    s.keep_recent_tokens = 100;
     let result = run(
         &agent,
         CompactionReason::Manual,
@@ -545,7 +545,7 @@ async fn a_late_execution_reopens_an_earlier_snapshot_and_recovers_without_losin
         }))
         .unwrap();
     let mut limits = settings(&agent);
-    limits.keep_recent_tokens = 0.0;
+    limits.keep_recent_tokens = 0;
     let initial = run(
         &agent,
         CompactionReason::Manual,
@@ -651,7 +651,7 @@ async fn a_late_operation_during_inference_rejects_the_cut_before_commit_and_rec
         }))
         .unwrap();
     let mut limits = settings(&agent);
-    limits.keep_recent_tokens = 0.0;
+    limits.keep_recent_tokens = 0;
     let result = run(
         &agent,
         CompactionReason::Manual,

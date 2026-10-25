@@ -104,12 +104,7 @@ fn check(value: &Value, schema: &Value, at: &str, errors: &mut Vec<String>) {
         }
     }
     let types: Option<Vec<&str>> = match schema.get("type") {
-        Some(Value::Array(items)) => Some(
-            items
-                .iter()
-                .map(|item| item.as_str().unwrap_or("undefined"))
-                .collect(),
-        ),
+        Some(Value::Array(items)) => Some(items.iter().filter_map(Value::as_str).collect()),
         Some(Value::String(kind)) => Some(vec![kind.as_str()]),
         _ => None,
     };

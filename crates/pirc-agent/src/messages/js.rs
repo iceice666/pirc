@@ -58,32 +58,16 @@ pub fn trim_end(text: &str) -> &str {
     text.trim_end_matches(is_space)
 }
 
-/// Node's text for a failed file system call: `ENOENT: no such file or
-/// directory, open '/x'` (without the path for `read`-style calls).
+/// A failed file system call as text: `open '/x': No such file or
+/// directory (os error 2)` (without the path where the call has none).
 pub fn node_error(error: &std::io::Error, syscall: &str, path: Option<&std::path::Path>) -> String {
-    let (code, description) = match error.raw_os_error() {
-        Some(1) => ("EPERM", "operation not permitted"),
-        Some(2) => ("ENOENT", "no such file or directory"),
-        Some(13) => ("EACCES", "permission denied"),
-        Some(16) => ("EBUSY", "resource busy or locked"),
-        Some(17) => ("EEXIST", "file already exists"),
-        Some(18) => ("EXDEV", "cross-device link not permitted"),
-        Some(20) => ("ENOTDIR", "not a directory"),
-        Some(21) => ("EISDIR", "illegal operation on a directory"),
-        Some(24) => ("EMFILE", "too many open files"),
-        Some(28) => ("ENOSPC", "no space left on device"),
-        Some(30) => ("EROFS", "read-only file system"),
-        Some(36) => ("ENAMETOOLONG", "name too long"),
-        Some(40) => ("ELOOP", "too many symbolic links encountered"),
-        _ => return format!("{error}, {syscall}"),
-    };
     match path {
-        Some(path) => format!("{code}: {description}, {syscall} '{}'", path.display()),
-        None => format!("{code}: {description}, {syscall}"),
+        Some(path) => format!("{syscall} '{}': {error}", path.display()),
+        None => format!("{syscall}: {error}"),
     }
 }
 
-/// `readFileSync(file, 'utf8')` with Node's error text.
+/// The file's text (invalid UTF-8 replaced), or the failure's text.
 pub fn read_text(path: &std::path::Path) -> Result<String, String> {
     match std::fs::read(path) {
         Ok(bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),

@@ -781,7 +781,7 @@ async fn adopts_the_spare_blank_page_then_opens_new_ones_up_to_eight() {
         .handle(second.clone(), "tabs".into(), json!({ "action": "close" }))
         .await
         .unwrap_err();
-    assert_eq!(error.message, "No tab undefined");
+    assert_eq!(error.message, "No tab (missing)");
     let error = manager
         .handle(second.clone(), "tabs".into(), json!({ "action": 3 }))
         .await

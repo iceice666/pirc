@@ -36,7 +36,7 @@ use std::time::Duration;
 
 use base64::Engine as _;
 use pirc_agent::messages::js::{number_value, path_normalize, path_resolve};
-use pirc_agent::tools::js::{dirname, extname, locale_compare, relative, trim};
+use pirc_agent::tools::js::{dirname, extname, name_order, relative, trim};
 use regex_lite::Regex;
 use serde_json::{Map, Value, json};
 use tokio::io::AsyncReadExt as _;
@@ -803,7 +803,7 @@ pub fn list_directory(root: &Path, relative_path: &str) -> ApiResult<Value> {
     entries.sort_by(|a, b| match (a.1 == "dir", b.1 == "dir") {
         (true, false) => std::cmp::Ordering::Less,
         (false, true) => std::cmp::Ordering::Greater,
-        _ => locale_compare(&a.0, &b.0),
+        _ => name_order(&a.0, &b.0),
     });
     let truncated = entries.len() > DIR_LIMIT;
     let entries: Vec<Value> = entries

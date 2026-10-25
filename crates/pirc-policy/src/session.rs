@@ -382,7 +382,7 @@ pub fn valid_domain(domain: &str) -> bool {
         && top.bytes().all(|b| b.is_ascii_alphabetic())
 }
 
-/// zod 3's name for a JSON value's type in "Expected X, received Y".
+/// A JSON value's type name, for "Expected X, received Y".
 fn received(value: &serde_json::Value) -> &'static str {
     use serde_json::Value;
     match value {
@@ -395,42 +395,19 @@ fn received(value: &serde_json::Value) -> &'static str {
     }
 }
 
-/// The keys of a JSON object in the order JS enumerates them: array-index
-/// keys (`"0"`, `"17"`) ascending first, then the others as inserted.
-fn js_key_order(object: &serde_json::Map<String, serde_json::Value>) -> Vec<&str> {
-    let index = |key: &str| -> Option<u32> {
-        let canonical = key == "0" || (!key.starts_with('0') && !key.is_empty());
-        let value: u32 = key
-            .parse()
-            .ok()
-            .filter(|_| canonical && key.bytes().all(|b| b.is_ascii_digit()))?;
-        (value < u32::MAX).then_some(value)
-    };
-    let mut indices: Vec<(u32, &str)> = object
-        .keys()
-        .filter_map(|key| index(key).map(|value| (value, key.as_str())))
-        .collect();
-    indices.sort_unstable();
-    indices
-        .into_iter()
-        .map(|(_, key)| key)
-        .chain(
-            object
-                .keys()
-                .filter(|key| index(key).is_none())
-                .map(String::as_str),
-        )
-        .collect()
-}
-
-/// What zod 3 reports while it parses `sandboxConfigSchema`: issues in
-/// the order zod finds them (each object's shape keys in schema order, then
-/// its unrecognized keys), as `<path>: <message>`.
+/// The problems found while the `sandbox` config is read, each as
+/// `<path>: <message>` (each object's known fields in schema order, then
+/// its unrecognized keys in file order).
 struct Issues(Vec<String>);
 
 impl Issues {
     fn push(&mut self, path: &[String], message: impl std::fmt::Display) {
-        self.0.push(format!("{}: {message}", path.join(".")));
+        let path = if path.is_empty() {
+            "sandbox".to_owned()
+        } else {
+            format!("sandbox.{}", path.join("."))
+        };
+        self.0.push(format!("{path}: {message}"));
     }
 
     /// A strict object: `Some` with its fields when `value` is an object.
@@ -456,16 +433,13 @@ impl Issues {
         object: &serde_json::Map<String, serde_json::Value>,
         shape: &[&str],
     ) {
-        let extra: Vec<String> = js_key_order(object)
-            .into_iter()
-            .filter(|key| !shape.contains(key))
+        let extra: Vec<String> = object
+            .keys()
+            .filter(|key| !shape.contains(&key.as_str()))
             .map(|key| format!("'{key}'"))
             .collect();
         if !extra.is_empty() {
-            self.push(
-                path,
-                format_args!("Unrecognized key(s) in object: {}", extra.join(", ")),
-            );
+            self.push(path, format_args!("Unknown key(s): {}", extra.join(", ")));
         }
     }
 
@@ -488,8 +462,8 @@ impl Issues {
         }
     }
 
-    /// `z.array(z.string()...).default([])`; `check` is the string's own
-    /// refinement (its message when it fails).
+    /// An optional array of strings (absent gives none); `check` is each
+    /// string's own rule (its message when it fails).
     fn strings(
         &mut self,
         path: &[String],
@@ -526,12 +500,11 @@ impl Issues {
 }
 
 fn domain_check(text: &str) -> Option<&'static str> {
-    (!valid_domain(text)).then_some("Invalid")
+    (!valid_domain(text)).then_some("Invalid domain")
 }
 
 fn path_check(text: &str) -> Option<&'static str> {
-    text.is_empty()
-        .then_some("String must contain at least 1 character(s)")
+    text.is_empty().then_some("Expected a non-empty string")
 }
 
 const SANDBOX_SHAPE: [&str; 2] = ["network", "filesystem"];
@@ -550,9 +523,8 @@ const FILESYSTEM_SHAPE: [&str; 5] = [
     "allowGitConfig",
 ];
 
-/// `sandboxConfigSchema.safeParse(value)`: `None` (absent) gives the
-/// defaults; `Err` lists the issues as TS words them
-/// (`<path>: <message>; ...`, zod 3's messages).
+/// The `sandbox` section of `config.json`: `None` (absent) gives the
+/// defaults; `Err` lists every problem found (`<path>: <message>; ...`).
 pub fn parse_sandbox_config(value: Option<&serde_json::Value>) -> Result<SandboxConfig, String> {
     let mut issues = Issues(Vec::new());
     let mut config = SandboxConfig::default();
@@ -1221,8 +1193,7 @@ pub fn session_policy(input: &SessionPolicyInput) -> Result<SessionPolicy, Strin
     })
 }
 
-/// Golden cases: `apps/gateway/test/sandbox-policy.test.ts` (the srt
-/// settings case is with the node's srt backend), plus zod 3's reports
-/// and `DOMAIN_PATTERN` verdicts recorded from the TS sources.
+/// Golden cases (the srt settings case is with the node's srt backend),
+/// the sandbox config's issue reports and `DOMAIN_PATTERN` verdicts.
 #[cfg(test)]
 mod tests;

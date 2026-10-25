@@ -227,11 +227,22 @@ pub fn unescape_input(value: &str) -> String {
 }
 
 /// `Number.isInteger(lines) && 1 <= lines <= 2000`.
+/// The `lines` argument: an integer from 1 to 2000.
 fn check_lines(lines: f64) -> Result<usize, String> {
     if lines.fract() != 0.0 || !(1.0..=2000.0).contains(&lines) {
         return Err("lines must be an integer from 1 to 2000.".to_owned());
     }
     Ok(lines as usize)
+}
+
+/// A `lines` value given as JSON: a number, or a number in a string;
+/// anything else fails the check as NaN.
+fn lines_number(value: &Value) -> f64 {
+    match value {
+        Value::Number(number) => number.as_f64().unwrap_or(f64::NAN),
+        Value::String(text) => text.trim().parse().unwrap_or(f64::NAN),
+        _ => f64::NAN,
+    }
 }
 
 /// What a monitor matched since the last wake-up, per task.
@@ -568,11 +579,11 @@ impl Background {
                         .collect()
                 };
                 let (id, lines) = match parts.as_slice() {
-                    [id] if !id.is_empty() => (*id, 200.0),
-                    [id, lines] => (*id, crate::compaction::to_number(&json!(lines))),
+                    [id] if !id.is_empty() => (*id, None),
+                    [id, lines] => (*id, Some(lines.parse::<f64>().unwrap_or(f64::NAN))),
                     _ => return Err("Usage: /bg output <id> [lines]".to_owned()),
                 };
-                self.output_of(id, Some(lines))?.0
+                self.output_of(id, lines)?.0
             }
             "stop" => {
                 let task = self.manager.stop(js::trim(rest)).await?;
@@ -1009,11 +1020,10 @@ impl Feature for BackgroundFeature {
                 .unwrap_or_default();
             if kind == "background_output" {
                 let lines = match command.get("lines") {
-                    None | Some(Value::Null) => 400.0,
-                    Some(lines) => crate::compaction::to_number(lines),
+                    None | Some(Value::Null) => 400,
+                    Some(lines) => check_lines(lines_number(lines))?,
                 };
                 let task = state.manager.get(&id)?;
-                let lines = check_lines(lines)?;
                 let raw = clean(&state.manager.output(&id, lines)?);
                 let (output, _) = truncate_output(&tail_lines(&raw, lines), 64 * 1024);
                 return Ok(Some(

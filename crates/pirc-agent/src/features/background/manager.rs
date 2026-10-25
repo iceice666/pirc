@@ -179,10 +179,7 @@ pub fn compile_monitor(pattern: &str) -> Result<(JsRegex, String), String> {
     }
     let regex =
         JsRegex::new(pattern, "").map_err(|error| format!("Invalid notify_on pattern: {error}"))?;
-    // `String(regex)` is `/source/`.
-    let shown = regex.to_string();
-    let source = shown[1..shown.len() - 1].to_owned();
-    Ok((regex, source))
+    Ok((regex, pattern.to_owned()))
 }
 
 /// `text.split(/\r?\n|\r(?!\n)/)`.

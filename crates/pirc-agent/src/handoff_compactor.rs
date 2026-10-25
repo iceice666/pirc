@@ -128,7 +128,7 @@ async fn build_snapshot(
         &entries,
         &branch[from..],
         if reason == CompactionReason::Overflow {
-            0.0
+            0
         } else {
             settings.keep_recent_tokens
         },

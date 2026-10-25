@@ -526,7 +526,7 @@ mod tests {
             "api": "openai-completions", "baseUrl": "https://x", "models": [] } } } });
         assert_eq!(
             parse_configure(&invalid).err().as_deref(),
-            Some("providers.p.models: Array must contain at least 1 element(s)")
+            Some("providers.p.models: Expected at least one entry")
         );
     }
 

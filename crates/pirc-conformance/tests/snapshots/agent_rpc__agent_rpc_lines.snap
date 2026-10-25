@@ -1,22 +1,23 @@
 ---
 source: crates/pirc-conformance/tests/agent_rpc.rs
+assertion_line: 120
 expression: r.into_value()
 ---
 [
   {
     "observed": [
       {
-        "error": "Unsupported command: undefined",
+        "error": "Unsupported command: (missing)",
         "success": false,
         "type": "response"
       },
       {
-        "error": "Unsupported command: undefined",
+        "error": "Unsupported command: (missing)",
         "success": false,
         "type": "response"
       },
       {
-        "error": "Unsupported command: undefined",
+        "error": "Unsupported command: (missing)",
         "success": false,
         "type": "response"
       }
@@ -56,7 +57,7 @@ expression: r.into_value()
   {
     "observed": {
       "command": "set_model",
-      "error": "Unknown model undefined/undefined",
+      "error": "set_model needs provider and modelId",
       "id": "c2",
       "success": false,
       "type": "response"

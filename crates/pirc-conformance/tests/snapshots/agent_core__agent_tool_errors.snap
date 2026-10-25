@@ -608,7 +608,7 @@ expression: r.into_value()
         "result": {
           "content": [
             {
-              "text": "ENOENT: no such file or directory, stat '<tmp>/workspace/missing.txt'",
+              "text": "stat '<tmp>/workspace/missing.txt': No such file or directory (os error 2)",
               "type": "text"
             }
           ],
@@ -622,7 +622,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "ENOENT: no such file or directory, stat '<tmp>/workspace/missing.txt'",
+              "text": "stat '<tmp>/workspace/missing.txt': No such file or directory (os error 2)",
               "type": "text"
             }
           ],
@@ -638,7 +638,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "ENOENT: no such file or directory, stat '<tmp>/workspace/missing.txt'",
+              "text": "stat '<tmp>/workspace/missing.txt': No such file or directory (os error 2)",
               "type": "text"
             }
           ],
@@ -1055,7 +1055,7 @@ expression: r.into_value()
         "result": {
           "content": [
             {
-              "text": "ENOENT: no such file or directory, stat '<tmp>/outside.txt'",
+              "text": "stat '<tmp>/outside.txt': No such file or directory (os error 2)",
               "type": "text"
             }
           ],
@@ -1069,7 +1069,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "ENOENT: no such file or directory, stat '<tmp>/outside.txt'",
+              "text": "stat '<tmp>/outside.txt': No such file or directory (os error 2)",
               "type": "text"
             }
           ],
@@ -1085,7 +1085,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "ENOENT: no such file or directory, stat '<tmp>/outside.txt'",
+              "text": "stat '<tmp>/outside.txt': No such file or directory (os error 2)",
               "type": "text"
             }
           ],
@@ -1561,7 +1561,7 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "ENOENT: no such file or directory, stat '<tmp>/workspace/missing.txt'",
+                "text": "stat '<tmp>/workspace/missing.txt': No such file or directory (os error 2)",
                 "type": "text"
               }
             ],
@@ -1663,7 +1663,7 @@ expression: r.into_value()
           {
             "content": [
               {
-                "text": "ENOENT: no such file or directory, stat '<tmp>/outside.txt'",
+                "text": "stat '<tmp>/outside.txt': No such file or directory (os error 2)",
                 "type": "text"
               }
             ],
@@ -1858,7 +1858,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "ENOENT: no such file or directory, stat '<tmp>/workspace/missing.txt'",
+              "text": "stat '<tmp>/workspace/missing.txt': No such file or directory (os error 2)",
               "type": "text"
             }
           ],
@@ -2002,7 +2002,7 @@ expression: r.into_value()
         "message": {
           "content": [
             {
-              "text": "ENOENT: no such file or directory, stat '<tmp>/outside.txt'",
+              "text": "stat '<tmp>/outside.txt': No such file or directory (os error 2)",
               "type": "text"
             }
           ],

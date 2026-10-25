@@ -76,7 +76,7 @@ fn card(store: &Store<'_>, user: &str, proposal: &Proposal) -> ApiResult<Value> 
         "add" => "Add",
         "replace" => "Replace",
         "remove" => "Remove",
-        _ => "undefined",
+        _ => "Change",
     };
     let mut parts = Vec::new();
     if let Some(target) = &target {

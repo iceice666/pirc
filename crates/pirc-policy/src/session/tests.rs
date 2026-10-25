@@ -678,72 +678,71 @@ fn accepts_hosts_wildcards_ports_and_ipv4_addresses_only() {
     }
 }
 
-/// zod 3.25's reports for `sandboxConfigSchema`, recorded from the TS
-/// sources (`<path>: <message>` joined with "; ", as `readAgentConfig`
-/// words them).
+/// Every problem in a `sandbox` section is reported, as `<path>: <message>`
+/// joined with "; " (what `readAgentConfig` shows).
 #[test]
-fn reports_schema_issues_as_zod_does() {
+fn reports_every_schema_issue() {
     let defaults = SandboxConfig::default();
     assert_eq!(parse_sandbox_config(None).unwrap(), defaults);
     assert_eq!(parse_sandbox_config(Some(&json!({}))).unwrap(), defaults);
     assert!(defaults.network.default_domains && defaults.network.allow_local_binding);
     for (value, expected) in [
-        (json!(null), ": Expected object, received null"),
-        (json!("x"), ": Expected object, received string"),
-        (json!([]), ": Expected object, received array"),
-        (json!(5), ": Expected object, received number"),
+        (json!(null), "sandbox: Expected object, received null"),
+        (json!("x"), "sandbox: Expected object, received string"),
+        (json!([]), "sandbox: Expected object, received array"),
+        (json!(5), "sandbox: Expected object, received number"),
         (
             json!({ "network": { "allowedDomains": ["not a host"] } }),
-            "network.allowedDomains.0: Invalid",
+            "sandbox.network.allowedDomains.0: Invalid domain",
         ),
         (
             json!({ "network": { "allowedDomains": ["ok.com", 5, ""] } }),
-            "network.allowedDomains.1: Expected string, received number; network.allowedDomains.2: Invalid",
+            "sandbox.network.allowedDomains.1: Expected string, received number; sandbox.network.allowedDomains.2: Invalid domain",
         ),
         (
             json!({ "network": { "allowedDomains": "github.com" } }),
-            "network.allowedDomains: Expected array, received string",
+            "sandbox.network.allowedDomains: Expected array, received string",
         ),
         (
             json!({ "network": { "defaultDomains": "yes", "allowLocalBinding": null } }),
-            "network.defaultDomains: Expected boolean, received string; network.allowLocalBinding: Expected boolean, received null",
+            "sandbox.network.defaultDomains: Expected boolean, received string; sandbox.network.allowLocalBinding: Expected boolean, received null",
         ),
         (
             json!({ "network": { "allowUnixSockets": [""] } }),
-            "network.allowUnixSockets.0: String must contain at least 1 character(s)",
+            "sandbox.network.allowUnixSockets.0: Expected a non-empty string",
         ),
         (
             json!({ "network": null }),
-            "network: Expected object, received null",
+            "sandbox.network: Expected object, received null",
         ),
         (
             json!({ "network": [] }),
-            "network: Expected object, received array",
+            "sandbox.network: Expected object, received array",
         ),
         (
             json!({ "filesystem": { "denyRead": [1], "allowGitConfig": 1 } }),
-            "filesystem.denyRead.0: Expected string, received number; filesystem.allowGitConfig: Expected boolean, received number",
+            "sandbox.filesystem.denyRead.0: Expected string, received number; sandbox.filesystem.allowGitConfig: Expected boolean, received number",
         ),
         (
             json!({ "extra": 1, "network": { "bogus": true, "also": 2, "allowedDomains": ["x"] }, "more": 2 }),
-            "network.allowedDomains.0: Invalid; network: Unrecognized key(s) in object: 'bogus', 'also'; : Unrecognized key(s) in object: 'extra', 'more'",
+            "sandbox.network.allowedDomains.0: Invalid domain; sandbox.network: Unknown key(s): 'bogus', 'also'; sandbox: Unknown key(s): 'extra', 'more'",
         ),
         (
             json!({ "filesystem": { "denyWrite": [""], "nope": 1 }, "network": { "deniedDomains": ["a b"] } }),
-            "network.deniedDomains.0: Invalid; filesystem.denyWrite.0: String must contain at least 1 character(s); filesystem: Unrecognized key(s) in object: 'nope'",
+            "sandbox.network.deniedDomains.0: Invalid domain; sandbox.filesystem.denyWrite.0: Expected a non-empty string; sandbox.filesystem: Unknown key(s): 'nope'",
         ),
         (
             json!({ "network": { "allowedDomains": [{}, true] } }),
-            "network.allowedDomains.0: Expected string, received object; network.allowedDomains.1: Expected string, received boolean",
+            "sandbox.network.allowedDomains.0: Expected string, received object; sandbox.network.allowedDomains.1: Expected string, received boolean",
         ),
         (
             json!({ "enabled": true }),
-            ": Unrecognized key(s) in object: 'enabled'",
+            "sandbox: Unknown key(s): 'enabled'",
         ),
-        // JS lists array-index keys first.
+        // Unknown keys are listed in file order.
         (
             json!({ "b": 1, "10": 1, "2": 1, "01": 1 }),
-            ": Unrecognized key(s) in object: '2', '10', 'b', '01'",
+            "sandbox: Unknown key(s): 'b', '10', '2', '01'",
         ),
     ] {
         assert_eq!(

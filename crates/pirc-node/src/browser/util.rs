@@ -22,9 +22,9 @@ pub fn arg<'a>(args: &'a Value, name: &str) -> Option<&'a Value> {
     args.as_object().and_then(|args| args.get(name))
 }
 
-/// `String(value)`, `undefined` for a missing one.
+/// An argument as text, `(missing)` for an absent one.
 pub fn js_string(value: Option<&Value>) -> String {
-    value.map_or_else(|| "undefined".to_owned(), string_of)
+    pirc_agent::tools::js::shown(value)
 }
 
 /// `String(value ?? '')`.
@@ -372,7 +372,7 @@ mod tests {
             "ref must come from browser_snapshot"
         );
         assert_eq!(ref_arg(Some(&json!("f1E3"))).unwrap(), "f1E3");
-        assert_eq!(js_string(None), "undefined");
+        assert_eq!(js_string(None), "(missing)");
         assert_eq!(js_string(Some(&json!(1.5))), "1.5");
         assert_eq!(num_arg(Some(&json!(2.5))), 2.5);
         assert_eq!(arg(&json!(["x"]), "0"), None);

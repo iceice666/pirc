@@ -1602,10 +1602,7 @@ impl Team {
             self.change(member, if pending { "waiting" } else { "idle" });
         }
         if kind == "team_dialog_cancelled" {
-            let title = match event.get("title") {
-                None => "undefined".to_owned(),
-                Some(title) => js::string_of(title),
-            };
+            let title = js::shown(event.get("title"));
             self.report(
                 member,
                 "notice",
@@ -1649,10 +1646,7 @@ impl Team {
             .inflight
             .insert(key.clone(), controller.clone());
         let name = member.borrow().name.clone();
-        let operation = match event.get("operation") {
-            None => "undefined".to_owned(),
-            Some(operation) => js::string_of(operation),
-        };
+        let operation = js::shown(event.get("operation"));
         let args = match event.get("args") {
             None | Some(Value::Null) => Value::Object(Json::new()),
             Some(args) => args.clone(),
@@ -1977,13 +1971,7 @@ impl Team {
         let task = id
             .and_then(Value::as_str)
             .and_then(|id| self.tasks.borrow().get(id).cloned());
-        task.ok_or_else(|| {
-            let id = match id {
-                None => "undefined".to_owned(),
-                Some(id) => js::string_of(id),
-            };
-            format!("Unknown task: {}", js::head16(&id, 40))
-        })
+        task.ok_or_else(|| format!("Unknown task: {}", js::head16(&js::shown(id), 40)))
     }
 
     fn dependencies(
@@ -2268,13 +2256,7 @@ impl Team {
                 self.record("task", data)?;
                 Ok(json!({ "deleted": id }))
             }
-            _ => Err(format!(
-                "Unknown task action: {}",
-                match action {
-                    None => "undefined".to_owned(),
-                    Some(action) => js::string_of(action),
-                }
-            )),
+            _ => Err(format!("Unknown task action: {}", js::shown(action))),
         }
     }
 

@@ -329,7 +329,7 @@ pub fn fit_signatures(core: &[Block], others: &[Block], budget: usize) -> Fitted
     };
     let core_listed = fit(core);
     let other_listed = fit(others);
-    unlisted.sort_by(|a, b| js::compare16(a, b));
+    unlisted.sort();
     Fitted {
         core_listed,
         other_listed,

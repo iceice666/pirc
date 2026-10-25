@@ -65,9 +65,9 @@ fn number(value: Option<&Value>) -> String {
     locale_string_en_us(value.and_then(Value::as_f64).unwrap_or(f64::NAN))
 }
 
-/// `String(value)`, `undefined` when absent.
+/// A field as text, [`js::MISSING`] when absent.
 fn string(value: Option<&Value>) -> String {
-    value.map_or_else(|| "undefined".to_owned(), js::string_of)
+    js::shown(value)
 }
 
 fn array(value: Option<&Value>) -> &[Value] {
@@ -485,7 +485,7 @@ pub fn current_origins(branch: &[SessionEntry], running: &[String]) -> Vec<Strin
             add(format!("tool:{name}"));
         }
     }
-    origins.sort_by(|a, b| js::compare16(a, b));
+    origins.sort();
     origins
 }
 
@@ -1117,7 +1117,7 @@ impl AssistantTool {
             }
             quote = Some(redact_secrets(js::trim(raw)));
         }
-        origins.sort_by(|a, b| js::compare16(a, b));
+        origins.sort();
         let mut request = Map::new();
         request.insert("action".to_owned(), json!(action));
         if !id.is_empty() {
@@ -1190,7 +1190,7 @@ impl AssistantTool {
                 self.remember(agent, &id, &revision)?;
                 let content = current
                     .get("content")
-                    .map_or_else(|| "undefined".to_owned(), js::stringify);
+                    .map_or_else(|| js::MISSING.to_owned(), js::stringify);
                 Ok(text(
                     format!(
                         "Note {} changed in another chat since you last saw it. It now reads: {content}. If your change still applies, call {NOTE_TOOL} again.",

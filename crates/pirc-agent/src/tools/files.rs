@@ -554,7 +554,7 @@ impl LsTool {
             )
         })
         .await?;
-        entries.sort_by(|a, b| js::locale_compare(&a.0, &b.0));
+        entries.sort_by(|a, b| js::name_order(&a.0, &b.0));
         let names: Vec<String> = entries
             .iter()
             .map(|(name, kind)| {
@@ -707,7 +707,7 @@ impl FindTool {
             .map(|()| matches)
         })
         .await?;
-        matches.sort_by(|a, b| js::compare16(a, b));
+        matches.sort();
         let text = if matches.is_empty() {
             "No matches".to_owned()
         } else {

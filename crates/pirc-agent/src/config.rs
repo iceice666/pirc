@@ -76,8 +76,8 @@ impl HooksConfig {
         HOOK_EVENTS.iter().all(|event| self.list(event).is_empty())
     }
 
-    /// As zod returns it: every event, each hook `{command, matcher?, timeoutMs}`
-    /// (also the node's project-config summary).
+    /// Every event, each hook `{command, matcher?, timeoutMs}` (also the
+    /// node's project-config summary).
     pub fn to_value(&self) -> Value {
         let mut map = Map::new();
         for event in HOOK_EVENTS {
@@ -178,14 +178,7 @@ fn read_json(file: &str) -> Result<Value, String> {
         return Ok(Value::Object(Map::new()));
     }
     let text = js::read_text(path)?;
-    serde_json::from_str(&text).map_err(|error| {
-        let reason = if error.is_eof() {
-            "Unexpected EOF".to_owned()
-        } else {
-            error.to_string()
-        };
-        format!("Invalid JSON in {file}: JSON Parse error: {reason}")
-    })
+    serde_json::from_str(&text).map_err(|error| format!("Invalid JSON in {file}: {error}"))
 }
 
 /// `readText(file)`: trimmed, empty when missing.

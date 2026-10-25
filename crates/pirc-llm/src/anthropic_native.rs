@@ -273,9 +273,9 @@ fn http_error(status: reqwest::StatusCode, body: &[u8]) -> String {
     format!("HTTP {}: {text}", status.as_u16())
 }
 
-/// A JavaScript string concatenation operand (`undefined` included).
+/// A delta field appended to text: nothing when absent.
 fn concat(value: Option<&Value>) -> String {
-    value.map_or_else(|| "undefined".to_owned(), js::to_js_string)
+    value.map_or_else(String::new, js::to_js_string)
 }
 
 /// Map keys compare by SameValueZero; a freshly parsed object never

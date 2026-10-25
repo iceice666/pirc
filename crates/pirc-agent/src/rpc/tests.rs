@@ -585,12 +585,23 @@ async fn simple_commands_and_their_data() {
         .await["error"],
         "Nothing to compact"
     );
+    assert_eq!(
+        run(
+            &agent,
+            json!({ "type": "set_model", "provider": "fake", "modelId": null }),
+        )
+        .await["error"],
+        "set_model needs provider and modelId"
+    );
+    assert_eq!(
+        run(&agent, json!({ "type": "set_model", "modelId": 12 })).await["error"],
+        "set_model needs provider and modelId"
+    );
     run(
         &agent,
-        json!({ "type": "set_model", "provider": "fake", "modelId": null }),
+        json!({ "type": "set_model", "provider": "fake", "modelId": "m" }),
     )
     .await;
-    run(&agent, json!({ "type": "set_model", "modelId": 12 })).await;
     run(
         &agent,
         json!({ "type": "set_role", "role": ["a", null, true] }),
@@ -605,10 +616,10 @@ async fn simple_commands_and_their_data() {
             "refresh",
             "compact None",
             "refresh",
-            "set_model fake null",
             "refresh",
-            "set_model undefined 12",
-            "set_role a,,true",
+            "refresh",
+            "set_model fake m",
+            "set_role [\"a\",null,true]",
             "set_name \"\" User",
             "set_name \"Hi\" User",
         ]
@@ -627,7 +638,7 @@ async fn simple_commands_and_their_data() {
     );
     assert_eq!(
         run(&agent, json!({ "message": "x" })).await,
-        json!({ "type": "response", "success": false, "error": "Unsupported command: undefined" })
+        json!({ "type": "response", "success": false, "error": "Unsupported command: (missing)" })
     );
     assert_eq!(
         run(&agent, json!({ "type": "clear_queue" })).await["data"],
@@ -671,12 +682,12 @@ async fn get_context_answers_only_what_fits_the_line() {
 
 #[test]
 fn js_strings() {
-    assert_eq!(js_string(None), "undefined");
+    assert_eq!(js_string(None), "(missing)");
     assert_eq!(js_string(Some(&json!(1.5))), "1.5");
     assert_eq!(js_string(Some(&json!(2.0))), "2");
     assert_eq!(js_string(Some(&json!(-3))), "-3");
-    assert_eq!(js_string(Some(&json!({ "a": 1 }))), "[object Object]");
-    assert_eq!(js_string(Some(&json!([1, [2, 3], null]))), "1,2,3,");
+    assert_eq!(js_string(Some(&json!({ "a": 1 }))), "{\"a\":1}");
+    assert_eq!(js_string(Some(&json!([1, [2, 3], null]))), "[1,[2,3],null]");
 }
 
 #[tokio::test]
@@ -729,7 +740,7 @@ async fn serves_lines_until_input_ends() {
                 json!({ "type": "response", "id": "c1", "command": "get_state", "success": true,
                     "data": { "isRunning": false } }),
                 json!({ "type": "response", "success": false,
-                    "error": "Unsupported command: undefined" }),
+                    "error": "Unsupported command: (missing)" }),
                 json!({ "type": "response", "id": "c2", "command": "abort", "success": true }),
             ]
         );

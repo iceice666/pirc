@@ -691,25 +691,33 @@ fn warns_about_memory_settings_at_load() {
     assert!(!config.warnings[0].contains("private-value"));
 }
 
-/// `ZodError.message` texts recorded from the TS agent (zod 3.25.76).
+/// Every problem in a config file is reported, with its path.
 #[test]
-fn rejects_invalid_config_with_zods_issues() {
+fn rejects_invalid_config_with_every_issue() {
     let setup = workspace_with(json!({}));
     let cases = [
         (
             json!({"limits": {"maxTurns": 0, "completionWaitMs": 1e12}, "env": {"A": 1}, "hooks": null, "allowedPaths": "x"}),
             json!({}),
-            "[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"received\": \"string\",\n    \"path\": [\n      \"allowedPaths\"\n    ],\n    \"message\": \"Expected array, received string\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"number\",\n    \"path\": [\n      \"env\",\n      \"A\"\n    ],\n    \"message\": \"Expected string, received number\"\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"object\",\n    \"received\": \"null\",\n    \"path\": [\n      \"hooks\"\n    ],\n    \"message\": \"Expected object, received null\"\n  },\n  {\n    \"code\": \"too_small\",\n    \"minimum\": 0,\n    \"type\": \"number\",\n    \"inclusive\": false,\n    \"exact\": false,\n    \"message\": \"Number must be greater than 0\",\n    \"path\": [\n      \"limits\",\n      \"maxTurns\"\n    ]\n  },\n  {\n    \"code\": \"too_big\",\n    \"maximum\": 86400000,\n    \"type\": \"number\",\n    \"inclusive\": true,\n    \"exact\": false,\n    \"message\": \"Number must be less than or equal to 86400000\",\n    \"path\": [\n      \"limits\",\n      \"completionWaitMs\"\n    ]\n  }\n]",
+            "allowedPaths: Expected array, received string\n\
+             env.A: Expected string, received number\n\
+             hooks: Expected object, received null\n\
+             limits.maxTurns: Expected more than 0\n\
+             limits.completionWaitMs: Expected at most 86400000",
         ),
         (
             json!({}),
             json!({"foo": 1, "defaultModel": {"provider": "p", "thinking": "big"}, "hooks": {"beforeTool": [{"command": "", "timeoutMs": 1.5}]}}),
-            "[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"defaultModel\",\n      \"id\"\n    ],\n    \"message\": \"Required\"\n  },\n  {\n    \"received\": \"big\",\n    \"code\": \"invalid_enum_value\",\n    \"options\": [\n      \"off\",\n      \"minimal\",\n      \"low\",\n      \"medium\",\n      \"high\",\n      \"xhigh\"\n    ],\n    \"path\": [\n      \"defaultModel\",\n      \"thinking\"\n    ],\n    \"message\": \"Invalid enum value. Expected 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh', received 'big'\"\n  },\n  {\n    \"code\": \"too_small\",\n    \"minimum\": 1,\n    \"type\": \"string\",\n    \"inclusive\": true,\n    \"exact\": false,\n    \"message\": \"String must contain at least 1 character(s)\",\n    \"path\": [\n      \"hooks\",\n      \"beforeTool\",\n      0,\n      \"command\"\n    ]\n  },\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"integer\",\n    \"received\": \"float\",\n    \"message\": \"Expected integer, received float\",\n    \"path\": [\n      \"hooks\",\n      \"beforeTool\",\n      0,\n      \"timeoutMs\"\n    ]\n  },\n  {\n    \"code\": \"unrecognized_keys\",\n    \"keys\": [\n      \"foo\"\n    ],\n    \"path\": [],\n    \"message\": \"Unrecognized key(s) in object: 'foo'\"\n  }\n]",
+            "defaultModel.id: Required (string)\n\
+             defaultModel.thinking: Expected one of 'off', 'minimal', 'low', 'medium', 'high', 'xhigh', received 'big'\n\
+             hooks.beforeTool[0].command: Expected at least 1 characters\n\
+             hooks.beforeTool[0].timeoutMs: Expected an integer\n\
+             (root): Unknown key(s): 'foo'",
         ),
         (
             json!([]),
             json!({}),
-            "[\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"object\",\n    \"received\": \"array\",\n    \"path\": [],\n    \"message\": \"Expected object, received array\"\n  }\n]",
+            "(root): Expected object, received array",
         ),
     ];
     for (global, project, expected) in cases {
@@ -744,8 +752,9 @@ fn rejects_invalid_config_with_zods_issues() {
     assert_eq!(
         error,
         format!(
-            "Invalid JSON in {}/config.json: JSON Parse error: Unexpected EOF",
-            text(&setup.config_dir)
+            "Invalid JSON in {}/config.json: {}",
+            text(&setup.config_dir),
+            serde_json::from_str::<serde_json::Value>("{").unwrap_err()
         )
     );
     let _ = &setup.root;

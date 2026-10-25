@@ -2260,8 +2260,8 @@ impl Agent {
         {
             settings.reserve_tokens = settings
                 .reserve_tokens
-                .min((r.model.context_window / 4) as f64)
-                .max(r.model.max_tokens as f64);
+                .min(r.model.context_window / 4)
+                .max(r.model.max_tokens);
         }
         settings
     }

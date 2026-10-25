@@ -504,7 +504,7 @@ async fn the_catalog_needs_a_good_answer() {
     // Read to the end of the connection, then checked.
     assert_eq!(
         fetch_remote_models(&server.config).await.unwrap_err(),
-        "providers.p.models: Array must contain at least 1 element(s)"
+        "providers.p.models: Expected at least one entry"
     );
 }
 
@@ -527,19 +527,19 @@ fn checks_catalogs_as_the_models_schema_does() {
     for (extra, error) in [
         (
             json!({ "baseUrl": "not a url" }),
-            "providers.p.baseUrl: Invalid url",
+            "providers.p.baseUrl: Expected a URL",
         ),
         (
             json!({ "models": [{ "id": "" }] }),
-            "providers.p.models.0.id: String must contain at least 1 character(s)",
+            "providers.p.models.0.id: Expected a non-empty string",
         ),
         (
             json!({ "models": [{ "id": "m", "contextWindow": 0 }] }),
-            "providers.p.models.0.contextWindow: Number must be greater than 0",
+            "providers.p.models.0.contextWindow: Expected a positive number",
         ),
         (
             json!({ "models": [{ "id": "m", "input": ["text", "audio"] }] }),
-            "providers.p.models.0.input.1: Invalid enum value. Expected 'text' | 'image'",
+            "providers.p.models.0.input.1: Expected 'text' or 'image'",
         ),
     ] {
         assert_eq!(parse_models(&provider(extra)).unwrap_err(), error);
@@ -547,7 +547,7 @@ fn checks_catalogs_as_the_models_schema_does() {
     assert!(parse_models(&json!({ "providers": { "p": { "api": "zzz" } } })).is_err());
     assert_eq!(
         parse_models(&json!({ "inference": { "socketPath": "/s", "token": "" } })).unwrap_err(),
-        "inference.token: String must contain at least 1 character(s)"
+        "inference.token: Expected a non-empty string"
     );
     // Unknown keys are dropped, as zod strips them.
     assert!(parse_models(&json!({ "extra": 1 })).is_ok());
