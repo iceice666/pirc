@@ -5,6 +5,10 @@
 //! may reuse an id after a completed group, and an occurrence without a
 //! result keeps its id reserved.
 
+mod rewrite;
+
+pub use rewrite::{Rewrite, RewriteError, replace_prefix, safe_boundaries};
+
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 

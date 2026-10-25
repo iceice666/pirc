@@ -1970,6 +1970,7 @@ dependencies = [
  "pirc-policy",
  "pirc-protocol",
  "pirc-ptc",
+ "pirc-tool-schema",
  "pty-process",
  "regex-lite",
  "regress",
@@ -2180,6 +2181,14 @@ dependencies = [
  "oxc",
  "rquickjs",
  "seccompiler",
+ "serde_json",
+]
+
+[[package]]
+name = "pirc-tool-schema"
+version = "0.9.3"
+dependencies = [
+ "regress",
  "serde_json",
 ]
 

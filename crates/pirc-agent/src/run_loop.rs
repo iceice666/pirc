@@ -33,15 +33,10 @@
 
 use pirc_agent_loop::{
     CallKey, Failure, Loop, Recovery, ResumeError, Status, Step, Ticket, ToolCall, ToolOutcome,
-    ToolStatus, WaitReason,
+    ToolStatus, WaitReason, WaitToken,
 };
 use pirc_protocol::{AssistantContent, AssistantDelta, AssistantMessage, Message, StopReason};
 use serde_json::{Map, Value};
-use std::sync::atomic::{AtomicU64, Ordering};
-
-/// Wait tokens are unique across runs: a dialog may outlive its run, and
-/// must not end a wait of the next one.
-static NEXT_WAIT: AtomicU64 = AtomicU64::new(1);
 
 /// What a final reply leaves the run to do.
 #[derive(Debug, PartialEq)]
@@ -70,13 +65,6 @@ fn state_error(error: ResumeError) -> String {
     format!("agent loop state: {error}")
 }
 
-/// One open wait of a call; several can overlap (a script's operations).
-struct OpenWait {
-    token: u64,
-    key: CallKey,
-    reason: WaitReason,
-}
-
 pub(crate) struct RunLoop {
     core: Loop,
     generation: u64,
@@ -88,7 +76,6 @@ pub(crate) struct RunLoop {
     input: Vec<Message>,
     /// The checked call running now, and its provider id.
     running: Option<(CallKey, String)>,
-    waits: Vec<OpenWait>,
 }
 
 impl RunLoop {
@@ -100,7 +87,6 @@ impl RunLoop {
             suspended: None,
             input: Vec::new(),
             running: None,
-            waits: Vec::new(),
         }
     }
 
@@ -235,23 +221,13 @@ impl RunLoop {
     }
 
     /// `key` waits for `reason` until [`RunLoop::end_wait`] with the token.
-    pub(crate) fn wait(&mut self, key: CallKey, reason: WaitReason) -> Option<u64> {
-        self.core.wait_tool(key, reason.clone()).ok()?;
-        let token = NEXT_WAIT.fetch_add(1, Ordering::Relaxed);
-        self.waits.push(OpenWait { token, key, reason });
-        Some(token)
+    pub(crate) fn wait(&mut self, key: CallKey, reason: WaitReason) -> Option<WaitToken> {
+        self.core.begin_wait(key, reason).ok()
     }
 
-    /// A wait ended; the call still waits for the latest other one, if any.
-    pub(crate) fn end_wait(&mut self, token: u64) {
-        let Some(at) = self.waits.iter().position(|wait| wait.token == token) else {
-            return;
-        };
-        let key = self.waits.remove(at).key;
-        let _ = match self.waits.iter().rev().find(|wait| wait.key == key) {
-            Some(other) => self.core.wait_tool(key, other.reason.clone()),
-            None => self.core.end_wait(key),
-        };
+    /// A wait ended; other waits of this call remain open.
+    pub(crate) fn end_wait(&mut self, token: &WaitToken) {
+        self.core.finish_wait(token);
     }
 
     #[cfg(test)]
@@ -270,14 +246,6 @@ impl RunLoop {
         result: &Message,
         end: CallEnd,
     ) -> Result<(), String> {
-        if self
-            .running
-            .as_ref()
-            .is_some_and(|(key, _)| *key == call.key)
-        {
-            self.running = None;
-        }
-        self.waits.retain(|wait| wait.key != call.key);
         let Message::ToolResult {
             content,
             details,
@@ -304,6 +272,13 @@ impl RunLoop {
             .core
             .resume_tool(call.key, outcome)
             .map_err(state_error)?;
+        if self
+            .running
+            .as_ref()
+            .is_some_and(|(key, _)| *key == call.key)
+        {
+            self.running = None;
+        }
         self.issued(step)
     }
 
@@ -334,7 +309,6 @@ impl RunLoop {
         self.pending = None;
         self.input.clear();
         self.running = None;
-        self.waits.clear();
         if cancelled {
             self.core.cancel(timestamp);
             return Ok(());

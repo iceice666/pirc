@@ -19,9 +19,11 @@ use serde_json::{Map, Value};
 mod failure;
 pub mod history;
 mod partial;
+mod wait;
 
 pub use failure::{is_context_overflow, is_retryable};
 pub use partial::Partial;
+pub use wait::{WaitReason, WaitToken};
 
 /// Opaque correlation identifier, scoped to one live [Loop]. Not a durable ID.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -121,14 +123,6 @@ impl ToolOutcome {
             timestamp: self.timestamp,
         }
     }
-}
-
-/// Host-specific reason a call is still pending, not a failed result or approval.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum WaitReason {
-    Approval,
-    Resource(String),
-    Other(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -240,7 +234,7 @@ impl std::error::Error for ResumeError {}
 #[derive(Debug)]
 struct PendingTool {
     call: ToolCall,
-    wait: Option<WaitReason>,
+    waits: wait::Waits,
     outcome: Option<ToolOutcome>,
 }
 
@@ -296,6 +290,64 @@ impl Loop {
 
     pub fn history(&self) -> &[Message] {
         &self.history
+    }
+
+    /// Whether this exact ticket is the currently pending model request.
+    /// A callback fence only, not approval or evidence that I/O is stopped.
+    pub fn is_current_model(&self, ticket: Ticket) -> bool {
+        matches!(self.state, State::Streaming { .. }) && self.check_ticket(ticket).is_ok()
+    }
+
+    /// An immutable context basis for a host-selected memory rewrite. Holding
+    /// it makes subsequent history growth copy-on-write and stale plans fail.
+    pub fn history_snapshot(&self) -> Arc<Vec<Message>> {
+        Arc::clone(&self.history)
+    }
+
+    /// Rewrite context at Idle without starting work. The host supplies the
+    /// memory strategy; tool/failure records are never rewritten or replayed.
+    pub fn rewrite_history(
+        &mut self,
+        rewrite: history::Rewrite,
+    ) -> Result<(), history::RewriteError> {
+        if !matches!(self.state, State::Idle) {
+            return Err(history::RewriteError::WrongState);
+        }
+        let next = rewrite.apply_to(&self.history)?;
+        self.history = Arc::new(next);
+        Ok(())
+    }
+
+    /// Replace a pending model request **before the host dispatches it**.
+    /// Useful after the last tool result immediately emits another request.
+    /// The host must discard the old effect and dispatch only the returned
+    /// request. No I/O runs here; a fresh ticket fences the old callbacks.
+    /// Generation alone is unchanged: compare the exact ticket using
+    /// [`Loop::is_current_model`] immediately before dispatch. This check
+    /// does not grant authority or cancel I/O already dispatched.
+    ///
+    /// The pre-dispatch boundary is a host assertion, not something missing
+    /// partials prove. An already started stream is refused, but the core
+    /// cannot detect I/O started without `stream_start`/`progress`. To change
+    /// context during actual I/O, first use host cancellation and `rebind`.
+    pub fn rewrite_request(
+        &mut self,
+        ticket: Ticket,
+        rewrite: history::Rewrite,
+    ) -> Result<ModelRequest, history::RewriteError> {
+        self.check_ticket(ticket)
+            .map_err(history::RewriteError::Resume)?;
+        if !matches!(self.state, State::Streaming { partial: None, .. }) {
+            return Err(history::RewriteError::WrongState);
+        }
+        self.ensure_sequence()
+            .map_err(history::RewriteError::Resume)?;
+        let next = rewrite.apply_to(&self.history)?;
+        self.history = Arc::new(next);
+        let Step::Model(request) = self.request_model() else {
+            unreachable!()
+        };
+        Ok(request)
     }
 
     fn history_mut(&mut self) -> &mut Vec<Message> {
@@ -439,7 +491,7 @@ impl Loop {
                     .cloned()
                     .map(|call| PendingTool {
                         call,
-                        wait: None,
+                        waits: wait::Waits::default(),
                         outcome: None,
                     })
                     .collect(),
@@ -458,35 +510,12 @@ impl Loop {
         Ok(self.suspend(ticket, failure, partial))
     }
 
-    pub fn wait_tool(&mut self, key: CallKey, reason: WaitReason) -> Result<(), ResumeError> {
-        let call = self.pending_tool(key)?;
-        call.wait = Some(reason);
-        Ok(())
-    }
-
-    /// The call no longer waits (its approval was answered, its resource
-    /// acquired). It is still pending; only a result ends it.
-    pub fn end_wait(&mut self, key: CallKey) -> Result<(), ResumeError> {
-        self.pending_tool(key)?.wait = None;
-        Ok(())
-    }
-
-    pub fn waiting(&self) -> Vec<(CallKey, &WaitReason)> {
-        match &self.state {
-            State::Tools { calls, .. } => calls
-                .iter()
-                .filter_map(|call| call.wait.as_ref().map(|reason| (call.call.key, reason)))
-                .collect(),
-            _ => Vec::new(),
-        }
-    }
-
     /// Results can arrive in any order; conversation results retain call order.
     /// Returns the next model effect only after every call has a terminal result.
     pub fn resume_tool(&mut self, key: CallKey, outcome: ToolOutcome) -> Result<Step, ResumeError> {
         self.ensure_sequence()?;
         let call = self.pending_tool(key)?;
-        call.wait = None;
+        call.waits.clear();
         call.outcome = Some(outcome);
         let State::Tools { calls, .. } = &self.state else {
             unreachable!()

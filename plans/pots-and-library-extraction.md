@@ -32,6 +32,11 @@ baseline: eb45f71d8fdefb35a796704ebd9ba7accdf098ff.
   [Reusable LLM foundations](../docs/architecture/reusable-llm.md#loop-host-driven-core-and-the-production-adapter).
   Retries, persistence, tools, approvals, queues and completion waits stay
   host-owned; the remaining adapter follow-ups are listed there.
+  The 2026-10-25 follow-up adds overlapping wait tokens and explicit snapshot-bound
+  history rewrites, without embedding OM or another memory backend.
+- **Tool contracts:** `pirc-tool-schema` separately provides compatibility-subset
+  schema validation and metadata-based TypeScript documentation. PTC routing,
+  tool policy and default prompt budgets remain in agent wrappers.
 - **pots:** Gateway schema 1010 persists owner-scoped responsibilities, generic
   session-progress suggestions and canonical tracking tasks. Explicit activation,
   finite lifetime budgets, durable controls, source/expiry checks, capped lists and

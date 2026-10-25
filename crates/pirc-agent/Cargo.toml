@@ -34,6 +34,7 @@ pty-process = { version = "0.5", features = ["async"] }
 pirc-agent-loop = { path = "../pirc-agent-loop" }
 pirc-config = { path = "../pirc-config" }
 pirc-policy = { path = "../pirc-policy" }
+pirc-tool-schema = { path = "../pirc-tool-schema" }
 pirc-protocol = { path = "../pirc-protocol" }
 # The preflight and shared contracts only: QuickJS lives in the guest.
 pirc-ptc = { path = "../pirc-ptc", default-features = false }

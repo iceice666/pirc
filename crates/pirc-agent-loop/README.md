@@ -32,7 +32,7 @@ carries the block's whole content), so the partial lags at most the block
 being streamed, no delta is copied and the host copies nothing per delta; a
 retry restarts the partial, and tool-call arguments stay empty until the call
 ends.
-Waits of the running checked call are labelled and ended with `end_wait`:
+Waits of the running checked call use independent `begin_wait`/`finish_wait` tokens:
 dialogs (`Approval` inside the auto-mode gate, otherwise `Other("dialog")`)
 and the write lease (`Resource`). A wait is the call's when the waiting
 future runs in the call's task, or carries the id of the call or of one of its
@@ -81,8 +81,9 @@ parallel scheduling or grant permission to run them.
    Empty/duplicate provider IDs within one batch fail atomically. Provider IDs
    are preserved; opaque model tickets plus call indexes correlate each effect.
 4. Host validates/approves/dispatches tools. It may label a pending call with an
-   approval/resource wait without recording a failure or reissuing the effect,
-   and clear the label with `end_wait` when the call goes on waiting for nothing.
+   approval/resource wait without recording a failure or reissuing the effect.
+   Use `begin_wait`/`finish_wait` for independently endable overlapping reasons
+   (`wait_tool`/`end_wait` keep a separate compatibility slot).
    `resume_tool` accepts one terminal result per call in any order. Only after
    all results does it return the next model effect; history is always call-order.
    Denied/interrupted/failed/unknown statuses are retained in `tool_records` and
@@ -123,6 +124,60 @@ coordinate mount/lock revocation itself. A state machine fence cannot revoke an
 already-open file descriptor, undo an effect, or close a network request on its own.
 Do not persist and blindly replay returned `Step` values.
 
+## Overlapping waits
+
+`begin_wait(key, reason)` returns an opaque, cloneable `WaitToken`;
+`finish_wait(&token)` ends exactly that wait. Ending one of several approvals
+(or two identical resource reasons) cannot erase the others. Foreign, stale or
+already-ended tokens return false, including tokens from another live loop
+with identical call keys. Results and invalidation clean up the call's waits.
+Dropping the token alone does not finish it; an async host may wrap it in its
+own RAII guard, as the pirc adapter does.
+
+`waiting_all()` exposes every overlapping reason in call/creation order;
+`waiting()` preserves the latest-reason-per-call view. The older
+`wait_tool`/`end_wait` API manages one separate compatibility slot and cannot
+erase tokenized waits. None of these APIs approves or dispatches anything.
+
+## History rewriting without a memory backend
+
+`history::Rewrite` replaces one range in an `Arc<Vec<Message>>` snapshot with
+messages supplied by the host. A host may insert retrieved context, replace
+older turns with a summary, or use a sliding window; OM is not a dependency.
+The core does not retrieve, summarize, choose retention policy, or store memory.
+The result is context, never a new permission or a provenance guarantee.
+
+- `history_snapshot()` supplies the exact immutable basis. `rewrite_history`
+  accepts it only at Idle and starts no work. Stale/foreign snapshots fail even
+  if their messages compare equal. Failed rewrites leave all state unchanged.
+- `history::safe_boundaries` validates complete tool groups. Range endpoints
+  (including insertions) cannot cut between an assistant call batch and any of
+  its results. Source and candidate are checked strictly: orphan, duplicate
+  active, empty or unresolved call IDs and calls outside ToolUse are refused,
+  rather than silently repaired. IDs may be reused after completion.
+- The final `resume_tool` immediately emits another model request. Intercept
+  it **before dispatch** and use `rewrite_request(ticket, plan)` to receive a
+  replacement request. Discard the old effect: its exact ticket is fenced,
+  although generation is unchanged. Check `is_current_model(ticket)` immediately
+  before dispatch, alongside the host's own authority checks.
+- A stream with `stream_start` or `progress` is refused. Absence of a partial
+  does not prove no I/O started: pre-dispatch is a host assertion. For actual
+  in-flight changes, cancel I/O and use `rebind`; a ticket cannot undo effects.
+- Tool records and failure records are not rewritten, replayed or erased.
+
+`history::replace_prefix` is the separate, lazy metadata-preserving projection
+primitive for richer journals. It deliberately performs **no** tool validation:
+its host must choose/validate the cut and may retain existing provider repair.
+Pirc uses it in `SessionStore::context_entries_of` after validating handoffs;
+summary construction, original entry IDs, OM compatibility, storage and later
+`history::project` repair stay host-owned. Core rewrite APIs do not change
+pirc's request context by themselves: its adapter history is still a run record.
+
+Run `cargo run -p pirc-agent-loop --example memory` for a memory-backend-free
+consumer showing overlapping waits, retrieval insertion before a tool
+continuation, and an Idle summary without an automatic restart. The model is
+fake, and memory text is supplied explicitly by that host.
+
 ## Local and Send consumers
 
 There is deliberately no boxed callback trait with unconditional Send bounds.
@@ -142,6 +197,7 @@ adapter. A future integration must resolve and test that separate boundary.
 cargo test -p pirc-agent-loop
 cargo run -p pirc-agent-loop --example local
 cargo run -p pirc-agent-loop --example send
+cargo run -p pirc-agent-loop --example memory
 cargo clippy -p pirc-agent-loop --all-targets -- -D warnings
 ```
 

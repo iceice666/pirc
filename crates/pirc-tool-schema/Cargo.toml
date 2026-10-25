@@ -1,0 +1,15 @@
+[package]
+name = "pirc-tool-schema"
+description = "Compatibility-subset tool schema validation and compact TypeScript documentation"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+# Schema patterns use ECMAScript Unicode regular expressions, not Rust regex syntax.
+regress = "0.12"
+
+[lints]
+workspace = true

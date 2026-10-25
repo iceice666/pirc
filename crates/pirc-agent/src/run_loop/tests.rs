@@ -337,18 +337,18 @@ fn waits_belong_to_the_running_call_and_overlap() {
         [(calls[0].key, WaitReason::Resource("write lease".to_owned()))]
     );
     // The lease is acquired: the approval is still open.
-    run.end_wait(lease);
+    run.end_wait(&lease);
     assert_eq!(run.waiting(), [(calls[0].key, WaitReason::Approval)]);
-    run.end_wait(approval);
+    run.end_wait(&approval);
     assert!(run.waiting().is_empty());
-    run.end_wait(approval);
+    run.end_wait(&approval);
 
     // A wait still open when its call ends is closed with it.
     let open = run.wait(calls[0].key, WaitReason::Approval).unwrap();
     run.tool_result(&calls[0], &result("a", false), CallEnd::Ran)
         .unwrap();
     assert_eq!(run.running_call("a"), None);
-    run.end_wait(open);
+    run.end_wait(&open);
     assert!(run.waiting().is_empty());
     // A token of another run ends nothing here.
     let mut other = RunLoop::new();
@@ -356,7 +356,7 @@ fn waits_belong_to_the_running_call_and_overlap() {
     let foreign = other
         .wait(other_calls[0].key, WaitReason::Approval)
         .unwrap();
-    run.end_wait(foreign);
+    run.end_wait(&foreign);
     assert_eq!(other.waiting().len(), 1);
     // A call that already has its result cannot wait.
     assert_eq!(run.wait(calls[0].key, WaitReason::Approval), None);
@@ -365,5 +365,85 @@ fn waits_belong_to_the_running_call_and_overlap() {
         .unwrap();
     run.tool_result(&calls[1], &result("b", false), CallEnd::Ran)
         .unwrap();
+    assert!(run.waiting().is_empty());
+}
+
+#[test]
+fn a_dialog_from_a_closed_run_cannot_clear_the_next_runs_wait() {
+    let mut old_run = RunLoop::new();
+    let old_calls = tools(&mut old_run, &["same"]);
+    let old_token = old_run
+        .wait(old_calls[0].key, WaitReason::Approval)
+        .unwrap();
+    old_run.close(true, 9).unwrap();
+    assert!(old_run.waiting().is_empty());
+    old_run.end_wait(&old_token);
+
+    let mut next_run = RunLoop::new();
+    let calls = tools(&mut next_run, &["same"]);
+    assert_eq!(old_calls[0].key, calls[0].key);
+    let current = next_run.wait(calls[0].key, WaitReason::Approval).unwrap();
+    next_run.end_wait(&old_token);
+    assert_eq!(next_run.waiting(), [(calls[0].key, WaitReason::Approval)]);
+    next_run.end_wait(&current);
+    assert!(next_run.waiting().is_empty());
+}
+
+#[test]
+fn malformed_or_stale_results_do_not_clear_the_running_calls_waits() {
+    let mut run = RunLoop::new();
+    let calls = tools(&mut run, &["a", "b"]);
+    run.start_call(&calls[0]);
+    let approval = run.wait(calls[0].key, WaitReason::Approval).unwrap();
+    let not_a_result = Message::User {
+        content: pirc_protocol::UserContent::Text("invalid".into()),
+        timestamp: 4,
+    };
+    assert!(
+        run.tool_result(&calls[0], &not_a_result, CallEnd::Ran)
+            .is_err()
+    );
+    assert_eq!(run.running_call("a"), Some(calls[0].key));
+    assert_eq!(run.waiting(), [(calls[0].key, WaitReason::Approval)]);
+
+    let mut invalid = calls[0].clone();
+    invalid.key.index = 99;
+    assert!(
+        run.tool_result(&invalid, &result("a", false), CallEnd::Ran)
+            .is_err()
+    );
+    assert_eq!(run.running_call("a"), Some(calls[0].key));
+    assert_eq!(run.waiting(), [(calls[0].key, WaitReason::Approval)]);
+
+    run.tool_result(&calls[1], &result("b", false), CallEnd::Ran)
+        .unwrap();
+    assert!(
+        run.tool_result(&calls[1], &result("b", false), CallEnd::Ran)
+            .is_err()
+    );
+    assert_eq!(run.running_call("a"), Some(calls[0].key));
+    assert_eq!(run.waiting(), [(calls[0].key, WaitReason::Approval)]);
+    run.end_wait(&approval);
+    assert!(run.waiting().is_empty());
+}
+
+#[test]
+fn overlapping_waits_on_different_calls_are_owned_by_the_core() {
+    let mut run = RunLoop::new();
+    let calls = tools(&mut run, &["a", "b"]);
+    let a = run.wait(calls[0].key, WaitReason::Approval).unwrap();
+    let b = run
+        .wait(calls[1].key, WaitReason::Other("question".into()))
+        .unwrap();
+    run.tool_result(&calls[0], &result("a", false), CallEnd::Ran)
+        .unwrap();
+    run.end_wait(&a);
+    assert_eq!(
+        run.waiting(),
+        [(calls[1].key, WaitReason::Other("question".into()))]
+    );
+    run.close(false, 9).unwrap();
+    assert!(run.waiting().is_empty());
+    run.end_wait(&b);
     assert!(run.waiting().is_empty());
 }

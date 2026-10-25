@@ -733,12 +733,18 @@ pub fn context_entries_of(branch: &[SessionEntry]) -> Vec<(String, Message)> {
             summary_message(summary, *tokens_before, entry.timestamp),
         ));
     }
-    out.extend(
-        branch[start.min(branch.len())..]
-            .iter()
-            .filter_map(|e| e.message().map(|m| (e.id.clone(), m.clone()))),
-    );
-    out
+    // The host selected and validated the snapshot and its rich-journal cut.
+    // The shared projection only replaces the prefix; it knows no OM, entry
+    // formats or storage policy. Provider-facing repair still happens later.
+    let source = branch.iter().map(|entry| {
+        entry
+            .message()
+            .map(|message| (entry.id.clone(), message.clone()))
+    });
+    pirc_agent_loop::history::replace_prefix(source, start, out.into_iter().map(Some))
+        .expect("snapshot boundary is within the branch")
+        .flatten()
+        .collect()
 }
 
 /// `SessionStore`.
@@ -1245,6 +1251,25 @@ mod tests {
             timestamp: 7,
             data,
         }
+    }
+
+    #[test]
+    fn context_projection_keeps_raw_evidence_ids_and_downstream_recovery() {
+        let orphan =
+            pirc_agent_loop::history::interrupted_result("orphan".into(), "read".into(), 7);
+        let branch = vec![
+            entry("a", None, user("keep")),
+            entry("b", Some("a"), EntryData::Message(orphan.clone())),
+        ];
+        let original = branch.clone();
+        let context = context_entries_of(&branch);
+        assert_eq!(context[0].0, "a");
+        assert_eq!(context[1], ("b".into(), orphan));
+        assert_eq!(branch, original);
+        let messages: Vec<_> = context.into_iter().map(|(_, message)| message).collect();
+        let repaired = crate::agent::sanitize_history(&messages);
+        assert_eq!(repaired.len(), 1);
+        assert!(matches!(repaired[0], Message::User { .. }));
     }
 
     #[test]

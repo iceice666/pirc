@@ -39,7 +39,9 @@ use crate::stream::{StreamFn, StreamRequest};
 use crate::tools::{AcquireWrite, HumanWait, Tool, ToolContext, ToolResult};
 use crate::ui::{Choice, DialogOptions, NotifyLevel, Ui};
 use crate::{LocalBoxFuture, now_ms};
-use pirc_agent_loop::{CallKey, NotRun, ToolCall, ToolOutcome, WaitReason, is_context_overflow};
+use pirc_agent_loop::{
+    CallKey, NotRun, ToolCall, ToolOutcome, WaitReason, WaitToken, is_context_overflow,
+};
 
 /// Session entry recording the role a session started in.
 const ROLE_ENTRY: &str = "agent.role";
@@ -415,13 +417,13 @@ type DialogWait = (HumanWait, Option<LoopWait>);
 /// dropped.
 struct LoopWait {
     agent: Weak<Agent>,
-    token: u64,
+    token: WaitToken,
 }
 
 impl Drop for LoopWait {
     fn drop(&mut self) {
         if let Some(agent) = self.agent.upgrade() {
-            agent.with_run_loop(|run_loop| run_loop.end_wait(self.token));
+            agent.with_run_loop(|run_loop| run_loop.end_wait(&self.token));
         }
     }
 }

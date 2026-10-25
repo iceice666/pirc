@@ -8,6 +8,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 - Opt-in, progress-only pots tracking in Web and native Android: durable responsibilities with finite budgets, sourced suggestions, canonical tracking tasks and fenced pause/takeover controls. Tracking never starts an agent; automatic execution is not available in this checkpoint. Gateway schema 1010 requires a state backup before upgrade.
 - Unpublished Rust foundations: pure `pirc-llm-types`, explicitly configured `pirc-llm` transports with optional default-off OAuth, and a host-driven `pirc-agent-loop` state-machine checkpoint. Production agents drive their existing run through `pirc-agent-loop` without changing events, persistence or the authenticated inference route.
+- Reusable overlapping tool waits, snapshot-bound history rewriting independent of the memory backend, and standalone `pirc-tool-schema` validation/documentation helpers. Existing tool policy and memory storage remain host-owned.
 
 ### Fixed
 

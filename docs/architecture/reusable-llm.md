@@ -5,8 +5,9 @@
 Status: staged local implementation, 2026-10-24. The implementation baseline is
 `eb45f71d8fdefb35a796704ebd9ba7accdf098ff`. The user authorized phased code work
 following the design review; this is not deployment or crates.io publication
-authorization. Workspace packages remain unpublished. The three crates are now
-code, not just proposed names. Since 2026-10-25 the production agent's run is
+authorization. Workspace packages remain unpublished. The foundation crates are now
+code, not just proposed names; the separate `pirc-tool-schema` validation/documentation
+crate was added on 2026-10-25. Since 2026-10-25 the production agent's run is
 driven through `pirc-agent-loop` by a thin adapter (see [the loop section](#loop-host-driven-core-and-the-production-adapter));
 the rest of the run's host logic has not moved into the library, and the complete
 unified conversation/pots contracts are not delivered by this extraction.
@@ -18,6 +19,7 @@ unified conversation/pots contracts are not delivered by this extraction.
 | `pirc-llm-types`            | Message/content/tool/delta/usage/stop/error and compatible model/provider DTOs. Pure serialization leaf.                                                   | HTTP, OAuth, sockets, runtime, environment loading and credential storage.                                             |
 | `pirc-llm`                  | Wire request/stream mechanics for six existing transport paths; explicit client/cache/cancellation inputs; optional OAuth helpers.                         | Backend/account selection, Node routing, environment policy, credential persistence and safe user-facing error policy. |
 | `pirc-agent-loop`           | Runtime-neutral, host-driven model/tool progression; effects, correlated resumes, generation fences, partial/failure records and explicit cancellation.    | The production run's host logic (streaming, retries, persistence), tools, approvals, write leases, storage and policy. |
+| `pirc-tool-schema`          | Compatibility-subset tool validation, schema-to-TypeScript documentation and caller-selected prompt-budget fitting.                                        | Tool execution, PTC routing, authorization, config, storage and async runtime.                                         |
 | `pirc-protocol`             | Existing pirc wire envelopes, `InferenceRequest`, `Models`, `InferenceConfig`, limits and Unix socket transport; re-exports shared DTOs.                   | Heavy LLM transport/OAuth dependency.                                                                                  |
 | `pirc-providers`            | Gateway backend/catalog/configuration, account resolution, route selection, cache identity, environment/TLS setup and error masking; adapts to `pirc-llm`. | The new generic loop and client-facing task authority.                                                                 |
 | Gateway / Node / agent host | Identity, scopes, grants, sessions, pots records, dispatch policy, sandbox, cancellation delivery, memory and checkpoints.                                 | Delegating these authority decisions to a reusable model loop.                                                         |
@@ -40,6 +42,22 @@ ordered nested maps/tool schemas, enum spellings, defaults and omitted-versus-nu
 fields. Protocol integration fixtures prove re-export type identity and unchanged
 routing/catalog/socket envelopes. The private opaque-details deserializer remains
 at the data boundary rather than creating a reverse protocol dependency.
+
+## Tool schema validation and documentation
+
+[`pirc-tool-schema`](../../crates/pirc-tool-schema/README.md) is independently
+usable from schema/description metadata: no agent `Tool` trait, protocol, config,
+JavaScript VM or async runtime. It depends only on ordered `serde_json` and
+`regress` for ECMAScript schema patterns. It exports the existing compatibility-
+subset validator, schema-to-TypeScript projection, compact/full signatures,
+bounded summaries and deterministic UTF-16 prompt-budget fitting. This is not
+full JSON Schema; unsupported keywords are ignored and existing validation
+quirks are documented. Rendering is documentation, not validation or authority.
+
+Pirc wrappers use this crate while retaining core capability lists, default
+budgets, PTC routing, common-result conventions and tool-specific caveats.
+Validation still runs in the host's existing policy chain; extraction does not
+grant execution or change hook/approval/write-lease order.
 
 ## Transport API and feature composition
 
@@ -163,6 +181,28 @@ classify and repair; they decide nothing. Token estimation and compaction cut
 points stay in the agent: they need pirc's JavaScript-compatible text helpers
 (`pirc-config`) and pirc's custom message types.
 
+Overlapping call waits now live in the core: `begin_wait` returns an opaque
+`WaitToken`, `finish_wait` ends only that wait, and `waiting_all` retains every
+reason. Tokens from other runs cannot clear newer waits. The adapter's RAII
+guard simply forwards the token; no global wait counter or overlapping-wait
+stack remains in the agent. Legacy single-slot wait APIs remain independent.
+
+History rewriting is memory-strategy-independent: snapshot-bound
+`history::Rewrite` can insert retrieved context, replace a range with a summary,
+or drop old turns. Strict source/candidate checks preserve whole tool batches;
+stale plans fail atomically. `rewrite_history` is Idle-only and starts nothing.
+For the model request emitted immediately after tool completion, the host can
+explicitly call `rewrite_request` before dispatch and receive a fresh ticket;
+it must discard the old effect and check exact ticket identity, not generation
+alone (`is_current_model`). Existing streams are not silently restarted. This
+is not storage, retrieval, summarization or a provenance/permission system.
+
+Pirc shares only the lazy metadata-preserving `history::replace_prefix` projection
+in `SessionStore::context_entries_of`: snapshot selection, rich-journal safety,
+summary construction, entry IDs, OM compatibility and downstream provider repair
+remain host-owned. Rewriting the adapter's run record does not rewrite pirc's
+request context. See the crate's `memory` example for two non-OM strategies.
+
 The adapter has moved none of the following; they remain host-owned production
 logic: before-end persistence/message ordering, role fallback, retry
 decisions/backoff, redaction, context preparation/compaction, sequential
@@ -177,6 +217,16 @@ the local `Rc`/`RefCell` versus separate Send examples.
 
 These are local checkpoint results, not deployment or real-provider acceptance.
 Later code changes must rerun the relevant gates.
+
+2026-10-25 wait/schema/history follow-up: 44 loop tests, 11 tool-schema tests
+(including the README doctest), 413 agent library tests and 34 PTC runtime tests
+passed. Tool-schema tests and strict all-target clippy also passed in an isolated
+copy with no other pirc crates. The local/Send/memory examples ran. Strict workspace
+all-target clippy and formatting passed. Rebuilt debug Gateway/Node binaries
+passed 49 conformance cases across ten suites (agent loop order, PTC/tools,
+memory/compaction, core/store and team), with golden updates disabled. These
+focused gates do not replace the historical full-workspace failures below; the
+full browser/sandbox/transport matrix was not rerun for this follow-up.
 
 | Gate                         | Recorded result                                                                                                                                                                                                                            |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
