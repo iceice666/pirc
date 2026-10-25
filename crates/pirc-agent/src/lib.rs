@@ -30,6 +30,7 @@ pub mod remote;
 pub mod roles;
 pub mod rpc;
 pub mod run;
+pub(crate) mod run_loop;
 pub mod session_store;
 pub mod signal;
 pub mod skills;

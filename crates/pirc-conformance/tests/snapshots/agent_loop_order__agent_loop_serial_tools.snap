@@ -1,0 +1,131 @@
+---
+source: crates/pirc-conformance/tests/agent_loop_order.rs
+expression: r.into_value()
+---
+[
+  {
+    "observed": [
+      "agent_start",
+      "message_start user",
+      "message_end user (persisted)",
+      "response prompt true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update toolcall_start",
+      "message_update toolcall_delta",
+      "message_update toolcall_end",
+      "message_update toolcall_start",
+      "message_update toolcall_delta",
+      "message_update toolcall_end",
+      "message_update toolcall_start",
+      "message_update toolcall_delta",
+      "message_update toolcall_end",
+      "message_end assistant toolUse (persisted)",
+      "panel_changed",
+      "tool_execution_start s1",
+      "write_lease_request",
+      "tool_execution_end s1",
+      "message_start toolResult",
+      "message_end toolResult s1 (persisted)",
+      "tool_execution_start s2",
+      "tool_execution_end s2",
+      "message_start toolResult",
+      "message_end toolResult s2 (persisted)",
+      "tool_execution_start s3",
+      "write_lease_request",
+      "tool_execution_end s3",
+      "message_start toolResult",
+      "message_end toolResult s3 (persisted)",
+      "turn_end",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update text_start",
+      "message_update text_delta",
+      "message_update text_delta",
+      "message_update text_end",
+      "message_end assistant stop (persisted)",
+      "panel_changed",
+      "turn_end",
+      "agent_end",
+      "agent_settled"
+    ],
+    "step": "three calls in one reply"
+  },
+  {
+    "observed": [
+      {
+        "id": "s1",
+        "isError": false,
+        "text": "[exit 0]"
+      },
+      {
+        "id": "s2",
+        "isError": false,
+        "text": "1\tfirst\n2\t"
+      },
+      {
+        "id": "s3",
+        "isError": false,
+        "text": "first\nthird\n[exit 0]"
+      }
+    ],
+    "step": "tool results"
+  },
+  {
+    "observed": "first\nthird\n",
+    "step": "order.txt"
+  },
+  {
+    "observed": [
+      "agent_start",
+      "message_start user",
+      "message_end user (persisted)",
+      "response prompt true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update toolcall_start",
+      "message_update toolcall_delta",
+      "message_update toolcall_end",
+      "message_update toolcall_start",
+      "message_update toolcall_delta",
+      "message_update toolcall_end",
+      "message_end assistant toolUse (persisted)",
+      "panel_changed",
+      "tool_execution_start t1",
+      "queue_update",
+      "response steer true",
+      "tool_execution_end t1",
+      "message_start toolResult",
+      "message_end toolResult t1 (persisted)",
+      "tool_execution_start t2",
+      "write_lease_request",
+      "tool_execution_end t2",
+      "message_start toolResult",
+      "message_end toolResult t2 (persisted)",
+      "turn_end",
+      "queue_update",
+      "message_start user",
+      "message_end user (persisted)",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update text_start",
+      "message_update text_delta",
+      "message_update text_delta",
+      "message_update text_end",
+      "message_end assistant stop (persisted)",
+      "panel_changed",
+      "turn_end",
+      "agent_end",
+      "agent_settled"
+    ],
+    "step": "a steer during the batch"
+  },
+  {
+    "observed": true,
+    "step": "steered.txt exists"
+  }
+]

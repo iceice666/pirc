@@ -1,0 +1,53 @@
+---
+source: crates/pirc-conformance/tests/agent_loop_order.rs
+expression: r.into_value()
+---
+[
+  {
+    "observed": [
+      "agent_start",
+      "message_start user",
+      "message_end user (persisted)",
+      "response prompt true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_end assistant error (not persisted)",
+      "auto_retry_start 1/3 2000ms: Model provider request failed (HTTP 503).",
+      "panel_changed",
+      "auto_retry_end 1 true",
+      "message_start assistant",
+      "panel_changed",
+      "message_end assistant error (not persisted)",
+      "auto_retry_start 2/3 5000ms: Model provider request failed (HTTP 503).",
+      "panel_changed",
+      "auto_retry_end 2 true",
+      "message_start assistant",
+      "panel_changed",
+      "message_end assistant error (not persisted)",
+      "auto_retry_start 3/3 15000ms: Model provider request failed (HTTP 503).",
+      "panel_changed",
+      "auto_retry_end 3 true",
+      "message_start assistant",
+      "panel_changed",
+      "message_end assistant error (persisted)",
+      "panel_changed",
+      "turn_end",
+      "agent_end",
+      "agent_settled"
+    ],
+    "step": "four failed attempts"
+  },
+  {
+    "observed": 4,
+    "step": "model requests"
+  },
+  {
+    "observed": [
+      "session",
+      "message user",
+      "message assistant error: Model provider request failed (HTTP 503)."
+    ],
+    "step": "session"
+  }
+]

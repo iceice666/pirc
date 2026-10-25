@@ -1,0 +1,127 @@
+---
+source: crates/pirc-conformance/tests/agent_loop_order.rs
+expression: r.into_value()
+---
+[
+  {
+    "observed": [
+      "agent_start",
+      "message_start user",
+      "message_end user (persisted)",
+      "response prompt true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_end assistant error (not persisted)",
+      "panel_changed",
+      "turn_end",
+      "compaction_start overflow",
+      "compaction_end overflow",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update text_start",
+      "message_update text_delta",
+      "message_update text_delta",
+      "message_update text_end",
+      "message_end assistant stop (persisted)",
+      "panel_changed",
+      "turn_end",
+      "agent_end",
+      "agent_settled"
+    ],
+    "step": "an overflow, compacted"
+  },
+  {
+    "observed": 3,
+    "step": "model requests"
+  },
+  {
+    "observed": [
+      "session",
+      "message user",
+      "message assistant stop",
+      "message user",
+      "custom",
+      "compaction handoff",
+      "message assistant stop"
+    ],
+    "step": "session"
+  },
+  {
+    "observed": [
+      "agent_start",
+      "message_start user",
+      "message_end user (persisted)",
+      "response prompt true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_end assistant error (not persisted)",
+      "panel_changed",
+      "turn_end",
+      "compaction_start overflow",
+      "compaction_end overflow",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_end assistant error (persisted)",
+      "panel_changed",
+      "turn_end",
+      "agent_end",
+      "agent_settled"
+    ],
+    "step": "a second overflow in one run"
+  },
+  {
+    "observed": 3,
+    "step": "model requests"
+  },
+  {
+    "observed": [
+      "agent_start",
+      "message_start user",
+      "message_end user (persisted)",
+      "response prompt true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_end assistant error (not persisted)",
+      "panel_changed",
+      "turn_end",
+      "compaction_start overflow",
+      "compaction_end overflow failed (aborted false): handoff_invalid_output",
+      "turn_end",
+      "agent_end",
+      "agent_settled"
+    ],
+    "step": "an overflow whose compaction fails"
+  },
+  {
+    "observed": 2,
+    "step": "model requests"
+  },
+  {
+    "observed": [
+      "session",
+      "message user",
+      "message assistant stop",
+      "message user",
+      "custom",
+      "compaction handoff",
+      "message assistant stop",
+      "message user",
+      "message assistant stop",
+      "message user",
+      "custom",
+      "compaction handoff",
+      "message assistant error: context length exceeded",
+      "message user",
+      "message assistant stop",
+      "message user",
+      "custom",
+      "message assistant error: context length exceeded"
+    ],
+    "step": "session at the end"
+  }
+]

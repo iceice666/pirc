@@ -5,14 +5,27 @@ Implementation baseline: `eb45f71d8fdefb35a796704ebd9ba7accdf098ff`.
 
 ## Scope, honestly
 
-This is the **fake-adapter/state-machine checkpoint**, not the completed extraction
-of `pirc-agent::Agent::run`. It is executable progression logic, not only a trait,
-but the production agent does **not** depend on it yet. No provider, tool, project,
-sandbox, policy, session storage or authority is embedded in this crate.
+This is the **state-machine checkpoint**, not the completed extraction of
+`pirc-agent::Agent::run`. It is executable progression logic, not only a trait.
+No provider, tool, project, sandbox, policy, session storage or authority is
+embedded in this crate.
+
+The production agent drives its run through this core via a thin adapter,
+`crates/pirc-agent/src/run_loop.rs`: each model call takes a ticket, the final
+reply goes through `finish_model`, tool calls are taken from the validated
+`Step::Tools` batch and each result is fenced by its call key, an overflow
+compaction is `ReplaceHistory`, and the run ends in an explicit terminal state.
+The adapter emits and writes nothing. Its core history is a record of the run,
+**not** the request context: requests are still built from the session store.
+Where the core is stricter than the agent, the agent's behavior wins (rejected
+call ids still run, unfenced; an interrupted reply rebinds instead of
+cancelling; retries stay inside the agent's `stream`, so the core only sees
+final attempts and never `Recovery::Retry`). Progress snapshots and tool waits
+are not fed to the core yet.
 
 The source inventory for this checkpoint was the production agent's `stream`
-and `run` implementations. The existing host owns all of the following, and
-this checkpoint intentionally has not moved or changed them:
+and `run` implementations. The existing host still owns all of the following;
+the adapter has not moved or changed them:
 
 - before-end persistence preceding message_end, panel/microtask event ordering;
 - role fallback, retry classification/backoff, redaction and remote Node routing;
@@ -20,8 +33,14 @@ this checkpoint intentionally has not moved or changed them:
 - admission/steering/team queues, features, context preparation and compaction;
 - completion waits, budgets, session recovery and host cancellation signals.
 
-The future integration gate is an explicit pirc adapter plus unchanged agent and
-pirc-conformance event traces. Passing fake tests alone does not meet that gate.
+The integration gate is the pirc adapter plus unchanged agent and
+pirc-conformance event traces; fake tests alone do not meet it.
+`crates/pirc-conformance/tests/agent_loop_order.rs` records the production
+ordering this gate protects: persistence before `message_end` (and no
+`message_end` when persistence fails), serial tool calls with send-now/abort
+interruption records, retry/fallback/exhaustion events around unpersisted
+attempts, and at most one overflow compaction per run. Completion waits are
+covered by the team scenarios except the `completionWaitMs` timeout path.
 In particular, accepting parallel results here does not switch pirc tools to
 parallel scheduling or grant permission to run them.
 

@@ -1,0 +1,139 @@
+---
+source: crates/pirc-conformance/tests/agent_loop_order.rs
+expression: r.into_value()
+---
+[
+  {
+    "observed": [
+      "agent_start",
+      "message_start user",
+      "message_end user (persisted)",
+      "response prompt true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update toolcall_start",
+      "message_update toolcall_delta",
+      "message_update toolcall_end",
+      "message_update toolcall_start",
+      "message_update toolcall_delta",
+      "message_update toolcall_end",
+      "message_update toolcall_start",
+      "message_update toolcall_delta",
+      "message_update toolcall_end",
+      "message_end assistant toolUse (persisted)",
+      "panel_changed",
+      "tool_execution_start n1",
+      "queue_update",
+      "response follow_up true",
+      "queue_update",
+      "response send_now true",
+      "tool_execution_end n1",
+      "message_start toolResult",
+      "message_end toolResult n1 (persisted)",
+      "message_start toolResult",
+      "message_end toolResult n2 (persisted)",
+      "message_start toolResult",
+      "message_end toolResult n3 (persisted)",
+      "turn_end",
+      "queue_update",
+      "message_start user",
+      "message_end user (persisted)",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update text_start",
+      "message_update text_delta",
+      "message_update text_delta",
+      "message_update text_end",
+      "message_end assistant stop (persisted)",
+      "panel_changed",
+      "turn_end",
+      "agent_end",
+      "agent_settled"
+    ],
+    "step": "send now: order"
+  },
+  {
+    "observed": [
+      {
+        "id": "n1",
+        "isError": true,
+        "text": "[aborted]"
+      },
+      {
+        "id": "n2",
+        "isError": true,
+        "text": "Interrupted: the user sent a message before this tool ran."
+      },
+      {
+        "id": "n3",
+        "isError": true,
+        "text": "Interrupted: the user sent a message before this tool ran."
+      }
+    ],
+    "step": "send now: tool results"
+  },
+  {
+    "observed": false,
+    "step": "send now: later call ran"
+  },
+  {
+    "observed": [
+      "agent_start",
+      "message_start user",
+      "message_end user (persisted)",
+      "response prompt true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update toolcall_start",
+      "message_update toolcall_delta",
+      "message_update toolcall_end",
+      "message_update toolcall_start",
+      "message_update toolcall_delta",
+      "message_update toolcall_end",
+      "message_update toolcall_start",
+      "message_update toolcall_delta",
+      "message_update toolcall_end",
+      "message_end assistant toolUse (persisted)",
+      "panel_changed",
+      "tool_execution_start a1",
+      "tool_execution_end a1",
+      "message_start toolResult",
+      "message_end toolResult a1 (persisted)",
+      "message_start toolResult",
+      "message_end toolResult a2 (persisted)",
+      "message_start toolResult",
+      "message_end toolResult a3 (persisted)",
+      "turn_end",
+      "agent_end",
+      "agent_settled"
+    ],
+    "step": "abort: order"
+  },
+  {
+    "observed": [
+      {
+        "id": "a1",
+        "isError": true,
+        "text": "[aborted]"
+      },
+      {
+        "id": "a2",
+        "isError": true,
+        "text": "Aborted by the user before this tool ran."
+      },
+      {
+        "id": "a3",
+        "isError": true,
+        "text": "Aborted by the user before this tool ran."
+      }
+    ],
+    "step": "abort: tool results"
+  },
+  {
+    "observed": false,
+    "step": "abort: later call ran"
+  }
+]

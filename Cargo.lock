@@ -1965,6 +1965,7 @@ dependencies = [
  "icu_normalizer",
  "indexmap",
  "nix",
+ "pirc-agent-loop",
  "pirc-config",
  "pirc-policy",
  "pirc-protocol",

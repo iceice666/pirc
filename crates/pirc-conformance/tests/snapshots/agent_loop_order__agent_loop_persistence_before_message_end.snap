@@ -1,0 +1,105 @@
+---
+source: crates/pirc-conformance/tests/agent_loop_order.rs
+expression: r.into_value()
+---
+[
+  {
+    "observed": [
+      "agent_start",
+      "message_start user",
+      "message_end user (persisted)",
+      "response prompt true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update toolcall_start",
+      "message_update toolcall_delta",
+      "message_update toolcall_end",
+      "message_end assistant toolUse (persisted)",
+      "panel_changed",
+      "tool_execution_start p1",
+      "tool_execution_end p1",
+      "message_start toolResult",
+      "message_end toolResult p1 (persisted)",
+      "turn_end",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update text_start",
+      "message_update text_delta",
+      "message_update text_delta",
+      "message_update text_end",
+      "message_end assistant stop (persisted)",
+      "panel_changed",
+      "turn_end",
+      "agent_end",
+      "agent_settled"
+    ],
+    "step": "a tool round"
+  },
+  {
+    "observed": [
+      "agent_start",
+      "message_start user",
+      "message_end user (persisted)",
+      "response prompt true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update text_start",
+      "message_update text_delta",
+      "message_update text_delta",
+      "message_update text_end",
+      "panel_changed",
+      "agent_error Agent loop crashed: writer_stale_reopen",
+      "notify error: Agent loop crashed: writer_stale_reopen",
+      "agent_settled"
+    ],
+    "step": "a reply that cannot be persisted"
+  },
+  {
+    "observed": [
+      "session",
+      "message user",
+      "message assistant toolUse",
+      "message toolResult",
+      "message assistant stop",
+      "message user"
+    ],
+    "step": "session afterwards"
+  },
+  {
+    "observed": [
+      "agent_start",
+      "notify error: Failed to start run: commit_outcome_unknown_reopen",
+      "response prompt true",
+      "turn_start",
+      "message_start assistant",
+      "panel_changed",
+      "message_update text_start",
+      "message_update text_delta",
+      "message_update text_delta",
+      "message_update text_end",
+      "panel_changed",
+      "agent_error Agent loop crashed: commit_outcome_unknown_reopen",
+      "notify error: Agent loop crashed: commit_outcome_unknown_reopen",
+      "agent_settled"
+    ],
+    "step": "the next prompt"
+  },
+  {
+    "observed": 1,
+    "step": "model requests for it"
+  },
+  {
+    "observed": [
+      "session",
+      "message user",
+      "message assistant toolUse",
+      "message toolResult",
+      "message assistant stop",
+      "message user"
+    ],
+    "step": "session at the end"
+  }
+]

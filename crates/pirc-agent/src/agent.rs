@@ -32,6 +32,7 @@ use crate::messages::empty_usage;
 use crate::ptc::{self, CapabilityRegistry, DIRECT_CAPABILITIES, WRAPPER_NAMES};
 use crate::roles::{AgentRole, expand_models, read_roles};
 use crate::rpc::Write;
+use crate::run_loop::{CallEnd, Reply, RunLoop};
 use crate::session_store::{EntryData, OPERATION_ENTRY, SessionEntry, SessionStore};
 use crate::signal::{AbortController, AbortSignal};
 use crate::stream::{StreamFn, StreamRequest};
@@ -2624,6 +2625,7 @@ impl Agent {
         let mut overflow_retried = false;
         let mut completion_timed_out = false;
         let mut produced: Vec<Message> = Vec::new();
+        let mut progression = RunLoop::new();
         while !signal.aborted() {
             turns += 1;
             if turns > max_turns {
@@ -2674,6 +2676,7 @@ impl Agent {
                 Ok(())
             });
             let prompt = self.system_prompt();
+            let ticket = progression.request()?;
             let message = self
                 .stream(
                     &prompt,
@@ -2685,6 +2688,7 @@ impl Agent {
                     },
                 )
                 .await?;
+            let reply = progression.reply(ticket, &message, interrupted())?;
             if !persisted.get() && compacts_instead(&message, overflow_retried) {
                 overflow_retried = true;
                 self.emit(json!({ "type": "turn_end" }));
@@ -2701,6 +2705,7 @@ impl Agent {
                     })
                     .await?;
                 if result.ok {
+                    progression.compacted()?;
                     continue;
                 }
             }
@@ -2708,33 +2713,31 @@ impl Agent {
                 self.append(EntryData::Message(Message::Assistant(message.clone())))?;
             }
             produced.push(Message::Assistant(message.clone()));
-            if message.stop_reason == StopReason::ToolUse {
-                let calls: Vec<(String, String, Map<String, Value>)> = message
-                    .content
-                    .iter()
-                    .filter_map(|part| match part {
-                        AssistantContent::ToolCall {
-                            id,
-                            name,
-                            arguments,
-                            ..
-                        } => Some((id.clone(), name.clone(), arguments.clone())),
-                        _ => None,
-                    })
-                    .collect();
-                for (id, name, arguments) in calls {
-                    if turn_signal.aborted() {
-                        let text = if signal.aborted() {
-                            "Aborted by the user before this tool ran."
-                        } else {
-                            "Interrupted: the user sent a message before this tool ran."
-                        };
-                        self.record_result(&id, &name, ToolResult::error(text))?;
-                        continue;
+            // Only a tool-use reply has calls; they run one at a time.
+            match reply {
+                Reply::Tools(calls) => {
+                    for call in &calls {
+                        let (result, end) = self
+                            .run_call(
+                                &call.id,
+                                &call.name,
+                                call.arguments.clone(),
+                                &turn_signal,
+                                &signal,
+                            )
+                            .await?;
+                        progression.tool_result(call, &result, end)?;
                     }
-                    self.execute_tool(&id, &name, arguments, &turn_signal)
-                        .await?;
                 }
+                Reply::Unchecked(calls) => {
+                    for (id, name, arguments) in calls {
+                        let (result, _) = self
+                            .run_call(&id, &name, arguments, &turn_signal, &signal)
+                            .await?;
+                        progression.unchecked_result(result);
+                    }
+                }
+                Reply::Nothing => {}
             }
             self.emit(json!({ "type": "turn_end" }));
             for feature in self.features.clone() {
@@ -2795,10 +2798,39 @@ impl Agent {
             }
             break;
         }
+        progression.close(signal.aborted(), now_ms())?;
         *self.turn.borrow_mut() = None;
         self.interrupt_pending.set(false);
         self.emit(json!({ "type": "agent_end", "willRetry": false }));
         Ok(())
+    }
+
+    /// One call of a reply: run, or recorded as not run once its turn was
+    /// aborted (`signal` is the run's).
+    async fn run_call(
+        &self,
+        id: &str,
+        name: &str,
+        arguments: Map<String, Value>,
+        turn_signal: &AbortSignal,
+        signal: &AbortSignal,
+    ) -> Result<(Message, CallEnd), String> {
+        if turn_signal.aborted() {
+            let text = if signal.aborted() {
+                "Aborted by the user before this tool ran."
+            } else {
+                "Interrupted: the user sent a message before this tool ran."
+            };
+            let result = self.record_result(id, name, ToolResult::error(text))?;
+            return Ok((result, CallEnd::Skipped));
+        }
+        let result = self.execute_tool(id, name, arguments, turn_signal).await?;
+        let end = if turn_signal.aborted() {
+            CallEnd::RanAborted
+        } else {
+            CallEnd::Ran
+        };
+        Ok((result, end))
     }
 
     fn record_result(&self, id: &str, name: &str, result: ToolResult) -> Result<Message, String> {
