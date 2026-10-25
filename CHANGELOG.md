@@ -4,18 +4,31 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-25
+
 ### Added
 
+- Remove idle Work workspaces from the Gateway without deleting node files, sessions or memory. Adding the same canonical path again restores its existing identity; linked projects retain the offline link.
 - Opt-in, progress-only pots tracking in Web and native Android: durable responsibilities with finite budgets, sourced suggestions, canonical tracking tasks and fenced pause/takeover controls. Tracking never starts an agent; automatic execution is not available in this checkpoint. Gateway schema 1010 requires a state backup before upgrade.
 - Unpublished Rust foundations: pure `pirc-llm-types`, explicitly configured `pirc-llm` transports with optional default-off OAuth, and a host-driven `pirc-agent-loop` state-machine checkpoint. Production agents drive their existing run through `pirc-agent-loop` without changing events, persistence or the authenticated inference route.
 - Reusable overlapping tool waits, snapshot-bound history rewriting independent of the memory backend, and standalone `pirc-tool-schema` validation/documentation helpers. Existing tool policy and memory storage remain host-owned.
 
+### Changed
+
+- LLM transports now use catalog-free runtime requests and structured completion, cancellation and failure outcomes. Provider wire formats, partial streaming snapshots and cancellation behavior stay compatible; tool argument ownership and SSE buffering avoid unnecessary copying.
+
 ### Fixed
 
+- Saturate aggregated LLM usage counts instead of overflowing on extreme provider values.
 - After a session write fails, later prompts end at once instead of calling the model for a reply that could not be saved.
 - Android removes already-missing terminal tabs correctly in Traditional Chinese while preserving genuine close errors.
 - Android keeps standard keyboard event names and key codes in Traditional Chinese, restoring native document shortcuts and remote browser Enter/Tab/Escape, deletion and IME submit.
 - Android native modal dialogs with author `inset:auto` position independently of their former DOM parent layout, keeping controls aligned with their hit targets.
+
+### Upgrade notes
+
+- Back up Gateway state before schema 1010 migrations; older Gateways cannot open the migrated database. Update Gateway, Nodes and client assets together. Node protocol 14 and Node schema 2002 are unchanged from 0.9.3. Pots tracking remains opt-in and cannot execute tasks automatically. See [upgrades](docs/deploy/upgrades.md).
+- The Rust libraries remain unpublished on crates.io. Android remains a beta preview; macOS archives are not Developer ID signed or notarized.
 
 ## [0.9.3] - 2026-10-23
 

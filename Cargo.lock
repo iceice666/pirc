@@ -1957,7 +1957,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "pirc-agent"
-version = "0.9.3"
+version = "0.10.0"
 dependencies = [
  "base64 0.22.1",
  "getrandom 0.3.4",
@@ -1984,7 +1984,7 @@ dependencies = [
 
 [[package]]
 name = "pirc-agent-loop"
-version = "0.9.3"
+version = "0.10.0"
 dependencies = [
  "pirc-llm-types",
  "regex-lite",
@@ -1994,7 +1994,7 @@ dependencies = [
 
 [[package]]
 name = "pirc-config"
-version = "0.9.3"
+version = "0.10.0"
 dependencies = [
  "chrono-tz",
  "iana-time-zone",
@@ -2012,7 +2012,7 @@ dependencies = [
 
 [[package]]
 name = "pirc-conformance"
-version = "0.9.3"
+version = "0.10.0"
 dependencies = [
  "aes-gcm",
  "axum",
@@ -2036,7 +2036,7 @@ dependencies = [
 
 [[package]]
 name = "pirc-gateway"
-version = "0.9.3"
+version = "0.10.0"
 dependencies = [
  "aes-gcm",
  "axum",
@@ -2071,7 +2071,7 @@ dependencies = [
 
 [[package]]
 name = "pirc-llm"
-version = "0.9.3"
+version = "0.10.0"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -2089,7 +2089,7 @@ dependencies = [
 
 [[package]]
 name = "pirc-llm-types"
-version = "0.9.3"
+version = "0.10.0"
 dependencies = [
  "indexmap",
  "serde",
@@ -2098,7 +2098,7 @@ dependencies = [
 
 [[package]]
 name = "pirc-node"
-version = "0.9.3"
+version = "0.10.0"
 dependencies = [
  "base64 0.22.1",
  "command-fds",
@@ -2131,7 +2131,7 @@ dependencies = [
 
 [[package]]
 name = "pirc-policy"
-version = "0.9.3"
+version = "0.10.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2140,7 +2140,7 @@ dependencies = [
 
 [[package]]
 name = "pirc-protocol"
-version = "0.9.3"
+version = "0.10.0"
 dependencies = [
  "indexmap",
  "libc",
@@ -2151,7 +2151,7 @@ dependencies = [
 
 [[package]]
 name = "pirc-providers"
-version = "0.9.3"
+version = "0.10.0"
 dependencies = [
  "axum",
  "futures-util",
@@ -2174,7 +2174,7 @@ dependencies = [
 
 [[package]]
 name = "pirc-ptc"
-version = "0.9.3"
+version = "0.10.0"
 dependencies = [
  "libc",
  "nix",
@@ -2186,7 +2186,7 @@ dependencies = [
 
 [[package]]
 name = "pirc-tool-schema"
-version = "0.9.3"
+version = "0.10.0"
 dependencies = [
  "regress",
  "serde_json",
