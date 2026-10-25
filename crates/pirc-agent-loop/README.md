@@ -41,7 +41,7 @@ The source inventory for this checkpoint was the production agent's `stream`
 and `run` implementations. The existing host still owns all of the following;
 the adapter has not moved or changed them:
 
-- before-end persistence preceding message_end, panel/microtask event ordering;
+- before-end persistence preceding message_end, panel event ordering;
 - role fallback, retry classification/backoff, redaction and remote Node routing;
 - sequential production tool execution, validation/hooks/approval/write leases;
 - admission/steering/team queues, features, context preparation and compaction;

@@ -24,9 +24,14 @@ baseline: eb45f71d8fdefb35a796704ebd9ba7accdf098ff.
   explicit client/cache/cancellation inputs and separate wire features; OAuth is
   optional and default off. pirc retains accounts, catalogs, credential storage,
   host environment/TLS policy, routing/cache identity and error redaction.
-- **Loop:** pirc-agent-loop is an executable fake-adapter/state-machine
-  checkpoint with correlated effects, generation fences, partial/error records,
-  cancellation and local/Send proofs. Production Agent::run is **not** cut over.
+- **Loop:** pirc-agent-loop is an executable state-machine core with
+  correlated effects, generation fences, partial/error records, cancellation and
+  local/Send proofs. Since 2026-10-25 the production `Agent::run` is driven
+  through it by a thin adapter (`crates/pirc-agent/src/run_loop.rs`) that emits
+  and writes nothing, so event traces and persistence are unchanged; see
+  [Reusable LLM foundations](../docs/architecture/reusable-llm.md#loop-host-driven-core-and-the-production-adapter).
+  Retries, persistence, tools, approvals, queues and completion waits stay
+  host-owned; the remaining adapter follow-ups are listed there.
 - **pots:** Gateway schema 1010 persists owner-scoped responsibilities, generic
   session-progress suggestions and canonical tracking tasks. Explicit activation,
   finite lifetime budgets, durable controls, source/expiry checks, capped lists and
@@ -54,8 +59,9 @@ in two targets: memory and five node-browser cases. A final fresh-binary focused
 rerun of ten suites passed 20 tests; it does not replace the failed full gate. No
 assertions/snapshots were weakened. The architecture reference
 details scope and matrix gaps. These are **not** full workspace/conformance,
-real-provider, production loop-adapter, pots dispatch, device, deployment or
-publication acceptance. Do not mark P7 or the delivery sequence complete from
+real-provider, pots dispatch, device, deployment or publication acceptance. The
+later production loop adapter has its own recorded gates in the architecture
+reference. Do not mark P7 or the delivery sequence complete from
 these focused proofs.
 
 All seven accepted follow-up areas are detailed in [Conversation execution contracts](conversation-execution-contracts.md):
@@ -298,7 +304,7 @@ separates those choices from numerical settings and engineering decisions still 
 | B2. Product foundations        | Versioned workspace bindings, mount enforcement, durable tasks/decisions, independent-client state            | Stage A; can use the existing agent loop and provider adapter                                   |
 | C. Unified workflow            | Same-conversation work, project resources, meaningful waiting/progress, Web/App contract parity               | Mount transitions, replay prevention and concurrent-writer acceptance                           |
 | D. pots                        | Overview and attributed dispatch, then scoped proactive observation/digests                                   | Tasks, provenance, grants, durable wake-ups and notification reconciliation                     |
-| E. Loop extraction             | Fake-adapter core, pirc integration and event-order/conformance checks                                        | Stable provider boundary plus understood tool-wait/approval/cancel semantics                    |
+| E. Loop extraction             | Fake-adapter core, pirc integration and event-order/conformance checks (adapter in place since 2026-10-25)    | Stable provider boundary plus understood tool-wait/approval/cancel semantics                    |
 | F. Optional frontend migration | Flutter Web comparison against current Web on difficult interactions                                          | Separate decision after measurement; not a dependency of App independence                       |
 
 B1/B2 are independent work streams. The later phased implementation authorization

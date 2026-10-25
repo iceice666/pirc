@@ -6,19 +6,21 @@ Status: staged local implementation, 2026-10-24. The implementation baseline is
 `eb45f71d8fdefb35a796704ebd9ba7accdf098ff`. The user authorized phased code work
 following the design review; this is not deployment or crates.io publication
 authorization. Workspace packages remain unpublished. The three crates are now
-code, not just proposed names, but production agent-loop integration and the
-complete unified conversation/pots contracts are not delivered by this extraction.
+code, not just proposed names. Since 2026-10-25 the production agent's run is
+driven through `pirc-agent-loop` by a thin adapter (see [the loop section](#loop-host-driven-core-and-the-production-adapter));
+the rest of the run's host logic has not moved into the library, and the complete
+unified conversation/pots contracts are not delivered by this extraction.
 
 ## Boundaries and dependency direction
 
-| Component                   | Current responsibility                                                                                                                                     | Deliberately outside it                                                                                                 |
-| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `pirc-llm-types`            | Message/content/tool/delta/usage/stop/error and compatible model/provider DTOs. Pure serialization leaf.                                                   | HTTP, OAuth, sockets, runtime, environment loading and credential storage.                                              |
-| `pirc-llm`                  | Wire request/stream mechanics for six existing transport paths; explicit client/cache/cancellation inputs; optional OAuth helpers.                         | Backend/account selection, Node routing, environment policy, credential persistence and safe user-facing error policy.  |
-| `pirc-agent-loop`           | Runtime-neutral, host-driven model/tool progression; effects, correlated resumes, generation fences, partial/failure records and explicit cancellation.    | Production `Agent::run`, tools, mounts, approvals, write leases, storage, project/task ownership and scheduling policy. |
-| `pirc-protocol`             | Existing pirc wire envelopes, `InferenceRequest`, `Models`, `InferenceConfig`, limits and Unix socket transport; re-exports shared DTOs.                   | Heavy LLM transport/OAuth dependency.                                                                                   |
-| `pirc-providers`            | Gateway backend/catalog/configuration, account resolution, route selection, cache identity, environment/TLS setup and error masking; adapts to `pirc-llm`. | The new generic loop and client-facing task authority.                                                                  |
-| Gateway / Node / agent host | Identity, scopes, grants, sessions, pots records, dispatch policy, sandbox, cancellation delivery, memory and checkpoints.                                 | Delegating these authority decisions to a reusable model loop.                                                          |
+| Component                   | Current responsibility                                                                                                                                     | Deliberately outside it                                                                                                |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `pirc-llm-types`            | Message/content/tool/delta/usage/stop/error and compatible model/provider DTOs. Pure serialization leaf.                                                   | HTTP, OAuth, sockets, runtime, environment loading and credential storage.                                             |
+| `pirc-llm`                  | Wire request/stream mechanics for six existing transport paths; explicit client/cache/cancellation inputs; optional OAuth helpers.                         | Backend/account selection, Node routing, environment policy, credential persistence and safe user-facing error policy. |
+| `pirc-agent-loop`           | Runtime-neutral, host-driven model/tool progression; effects, correlated resumes, generation fences, partial/failure records and explicit cancellation.    | The production run's host logic (streaming, retries, persistence), tools, approvals, write leases, storage and policy. |
+| `pirc-protocol`             | Existing pirc wire envelopes, `InferenceRequest`, `Models`, `InferenceConfig`, limits and Unix socket transport; re-exports shared DTOs.                   | Heavy LLM transport/OAuth dependency.                                                                                  |
+| `pirc-providers`            | Gateway backend/catalog/configuration, account resolution, route selection, cache identity, environment/TLS setup and error masking; adapts to `pirc-llm`. | The new generic loop and client-facing task authority.                                                                 |
+| Gateway / Node / agent host | Identity, scopes, grants, sessions, pots records, dispatch policy, sandbox, cancellation delivery, memory and checkpoints.                                 | Delegating these authority decisions to a reusable model loop.                                                         |
 
 The deployed inference topology is unchanged: **agent → authenticated Node socket
 → Gateway → provider**. An App does not receive provider secrets or call the new
@@ -101,7 +103,7 @@ Synthetic local endpoints prove mechanics without real accounts. No real login,
 provider credentials, paid evaluation or remote publication was performed for this
 checkpoint.
 
-## Loop: executable proof, not production cutover
+## Loop: host-driven core and the production adapter
 
 The new reducer returns effects; it never executes a tool itself:
 
@@ -126,13 +128,36 @@ The host must check generation immediately before dispatch, deliver actual abort
 and enforce mount/lock revocation. A reducer cannot close a remote process or
 revoke an already-open file descriptor by changing state.
 
-The existing `pirc-agent::Agent::run` remains in place and does not depend on the
-new loop. Before-end persistence/message ordering, streaming/microtask behavior,
-retries, context preparation/compaction, sequential production tools, approvals,
-feature hooks, queues, budgets and completion waits remain host-owned production
-logic. Fake parallel-result tests do not enable parallel production tools.
-See the [crate contract](../../crates/pirc-agent-loop/README.md) for the complete
-checkpoint API and local `Rc`/`RefCell` versus separate Send examples.
+`pirc-agent::Agent::run` drives its run through this core via
+[`run_loop.rs`](../../crates/pirc-agent/src/run_loop.rs) (cut over in `a5485cc8`).
+Each model call takes a ticket; the final reply goes through `finish_model`; tool
+calls come from the validated `Step::Tools` batch and each result is fenced by its
+call key; an overflow compaction is `ReplaceHistory`; and the run ends in an
+explicit terminal state (`Completed`, `Cancelled` or `Failed`). The adapter also
+reports streaming progress at content-block boundaries and the running call's
+waits: dialogs (`Approval` inside the auto-mode gate, otherwise
+`Other("dialog")`) and the write lease (`Resource`). The adapter emits and
+writes nothing: the event trace and the session store are unchanged, and requests
+are still built from the session store, not from the core's history. The core's
+history is shared with model requests as `Arc<Vec<Message>>` (copy-on-write), so
+dropping a request copies nothing.
+
+Where the core is stricter than the agent, the agent's behavior wins. Tool-use
+replies with empty or repeated call ids, or with no calls, still run as listed,
+outside the fence (`supersede`). An interrupted turn supersedes its request
+instead of cancelling the run. Retries stay inside the agent's `stream`, so the
+core never sees `Recovery::Retry`. A session that refuses a write ends the run at
+once (`3914e9ec`).
+
+The adapter has moved none of the following; they remain host-owned production
+logic: before-end persistence/message ordering, role fallback, retry
+classification/backoff, redaction, context preparation/compaction, sequential
+tools through validation/hooks/approval/write leases, feature hooks, queues,
+budgets and completion waits. Progress and waits are bookkeeping the agent does
+not read; a refused update is dropped, not a run error. Fake parallel-result
+tests do not enable parallel production tools. See the
+[crate contract](../../crates/pirc-agent-loop/README.md) for the complete API and
+the local `Rc`/`RefCell` versus separate Send examples.
 
 ## Verification actually run
 
@@ -148,7 +173,9 @@ Later code changes must rerun the relevant gates.
 | Loop checkpoint              | 16 tests passed; local and Send examples both ran successfully; focused fmt and all-target strict clippy passed. Normal dependencies contain no HTTP/runtime.                                                                              |
 | pots tracking checkpoint     | 22 focused store/API/host/migration tests passed; enclosing Gateway suite passed 178 tests, including 1009-to-1010 migration. This does not test an execution adapter: none is installed.                                                  |
 | Native Android tracking      | 31 focused/regression tests passed (11 new pots cases), with changed production/test analysis clean. This is not APK, physical-device or push acceptance.                                                                                  |
-| Existing production agent    | 399 library tests passed. The new loop is not integrated; this is a regression gate, not evidence of new-loop production parity.                                                                                                           |
+| Existing production agent    | 399 library tests passed at the implementation baseline, before the adapter existed: a regression gate, not evidence of new-loop production parity.                                                                                        |
+| Production loop adapter      | 2026-10-25 at `c4df1c27`: 411 agent library tests (incl. adapter, streaming-progress, wait, auto-mode gate and `completionWaitMs` timeout tests) and strict workspace clippy passed.                                                       |
+| Conformance with the adapter | Same day, debug executables: 227 passed, including all agent suites and the 7 `agent_loop_order` cases; 5 `node_browser` cases failed as in earlier runs (browser environment; not rerun unsandboxed).                                     |
 | Formatting                   | Final `cargo fmt --all --check` passed.                                                                                                                                                                                                    |
 | Workspace lint               | `cargo clippy --workspace --all-targets --offline -- -D warnings` passed at the integrated checkpoint.                                                                                                                                     |
 
@@ -186,8 +213,14 @@ than suppressed. Disposable matrix outputs are removed on exit.
 
 ## Remaining gates
 
-- A production pirc loop adapter and unchanged agent/conformance event traces,
-  including suspension, revocation, compaction, cancellation and child completion.
+- Production loop adapter follow-ups: waits of unchecked calls (rejected call
+  ids) are not tracked; the core keeps the run's replies and tool results
+  alongside the session store until the run ends (tool results twice: history
+  and tool records), and the adapter and core both copy partials. The prompt
+  command still answers `true` after a write-refused session ends its run,
+  pending a Web/Android decision, and such a session has no reopen path.
+  Revocation/rebind fences are not used by the production host yet. The five
+  `node_browser` conformance cases need a run with a browser outside the sandbox.
 - Rerun the isolated transport/OAuth matrix and dependency review after further
   changes; its current pass is not a permanent API/feature-stability guarantee.
   A pluggable OAuth callback-server factory remains unimplemented.

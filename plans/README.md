@@ -30,10 +30,11 @@ connects those requirements to the proposed provider/loop extraction, with
 confirmed coupling, corrections and staged acceptance gates. The user subsequently
 authorized phased code implementation, not deployment or crate publication. A
 [bounded implementation checkpoint](pots-and-library-extraction.md#implementation-checkpoint--not-the-complete-target)
-now includes pure types, transport/OAuth extraction, a fake-adapter loop core and
-progress-only pots tracking with locally tested Web and native Android views.
-Start remains unavailable; production loop integration, APK/device acceptance and the wider architecture
-remain open. Existing security/data-loss issues and acceptance gaps below remain
+now includes pure types, transport/OAuth extraction, a loop core that the
+production agent run drives through a thin adapter, and progress-only pots
+tracking with locally tested Web and native Android views. Start remains
+unavailable; the adapter's follow-ups, APK/device acceptance and the wider
+architecture remain open. Existing security/data-loss issues and acceptance gaps below remain
 valid; this does not mark mobile parity complete. The user subsequently accepted
 [the specification-review recommendations](unified-conversations.md#accepted-specification-review-recommendations-2026-10-24)
 as the planning baseline. Accepted choices are no longer repeated as approval
