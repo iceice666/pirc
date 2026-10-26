@@ -50,15 +50,29 @@ Gateway restart between reserve/prepare/start fences unfinished preparation rath
 than silently restarting it. Progress uses coalesced runtime events and a slow
 recovery sweep while clients are closed; there are no observer model workers.
 
-A new dedicated session temporarily refuses ordinary input while its first pots
-instruction is prepared/sending, preventing another run from queuing ahead of it.
-Takeover fences undelivered work but does not abort already-delivered execution.
-Stop stops only that dedicated execution session, never the original source.
-An offline Stop stays **Stopping** until confirmed; reconnect does not resume it.
-Completed/stopped tasks cannot be restarted by Start or coordination Resume.
-Node checks immutable evidence expiry at the final send claim. Host control changes
-are propagated as Node fences; a command already delivered before a fence is not
-claimed to have been prevented. This is not OS-level project-mount revocation.
+The dedicated execution conversation belongs to pots until you **take over** the
+task or the task ends. Until then it refuses ordinary input (prompts, follow-ups,
+model/approval changes and scheduled or delegated deliveries) with
+`pots_dispatch_reserved`; it still accepts answers to its own approvals and
+questions, and its own Stop. This keeps pots' Stop from aborting work you started
+there: Stop can only end the session while pots alone has used it.
+
+- **Take over** fences undelivered work and hands the conversation to you. It
+  does not abort already-delivered execution; that run continues and you stop it
+  from the conversation itself. A later pots Stop then only ends the task in pots
+  (the button reads **Stop tracking**); it never stops the conversation.
+- **Pausing coordination** or a revoked grant only fences pots. Delivered work
+  stays pots-owned, so Stop still stops it.
+- When the task becomes terminal, Gateway hands the conversation back to you.
+  This is retried by the recovery sweep while the Node is offline. A send whose
+  outcome is unknown is never handed over: it is stopped instead.
+- Stop stops only that dedicated execution session, never the original source.
+  The conversation stays reserved until the stop completes. An offline Stop stays
+  **Stopping** until confirmed; reconnect does not resume it.
+  Completed/stopped tasks cannot be restarted by Start or coordination Resume.
+  Node checks immutable evidence expiry at the final send claim. Host control changes
+  are propagated as Node fences; a command already delivered before a fence is not
+  claimed to have been prevented. This is not OS-level project-mount revocation.
 
 Back up both states before upgrading: unreleased Gateway schema **1011**, Node
 schema **2003**, Node protocol **15**. Update Gateway/Nodes together. These changes
@@ -119,13 +133,14 @@ current.
 
 ## Controls have different scopes
 
-| Control                                    | What changes                                                                                | What does not change                                                              |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Pause observation / Disable responsibility | Stop new observations and evidence refreshes for that responsibility.                       | Existing records are not erased; independent sessions are not stopped.            |
-| Pause coordination                         | Persist a fence against future pots coordination in that scope.                             | Already delivered authorized execution can continue; no new dispatch is implied.  |
-| Resume observation / coordination          | Change the corresponding durable control.                                                   | Do not replenish budgets, replay suppressed events or restart stopped tasks.      |
-| Take over task                             | Fence that task's pots coordination with a new control generation.                          | Do not kill already-delivered tools, complete the task or take over another task. |
-| Stop tracking / Stop execution             | Fence coordination; for an execution, stay Stopping until its dedicated session is stopped. | Do not cancel or kill the pre-existing source conversation's runner.              |
+| Control                                    | What changes                                                                                                                             | What does not change                                                                                      |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Pause observation / Disable responsibility | Stop new observations and evidence refreshes for that responsibility.                                                                    | Existing records are not erased; independent sessions are not stopped.                                    |
+| Pause coordination                         | Persist a fence against future pots coordination in that scope.                                                                          | Already delivered authorized execution can continue; no new dispatch is implied.                          |
+| Resume observation / coordination          | Change the corresponding durable control.                                                                                                | Do not replenish budgets, replay suppressed events or restart stopped tasks.                              |
+| Take over task                             | Fence that task's pots coordination with a new control generation; open its execution conversation to your input.                        | Do not kill already-delivered tools, complete the task or take over another task.                         |
+| Stop tracking / Stop execution             | Fence coordination; for a pots-owned execution, stay Stopping until its dedicated session is stopped. After takeover, end the task only. | Do not cancel or kill the source conversation's runner, or anything you run in a taken-over conversation. |
+| Archive                                    | Remove a finished record from lists and the per-owner cap. Irreversible.                                                                 | Do not delete it: it still deduplicates its occurrence and keeps its idempotency key.                     |
 
 Taking over or stopping one task does not affect unrelated responsibilities or
 tasks. Resuming coordination elsewhere cannot release a takeover. There is no
@@ -160,9 +175,21 @@ backups/copies.
 ## Limits and remaining work
 
 Each owner has at most **100 responsibilities, 100 suggestions and 100 linked
-tasks**; list requests are capped at 100. There is no cursor pagination, automatic
-retention or deletion/reset workflow yet. A full suggestion inbox stops new issue
-creation without spending extra quota. Historical records remain part of that cap.
+tasks** that are not archived; list requests are capped at 100 and omit archived
+records. A full suggestion inbox stops new issue creation without spending extra
+quota. **Archive** frees a slot:
+
+- a suggestion once it is dismissed or superseded and not tracked;
+- a task once it is completed, failed, interrupted or stopped, together with its
+  origin suggestion;
+- a responsibility once it is disabled and none of its executions is still
+  running. Its suggestions and tasks are archived with it, including ones hidden
+  because their source was revoked, and its tracking-only tasks are stopped.
+
+Archived records stay stored: a replayed event for an archived occurrence stays
+quiet, and replaying a create request returns the archived responsibility. There
+is no unarchive, cursor pagination, automatic retention, hard deletion or
+budget-edit/reset workflow yet.
 
 Still absent: transcript/content observation grants, periodic or model-driven
 analysis, digests and dedicated pots push delivery, standing execution grants,
@@ -171,6 +198,26 @@ P7 cross-client/runtime acceptance cases. Real browser/device journeys
 still require verification; synthetic Web/backend/Android tests do not close those
 gaps. Local browser acceptance was blocked by the operator setting
 `PIRC_BROWSER_ALLOW_PRIVATE`; no alternate route was used.
+
+## Stop-ownership and archive follow-up verification
+
+Local sandboxed verification of the uncommitted follow-up to `29178481`:
+
+- Gateway: 53 pots tests, including release on terminal tasks, pause versus
+  takeover controls, archive rules and the revocation fence paging past 100
+  pending tasks. Node: 12 pots ledger tests, including input refused until
+  release, Stop after release leaving the session alone, and a Stop racing a send.
+- Conformance with rebuilt debug binaries: 24 cases across `pots` (4, including
+  the new Stop-after-takeover scenario), `agent_loop_order`, `delegations`,
+  `message_edit`, `node_sessions`, `node_side` and `project_deletion`.
+- Web: 61 files / 453 tests and a clean Svelte check. Android: 27 pots tests and
+  the i18n test; changed files analyze clean.
+- Workspace formatting and strict all-target clippy passed.
+
+In this sandbox the Node library also fails three persistence tests
+(`Persistence request refused`) besides the two socket-enumeration tests below.
+They fail identically with the pots changes stashed. A full workspace run, full
+conformance and device/browser acceptance were not repeated.
 
 ## Explicit-execution checkpoint verification
 

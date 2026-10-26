@@ -743,6 +743,221 @@ fn inbox_cap_is_finite_and_consumes_no_extra_quota() {
         100
     );
     assert_eq!(list_suggestions(&conn, USER, 100).unwrap().len(), 100);
+
+    // Archiving a dismissed suggestion frees its slot without reviving it.
+    let first = list_suggestions(&conn, USER, 100).unwrap().remove(0);
+    let suggestion = |s: &Suggestion, action| {
+        control_suggestion(
+            &conn,
+            USER,
+            &s.id,
+            SuggestionControl {
+                expected_revision: s.revision,
+                action,
+            },
+            5,
+        )
+    };
+    assert_eq!(
+        suggestion(&first, SuggestionAction::Archive)
+            .unwrap_err()
+            .code,
+        "not_actionable",
+        "pending suggestions must be dismissed first"
+    );
+    let dismissed = suggestion(&first, SuggestionAction::Dismiss).unwrap();
+    let archived = suggestion(&dismissed, SuggestionAction::Archive).unwrap();
+    assert!(archived.archived_at.is_some());
+    // A retried Archive with the stale revision is idempotent.
+    assert!(suggestion(&dismissed, SuggestionAction::Archive).is_ok());
+    assert_eq!(
+        suggestion(&archived, SuggestionAction::Dismiss)
+            .unwrap_err()
+            .code,
+        "archived"
+    );
+    assert_eq!(list_suggestions(&conn, USER, 100).unwrap().len(), 99);
+    assert!(ingest(&conn, &session, "occurrence-0").is_empty());
+    assert_eq!(ingest(&conn, &session, "after-archive").len(), 1);
+    assert!(ingest(&conn, &session, "over-limit-again").is_empty());
+}
+#[test]
+fn archived_tasks_and_responsibilities_leave_lists_and_caps() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let session = seed(&conn);
+    let r = active(&conn);
+    let tracked = accept(&conn, &ingest(&conn, &session, "tracked")[0], "track");
+    let finished = accept(&conn, &ingest(&conn, &session, "finished")[0], "track");
+    let control = |t: &Task, action| {
+        control_task(
+            &conn,
+            USER,
+            &t.id,
+            TaskControl {
+                expected_revision: t.revision,
+                expected_generation: t.control_generation,
+                action,
+            },
+            5,
+        )
+    };
+    assert_eq!(
+        control(&tracked, TaskAction::Archive).unwrap_err().code,
+        "not_actionable",
+        "only terminal tasks are archived"
+    );
+    let finished = task_control(&conn, &finished, TaskAction::Stop);
+    let archived = control(&finished, TaskAction::Archive).unwrap();
+    assert!(archived.archived_at.is_some());
+    assert!(control(&finished, TaskAction::Archive).is_ok());
+    assert_eq!(
+        control(&archived, TaskAction::Stop).unwrap_err().code,
+        "archived"
+    );
+    assert_eq!(list_tasks(&conn, USER, 100).unwrap().len(), 1);
+    assert!(
+        list_suggestions(&conn, USER, 100)
+            .unwrap()
+            .iter()
+            .all(|s| s.id != finished.origin_suggestion_id),
+        "a task's origin suggestion is archived with it"
+    );
+    // The linked suggestion still returns its archived task, never a new one.
+    let origin: Suggestion = serde_json::from_str(
+        &conn
+            .query_row(
+                "SELECT data FROM pots_suggestions WHERE id=?",
+                [&finished.origin_suggestion_id],
+                |r| r.get::<_, String>(0),
+            )
+            .unwrap(),
+    )
+    .unwrap();
+    assert!(origin.archived_at.is_some());
+    assert_eq!(
+        accept_tracking(
+            &conn,
+            USER,
+            &origin.id,
+            AcceptInput {
+                expected_revision: origin.accepted_revision.unwrap(),
+                command_id: "again".into()
+            },
+            6
+        )
+        .unwrap()
+        .id,
+        finished.id
+    );
+
+    let responsibility = |r: &Responsibility, action| {
+        control_responsibility(
+            &conn,
+            USER,
+            &r.id,
+            ResponsibilityControl {
+                expected_revision: r.revision,
+                expected_generation: r.generation,
+                action,
+            },
+            7,
+        )
+    };
+    let r = get_responsibility(&conn, USER, &r.id).unwrap();
+    assert_eq!(
+        responsibility(&r, ResponsibilityAction::Archive)
+            .unwrap_err()
+            .code,
+        "not_actionable",
+        "an enabled responsibility is not archived"
+    );
+    let disabled = responsibility(&r, ResponsibilityAction::Disable).unwrap();
+    let archived = responsibility(&disabled, ResponsibilityAction::Archive).unwrap();
+    assert!(archived.archived_at.is_some());
+    assert_eq!(
+        responsibility(&archived, ResponsibilityAction::Activate)
+            .unwrap_err()
+            .code,
+        "archived"
+    );
+    assert!(list_responsibilities(&conn, USER, 100).unwrap().is_empty());
+    assert!(list_suggestions(&conn, USER, 100).unwrap().is_empty());
+    assert!(list_tasks(&conn, USER, 100).unwrap().is_empty());
+    let tracked = get_task_for_control(&conn, USER, &tracked.id).unwrap();
+    assert_eq!(tracked.status, TaskStatus::Stopped);
+    assert!(tracked.archived_at.is_some());
+    // Archived responsibilities free their slot; the idempotency key still replays.
+    assert_eq!(
+        create_responsibility(&conn, USER, input(), 8).unwrap().id,
+        r.id
+    );
+    let mut fresh = input();
+    fresh.idempotency_key = "create-2".into();
+    assert_ne!(
+        create_responsibility(&conn, USER, fresh, 8).unwrap().id,
+        r.id
+    );
+}
+#[test]
+fn responsibility_with_running_execution_is_not_archived() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let session = seed(&conn);
+    let r = active(&conn);
+    let task = accept(&conn, &ingest(&conn, &session, "run")[0], "track");
+    let mut running = get_task_for_control(&conn, USER, &task.id).unwrap();
+    running.status = TaskStatus::Running;
+    running.execution = Some(Execution {
+        dispatch_id: "pd".into(),
+        generation: running.control_generation,
+        accepted_revision: running.revision,
+        accepted_at: 4,
+        instruction: "work".into(),
+        responsibility_generation: r.generation,
+        responsibility_id: r.id.clone(),
+        workspace_id: "node:work".into(),
+        source_runner_epoch: 0,
+    });
+    conn.execute(
+        "UPDATE pots_tasks SET data=? WHERE id=?",
+        params![serde_json::to_string(&running).unwrap(), running.id],
+    )
+    .unwrap();
+    let r = get_responsibility(&conn, USER, &r.id).unwrap();
+    let disabled = control_responsibility(
+        &conn,
+        USER,
+        &r.id,
+        ResponsibilityControl {
+            expected_revision: r.revision,
+            expected_generation: r.generation,
+            action: ResponsibilityAction::Disable,
+        },
+        6,
+    )
+    .unwrap();
+    let refused = control_responsibility(
+        &conn,
+        USER,
+        &r.id,
+        ResponsibilityControl {
+            expected_revision: disabled.revision,
+            expected_generation: disabled.generation,
+            action: ResponsibilityAction::Archive,
+        },
+        7,
+    )
+    .unwrap_err();
+    assert_eq!(refused.code, "active_execution");
+    // Nothing was archived by the refused attempt.
+    assert_eq!(list_suggestions(&conn, USER, 100).unwrap().len(), 1);
+    assert!(
+        get_task_for_control(&conn, USER, &task.id)
+            .unwrap()
+            .archived_at
+            .is_none()
+    );
 }
 #[test]
 fn all_action_unit_variants_reject_forged_fields() {
@@ -753,16 +968,18 @@ fn all_action_unit_variants_reject_forged_fields() {
         "resume_observation",
         "pause_coordination",
         "resume_coordination",
+        "archive",
     ] {
         assert!(
             serde_json::from_value::<ResponsibilityAction>(json!({"type":ty,"actor":"pots"}))
                 .is_err()
         );
     }
-    assert!(
-        serde_json::from_value::<SuggestionAction>(json!({"type":"dismiss","actor":"pots"}))
-            .is_err()
-    );
+    for ty in ["dismiss", "archive"] {
+        assert!(
+            serde_json::from_value::<SuggestionAction>(json!({"type":ty,"actor":"pots"})).is_err()
+        );
+    }
     assert!(
         serde_json::from_value::<SuggestionAction>(
             json!({"type":"snooze","until":123,"actor":"pots"})
@@ -774,6 +991,7 @@ fn all_action_unit_variants_reject_forged_fields() {
         "resume_coordination",
         "take_over",
         "stop",
+        "archive",
     ] {
         assert!(serde_json::from_value::<TaskAction>(json!({"type":ty,"actor":"pots"})).is_err());
     }

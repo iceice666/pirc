@@ -22,6 +22,9 @@ const UNCERTAIN: &str =
 const AUTH_CHANGED: &str = "Dispatch authorization changed; no further work was sent.";
 const UNAVAILABLE: &str = "Execution is unavailable; inspect the execution conversation.";
 const INCOMPLETE: &str = "Execution ended without completing the task.";
+/// Sweep filter: active executions, plus terminal ones whose conversation the
+/// Node has not yet handed back to the user.
+const PENDING_EXECUTION: &str = "json_extract(data,'$.execution') IS NOT NULL AND (json_extract(data,'$.status') NOT IN ('completed','failed','interrupted','stopped') OR json_extract(data,'$.executionReleased') IS NOT 1)";
 
 #[derive(Default)]
 struct Runtime {
@@ -206,7 +209,8 @@ pub(super) async fn start_task_route(
             now_ms(),
         )?;
         let answer = command(app, &task, PotsOperation::Start).await?;
-        if answer["state"] != "delivered" {
+        // `released`: a takeover raced the send, which still crossed RPC.
+        if !matches!(answer["state"].as_str(), Some("delivered" | "released")) {
             return Err(ApiError::new(503, "dispatch_uncertain", UNCERTAIN));
         }
         progress(app, &task, TaskStatus::Queued, None, None)
@@ -230,7 +234,8 @@ pub(super) async fn start_task_route(
 
 /// Controls persist before Node IO. A concurrent Start must then either fail its
 /// host check or encounter the Node's durable send fence. Takeover never aborts
-/// an already delivered run; Stop addresses only the ledger-owned session.
+/// an already delivered run; it releases the execution conversation to the user.
+/// Stop addresses only a ledger-owned session that pots still holds.
 pub(super) async fn control_task_route(
     app: &AppState,
     user: &str,
@@ -255,7 +260,10 @@ pub(super) async fn control_task_route(
 async fn apply_control(app: &App, task: &Task) -> ApiResult<()> {
     let action = if task.status == TaskStatus::Stopping {
         Some(PotsControl::Stop)
-    } else if task.taken_over || task.coordination_paused {
+    } else if task.taken_over {
+        Some(PotsControl::Release)
+    } else if task.coordination_paused {
+        // A pause fences pots without handing the conversation over.
         Some(PotsControl::TakeOver)
     } else {
         None
@@ -351,7 +359,7 @@ async fn reconcile(app: &App, task: Task) -> ApiResult<()> {
                 Some(AUTH_CHANGED),
             )?;
         }
-        Some("delivered") => {
+        Some("delivered" | "released") => {
             let session_id = task
                 .execution_session_id
                 .as_deref()
@@ -419,6 +427,33 @@ async fn reconcile(app: &App, task: Task) -> ApiResult<()> {
         _ => {
             progress(app, &task, task.status, None, Some(UNAVAILABLE))?;
         }
+    }
+    Ok(())
+}
+
+/// Once a task is terminal, hand its execution conversation to the user. The Node
+/// refuses ordinary input there until then, so a Stop racing completion can never
+/// abort the user's later work. An unknown send outcome is never handed over: it
+/// is stopped instead, because the instruction may still be running.
+async fn release(app: &App, task: &Task) -> ApiResult<()> {
+    if !task.status.is_terminal() || task.execution.is_none() || task.execution_released {
+        return Ok(());
+    }
+    let control = |action| PotsOperation::Control { action };
+    let mut answer = command(app, task, control(PotsControl::Release)).await?;
+    if matches!(answer["state"].as_str(), Some("uncertain" | "stopping")) {
+        answer = command(app, task, control(PotsControl::Stop)).await?;
+    }
+    if matches!(
+        answer["state"].as_str(),
+        Some("released" | "cancelled" | "stopped")
+    ) {
+        mark_execution_released(
+            &app.db.lock(),
+            &task.owner_user,
+            &task.id,
+            &execution(task)?.dispatch_id,
+        )?;
     }
     Ok(())
 }
@@ -561,7 +596,7 @@ pub fn start(app: &AppState) {
             };
             let records: ApiResult<Vec<(String, String)>> = (|| {
                 let conn = app.db.lock();
-                let mut q = conn.prepare("SELECT id,owner_user FROM pots_tasks WHERE id>? AND json_extract(data,'$.execution') IS NOT NULL AND json_extract(data,'$.status') NOT IN ('completed','failed','interrupted','stopped') ORDER BY id LIMIT 100")?;
+                let mut q = conn.prepare(&format!("SELECT id,owner_user FROM pots_tasks WHERE id>? AND {PENDING_EXECUTION} ORDER BY id LIMIT 100"))?;
                 Ok(q.query_map([&after], |r| Ok((r.get(0)?, r.get(1)?)))?
                     .collect::<rusqlite::Result<Vec<_>>>()?)
             })();
@@ -589,8 +624,16 @@ pub fn start(app: &AppState) {
                         return;
                     };
                     let task = get_task_for_control(&app.db.lock(), &owner, &id);
-                    if let Ok(task) = task {
+                    let Ok(task) = task else {
+                        return;
+                    };
+                    if !task.status.is_terminal() {
                         let _ = reconcile(&app, task).await;
+                    }
+                    // Release promptly once reconciliation made the task terminal.
+                    let task = get_task_for_control(&app.db.lock(), &owner, &id);
+                    if let Ok(task) = task {
+                        let _ = release(&app, &task).await;
                     }
                 });
             }
@@ -606,18 +649,41 @@ pub(super) async fn fence_invalid_pending(
     owner: Option<&str>,
     source_session: Option<&str>,
 ) -> ApiResult<()> {
-    let tasks: Vec<Task> = {
-        let conn = app.db.lock();
-        let mut q = conn.prepare("SELECT data FROM pots_tasks WHERE json_extract(data,'$.status') IN ('starting','queued') AND (?1 IS NULL OR owner_user=?1) AND (?2 IS NULL OR json_extract(data,'$.targetSessionId')=?2) LIMIT 100")?;
-        let rows = q
-            .query_map(rusqlite::params![owner, source_session], |r| {
-                r.get::<_, String>(0)
-            })?
-            .collect::<rusqlite::Result<Vec<_>>>()?;
-        rows.into_iter()
-            .map(|s| serde_json::from_str(&s).map_err(|_| ApiError::internal()))
-            .collect::<ApiResult<_>>()?
-    };
+    // Keyset pages: an unowned, session-scoped scan is not bounded by the
+    // per-owner caps, and every pending task must be rechecked.
+    let mut after = String::new();
+    loop {
+        let tasks = pending_page(app, owner, source_session, &after)?;
+        let Some(last) = tasks.last() else {
+            return Ok(());
+        };
+        after = last.id.clone();
+        let full = tasks.len() >= PAGE as usize;
+        fence_page(app, tasks).await?;
+        if !full {
+            return Ok(());
+        }
+    }
+}
+const PAGE: u32 = 100;
+fn pending_page(
+    app: &App,
+    owner: Option<&str>,
+    source_session: Option<&str>,
+    after: &str,
+) -> ApiResult<Vec<Task>> {
+    let conn = app.db.lock();
+    let mut q = conn.prepare("SELECT data FROM pots_tasks WHERE json_extract(data,'$.status') IN ('starting','queued') AND (?1 IS NULL OR owner_user=?1) AND (?2 IS NULL OR json_extract(data,'$.targetSessionId')=?2) AND id>?3 ORDER BY id LIMIT ?4")?;
+    let rows = q
+        .query_map(rusqlite::params![owner, source_session, after, PAGE], |r| {
+            r.get::<_, String>(0)
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    rows.into_iter()
+        .map(|s| serde_json::from_str(&s).map_err(|_| ApiError::internal()))
+        .collect()
+}
+async fn fence_page(app: &App, tasks: Vec<Task>) -> ApiResult<()> {
     for task in tasks {
         let Some(e) = &task.execution else {
             continue;
@@ -972,6 +1038,48 @@ mod tests {
         assert_eq!(task.control_generation, expected_generation);
     }
     #[tokio::test]
+    async fn revocation_fence_pages_past_one_hundred_pending_tasks() {
+        let (app, _dir, task) = setup();
+        let (reserved, _) =
+            reserve_start_task(&app.db.lock(), "alice", &task.id, input(&task), now_ms()).unwrap();
+        {
+            // Pending rows beyond any single page; their links do not authorize.
+            let conn = app.db.lock();
+            let mut clone = reserved.clone();
+            for n in 0..150 {
+                let suggestion = format!("ps-extra-{n:03}");
+                conn.execute(
+                    "INSERT INTO pots_suggestions(id,owner_user,responsibility_id,condition_key,occurrence_key,revision,data) SELECT ?1,owner_user,responsibility_id,condition_key,?1,revision,data FROM pots_suggestions WHERE id=?2",
+                    rusqlite::params![suggestion, reserved.origin_suggestion_id],
+                )
+                .unwrap();
+                clone.id = format!("pt-extra-{n:03}");
+                clone.origin_suggestion_id = suggestion.clone();
+                conn.execute(
+                    "INSERT INTO pots_tasks(id,owner_user,origin_suggestion_id,revision,generation,data) VALUES(?1,'alice',?2,1,1,?3)",
+                    rusqlite::params![clone.id, suggestion, serde_json::to_string(&clone).unwrap()],
+                )
+                .unwrap();
+            }
+        }
+        let fenced = Arc::new(Mutex::new(std::collections::HashSet::new()));
+        let seen = fenced.clone();
+        app.nodes.set_test_pots(move |request| {
+            assert!(matches!(
+                request.operation,
+                PotsOperation::Control {
+                    action: PotsControl::TakeOver
+                }
+            ));
+            seen.lock().unwrap().insert(request.binding_id);
+            answer("delivered")
+        });
+        fence_invalid_pending(&app, None, Some(&reserved.target_session_id))
+            .await
+            .unwrap();
+        assert_eq!(fenced.lock().unwrap().len(), 150);
+    }
+    #[tokio::test]
     async fn restart_prepared_or_uncertain_stops_before_releasing_slot_without_redispatch() {
         for state in ["prepared", "uncertain"] {
             let (app, _dir, task) = setup();
@@ -1032,6 +1140,126 @@ mod tests {
         assert!(task.outcome.is_none());
         assert!(task.failure.is_none());
         assert!(get_task(&app.db.lock(), "alice", &task.id).is_err());
+    }
+    async fn delivered(app: &AppState, task: &Task) -> Task {
+        app.nodes.set_test_pots(|r| {
+            answer(if matches!(r.operation, PotsOperation::Prepare { .. }) {
+                "prepared"
+            } else {
+                "delivered"
+            })
+        });
+        start_task_route(app, "alice", &task.id, input(task))
+            .await
+            .unwrap()
+    }
+    fn controls(app: &AppState, reply: &'static str) -> Arc<Mutex<Vec<PotsControl>>> {
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let log = seen.clone();
+        app.nodes.set_test_pots(move |r| match r.operation {
+            PotsOperation::Control { action } => {
+                log.lock().unwrap().push(action);
+                answer(match action {
+                    PotsControl::Stop => "stopped",
+                    _ => reply,
+                })
+            }
+            PotsOperation::Status => answer(reply),
+            _ => panic!("controls never prepare/start"),
+        });
+        seen
+    }
+    #[tokio::test]
+    async fn takeover_releases_the_conversation_but_pause_only_fences() {
+        let (app, _dir, task) = setup();
+        let task = delivered(&app, &task).await;
+        let seen = controls(&app, "delivered");
+        let paused = control_task_route(
+            &app,
+            "alice",
+            &task.id,
+            TaskControl {
+                expected_revision: task.revision,
+                expected_generation: task.control_generation,
+                action: TaskAction::PauseCoordination,
+            },
+        )
+        .await
+        .unwrap();
+        let seen_after_pause = seen.lock().unwrap().clone();
+        assert_eq!(seen_after_pause, [PotsControl::TakeOver]);
+        let seen = controls(&app, "released");
+        control_task_route(
+            &app,
+            "alice",
+            &task.id,
+            TaskControl {
+                expected_revision: paused.revision,
+                expected_generation: paused.control_generation,
+                action: TaskAction::TakeOver,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(*seen.lock().unwrap(), [PotsControl::Release]);
+        // A released execution is still observed until its run is over.
+        let task = get_task_for_control(&app.db.lock(), "alice", &task.id).unwrap();
+        assert_eq!(task.status, TaskStatus::Queued);
+    }
+    #[tokio::test]
+    async fn terminal_task_hands_its_conversation_back_once() {
+        let (app, _dir, task) = setup();
+        let task = delivered(&app, &task).await;
+        let task = progress(&app, &task, TaskStatus::Completed, Some("done"), None).unwrap();
+        let seen = controls(&app, "released");
+        release(&app, &task).await.unwrap();
+        assert_eq!(*seen.lock().unwrap(), [PotsControl::Release]);
+        let task = get_task_for_control(&app.db.lock(), "alice", &task.id).unwrap();
+        assert!(task.execution_released);
+        release(&app, &task).await.unwrap();
+        assert_eq!(seen.lock().unwrap().len(), 1);
+    }
+    #[tokio::test]
+    async fn terminal_task_with_unknown_send_is_stopped_not_handed_over() {
+        let (app, _dir, task) = setup();
+        let task = delivered(&app, &task).await;
+        let task = progress(&app, &task, TaskStatus::Failed, None, None).unwrap();
+        let seen = controls(&app, "uncertain");
+        release(&app, &task).await.unwrap();
+        assert_eq!(
+            *seen.lock().unwrap(),
+            [PotsControl::Release, PotsControl::Stop]
+        );
+        assert!(
+            get_task_for_control(&app.db.lock(), "alice", &task.id)
+                .unwrap()
+                .execution_released
+        );
+    }
+    #[tokio::test]
+    async fn offline_release_stays_pending_for_the_sweep() {
+        let (app, _dir, task) = setup();
+        let task = delivered(&app, &task).await;
+        let task = progress(&app, &task, TaskStatus::Completed, None, None).unwrap();
+        app.nodes
+            .set_test_pots(|_| Err(ApiError::new(503, "node_offline", "offline")));
+        assert!(release(&app, &task).await.is_err());
+        let task = get_task_for_control(&app.db.lock(), "alice", &task.id).unwrap();
+        assert!(!task.execution_released);
+        let pending = |app: &AppState| -> i64 {
+            app.db
+                .lock()
+                .query_row(
+                    &format!("SELECT count(*) FROM pots_tasks WHERE {PENDING_EXECUTION}"),
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap()
+        };
+        assert_eq!(pending(&app), 1);
+        controls(&app, "released");
+        release(&app, &task).await.unwrap();
+        assert_eq!(pending(&app), 0);
     }
     #[test]
     fn snapshot_requires_exact_marker_and_never_attributes_later_user_results() {

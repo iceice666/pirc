@@ -3277,6 +3277,9 @@ const englishMessages = <String, String>{
   "Linked": "Linked",
   "Linked task: {0}": "Linked task: {0}",
   "Lists show at most 100 records per category. Refresh to see current state.": "Lists show at most 100 records per category. Refresh to see current state.",
+  "Archive": "Archive",
+  "Archive removes a finished record from pots and frees its place in that limit. It cannot be undone.":
+      "Archive removes a finished record from pots and frees its place in that limit. It cannot be undone.",
   "Needs refresh": "Needs refresh",
   "No execution session. Tracking is not running.": "No execution session. Tracking is not running.",
   "No responsibilities. Nothing is observed until you explicitly configure and activate one.": "No responsibilities. Nothing is observed until you explicitly configure and activate one.",
@@ -3322,8 +3325,10 @@ const englishMessages = <String, String>{
       "Start authorizes one execution in a new session in the same workspace, using only your instruction. No source transcript or approval is copied or answered. The instruction cannot be changed after Start.",
   "Start requires an enabled responsibility with coordination unpaused, dispatch budget remaining and a concurrency slot. Pausing coordination does not stop already-running execution.":
       "Start requires an enabled responsibility with coordination unpaused, dispatch budget remaining and a concurrency slot. Pausing coordination does not stop already-running execution.",
-  "Taken over by you; pots coordination is fenced. Already-running execution continues.":
-      "Taken over by you; pots coordination is fenced. Already-running execution continues.",
+  "Taken over by you; pots coordination is fenced and the execution conversation accepts your input. Already-running execution continues there; stop it from that conversation.":
+      "Taken over by you; pots coordination is fenced and the execution conversation accepts your input. Already-running execution continues there; stop it from that conversation.",
+  "Until you take over or the task ends, the execution conversation accepts only the pots instruction.":
+      "Until you take over or the task ends, the execution conversation accepts only the pots instruction.",
   "Execution instruction": "Execution instruction",
   "Instruction must be 1–20000 UTF-8 bytes.":
       "Instruction must be 1–20000 UTF-8 bytes.",
@@ -6103,6 +6108,9 @@ const traditionalChineseMessages = <String, String>{
   "Linked": "已連結",
   "Linked task: {0}": "已連結任務：{0}",
   "Lists show at most 100 records per category. Refresh to see current state.": "各類別最多顯示 100 筆。請重新整理以取得最新狀態。",
+  "Archive": "封存",
+  "Archive removes a finished record from pots and frees its place in that limit. It cannot be undone.":
+      "封存會將已結束的紀錄從 pots 移除，並釋出它在上限中的名額；無法復原。",
   "Needs refresh": "需要重新檢查",
   "No execution session. Tracking is not running.": "沒有執行對話。追蹤不代表正在執行。",
   "No responsibilities. Nothing is observed until you explicitly configure and activate one.": "尚無責任。明確設定並啟用之前，不會觀察任何內容。",
@@ -6148,8 +6156,10 @@ const traditionalChineseMessages = <String, String>{
       "啟動會授權在同一工作區的新工作階段執行一次，僅使用您提供的指示。不會複製來源對話或核准要求，也不會回答來源核准。啟動後無法變更指示。",
   "Start requires an enabled responsibility with coordination unpaused, dispatch budget remaining and a concurrency slot. Pausing coordination does not stop already-running execution.":
       "啟動需要已啟用且未暫停協調的責任、剩餘派送額度及可用的並行名額。暫停協調不會停止已在執行的工作。",
-  "Taken over by you; pots coordination is fenced. Already-running execution continues.":
-      "您已接管，pots 協調已隔離。已在執行的工作會繼續。",
+  "Taken over by you; pots coordination is fenced and the execution conversation accepts your input. Already-running execution continues there; stop it from that conversation.":
+      "您已接管：pots 協調已隔離，執行對話現在接受您的輸入。已在執行的工作會在那裡繼續；要停止請在該對話中操作。",
+  "Until you take over or the task ends, the execution conversation accepts only the pots instruction.":
+      "在您接管或任務結束前，執行對話只接受 pots 的指令。",
   "Execution instruction": "執行指示",
   "Instruction must be 1–20000 UTF-8 bytes.": "指示必須為 1–20000 個 UTF-8 位元組。",
   "Authorized instruction: {0}": "已授權的指示：{0}",

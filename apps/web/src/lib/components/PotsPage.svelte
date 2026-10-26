@@ -8,6 +8,7 @@
     potsApi,
     potsTaskLabels,
     potsTaskTerminal,
+    potsSuggestionArchivable,
     validPotsInstruction,
     type PotsTask,
     type PotsOverview,
@@ -307,6 +308,15 @@
                 responsibility.coordinationPaused ? 'Resume coordination' : 'Pause coordination',
               )}</button
             >
+            {#if !responsibility.enabled}
+              <button
+                type="button"
+                class="button"
+                disabled={busy}
+                onclick={() => act(() => potsApi.responsibility(responsibility, 'archive'))}
+                >{tr('Archive')}</button
+              >
+            {/if}
           </div>
         </article>
       {:else}<p>
@@ -375,6 +385,14 @@
                 onclick={() => act(() => potsApi.suggestion(suggestion, { type: 'dismiss' }))}
                 >{tr('Dismiss')}</button
               >
+            {:else if potsSuggestionArchivable(suggestion)}
+              <button
+                type="button"
+                class="button"
+                disabled={busy}
+                onclick={() => act(() => potsApi.suggestion(suggestion, { type: 'archive' }))}
+                >{tr('Archive')}</button
+              >
             {/if}
           </div>
         </article>
@@ -389,10 +407,17 @@
           <p>
             {task.takenOver
               ? tr(
-                  'Taken over by you; pots coordination is fenced. Already-running execution continues.',
+                  'Taken over by you; pots coordination is fenced and the execution conversation accepts your input. Already-running execution continues there; stop it from that conversation.',
                 )
               : tr(task.coordinationPaused ? 'Coordination paused' : 'Coordination unpaused')}
           </p>
+          {#if task.executionSessionId && !task.takenOver && !potsTaskTerminal(task)}
+            <p>
+              {tr(
+                'Until you take over or the task ends, the execution conversation accepts only the pots instruction.',
+              )}
+            </p>
+          {/if}
           <p>{tr('Origin suggestion: {0}', [task.originSuggestionId])}</p>
           <p>
             {task.executionSessionId
@@ -470,7 +495,9 @@
               disabled={busy || potsTaskTerminal(task) || task.status === 'stopping'}
               onclick={() => act(() => potsApi.task(task, 'stop'))}
               >{tr(
-                task.execution || task.executionSessionId ? 'Stop execution' : 'Stop tracking',
+                (task.execution || task.executionSessionId) && !task.takenOver
+                  ? 'Stop execution'
+                  : 'Stop tracking',
               )}</button
             >
             {#if task.executionSessionId}
@@ -481,12 +508,23 @@
                 >{tr('Open execution session')}</button
               >
             {/if}
+            {#if potsTaskTerminal(task)}
+              <button
+                type="button"
+                class="button"
+                disabled={busy}
+                onclick={() => act(() => potsApi.task(task, 'archive'))}>{tr('Archive')}</button
+              >
+            {/if}
           </div>
         </article>
       {:else}<p>{tr('No tracked tasks.')}</p>{/each}
     </section>
     <p class="notice">
       {tr('Lists show at most 100 records per category. Refresh to see current state.')}
+      {tr(
+        'Archive removes a finished record from pots and frees its place in that limit. It cannot be undone.',
+      )}
     </p>
   {/if}
 </section>

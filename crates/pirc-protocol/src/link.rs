@@ -283,7 +283,12 @@ pub enum PotsOperation {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PotsControl {
+    /// Fence pots work without stopping it: an unsent instruction is
+    /// cancelled, delivered work keeps running and stays stoppable by pots.
     TakeOver,
+    /// Fence and hand the execution conversation to the user (explicit
+    /// takeover, or the task is over). A later Stop no longer stops it.
+    Release,
     Stop,
 }
 

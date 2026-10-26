@@ -230,6 +230,11 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
                   ),
                 ),
         ),
+        if (r['enabled'] != true)
+          button(
+            'Archive',
+            () => unawaited(state.responsibility(r, 'archive')),
+          ),
       ]),
     ]);
   }
@@ -311,7 +316,8 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
             () => unawaited(state.suggestion(s, 'snooze')),
           ),
           button('Dismiss', () => unawaited(state.suggestion(s, 'dismiss'))),
-        ],
+        ] else if (PotsState.archivable(s))
+          button('Archive', () => unawaited(state.suggestion(s, 'archive'))),
       ]),
     ]);
   }
@@ -325,6 +331,12 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
       'stopping',
     ].contains(t['status']);
     final takeover = t['takenOver'] == true;
+    final terminal = const [
+      'completed',
+      'failed',
+      'interrupted',
+      'stopped',
+    ].contains(t['status']);
     final execution = t['execution'] != null || t['executionSessionId'] != null;
     final instruction = instructions.putIfAbsent(
       '${t['id']}',
@@ -351,12 +363,18 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
       Text(
         tr(
           takeover
-              ? 'Taken over by you; pots coordination is fenced. Already-running execution continues.'
+              ? 'Taken over by you; pots coordination is fenced and the execution conversation accepts your input. Already-running execution continues there; stop it from that conversation.'
               : t['coordinationPaused'] == true
               ? 'Coordination paused'
               : 'Coordination unpaused',
         ),
       ),
+      if (t['executionSessionId'] != null && !takeover && !terminal)
+        Text(
+          tr(
+            'Until you take over or the task ends, the execution conversation accepts only the pots instruction.',
+          ),
+        ),
       Text(tr('Origin suggestion: {0}', [t['originSuggestionId']])),
       Text(tr('Target session: {0}', [t['targetSessionId']])),
       Text(
@@ -430,7 +448,7 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
                 ),
         ),
         button(
-          execution ? 'Stop execution' : 'Stop tracking',
+          execution && !takeover ? 'Stop execution' : 'Stop tracking',
           stopped ? null : () => unawaited(state.task(t, 'stop')),
         ),
         if (t['executionSessionId'] != null)
@@ -438,6 +456,8 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
             'Open execution session',
             () => widget.onOpenChat('${t['executionSessionId']}'),
           ),
+        if (terminal)
+          button('Archive', () => unawaited(state.task(t, 'archive'))),
       ]),
     ]);
   }
@@ -554,6 +574,11 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
                   Text(
                     tr(
                       'Lists show at most 100 records per category. Refresh to see current state.',
+                    ),
+                  ),
+                  Text(
+                    tr(
+                      'Archive removes a finished record from pots and frees its place in that limit. It cannot be undone.',
                     ),
                   ),
                 ],

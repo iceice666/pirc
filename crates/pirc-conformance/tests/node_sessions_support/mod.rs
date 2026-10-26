@@ -327,6 +327,18 @@ impl Session {
         (session, created)
     }
 
+    /// An existing session, e.g. one the backend created (no control taken yet).
+    pub fn existing(api: &Api, id: &str) -> Self {
+        Self {
+            api: api.clone(),
+            base: format!("/api/sessions/{id}"),
+            id: id.to_owned(),
+            client: "browser".to_owned(),
+            generation: Value::Null,
+            commands: 0,
+        }
+    }
+
     pub async fn acquire(&mut self) -> ApiResponse {
         let acquired = self
             .post(

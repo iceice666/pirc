@@ -427,6 +427,10 @@ void main() {
       expect(opened, 'dedicated-execution');
       expect(find.text('Start'), findsNothing);
       expect(find.text('Stop execution'), findsOneWidget);
+      expect(
+        find.textContaining('accepts only the pots instruction'),
+        findsOneWidget,
+      );
       expect(t.takeException(), isNull);
       await t.pumpWidget(const SizedBox());
       c.dispose();
@@ -478,9 +482,14 @@ void main() {
         expect(find.text('Outcome: Result summary'), findsOneWidget);
         expect(find.text('Failure: Diagnostic'), findsOneWidget);
         expect(
-          find.textContaining('Already-running execution continues.'),
+          find.textContaining('execution conversation accepts your input'),
           findsOneWidget,
         );
+        expect(
+          find.textContaining('accepts only the pots instruction'),
+          findsNothing,
+        );
+        expect(find.text('Stop execution'), findsNothing);
         expect(find.text('Start'), findsNothing);
         expect(posts(g), isEmpty);
         expect(t.takeException(), isNull);
@@ -490,6 +499,47 @@ void main() {
       },
     );
   }
+
+  test('archive is offered only for finished records', () async {
+    final current = overview();
+    final g = FakeGateway()..handler = (m, a) async => current;
+    final c = paired(g);
+    final state = PotsState(c);
+    await state.load();
+    // Pending suggestion and tracked task are refused locally, without a request.
+    expect(
+      await state.suggestion(state.suggestions.single, 'archive'),
+      isFalse,
+    );
+    expect(await state.task(state.tasks.single, 'archive'), isFalse);
+    expect(posts(g), isEmpty);
+    await state.responsibility(state.responsibilities.single, 'archive');
+    expect(posts(g).last['body'], {
+      'expectedRevision': 3,
+      'expectedGeneration': 2,
+      'action': {'type': 'archive'},
+    });
+    final suggestion = (current['suggestions'] as List).single as Json;
+    final task = (current['tasks'] as List).single as Json;
+    suggestion['disposition'] = 'dismissed';
+    task['status'] = 'completed';
+    await state.load();
+    await state.suggestion(state.suggestions.single, 'archive');
+    expect(posts(g).last['path'], '/api/pots/suggestions/s%20%2F/control');
+    expect(posts(g).last['body'], {
+      'expectedRevision': 4,
+      'action': {'type': 'archive'},
+    });
+    await state.task(state.tasks.single, 'archive');
+    expect(posts(g).last['body'], {
+      'expectedRevision': 5,
+      'expectedGeneration': 3,
+      'action': {'type': 'archive'},
+    });
+    state.dispose();
+    c.dispose();
+    await g.stream.close();
+  });
 
   testWidgets(
     're-pair clears private execution instruction and disables stale Start',
@@ -564,7 +614,7 @@ void main() {
               )
               .first,
         );
-        await t.drag(find.byType(ListView), const Offset(0, -180));
+        await t.ensureVisible(find.text('Review source conversation'));
         await t.pumpAndSettle();
         await t.tap(find.text('Review source conversation'));
         await t.pump();

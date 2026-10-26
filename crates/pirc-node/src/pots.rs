@@ -55,19 +55,26 @@ impl Dispatch {
     }
 }
 
-/// A prepared execution must remain empty until its one trusted dispatch has
-/// crossed RPC. Otherwise an ordinary prompt could make deliver queue work
-/// behind a user run and a later takeover would not fence that queued message.
+/// SQL predicate: the dedicated session still belongs to pots. A prepared
+/// execution must remain empty until its one trusted dispatch has crossed RPC.
+/// A delivered one stays pots-only until the Gateway releases it (user takeover,
+/// or the task became terminal): otherwise a late Stop, which stops the whole
+/// session, could abort ordinary work the user started there. An unknown send
+/// outcome or a Stop in flight also keeps it reserved. Only `cancelled` (nothing
+/// was ever sent), `released` and `stopped` accept ordinary input.
+const RESERVED: &str = "state IN ('prepared','sending','delivered','uncertain','stopping')";
+
 pub(crate) fn require_generic_input(db: &Connection, session_id: &str) -> ApiResult<()> {
     let reserved: bool = db.query_row(
-        "SELECT EXISTS(SELECT 1 FROM pots_dispatches WHERE session_id=?1 AND state IN ('prepared','sending','uncertain'))",
-        [session_id], |r| r.get(0),
+        &format!("SELECT EXISTS(SELECT 1 FROM pots_dispatches WHERE session_id=?1 AND {RESERVED})"),
+        [session_id],
+        |r| r.get(0),
     )?;
     if reserved {
         return Err(ApiError::new(
             409,
             "pots_dispatch_reserved",
-            "This execution is reserved for its pending pots dispatch",
+            "This conversation belongs to a pots execution. Take over the task in pots before sending input.",
         ));
     }
     Ok(())
@@ -238,7 +245,14 @@ fn claim_send(db: &Connection, request: &PotsRequest) -> ApiResult<Option<Dispat
     Ok(None)
 }
 
-fn fence(db: &Connection, request: &PotsRequest) -> ApiResult<Dispatch> {
+/// Fence every control; an unsent instruction is cancelled. `TakeOver` only
+/// fences (coordination pause, revoked authority): delivered work stays
+/// pots-owned and stoppable. `Release` additionally hands a delivered session to
+/// the user. A Stop of a pots-owned send/delivery becomes `stopping`, which keeps
+/// ordinary input refused until the session stop completes. A released or
+/// cancelled dispatch may now hold the user's own work, so Stop keeps its state
+/// and never stops that session: it only ends pots' claim.
+fn fence(db: &Connection, request: &PotsRequest, action: PotsControl) -> ApiResult<Dispatch> {
     if let Some(old) = read(db, request)? {
         bound(&old, request)?;
         if request.generation < old.generation && old.state == "stopped" {
@@ -247,8 +261,13 @@ fn fence(db: &Connection, request: &PotsRequest) -> ApiResult<Dispatch> {
         if request.generation < old.generation {
             return Err(ApiError::conflict("Dispatch generation is stale"));
         }
-        db.execute("UPDATE pots_dispatches SET generation=?3,fenced=1,state=CASE WHEN state='prepared' THEN 'cancelled' ELSE state END WHERE owner=?1 AND dispatch_id=?2",
-            params![request.user, request.dispatch_id, request.generation])?;
+        db.execute("UPDATE pots_dispatches SET generation=?3,fenced=1,state=CASE \
+                WHEN state='prepared' THEN 'cancelled' \
+                WHEN ?4 AND state IN ('sending','delivered','uncertain','stopping') THEN 'stopping' \
+                WHEN ?5 AND state='delivered' THEN 'released' \
+                ELSE state END WHERE owner=?1 AND dispatch_id=?2",
+            params![request.user, request.dispatch_id, request.generation,
+                action == PotsControl::Stop, action == PotsControl::Release])?;
     } else {
         db.execute("INSERT INTO pots_dispatches(owner,dispatch_id,binding_id,generation,state,fenced) VALUES(?1,?2,?3,?4,'cancelled',1)",
             params![request.user, request.dispatch_id, request.binding_id, request.generation])?;
@@ -312,6 +331,7 @@ async fn execute(node: &Node, request: &PotsRequest) -> ApiResult<Value> {
                 })
                 .await;
             let db = node.db.lock();
+            // A Stop that raced the send already turned it into `stopping`.
             db.execute("UPDATE pots_dispatches SET state=?3 WHERE owner=?1 AND dispatch_id=?2 AND state='sending'",
                 params![request.user, request.dispatch_id, if delivered.is_ok() { "delivered" } else { "uncertain" }])?;
             let dispatch = require(&db, request)?;
@@ -322,11 +342,8 @@ async fn execute(node: &Node, request: &PotsRequest) -> ApiResult<Value> {
         }
         PotsOperation::Control { action } => {
             // Fence first, WITHOUT the dispatch mutex: startup can take time.
-            let dispatch = fence(&node.db.lock(), request)?;
-            if dispatch.state == "stopped" {
-                return Ok(dispatch.status());
-            }
-            if *action == PotsControl::TakeOver {
+            let dispatch = fence(&node.db.lock(), request, *action)?;
+            if dispatch.state == "stopped" || *action != PotsControl::Stop {
                 return Ok(dispatch.status());
             }
             let _guard = lock.lock().await;
@@ -334,7 +351,9 @@ async fn execute(node: &Node, request: &PotsRequest) -> ApiResult<Value> {
                 let db = node.db.lock();
                 let latest = require(&db, request)?;
                 current(&latest, request)?;
-                if latest.session.is_some() {
+                // Only a dispatch that was still pots-owned when fenced may stop
+                // its session; a released/cancelled one can hold the user's work.
+                if latest.state == "stopping" && latest.session.is_some() {
                     Some(session(&db, request, &latest)?)
                 } else {
                     None

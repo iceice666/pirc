@@ -8,7 +8,11 @@ pub const LIST_MAX: u32 = 100;
 const RESPONSIBILITIES_MAX: u32 = 100;
 // No cursor/retention policy yet: keep every owner list wholly addressable in
 // one capped page. Exhaustion fails closed; controls never replenish budgets.
+// Archived records leave lists and caps but stay stored, so their dedup keys,
+// idempotency keys and tombstones keep working; there is no hard deletion yet.
 const SUGGESTIONS_MAX: i64 = 100;
+/// SQL filter for records that are not archived.
+const LIVE: &str = "json_extract(data,'$.archivedAt') IS NULL";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -51,6 +55,8 @@ pub struct Responsibility {
     pub coordination_paused: bool,
     pub observations_used: u32,
     pub dispatches_used: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -63,6 +69,9 @@ pub enum ResponsibilityAction {
     ResumeObservation,
     PauseCoordination,
     ResumeCoordination,
+    /// Irreversible: leaves lists and the cap. Needs a disabled responsibility
+    /// without running executions; archives its suggestions and tasks with it.
+    Archive,
 }
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -113,6 +122,8 @@ pub struct Suggestion {
     pub snoozed_until: Option<i64>,
     pub task_id: Option<String>,
     pub accepted_revision: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -125,7 +136,12 @@ pub struct AcceptInput {
 #[derive(Clone, Debug)]
 pub enum SuggestionAction {
     Dismiss,
-    Snooze { until: i64 },
+    Snooze {
+        until: i64,
+    },
+    /// Only an unlinked, dismissed or superseded suggestion; linked ones are
+    /// archived with their task.
+    Archive,
 }
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -190,6 +206,12 @@ pub struct Task {
     pub control_generation: i64,
     pub coordination_paused: bool,
     pub taken_over: bool,
+    /// Host bookkeeping: the Node has handed the terminal task's execution
+    /// conversation to the user (or it never held one), so nothing is pending.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub execution_released: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<i64>,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -199,6 +221,8 @@ pub enum TaskAction {
     ResumeCoordination,
     TakeOver,
     Stop,
+    /// Only a terminal task; archives its origin suggestion too.
+    Archive,
 }
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -236,13 +260,15 @@ strict_actions!(ResponsibilityAction {
     PauseObservation,
     ResumeObservation,
     PauseCoordination,
-    ResumeCoordination
+    ResumeCoordination,
+    Archive
 });
 strict_actions!(TaskAction {
     PauseCoordination,
     ResumeCoordination,
     TakeOver,
-    Stop
+    Stop,
+    Archive
 });
 impl<'de> Deserialize<'de> for SuggestionAction {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
@@ -251,10 +277,12 @@ impl<'de> Deserialize<'de> for SuggestionAction {
         enum Wire {
             Dismiss {},
             Snooze { until: i64 },
+            Archive {},
         }
         Ok(match Wire::deserialize(deserializer)? {
             Wire::Dismiss {} => Self::Dismiss,
             Wire::Snooze { until } => Self::Snooze { until },
+            Wire::Archive {} => Self::Archive,
         })
     }
 }
@@ -263,6 +291,9 @@ fn invalid() -> ApiError {
 }
 fn missing() -> ApiError {
     ApiError::not_found("Pots record not found")
+}
+fn archived() -> ApiError {
+    ApiError::new(409, "archived", "Pots record is archived")
 }
 fn conflict() -> ApiError {
     ApiError::new(
@@ -304,7 +335,7 @@ fn list<T: DeserializeOwned>(
         return Err(invalid());
     }
     let mut q = conn.prepare(&format!(
-        "SELECT data FROM {table} WHERE owner_user=? ORDER BY id LIMIT ?"
+        "SELECT data FROM {table} WHERE owner_user=? AND {LIVE} ORDER BY id LIMIT ?"
     ))?;
     q.query_map(params![user, limit], |r| r.get::<_, String>(0))?
         .map(|r| decode(r?))
@@ -404,7 +435,7 @@ pub fn create_responsibility(
             return decode(data);
         }
         let count: i64 = conn.query_row(
-            "SELECT count(*) FROM pots_responsibilities WHERE owner_user=?",
+            &format!("SELECT count(*) FROM pots_responsibilities WHERE owner_user=? AND {LIVE}"),
             [user],
             |r| r.get(0),
         )?;
@@ -428,6 +459,7 @@ pub fn create_responsibility(
             coordination_paused: true,
             observations_used: 0,
             dispatches_used: 0,
+            archived_at: None,
             created_at: now,
             updated_at: now,
         };
@@ -455,6 +487,14 @@ pub fn control_responsibility(
     atomic(conn, |conn| {
         lock_owner(conn, user)?;
         let mut r = get_responsibility(conn, user, id)?;
+        if r.archived_at.is_some() {
+            // A lost Archive reply may be retried; nothing else applies.
+            return if matches!(input.action, ResponsibilityAction::Archive) {
+                Ok(r)
+            } else {
+                Err(archived())
+            };
+        }
         if r.revision != input.expected_revision || r.generation != input.expected_generation {
             return Err(conflict());
         }
@@ -475,6 +515,17 @@ pub fn control_responsibility(
             }
             ResponsibilityAction::PauseCoordination => r.coordination_paused = true,
             ResponsibilityAction::ResumeCoordination => r.coordination_paused = false,
+            ResponsibilityAction::Archive => {
+                if r.enabled {
+                    return Err(ApiError::new(
+                        409,
+                        "not_actionable",
+                        "Disable the responsibility before archiving it",
+                    ));
+                }
+                archive_responsibility_records(conn, user, &r.id, now)?;
+                r.archived_at = Some(now);
+            }
         }
         r.revision += 1;
         r.generation += 1;
@@ -528,6 +579,10 @@ pub fn ingest_progress(
             let existing:Option<String>=conn.query_row("SELECT data FROM pots_suggestions WHERE owner_user=? AND condition_key=? AND occurrence_key=?",params![user,condition,occurrence],|row|row.get(0)).optional()?;
             if let Some(data) = existing {
                 let mut prior: Suggestion = decode(data)?;
+                // Archived occurrences stay deduplicated and are never revived.
+                if prior.archived_at.is_some() {
+                    continue;
+                }
                 // Do not silently transfer an existing issue to another responsibility.
                 if prior.responsibility_id != r.id {
                     continue;
@@ -549,7 +604,7 @@ pub fn ingest_progress(
                 continue;
             }
             let count: i64 = conn.query_row(
-                "SELECT count(*) FROM pots_suggestions WHERE owner_user=?",
+                &format!("SELECT count(*) FROM pots_suggestions WHERE owner_user=? AND {LIVE}"),
                 [user],
                 |row| row.get(0),
             )?;
@@ -570,6 +625,7 @@ pub fn ingest_progress(
                 snoozed_until: None,
                 task_id: None,
                 accepted_revision: None,
+                archived_at: None,
                 created_at: now,
                 updated_at: now,
             };
@@ -622,8 +678,34 @@ pub fn control_suggestion(
     atomic(conn, |conn| {
         lock_owner(conn, user)?;
         let mut s = freshness(get_suggestion(conn, user, id)?, now);
+        if s.archived_at.is_some() {
+            return if matches!(input.action, SuggestionAction::Archive) {
+                Ok(s)
+            } else {
+                Err(archived())
+            };
+        }
         if s.revision != input.expected_revision {
             return Err(conflict());
+        }
+        if matches!(input.action, SuggestionAction::Archive) {
+            if s.task_id.is_some()
+                || !matches!(
+                    s.disposition,
+                    Disposition::Dismissed | Disposition::Superseded
+                )
+            {
+                return Err(ApiError::new(
+                    409,
+                    "not_actionable",
+                    "Dismiss the suggestion first; tracked ones are archived with their task",
+                ));
+            }
+            s.archived_at = Some(now);
+            s.revision += 1;
+            s.updated_at = now;
+            save_suggestion(conn, &s)?;
+            return Ok(s);
         }
         if s.task_id.is_some()
             || matches!(
@@ -649,6 +731,7 @@ pub fn control_suggestion(
                 s.disposition = Disposition::Snoozed;
                 s.snoozed_until = Some(until);
             }
+            SuggestionAction::Archive => unreachable!("handled above"),
         }
         s.revision += 1;
         s.updated_at = now;
@@ -670,6 +753,9 @@ pub fn accept_tracking(
     atomic(conn, |conn| {
         lock_owner(conn, user)?;
         let mut s = freshness(get_suggestion(conn, user, id)?, now);
+        if s.task_id.is_none() && s.archived_at.is_some() {
+            return Err(archived());
+        }
         if let Some(task_id) = &s.task_id {
             if s.disposition != Disposition::Linked {
                 return Err(ApiError::new(
@@ -713,6 +799,8 @@ pub fn accept_tracking(
             control_generation: 1,
             coordination_paused: false,
             taken_over: false,
+            execution_released: false,
+            archived_at: None,
             created_at: now,
             updated_at: now,
         };
@@ -760,6 +848,13 @@ pub fn control_task(
         } else {
             get_task_for_control(conn, user, id)?
         };
+        if task.archived_at.is_some() {
+            return if matches!(input.action, TaskAction::Archive) {
+                Ok(task)
+            } else {
+                Err(archived())
+            };
+        }
         if task.revision != input.expected_revision
             || task.control_generation != input.expected_generation
         {
@@ -793,6 +888,17 @@ pub fn control_task(
                     };
                 }
                 task.coordination_paused = true;
+            }
+            TaskAction::Archive => {
+                if !task.status.is_terminal() {
+                    return Err(ApiError::new(
+                        409,
+                        "not_actionable",
+                        "Only finished or stopped tasks can be archived",
+                    ));
+                }
+                archive_suggestion_row(conn, user, &task.origin_suggestion_id, now)?;
+                task.archived_at = Some(now);
             }
         }
         task.revision += 1;
@@ -908,6 +1014,70 @@ pub fn reserve_start_task(
         save_task(conn, &task)?;
         Ok((task, true))
     })
+}
+/// Raw owner-scoped archive, also for records hidden by source revocation.
+fn archive_suggestion_row(conn: &Connection, user: &str, id: &str, now: i64) -> ApiResult<()> {
+    let mut s: Suggestion = row(conn, "pots_suggestions", user, id)?;
+    if s.archived_at.is_none() {
+        s.archived_at = Some(now);
+        s.revision += 1;
+        s.updated_at = now;
+        save_suggestion(conn, &s)?;
+    }
+    Ok(())
+}
+/// Archive every live suggestion of a responsibility and its tasks, including
+/// records hidden by revoked sources (they would otherwise hold cap slots
+/// forever). Running executions must be stopped first; tracking-only tasks
+/// are stopped as part of the archive. Validates everything before writing.
+fn archive_responsibility_records(
+    conn: &Connection,
+    user: &str,
+    responsibility_id: &str,
+    now: i64,
+) -> ApiResult<()> {
+    let rows: Vec<String> = conn
+        .prepare(&format!(
+            "SELECT data FROM pots_suggestions WHERE owner_user=? AND responsibility_id=? AND {LIVE}"
+        ))?
+        .query_map(params![user, responsibility_id], |r| r.get(0))?
+        .collect::<rusqlite::Result<_>>()?;
+    let suggestions: Vec<Suggestion> = rows.into_iter().map(decode).collect::<ApiResult<_>>()?;
+    let mut tasks = Vec::new();
+    for s in &suggestions {
+        if let Some(task_id) = &s.task_id {
+            let task = get_task_for_control(conn, user, task_id)?;
+            if task.archived_at.is_some() {
+                continue;
+            }
+            if !task.status.is_terminal() && task.execution.is_some() {
+                return Err(ApiError::new(
+                    409,
+                    "active_execution",
+                    "Stop or finish this responsibility's executions before archiving it",
+                ));
+            }
+            tasks.push(task);
+        }
+    }
+    for mut task in tasks {
+        if !task.status.is_terminal() {
+            task.status = TaskStatus::Stopped;
+            task.coordination_paused = true;
+            task.control_generation += 1;
+        }
+        task.archived_at = Some(now);
+        task.revision += 1;
+        task.updated_at = now;
+        save_task(conn, &task)?;
+    }
+    for mut s in suggestions {
+        s.archived_at = Some(now);
+        s.revision += 1;
+        s.updated_at = now;
+        save_suggestion(conn, &s)?;
+    }
+    Ok(())
 }
 fn not_actionable() -> ApiError {
     ApiError::new(
@@ -1155,6 +1325,28 @@ pub fn set_execution_progress(
         task.revision += 1;
         task.updated_at = now;
         save_task(conn, &task)?;
+        Ok(task)
+    })
+}
+/// HOST ONLY: record that a terminal task's execution conversation no longer
+/// waits for pots. Bookkeeping, not a user-visible change: no revision bump.
+pub fn mark_execution_released(
+    conn: &Connection,
+    user: &str,
+    id: &str,
+    dispatch_id: &str,
+) -> ApiResult<Task> {
+    atomic(conn, |conn| {
+        lock_owner(conn, user)?;
+        let mut task = get_task_for_control(conn, user, id)?;
+        execution_matches(&task, dispatch_id)?;
+        if !task.status.is_terminal() {
+            return Err(not_actionable());
+        }
+        if !task.execution_released {
+            task.execution_released = true;
+            save_task(conn, &task)?;
+        }
         Ok(task)
     })
 }

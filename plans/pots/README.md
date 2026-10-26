@@ -70,6 +70,28 @@ acceptance or a finished autonomous assistant.
 
 Verification details, including exact test counts, are in the guide's
 [verification section](../../docs/guides/pots.md#explicit-execution-checkpoint-verification).
+
+### 3. Stop ownership, archive and fence paging (uncommitted, 2026-10-26)
+
+Authorized by the user on 2026-10-26 as queue items 1 and part of 4. No schema
+change; Node protocol stays **15** but gains the `Release` control, so Gateway
+and Nodes must still be upgraded together.
+
+- **Stop is tied to pots ownership.** The execution conversation refuses ordinary
+  input until the Gateway releases it: on explicit takeover (`Release`), or once
+  the task is terminal (retried by the recovery sweep). Pause and revocation still
+  send the fence-only `TakeOver`, so delivered work stays stoppable. Stop stops the
+  session only while pots still owns it, and keeps it reserved (`stopping`) until
+  the stop completes; after release it only ends the task. An unknown send is
+  stopped, never released.
+- **Archive.** Responsibilities, suggestions and tasks gain an irreversible
+  `archive` action. Archived records leave lists and the 100 caps but stay stored
+  for deduplication and idempotency. Rules are in the
+  [user guide](../../docs/guides/pots.md#limits-and-remaining-work).
+- **Revocation fence paging.** `fence_invalid_pending` now pages by task id
+  instead of stopping at 100 rows.
+
+Verification: [guide](../../docs/guides/pots.md#stop-ownership-and-archive-follow-up-verification).
 In short, the focused gates passed: Gateway 202 (46 pots), Web 452, Android 35
 pots/timeline, 23 conformance cases across 7 suites, and strict clippy. The full
 sandboxed Rust workspace run still fails 2 Linux Node socket-enumeration tests
@@ -77,33 +99,33 @@ sandboxed Rust workspace run still fails 2 Linux Node socket-enumeration tests
 
 ## Known risks in the delivered code
 
-These come from implementation review and should be fixed before anything is
-built on top.
+Both review findings are addressed by checkpoint 3 above:
 
-1. **Stop is not tied to a specific run.** The ledger binds a dedicated _session_.
-   Stop calls the session-level stop (`crates/pirc-node/src/pots.rs`). If Stop
-   arrives after the pots run has finished but before Gateway has reconciled it,
-   it can abort ordinary user work started later in that session. Options:
-   correlate Stop with the dispatched run, or refuse ordinary input in the
-   dedicated session until explicit takeover. The second was discussed but not
-   implemented. Today input is refused only while the instruction is prepared or
-   sending.
-2. **Restart reconciliation is capped.** The owner/source-scoped scan has limit 100.
-   Behavior beyond that cap has not been tested.
+1. **Stop was not tied to a specific run** (it could abort user work started in
+   the dedicated session after pots' run finished). Fixed by refusing ordinary
+   input until release, rather than by correlating Stop with a run ID.
+2. **"Restart reconciliation is capped"** was imprecise. The 30-second recovery
+   sweep already paged by id. The unpaged `LIMIT 100` was in
+   `fence_invalid_pending`, which now pages too.
+
+Remaining consequence of the fix: a pots-owned execution conversation is
+read-only to ordinary input until takeover or the end of the task. If a Node
+never comes back, its terminal tasks keep being retried by the sweep.
 
 ## Remaining work queue
 
 Roughly in dependency order. Every step needs the user's go-ahead.
 
-1. **Close the known risks** above, with regression tests.
+1. ~~**Close the known risks** above, with regression tests.~~ Done in checkpoint 3.
 2. **Verification debt:** a full conformance run, real browser and Android device
    journeys for tracking and Start, and an APK install. Resolve or classify the 2
    Node socket tests outside the sandbox (requires approval).
 3. **Configuration values:** concrete defaults for budgets, concurrency and depth,
    plus quiet hours and digest cadence. The policy is adopted; the numbers were
    never chosen ([design](design.md#quiet-operation-failure-and-recovery)).
-4. **Inbox lifecycle:** cursor pagination, retention, and a deletion/reset or
-   budget-edit workflow. Historical records currently count toward the 100 caps.
+4. **Inbox lifecycle:** archive is done (checkpoint 3). Still open: cursor
+   pagination, automatic retention or hard deletion, unarchive, and a budget
+   edit/reset workflow.
 5. **Content observation grants:** per-scope read-progress versus read-content.
    This must happen before any transcript- or file-aware suggestion.
 6. **Bounded proactive analysis:** event and scheduled wake-ups with budgets and

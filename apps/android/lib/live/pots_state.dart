@@ -224,7 +224,9 @@ class PotsState extends ChangeNotifier {
           'resume_observation',
           'pause_coordination',
           'resume_coordination',
-        ].contains(action)) {
+          'archive',
+        ].contains(action) ||
+        (action == 'archive' && r['enabled'] == true)) {
       return false;
     }
     return _mutate('/api/pots/responsibilities/${enc('${r['id']}')}/control', {
@@ -251,10 +253,24 @@ class PotsState extends ChangeNotifier {
     });
   }
 
+  /// An unlinked suggestion that was dismissed or superseded.
+  static bool archivable(Json s) =>
+      s['taskId'] == null &&
+      const ['dismissed', 'superseded'].contains(s['disposition']);
+
+  static bool terminal(Json t) => const [
+    'completed',
+    'failed',
+    'interrupted',
+    'stopped',
+  ].contains(t['status']);
+
   Future<bool> suggestion(Json s, String action) async {
-    if (!_record(s, 'suggestions') ||
-        !const ['pending', 'snoozed'].contains(s['disposition']) ||
-        !const ['dismiss', 'snooze'].contains(action)) {
+    final allowed = action == 'archive'
+        ? archivable(s)
+        : const ['pending', 'snoozed'].contains(s['disposition']) &&
+              const ['dismiss', 'snooze'].contains(action);
+    if (!_record(s, 'suggestions') || !allowed) {
       return false;
     }
     return _mutate('/api/pots/suggestions/${enc('${s['id']}')}/control', {
@@ -297,7 +313,9 @@ class PotsState extends ChangeNotifier {
           'resume_coordination',
           'take_over',
           'stop',
-        ].contains(action)) {
+          'archive',
+        ].contains(action) ||
+        (action == 'archive' && !terminal(t))) {
       return false;
     }
     return _mutate('/api/pots/tasks/${enc('${t['id']}')}/control', {

@@ -256,6 +256,48 @@ describe('pots tracking checkpoint', () => {
     expect(calls.filter((call) => !call.init.method)).toHaveLength(2);
   });
 
+  it('archives only finished records, with their current revision', async () => {
+    const archiveButtons = (label: string) =>
+      Array.from(
+        target.querySelectorAll<HTMLElement>(`article[aria-label="${label}"] button`),
+      ).filter((item) => item.textContent?.trim() === 'Archive');
+    await mountPage();
+    // Disabled responsibility: archivable. Pending suggestion and tracked task: not.
+    expect(archiveButtons('Watch workspace')).toHaveLength(1);
+    expect(archiveButtons('Suggestion from pots')).toHaveLength(0);
+    expect(archiveButtons('t1')).toHaveLength(0);
+    expect(target.textContent).toContain('It cannot be undone.');
+    if (component) await unmount(component);
+    target.remove();
+
+    state.responsibilities[0]!.enabled = true;
+    state.suggestions[0]!.disposition = 'dismissed';
+    state.tasks[0]!.status = 'completed';
+    await mountPage();
+    expect(archiveButtons('Watch workspace')).toHaveLength(0);
+    handler = async (url, init) => {
+      if (init.method === 'POST') {
+        if (url.includes('/suggestions/')) state.suggestions = [];
+        else state.tasks = [];
+        return response({});
+      }
+      return response(state);
+    };
+    archiveButtons('Suggestion from pots')[0]!.click();
+    await flush();
+    archiveButtons('t1')[0]!.click();
+    await flush();
+    expect(posts().map((post) => [post.url, post.body])).toEqual([
+      ['/api/pots/suggestions/s1/control', { expectedRevision: 3, action: { type: 'archive' } }],
+      [
+        '/api/pots/tasks/t1/control',
+        { expectedRevision: 2, expectedGeneration: 5, action: { type: 'archive' } },
+      ],
+    ]);
+    expect(target.textContent).toContain('No suggestions.');
+    expect(target.textContent).toContain('No tracked tasks.');
+  });
+
   it('takes over with the control generation and fences further coordination', async () => {
     await mountPage();
     handler = async (_url, init) => {
@@ -273,7 +315,10 @@ describe('pots tracking checkpoint', () => {
       action: { type: 'take_over' },
     });
     expect(target.textContent).toContain('pots coordination is fenced');
+    expect(target.textContent).toContain('execution conversation accepts your input');
     expect(button('Take over').disabled).toBe(true);
+    expect(button('Stop execution')).toBeUndefined();
+    expect(button('Stop tracking')).toBeDefined();
   });
 
   it('clears records immediately on focus and clears drafts across account changes', async () => {
@@ -390,6 +435,7 @@ describe('pots tracking checkpoint', () => {
     expect(target.textContent).toContain('Running');
     expect(button('Start')).toBeUndefined();
     expect(button('Stop execution').disabled).toBe(false);
+    expect(target.textContent).toContain('accepts only the pots instruction');
     await click('Open execution session');
     expect(open).toHaveBeenCalledWith('dedicated-execution');
     expect(posts()).toHaveLength(1);

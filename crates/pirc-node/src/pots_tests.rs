@@ -175,7 +175,7 @@ fn durable_sending_claim_is_not_replayed_after_restart() {
     assert!(claim_send(&db.lock(), &request).unwrap().is_none());
     let mut control = request.clone();
     control.generation = 2;
-    fence(&db.lock(), &control).unwrap();
+    fence(&db.lock(), &control, PotsControl::TakeOver).unwrap();
     assert!(claim_send(&db.lock(), &request).unwrap().is_none());
 }
 
@@ -188,15 +188,17 @@ fn takeover_does_not_claim_already_delivered_execution_was_stopped() {
     let mut control = request.clone();
     control.generation = 2;
     assert_eq!(
-        fence(&db.lock(), &control).unwrap().status()["state"],
+        fence(&db.lock(), &control, PotsControl::TakeOver)
+            .unwrap()
+            .status()["state"],
         "delivered"
     );
     assert!(claim_send(&db.lock(), &request).unwrap().is_none());
     control.generation = 1;
-    assert!(fence(&db.lock(), &control).is_err());
+    assert!(fence(&db.lock(), &control, PotsControl::TakeOver).is_err());
     control.binding_id = "other".into();
     control.generation = 3;
-    assert!(fence(&db.lock(), &control).is_err());
+    assert!(fence(&db.lock(), &control, PotsControl::TakeOver).is_err());
 }
 
 #[test]
@@ -309,4 +311,152 @@ async fn deleted_execution_keeps_stopped_tombstone_and_can_be_cancelled() {
     assert_eq!(execute(&node, &prepared).await.unwrap(), status);
     assert!(claim_send(&node.db.lock(), &prepared).unwrap().is_none());
     node.close().await;
+}
+
+fn control(action: PotsControl, generation: u64) -> PotsRequest {
+    let mut control = request(PotsOperation::Control { action });
+    control.generation = generation;
+    control
+}
+
+/// Make the Node's own session check fail, so a Stop that still tries to stop
+/// the session errors, while one that correctly skips it succeeds.
+fn break_session_binding(node: &Node, id: &str) {
+    node.db
+        .lock()
+        .execute(
+            "UPDATE pots_dispatches SET workspace_id='elsewhere' WHERE session_id=?1",
+            [id],
+        )
+        .unwrap();
+}
+
+#[tokio::test]
+async fn delivered_execution_refuses_ordinary_input_until_released() {
+    let (_dir, node) = node().await;
+    let prepared = prepare_request();
+    execute(&node, &prepared).await.unwrap();
+    let id = identity(&prepared);
+    node.db
+        .lock()
+        .execute(
+            "UPDATE pots_dispatches SET state='delivered' WHERE session_id=?1",
+            [&id],
+        )
+        .unwrap();
+    assert_eq!(
+        require_generic_input(&node.db.lock(), &id)
+            .unwrap_err()
+            .code,
+        "pots_dispatch_reserved"
+    );
+    // A coordination pause/revocation fences pots but does not hand over the
+    // session: the delivered run stays pots-owned and stoppable.
+    let fenced = execute(&node, &control(PotsControl::TakeOver, 2))
+        .await
+        .unwrap();
+    assert_eq!(fenced["state"], "delivered");
+    assert!(require_generic_input(&node.db.lock(), &id).is_err());
+    let released = execute(&node, &control(PotsControl::Release, 3))
+        .await
+        .unwrap();
+    assert_eq!(released["state"], "released");
+    require_generic_input(&node.db.lock(), &id).unwrap();
+
+    // After release the session may hold the user's own work: Stop ends pots'
+    // claim without touching the session (whose check would now fail).
+    break_session_binding(&node, &id);
+    let stopped = execute(&node, &control(PotsControl::Stop, 4))
+        .await
+        .unwrap();
+    assert_eq!(stopped["state"], "stopped");
+    require_generic_input(&node.db.lock(), &id).unwrap();
+    node.close().await;
+}
+
+#[tokio::test]
+async fn stop_of_pots_owned_delivery_stays_reserved_until_the_session_stops() {
+    let (_dir, node) = node().await;
+    let prepared = prepare_request();
+    execute(&node, &prepared).await.unwrap();
+    let id = identity(&prepared);
+    node.db
+        .lock()
+        .execute(
+            "UPDATE pots_dispatches SET state='delivered' WHERE session_id=?1",
+            [&id],
+        )
+        .unwrap();
+    // The session stop fails: the dispatch stays `stopping` and input stays refused.
+    break_session_binding(&node, &id);
+    assert_eq!(
+        execute(&node, &control(PotsControl::Stop, 2))
+            .await
+            .unwrap_err()
+            .status,
+        409
+    );
+    let status = execute(&node, &request(PotsOperation::Status))
+        .await
+        .unwrap();
+    assert_eq!(status["state"], "stopping");
+    assert_eq!(
+        require_generic_input(&node.db.lock(), &id)
+            .unwrap_err()
+            .code,
+        "pots_dispatch_reserved"
+    );
+    // A release cannot open a session whose stop is still in flight.
+    execute(&node, &control(PotsControl::Release, 3))
+        .await
+        .unwrap();
+    assert!(require_generic_input(&node.db.lock(), &id).is_err());
+    // Once the session can be stopped, a retried Stop completes and releases it.
+    node.db
+        .lock()
+        .execute(
+            "UPDATE pots_dispatches SET workspace_id='workspace' WHERE session_id=?1",
+            [&id],
+        )
+        .unwrap();
+    let stopped = execute(&node, &control(PotsControl::Stop, 4))
+        .await
+        .unwrap();
+    assert_eq!(stopped["state"], "stopped");
+    require_generic_input(&node.db.lock(), &id).unwrap();
+    node.close().await;
+}
+
+#[test]
+fn stop_racing_a_send_keeps_the_session_reserved() {
+    let db = Db::memory();
+    let request = request(PotsOperation::Start);
+    db.lock().execute("INSERT INTO pots_dispatches(owner,dispatch_id,binding_id,generation,session_id,state) VALUES(?1,?2,?3,1,'s','sending')",
+        params![request.user, request.dispatch_id, request.binding_id]).unwrap();
+    assert_eq!(
+        fence(
+            &db.lock(),
+            &control(PotsControl::Stop, 2),
+            PotsControl::Stop
+        )
+        .unwrap()
+        .state,
+        "stopping"
+    );
+    // The send's completion cannot overwrite the pending stop.
+    db.lock().execute("UPDATE pots_dispatches SET state='delivered' WHERE owner=?1 AND dispatch_id=?2 AND state='sending'",
+        params![request.user, request.dispatch_id]).unwrap();
+    assert!(require_generic_input(&db.lock(), "s").is_err());
+    // Releasing an uncertain send fences it but cannot open the session: the
+    // instruction may still be running there, so only a Stop may end it.
+    db.lock()
+        .execute("UPDATE pots_dispatches SET state='uncertain'", [])
+        .unwrap();
+    fence(
+        &db.lock(),
+        &control(PotsControl::Release, 3),
+        PotsControl::Release,
+    )
+    .unwrap();
+    assert!(require_generic_input(&db.lock(), "s").is_err());
 }

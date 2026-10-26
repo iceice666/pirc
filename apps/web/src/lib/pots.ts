@@ -23,6 +23,7 @@ export interface Responsibility {
   coordinationPaused: boolean;
   observationsUsed: number;
   dispatchesUsed: number;
+  archivedAt?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -32,7 +33,8 @@ export type ResponsibilityAction =
   | 'pause_observation'
   | 'resume_observation'
   | 'pause_coordination'
-  | 'resume_coordination';
+  | 'resume_coordination'
+  | 'archive';
 export interface PotsSuggestion {
   id: string;
   ownerUser: string;
@@ -53,6 +55,7 @@ export interface PotsSuggestion {
   snoozedUntil: number | null;
   taskId: string | null;
   acceptedRevision: number | null;
+  archivedAt?: number;
   createdAt: number;
   updatedAt: number;
 }
@@ -89,10 +92,16 @@ export interface PotsTask {
   controlGeneration: number;
   coordinationPaused: boolean;
   takenOver: boolean;
+  archivedAt?: number;
   createdAt: number;
   updatedAt: number;
 }
-export type TaskAction = 'pause_coordination' | 'resume_coordination' | 'take_over' | 'stop';
+export type TaskAction =
+  | 'pause_coordination'
+  | 'resume_coordination'
+  | 'take_over'
+  | 'stop'
+  | 'archive';
 export interface PotsOverview {
   actor: { kind: 'pots'; id: 'personal' };
   accountKey: string;
@@ -132,7 +141,7 @@ export const potsApi = {
     ),
   suggestion: (
     record: PotsSuggestion,
-    action: { type: 'dismiss' } | { type: 'snooze'; until: number },
+    action: { type: 'dismiss' } | { type: 'snooze'; until: number } | { type: 'archive' },
   ) =>
     send<{ suggestion: PotsSuggestion }>(`/api/pots/suggestions/${part(record.id)}/control`, {
       expectedRevision: record.revision,
@@ -172,5 +181,8 @@ export const potsTaskLabels: Record<PotsTask['status'], string> = {
 };
 export const potsTaskTerminal = (task: PotsTask) =>
   ['completed', 'failed', 'interrupted', 'stopped'].includes(task.status);
+/** Archivable: an unlinked suggestion that was dismissed or superseded. */
+export const potsSuggestionArchivable = (s: PotsSuggestion) =>
+  !s.taskId && (s.disposition === 'dismissed' || s.disposition === 'superseded');
 export const validPotsInstruction = (instruction: string) =>
   instruction.trim().length > 0 && new TextEncoder().encode(instruction).length <= 20000;
