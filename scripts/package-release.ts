@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import { checkVersions } from './version.js';
-import { copyNotices } from './release-notices.js';
+import { copyNotices, copyProjectLicense } from './release-notices.js';
 
 const repo = path.resolve(import.meta.dir, '..');
 let root = repo;
@@ -79,6 +79,7 @@ cpSync(path.join(root, 'apps/web/dist'), path.join(stage, 'share/pirc/web'), { r
 cpSync(path.join(root, 'docs'), path.join(stage, 'docs'), { recursive: true });
 for (const file of ['README.md', 'CHANGELOG.md'])
   cpSync(path.join(root, file), path.join(stage, file));
+copyProjectLicense(root, stage);
 // Preserve web/build dependency notices and the native crates' vendored licenses.
 const notices = path.join(stage, 'third-party-notices');
 mkdirSync(notices);
@@ -144,6 +145,7 @@ writeFileSync(
 const webName = `pirc-web-v${version}`;
 cpSync(path.join(stage, 'share/pirc/web'), path.join(out, webName, 'web'), { recursive: true });
 cpSync(notices, path.join(out, webName, 'third-party-notices'), { recursive: true });
+copyProjectLicense(root, path.join(out, webName));
 const archives = [name, webName].map((dir) => {
   const file = dir + '.tar.gz';
   // Python tarfile avoids AppleDouble/xattrs and normalizes archive metadata/order.

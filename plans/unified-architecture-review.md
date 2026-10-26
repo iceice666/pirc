@@ -77,8 +77,8 @@ presets still need concrete proposals within the adopted policy.
 The actual observed projects/content and standing execution grants are user
 configuration choices, not another architecture approval. Existing grants survive
 migration; new-folder defaults do not downgrade them or override explicit blocks.
-Public trait/type signatures and feature names are engineering work. Public
-licensing/external publication remains a separate owner decision. The user does
+Public trait/type signatures and feature names are engineering work. The repository license is now AGPL-3.0-only (`e34586b2`, 2026-10-26);
+external crate publication and release packaging remain separate owner decisions. The user does
 not need to choose Rust boxing, lock algorithms or database column names.
 
 ## Engineering specifications and proof gates still missing

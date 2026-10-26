@@ -25,6 +25,7 @@ rustPlatform.buildRustPackage {
     fileset = lib.fileset.unions [
       ../Cargo.toml
       ../Cargo.lock
+      ../LICENSE
       ../crates
     ];
   };
@@ -47,6 +48,7 @@ rustPlatform.buildRustPackage {
     # crate-root licenses. cargoDeps is the locked, unpacked vendor tree.
     licenses=$out/share/licenses/pirc-${role}
     mkdir -p "$licenses/rust"
+    install -m644 LICENSE "$licenses/LICENSE"
     (
       cd "$cargoDeps"
       find -L . -type f \( -iname 'license*' -o -iname 'licence*' -o -iname 'notice*' \
@@ -104,6 +106,7 @@ rustPlatform.buildRustPackage {
         "Private forward-authenticated gateway and web UI"
       else
         "Native coding and chat node with a sandboxed agent";
+    license = lib.licenses.agpl3Only;
     mainProgram = "pirc-${role}";
     platforms = lib.platforms.linux ++ lib.platforms.darwin;
   };

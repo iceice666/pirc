@@ -178,9 +178,10 @@ recorded in the architecture reference, not here.
    install global crypto state. Retain the recently added distrust regression
    and the actual production verifier behavior after changing ownership.
 
-Root license selection remains an owner decision before any external publication;
-preserve existing attribution/notices when moving source. No public release is
-part of this plan. Verify dependency APIs and candidate crate versions separately
+The repository adopted AGPL-3.0-only in `e34586b2` (2026-10-26), inherited by
+all workspace crates. Preserve existing third-party attribution/notices when
+moving source. External crate publication and its packaging remain separate
+owner decisions; no public release is part of this plan. Verify dependency APIs and candidate crate versions separately
 if they are selected; the supplied ecosystem comparisons are not acceptance proof.
 
 ## Adopted extraction boundary

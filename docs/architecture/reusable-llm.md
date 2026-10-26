@@ -292,8 +292,9 @@ than suppressed. Disposable matrix outputs are removed on exit.
   ids) are not tracked; the core keeps the run's replies and tool results
   alongside the session store until the run ends (tool results twice: history
   and tool records). The prompt
-  command still answers `true` after a write-refused session ends its run,
-  pending a Web/Android decision, and such a session has no reopen path.
+  command now waits for initial message admission and reports an uncertain
+  outcome after a refused append. Durable Gateway/client reconciliation and
+  a proven reopening path are still required.
   Revocation/rebind fences are not used by the production host yet. The five
   `node_browser` conformance cases need a run with a browser outside the sandbox.
 - Rerun the isolated transport/OAuth matrix and dependency review after further
@@ -305,6 +306,8 @@ than suppressed. Disposable matrix outputs are removed on exit.
 - Full native Android execution/notification parity and real-device/push acceptance, live-provider smoke
   tests under a separately authorized budget, and any full conformance run not
   explicitly recorded above.
-- Public API stabilization, root license/notice decisions and release packaging.
+- Public API stabilization, preservation of third-party notices and release
+  packaging. The repository adopted AGPL-3.0-only in `e34586b2` (2026-10-26);
+  all workspace crates inherit that license.
   No crates.io publication or deployment is implied. Nix verification remains
   waived as previously requested, not passed.

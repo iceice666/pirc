@@ -10,6 +10,7 @@ let
     root = ../.;
     fileset = lib.fileset.unions [
       ../package.json
+      ../LICENSE
       ../bun.lock
       ../tsconfig.base.json
       (lib.fileset.fileFilter (
@@ -65,6 +66,8 @@ stdenvNoCC.mkDerivation {
   installPhase = ''
     mkdir -p $out/share/pirc/web
     cp -r apps/web/dist/. $out/share/pirc/web/
+    install -Dm644 LICENSE $out/share/licenses/pirc-web/LICENSE
   '';
   passthru = { inherit nodeModules; };
+  meta.license = lib.licenses.agpl3Only;
 }

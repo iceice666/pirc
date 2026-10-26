@@ -852,6 +852,24 @@ Gateway creation reconciliation, attachment staging and client recovery remain
 open. The run-created build target is removed after validation; existing APKs
 and other worktrees' outputs are preserved.
 
+### Remote integration: repository license (2026-10-26)
+
+Rebased the completed local planning, Node allocation and admission checkpoints
+onto `origin/main` at `e34586b2`. That remote change adopts AGPL-3.0-only for all
+13 Rust workspace crates; it changes no API, protocol or database schema. Native
+and standalone Web release staging now copy the project `LICENSE` separately
+from dependency notices. Nix source allowlists, installed licenses and package
+metadata follow the same license; extraction/publication documents no longer
+report the root license as undecided.
+
+After rebase: 420 Agent library tests, 14 Node creation/route tests, 28 runner
+checks and 6 release-notice/CI tests passed. One runner test is an intentionally
+ignored subprocess helper exercised by its passing parent test. Strict Agent/Node
+Clippy, Rust/changed-file formatting and workspace Cargo metadata checks passed.
+Nix build/evaluation remains waived, and no APK, device test or Release was run.
+The unfinished Gateway preparation remains local and is excluded from this
+integration push. Full U1 acceptance and later architecture stages stay open.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

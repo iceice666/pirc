@@ -16,3 +16,13 @@ export function copyNotices(source: string, destination: string): void {
     } else if (stat.isDirectory()) copyNotices(input, output);
   }
 }
+
+/** The project's license accompanies both native and standalone web archives.
+ * Keep it separate from dependencies' notices, whose original terms remain.
+ */
+export function copyProjectLicense(source: string, destination: string): void {
+  const license = path.join(source, 'LICENSE');
+  if (!lstatSync(license).isFile()) throw new Error('Project LICENSE must be a regular file');
+  mkdirSync(destination, { recursive: true });
+  cpSync(license, path.join(destination, 'LICENSE'));
+}
