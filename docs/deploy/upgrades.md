@@ -1,5 +1,36 @@
 # Upgrades
 
+## Unreleased local checkpoint: negotiated Web first-send recovery
+
+Web includes private durable drafts and pending-send recovery, but Gateway still
+returns **`canSubmit: false`** until Android adoption and the complete recovery
+matrix pass. This checkpoint does not enable the new production client flow.
+Gateway schema 1016, Node schema 2007 and protocol 15 are unchanged, as are
+lockfiles and Nix cargo hashes. Unsupported/gated servers retain the existing
+client flow; an operation already reserved for durable sending never silently
+falls back after a local storage failure.
+
+Authenticated capabilities add `ownerUser`, `canFenceAccount` and
+`canFindPendingSession`. New durable requests send optional `x-pirc-account`
+containing encodeURIComponent(owner); mismatch with the current authenticated
+identity returns `409 account_changed` before mutation. Preparation also accepts
+optional `expectedOwner` with the same check. Legacy clients need neither field.
+An older strict server rejects the new preparation body rather than retargeting
+an old-account draft. Read-only pending lookup by public session ID is owner
+scoped and does not allocate, take control or replay input.
+
+The new Web path requires working IndexedDB and successful local transaction
+commits before sending. Cold recovery requires authenticated capability discovery
+for that same Gateway origin/account. Do not clear site storage to resolve an
+unknown outcome: it may hold the only unaccepted draft/attachment bytes. Check
+result only queries; Continue and taking control require explicit user actions.
+The seven-day policy applies to unaccepted Gateway staging, not accepted files
+or private browser drafts. Browser/profile deletion remains outside that policy.
+
+This is local implementation/verification work, not a deployment instruction or
+a completed end-to-end Web/Android guarantee. No Nix or Android-device validation
+was performed for this slice.
+
 ## Unreleased local checkpoint: cancellation before Node mapping
 
 Gateway schema **1016** and Node schema **2007** add durable remote cleanup jobs

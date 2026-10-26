@@ -1,4 +1,12 @@
 import { tr } from './i18n.svelte';
+import {
+  FirstSend,
+  firstTransport,
+  draftScope,
+  type FirstDraft,
+  type FirstCapabilities,
+} from './first-send';
+import { BrowserDraftStore } from './first-send-storage';
 /**
  * Session-wide client state: the gateway's workspaces, nodes and sessions, the
  * open session and its event stream, the draft and uploads, and every command
@@ -143,8 +151,264 @@ class AppState {
   models = $state.raw<ModelOption[]>([]);
   activeSessionId = $state<string>();
   connection = $state<ConnectionState>(navigator.onLine ? 'reconnecting' : 'offline');
+  firstCapabilities = $state.raw<FirstCapabilities>();
+  firstDraft = $state.raw<FirstDraft>();
+  firstRecoveries = $state.raw<FirstDraft[]>([]);
+  firstControlBusy = $state(false);
+  #firstScope = '';
+  #firstAccountRevision = 0;
+  #firstOpenIntent = 0;
+  #firstRevisions = new Map<string, number>();
+  #firstWrites = Promise.resolve();
+  readonly firstFlow = new FirstSend(new BrowserDraftStore(), firstTransport, (row, id, scope) => {
+    const key = JSON.stringify([scope, id]);
+    if (row) this.#firstRevisions.set(key, row.revision);
+    else this.#firstRevisions.delete(key);
+    if (scope !== this.#firstScope) return;
+    this.firstRecoveries = [
+      ...(row && (row.message || row.files.length || row.frozen) ? [row] : []),
+      ...this.firstRecoveries.filter((item) => item.operationId !== id),
+    ];
+    if (this.firstDraft?.operationId !== id) return;
+    this.firstDraft = row;
+    if (row?.preparation?.accepted && this.sessionState) {
+      this.activeSessionId = row.preparation.sessionId;
+      this.sessionState = {
+        ...this.sessionState,
+        session: { ...this.sessionState.session, id: row.preparation.sessionId },
+      };
+      this.#address(`?session=${encodeURIComponent(row.preparation.sessionId)}`);
+      void this.refreshSessions();
+    }
+  });
+  get firstEnabled() {
+    return !!(
+      !this.demo &&
+      this.firstCapabilities?.canSubmit &&
+      this.firstCapabilities.canFenceAccount &&
+      this.firstCapabilities.ownerUser
+    );
+  }
+  async initializeFirstSend() {
+    const revision = ++this.#firstAccountRevision;
+    try {
+      const caps = await this.firstFlow.transport.capabilities();
+      if (revision !== this.#firstAccountRevision) return;
+      const scope =
+        caps.ownerUser && caps.canFenceAccount ? draftScope(location.origin, caps.ownerUser) : '';
+      if (this.#firstScope && scope !== this.#firstScope) {
+        this.discardDraftSession();
+        this.#events?.close();
+        this.#events = undefined;
+        this.sessionState = undefined;
+        this.activeSessionId = undefined;
+        this.draft = '';
+        this.uploads = [];
+        this.firstRecoveries = [];
+      }
+      this.#firstScope = scope;
+      this.firstCapabilities = caps;
+      if (scope && caps.canSubmit) {
+        const records = await this.firstFlow.store.list(scope);
+        if (scope === this.#firstScope)
+          this.firstRecoveries = records.filter((r) => r.message || r.files.length || r.frozen);
+      }
+    } catch (error) {
+      if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+        this.discardDraftSession();
+        this.#events?.close();
+        this.#events = undefined;
+        this.firstCapabilities = undefined;
+        this.firstRecoveries = [];
+        this.#firstScope = '';
+        this.sessionState = undefined;
+        this.activeSessionId = undefined;
+        this.draft = '';
+        this.uploads = [];
+      }
+      // A transient offline check keeps existing local content; an authenticated
+      // capability response is needed before restoring private drafts cold.
+    }
+  }
+
+  #firstValue() {
+    const model = this.selectedModelOption;
+    return {
+      workspaceId: this.draftWorkspaceId!,
+      message: this.draft,
+      model: model ? { provider: model.provider, id: model.id } : undefined,
+      thinking: this.thinking,
+      files: this.uploads.map((item) => {
+        const blob = this.#draftFiles.get(item.id);
+        if (!blob) throw new Error(tr('The original attachment is missing from local storage.'));
+        return {
+          id: item.id,
+          name: item.name,
+          mimeType: blob.type || 'application/octet-stream',
+          byteSize: blob.size,
+          blob,
+        };
+      }),
+    };
+  }
+  #saveFirstDraft() {
+    const draft = this.firstDraft;
+    if (!draft || draft.frozen || draft.scope !== this.#firstScope) return this.#firstWrites;
+    let value: Pick<FirstDraft, 'workspaceId' | 'message' | 'model' | 'thinking' | 'files'>;
+    try {
+      value = this.#firstValue();
+    } catch (error) {
+      return Promise.reject(error);
+    }
+    const write = this.#firstWrites.then(async () => {
+      const revision =
+        this.#firstRevisions.get(JSON.stringify([draft.scope, draft.operationId])) ??
+        (draft.revision || undefined);
+      await this.firstFlow.save(draft.scope, draft.ownerUser, draft.operationId, value, revision);
+    });
+    this.#firstWrites = write.catch((error) => {
+      if (this.firstDraft?.operationId === draft.operationId)
+        this.pageError = errorMessage(error, tr('Local draft save failed. Your message is kept.'));
+    });
+    return write;
+  }
+  async resumeFirst(row: FirstDraft) {
+    if (row.scope !== this.#firstScope) return;
+    const selection = this.#openSeq;
+    const current = await this.firstFlow.store.get(row.scope, row.operationId);
+    if (!current || current.scope !== this.#firstScope || selection !== this.#openSeq) return;
+    if (current.preparation?.state === 'admitted') {
+      await this.firstFlow.forget(current.scope, current.operationId);
+      await this.openSession(current.preparation.sessionId, { skipFirst: true });
+      return;
+    }
+    await this.createSession(current.workspaceId, current);
+  }
+  async #finishFirst(row: FirstDraft, selection: number) {
+    if (
+      row.scope !== this.#firstScope ||
+      this.firstDraft?.operationId !== row.operationId ||
+      selection !== this.#openSeq
+    )
+      return;
+    if (row.preparation?.state === 'admitted') {
+      const id = row.preparation.sessionId;
+      await this.firstFlow.forget(row.scope, row.operationId);
+      if (row.scope !== this.#firstScope || selection !== this.#openSeq) return;
+      this.draftWorkspaceId = undefined;
+      this.firstDraft = undefined;
+      this.#draftFiles.clear();
+      this.uploads = [];
+      this.draft = '';
+      await this.openSession(id, { skipFirst: true });
+    }
+  }
+  #firstError(error: unknown) {
+    this.pageError = errorMessage(
+      error,
+      tr('The first message is saved. Check its result before continuing.'),
+    );
+    if (error instanceof ApiError && error.code === 'account_changed') {
+      this.discardDraftSession();
+      this.sessionState = undefined;
+      this.activeSessionId = undefined;
+      this.firstCapabilities = undefined;
+      this.firstRecoveries = [];
+      this.#firstScope = '';
+      void this.bootstrap();
+    }
+  }
+  async continueFirst() {
+    const draft = this.firstDraft,
+      selection = this.#openSeq;
+    if (!draft || !this.firstEnabled || this.commandBusy) return;
+    this.commandBusy = true;
+    this.pageError = '';
+    try {
+      if (!draft.frozen) await this.#saveFirstDraft();
+      const row = draft.cancelRequested
+        ? await this.firstFlow.discard(draft.scope, draft.operationId)
+        : await this.firstFlow.run(draft.scope, draft.operationId, this.firstDraft?.revision);
+      if (row) await this.#finishFirst(row, selection);
+    } catch (error) {
+      if (draft.scope === this.#firstScope && selection === this.#openSeq) this.#firstError(error);
+    } finally {
+      this.commandBusy = false;
+    }
+  }
+  async checkFirst() {
+    const draft = this.firstDraft,
+      selection = this.#openSeq;
+    if (!draft || this.firstControlBusy) return;
+    this.firstControlBusy = true;
+    try {
+      await this.firstFlow.check(draft.scope, draft.operationId);
+    } catch (error) {
+      if (draft.scope === this.#firstScope && selection === this.#openSeq) this.#firstError(error);
+    } finally {
+      this.firstControlBusy = false;
+    }
+  }
+  async takeFirstControl() {
+    const row = this.firstDraft,
+      selection = this.#openSeq;
+    if (!row || this.firstControlBusy) return;
+    this.firstControlBusy = true;
+    try {
+      await this.firstFlow.takeControl(row.scope, row.operationId);
+    } catch (error) {
+      if (row.scope === this.#firstScope && selection === this.#openSeq) this.#firstError(error);
+    } finally {
+      this.firstControlBusy = false;
+    }
+  }
+  async stopFirst() {
+    const draft = this.firstDraft,
+      selection = this.#openSeq;
+    if (!draft || this.firstControlBusy) return;
+    this.firstControlBusy = true;
+    try {
+      await this.#finishFirst(await this.firstFlow.stop(draft.scope, draft.operationId), selection);
+    } catch (error) {
+      if (draft.scope === this.#firstScope && selection === this.#openSeq) this.#firstError(error);
+    } finally {
+      this.firstControlBusy = false;
+    }
+  }
+  async openStoppedFirst() {
+    const row = this.firstDraft;
+    if (row?.preparation?.state === 'admitted') {
+      await this.#finishFirst(row, this.#openSeq);
+      return;
+    }
+    if (!row || !row.preparation?.messageAdmission?.stopConfirmed) return;
+    await this.firstFlow.release(row.scope, row.operationId);
+    const id = row.preparation.sessionId;
+    this.discardDraftSession();
+    await this.openSession(id, { skipFirst: true });
+  }
+  async dismissFirst(row: FirstDraft) {
+    const current = this.firstDraft?.operationId === row.operationId,
+      selection = this.#openSeq;
+    await this.firstFlow.forget(row.scope, row.operationId);
+    if (current && selection === this.#openSeq && row.scope === this.#firstScope)
+      this.discardDraftSession();
+  }
+  async discardFirst(row = this.firstDraft) {
+    if (!row || row.scope !== this.#firstScope) return;
+    const current = this.firstDraft?.operationId === row.operationId,
+      selection = this.#openSeq;
+    const result = await this.firstFlow.discard(row.scope, row.operationId);
+    if (
+      !result ||
+      (result.preparation?.state === 'cancelled' && !result.preparation.cleanupPending)
+    )
+      await this.firstFlow.forget(row.scope, row.operationId);
+    if (current && selection === this.#openSeq && row.scope === this.#firstScope)
+      this.discardDraftSession();
+  }
   draft = $state('');
-  /** Unsaved conversation, scoped to this page until the user first sends. */
+  /** Local conversation; the negotiated first-send flow also persists its private draft. */
   draftWorkspaceId = $state<string>();
   #draftFiles = new Map<string, File>();
   get isDraftSession() {
@@ -153,6 +417,18 @@ class AppState {
 
   discardDraftSession() {
     if (!this.isDraftSession) return;
+    const pendingFirst = this.firstDraft;
+    this.firstDraft = undefined;
+    if (
+      pendingFirst &&
+      !pendingFirst.frozen &&
+      !pendingFirst.message &&
+      !pendingFirst.files.length
+    ) {
+      void this.#firstWrites
+        .then(() => this.firstFlow.pruneEmpty(pendingFirst.scope, pendingFirst.operationId))
+        .catch(() => undefined);
+    }
     this.draftWorkspaceId = undefined;
     this.#draftFiles.clear();
     this.uploads.forEach((item) => item.preview && URL.revokeObjectURL(item.preview));
@@ -402,6 +678,7 @@ class AppState {
   /** Start up: load the gateway's lists and open the most recent session. */
   async bootstrap() {
     this.clientId = getClientId();
+    await this.initializeFirstSend();
     this.loading = true;
     this.#bootstrapFailed = false;
     this.pageError = '';
@@ -685,6 +962,9 @@ class AppState {
    */
   resume(hiddenFor: number) {
     if (this.retryBootstrap()) return;
+    void this.initializeFirstSend().then(() =>
+      this.firstDraft?.frozen ? this.checkFirst() : undefined,
+    );
     this.#events?.reconnectNow();
     void this.refreshControl();
     void this.refreshNodes();
@@ -698,8 +978,43 @@ class AppState {
   /** `show: false` connects the session behind the page on screen (a project page, the schedules). */
   async openSession(
     id: string,
-    { show = true, keepComposer = false }: { show?: boolean; keepComposer?: boolean } = {},
+    {
+      show = true,
+      keepComposer = false,
+      skipFirst = false,
+    }: { show?: boolean; keepComposer?: boolean; skipFirst?: boolean } = {},
   ) {
+    const firstIntent = ++this.#firstOpenIntent;
+    if (!skipFirst && this.firstEnabled && !this.demo) {
+      const seq = this.#openSeq,
+        scope = this.#firstScope,
+        owner = this.firstCapabilities!.ownerUser!;
+      let pending = this.firstRecoveries.find(
+        (r) => r.operationId === id || r.preparation?.sessionId === id,
+      );
+      if (!pending) {
+        try {
+          pending = await this.firstFlow.adopt(
+            scope,
+            owner,
+            await this.firstFlow.transport.find(owner, id),
+          );
+        } catch (error) {
+          if (!(error instanceof ApiError && error.status === 404) && scope === this.#firstScope)
+            this.#firstError(error);
+        }
+      }
+      if (
+        seq !== this.#openSeq ||
+        scope !== this.#firstScope ||
+        firstIntent !== this.#firstOpenIntent
+      )
+        return;
+      if (pending && !pending.released && pending.preparation?.state !== 'admitted') {
+        await this.resumeFirst(pending);
+        return;
+      }
+    }
     if (id === this.activeSessionId && this.isDraftSession) {
       this.view = 'session';
       return;
@@ -889,7 +1204,9 @@ class AppState {
   }
 
   async deleteSession(id: string) {
-    if (!this.demo) await api.deleteSession(id);
+    const first = this.firstRecoveries.find((row) => row.preparation?.sessionId === id);
+    if (first) await this.discardFirst(first);
+    else if (!this.demo) await api.deleteSession(id);
     this.removeSession(id);
     this.memoryRevision++;
     await this.refreshMemory();
@@ -973,7 +1290,12 @@ class AppState {
    * (and on session switch / page hide via {@link flushDraft}), not per key.
    */
   setDraft(value: string) {
+    if (this.firstDraft?.frozen) return;
     this.draft = value;
+    if (this.firstDraft) {
+      void this.#saveFirstDraft().catch(() => undefined);
+      return;
+    }
     if (!this.activeSessionId || this.isDraftSession) return;
     this.#draftPending = { sessionId: this.activeSessionId, value };
     clearTimeout(this.#draftTimer);
@@ -983,6 +1305,8 @@ class AppState {
   }
 
   flushDraft() {
+    if (this.firstDraft && !this.firstDraft.frozen)
+      void this.#saveFirstDraft().catch(() => undefined);
     clearTimeout(this.#draftTimer);
     this.#draftTimer = undefined;
     const pending = this.#draftPending;
@@ -992,6 +1316,13 @@ class AppState {
 
   async sendCommand(kind: CommandKind, content = this.draft) {
     if (this.commandBusy) return;
+    if (this.firstDraft) {
+      if (kind === 'prompt' && !this.firstDraft.frozen && (content.trim() || this.uploads.length)) {
+        this.setDraft(content);
+        await this.continueFirst();
+      }
+      return;
+    }
     if (this.isDraftSession) {
       if (kind !== 'prompt' || !content.trim()) return;
       this.commandBusy = true;
@@ -1397,7 +1728,7 @@ class AppState {
     // Stored on the node that runs the session's agent: images ride in the
     // model's context, other files are copied into the workspace for tools.
     const sessionId = this.activeSessionId;
-    if (!sessionId) return;
+    if (!sessionId || this.firstDraft?.frozen) return;
     for (const file of Array.from(files)) {
       const isImage = file.type.startsWith('image/');
       const localId = `local-${uuid()}`;
@@ -1413,6 +1744,14 @@ class AppState {
           uploading: true,
         },
       ];
+      if (this.firstDraft) {
+        this.#draftFiles.set(localId, file);
+        try {
+          await this.#saveFirstDraft();
+        } catch {
+          return;
+        }
+      }
       try {
         const attachment = this.demo
           ? {
@@ -1440,6 +1779,7 @@ class AppState {
         this.uploads = this.uploads.map((item) =>
           item.id === localId ? { ...attachment, preview } : item,
         );
+        if (this.firstDraft) await this.#saveFirstDraft();
       } catch (error) {
         this.uploads = this.uploads.filter((item) => item.id !== localId);
         if (preview) URL.revokeObjectURL(preview);
@@ -1453,13 +1793,16 @@ class AppState {
   }
 
   removeUpload(id: string) {
+    if (this.firstDraft?.frozen) return;
     this.#draftFiles.delete(id);
     const upload = this.uploads.find((item) => item.id === id);
     if (upload?.preview) URL.revokeObjectURL(upload.preview);
     this.uploads = this.uploads.filter((item) => item.id !== id);
+    if (this.firstDraft) void this.#saveFirstDraft().catch(() => undefined);
   }
 
   async changeModel(key: string) {
+    if (this.firstDraft?.frozen) return;
     const model = this.models.find((item) => modelKey(item) === key);
     const state = this.sessionState;
     if (!state || !model) return;
@@ -1468,6 +1811,7 @@ class AppState {
       selectedModelId: model.id,
       selectedModelProvider: model.provider,
     };
+    if (this.firstDraft) void this.#saveFirstDraft().catch(() => undefined);
     // Without the lease the command would be refused; the choice rides with the next prompt.
     if (
       !this.demo &&
@@ -1491,9 +1835,11 @@ class AppState {
   }
 
   async changeThinking(level: ThinkingLevel) {
+    if (this.firstDraft?.frozen) return;
     const state = this.sessionState;
     if (!state) return;
     this.sessionState = { ...state, thinkingLevel: level };
+    if (this.firstDraft) void this.#saveFirstDraft().catch(() => undefined);
     // Without the lease the command would be refused; the choice rides with the next prompt.
     if (
       !this.demo &&
@@ -1585,22 +1931,29 @@ class AppState {
     return workspace;
   }
 
-  /** Open a local conversation immediately. Nothing is stored until first send. */
-  async createSession(workspaceId: string): Promise<boolean> {
+  /** Open immediately; negotiated durable drafts are local until first Send is accepted. */
+  async createSession(workspaceId: string, recovered?: FirstDraft): Promise<boolean> {
     const workspace = this.workspaces.find((item) => item.id === workspaceId);
-    if (!workspace || !this.acceptsSessions(workspace)) {
+    if (
+      !recovered &&
+      (!workspace ||
+        isReadOnly(workspace) ||
+        (!this.firstEnabled && !this.workspaceOnline(workspace)))
+    ) {
       this.pageError = tr('This workspace is unavailable.');
       return false;
     }
     this.flushDraft();
     this.discardDraftSession();
-    ++this.#openSeq;
+    const selection = ++this.#openSeq;
+    ++this.#firstOpenIntent;
     this.#events?.close();
     this.#events = undefined;
     this.draftWorkspaceId = workspaceId;
     this.view = 'session';
-    this.setMode(tabOf(workspace, this.modeCatalog));
-    this.activeSessionId = `draft-${uuid()}`;
+    if (workspace) this.setMode(tabOf(workspace, this.modeCatalog));
+    this.activeSessionId =
+      recovered?.preparation?.sessionId ?? recovered?.operationId ?? `draft-${uuid()}`;
     this.#address(`?new=${encodeURIComponent(workspaceId)}`);
     this.draft = '';
     this.uploads = [];
@@ -1624,9 +1977,49 @@ class AppState {
       control: { heldByCurrentClient: true },
       cursor: '',
       runnerEpoch: '',
-      thinkingLevel: workspace.defaults?.thinkingLevel ?? 'medium',
-      selectedModelId: workspace.defaults?.modelId,
+      thinkingLevel: recovered?.thinking ?? workspace?.defaults?.thinkingLevel ?? 'medium',
+      selectedModelId: recovered?.model?.id ?? workspace?.defaults?.modelId,
+      selectedModelProvider: recovered?.model?.provider,
     });
+    if (recovered) {
+      this.firstDraft = recovered;
+      this.draft = recovered.message;
+      this.uploads = recovered.files.map((file) => {
+        if (file.blob)
+          this.#draftFiles.set(file.id, new File([file.blob], file.name, { type: file.mimeType }));
+        return {
+          id: file.id,
+          name: file.name,
+          mimeType: file.mimeType,
+          size: file.byteSize,
+          kind: file.mimeType.startsWith('image/') ? ('image' as const) : ('file' as const),
+        };
+      });
+    } else if (this.firstEnabled) {
+      // Reserve the client route before awaiting storage. A failed or slow
+      // first write must never expose the legacy create-and-send path.
+      this.firstDraft = {
+        ...this.#firstValue(),
+        scope: this.#firstScope,
+        ownerUser: this.firstCapabilities!.ownerUser!,
+        operationId: this.activeSessionId!,
+        frozen: false,
+        prepareAttempted: false,
+        revision: 0,
+        updatedAt: Date.now(),
+      };
+      try {
+        await this.#saveFirstDraft();
+      } catch (error) {
+        if (selection === this.#openSeq)
+          this.pageError = errorMessage(
+            error,
+            tr('Local draft storage is unavailable. Your message has not been sent.'),
+          );
+        return false;
+      }
+      if (selection !== this.#openSeq) return false;
+    }
     if (!this.demo) void this.loadModels();
     return true;
   }

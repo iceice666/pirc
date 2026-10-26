@@ -23,6 +23,7 @@
   import { fade } from 'svelte/transition';
   import { app } from './lib/app.svelte';
   import Composer from './lib/components/Composer.svelte';
+  import FirstSendRecovery from './lib/components/FirstSendRecovery.svelte';
   import DelegationStrip from './lib/components/DelegationStrip.svelte';
   import InteractionCard from './lib/components/InteractionCard.svelte';
   import { isRelayed } from './lib/types';
@@ -500,6 +501,7 @@
     class="workspace"
     inert={sidebarOpen && viewportWidth <= 650}
   >
+    {#if !app.usingDemo}<FirstSendRecovery />{/if}
     {#if app.view === 'pots'}
       <PotsPage
         {sidebarCollapsed}
@@ -687,7 +689,7 @@
                   >
                 </div>
               {/if}
-              {#if sessionState.messages.length === 0}
+              {#if sessionState.messages.length === 0 && !app.firstDraft?.frozen}
                 <div class="empty-conversation">
                   <span><Plus size={24} /></span>
                   <h2>{tr('Start something useful')}</h2>
@@ -700,7 +702,7 @@
               {/if}
             </div>
           </div>
-          <Composer />
+          {#if !app.firstDraft?.frozen}<Composer />{/if}
           <p class="sr-only" role="status" aria-live="polite">{announcement}</p>
         </section>
 

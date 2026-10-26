@@ -64,6 +64,8 @@ struct Spec {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Input {
+    #[serde(default)]
+    expected_owner: Option<String>,
     operation_id: String,
     submission: Spec,
 }
@@ -280,23 +282,51 @@ pub fn router() -> Router<AppState> {
         )
         .route("/api/conversation-submissions/prepare", post(prepare))
         .route(
+            "/api/conversation-submissions/session/{id}",
+            get(pending_for_session),
+        )
+        .route(
             "/api/conversation-submissions/{id}",
             get(status).delete(discard),
         )
 }
-async fn capabilities() -> axum::Json<Value> {
+async fn capabilities(Extension(identity): Extension<Identity>) -> axum::Json<Value> {
     // Existing clients stay on their current flow until durable client recovery
     // and the multi-client failure table are verified.
     axum::Json(
-        json!({"version":1,"canPrepare":true,"canStageAttachments":true,"canAcceptIntent":true,"canMaterialize":true,"canDispatchFirstMessage":true,"canCancelCreation":true,"attachmentRetentionDays":7,"canSubmit":false}),
+        json!({"version":1,"ownerUser":identity.user,"canFenceAccount":true,"canFindPendingSession":true,"canPrepare":true,"canStageAttachments":true,"canAcceptIntent":true,"canMaterialize":true,"canDispatchFirstMessage":true,"canCancelCreation":true,"attachmentRetentionDays":7,"canSubmit":false}),
     )
 }
+async fn pending_for_session(
+    State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Path(session): Path<String>,
+) -> ApiResult<axum::Json<Value>> {
+    let db = app.db.lock();
+    let op:Option<String>=db.query_row("SELECT s.operation_id FROM conversation_submissions s JOIN conversation_submission_acceptances a USING(owner_user,operation_id) LEFT JOIN conversation_submission_dispatches d USING(owner_user,operation_id) WHERE s.owner_user=?1 AND s.session_id=?2 AND s.state!='cancelled' AND d.admitted_at IS NULL",params![identity.user,session],|r|r.get(0)).optional()?;
+    let op = op.ok_or_else(|| ApiError::not_found("No pending first message"))?;
+    Ok(axum::Json(
+        json!({"preparation":lookup(&db,&identity.user,&op)?}),
+    ))
+}
+
 async fn prepare(
     State(app): State<AppState>,
     Extension(identity): Extension<Identity>,
     ReqBody(body): ReqBody,
 ) -> ApiResult<axum::Json<Value>> {
     let input: Input = body.parse()?;
+    if input
+        .expected_owner
+        .as_deref()
+        .is_some_and(|owner| owner != identity.user)
+    {
+        return Err(ApiError::new(
+            409,
+            "account_changed",
+            "The signed-in account changed. Reopen this operation in its original account.",
+        ));
+    }
     input.validate(app.config.upload_max_bytes as u64)?;
     // A duplicate is an outcome query, even after a model/mode was removed.
     // Checking its immutable content still rejects retargeted retries.

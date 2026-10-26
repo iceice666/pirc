@@ -117,6 +117,15 @@ mapping is known, honest pending status while offline, and operation-scoped
 cancellation/cleanup on reconnect. 282 Gateway tests, 422 Node library tests,
 strict Clippy and five process cases passed locally. Client adoption and the full
 failure table remain open; `canSubmit` stays false.
+The [Web durable-draft checkpoint](unified-conversations.md#u1-implementation-checkpoint-web-durable-drafts-and-recovery-2026-10-27)
+adds account-scoped IndexedDB text/Blob persistence, revision guards, immutable
+first-send integration and explicit pending recovery controls. Gateway pins the
+expected account and exposes owner-scoped pending discovery by public session ID.
+Storage refusal and delayed initial writes cannot fall back to legacy sending or
+replace a newer selection. Web tests/typecheck/build, 284 Gateway tests, strict
+Gateway Clippy and an isolated real IndexedDB browser proof pass. Android
+adoption and the full client/process failure table remain open; `canSubmit` stays
+false. No schema/dependency change or Flutter modification is included.
 The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
 records local fixture/transcript repairs and 50 Agent plus five Node process
 passes; the remote Check is still failed, and full Chromium/Linux verification

@@ -600,6 +600,23 @@ async fn authenticate(
         require_origin,
     ) {
         Ok(identity) => {
+            // Optional for legacy clients. Durable operations always send this
+            // fence so changed browser cookies cannot retarget old local content.
+            let expected = request.headers().get_all("x-pirc-account");
+            if expected.iter().count() > 1 {
+                return ApiError::invalid_input().into_response();
+            }
+            if let Some(expected) = expected.iter().next()
+                && expected.to_str().ok()
+                    != Some(crate::routes::urlencoding_component(&identity.user).as_str())
+            {
+                return ApiError::new(
+                    409,
+                    "account_changed",
+                    "The signed-in account changed. Reopen this operation in its original account.",
+                )
+                .into_response();
+            }
             request.extensions_mut().insert(identity);
             next.run(request).await
         }

@@ -727,3 +727,76 @@ fn concurrent_retry_cancellation_and_project_deletion_never_revive_content() {
     assert_eq!(count(&db.lock(), "sessions"), 0);
     assert_eq!(count(&db.lock(), "commands"), 0);
 }
+
+#[tokio::test]
+async fn account_fence_rejects_a_changed_cookie_before_preparing_any_content() {
+    use tower::ServiceExt;
+    let (app, _dir) = app();
+    let request=axum::http::Request::builder().method("POST").uri("/api/conversation-submissions/prepare")
+        .header("host","a.example").header("origin","https://a.example").header("x-pirc-user","bob").header("x-pirc-account","alice").header("content-type","application/json")
+        .extension(axum::extract::ConnectInfo("127.0.0.1:40000".parse::<std::net::SocketAddr>().unwrap()))
+        .body(axum::body::Body::from(json!({"operationId":"old-account","submission":{"workspaceId":"node:repo","message":"private Alice text","attachments":[]}}).to_string())).unwrap();
+    let response = crate::app::router(app.clone())
+        .oneshot(request)
+        .await
+        .unwrap();
+    assert_eq!(response.status().as_u16(), 409);
+    assert_eq!(count(&app.db.lock(), "conversation_submissions"), 0);
+    let(code,_)=call(&app,"POST","/api/conversation-submissions/prepare",Some("bob"),None,Some(json!({"expectedOwner":"alice","operationId":"old-account","submission":{"workspaceId":"node:repo","message":"Alice text","attachments":[]}}))).await;
+    assert_eq!(code, 409);
+    assert_eq!(count(&app.db.lock(), "conversation_submissions"), 0);
+    let (code, body) = call(
+        &app,
+        "GET",
+        "/api/conversation-submissions/capabilities",
+        Some("alice"),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(code, 200);
+    assert_eq!(body["ownerUser"], "alice");
+    assert_eq!(body["canFenceAccount"], true);
+    assert_eq!(body["canSubmit"], false);
+}
+#[tokio::test]
+async fn pending_session_lookup_is_owner_scoped_and_neither_materializes_nor_takes_control() {
+    use super::acceptance::tests::{identity, model, prepared, register};
+    let (app, _dir) = app();
+    model(&app);
+    let requests = register(&app);
+    prepared(&app, false);
+    let accepted = super::acceptance::accept_intent(&app, &identity(), "draft-1")
+        .await
+        .unwrap();
+    requests.lock().unwrap().clear();
+    let path = format!(
+        "/api/conversation-submissions/session/{}",
+        accepted.session_id
+    );
+    let (code, body) = call(&app, "GET", &path, Some("alice"), None, None).await;
+    assert_eq!(code, 200);
+    assert_eq!(body["preparation"]["operationId"], "draft-1");
+    assert_eq!(body["preparation"]["accepted"], true);
+    assert_eq!(
+        call(&app, "GET", &path, Some("bob"), None, None).await.0,
+        404
+    );
+    assert!(requests.lock().unwrap().is_empty());
+    assert_eq!(count(&app.db.lock(), "commands"), 0);
+    assert!(
+        app.db
+            .lock()
+            .get_lease(&accepted.session_id)
+            .unwrap()
+            .is_null()
+    );
+    app.db
+        .lock()
+        .begin_session_deletion(&accepted.session_id, "alice")
+        .unwrap();
+    assert_eq!(
+        call(&app, "GET", &path, Some("alice"), None, None).await.0,
+        404
+    );
+}

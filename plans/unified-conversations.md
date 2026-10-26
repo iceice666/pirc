@@ -1335,6 +1335,80 @@ conversation deletion when adding those client controls. Later binding/resource
 transition/collaboration/pots stages and frontend redesign deferrals are unchanged.
 No remote push, deployment or Release is included.
 
+## U1 implementation checkpoint: Web durable drafts and recovery (2026-10-27)
+
+Local only. Web now has the durable client path behind negotiated capabilities;
+**Gateway still advertises `canSubmit: false`**. This checkpoint does not activate
+it for ordinary users or complete U1. Gateway 1016, Node 2007 and protocol 15 are
+unchanged; there are no dependency, lockfile or Nix cargo-hash changes.
+
+- The IndexedDB adapter scopes each draft by Gateway origin and authenticated
+  owner, stores original text/model/thinking and Blob bytes, and resolves writes
+  only after a strict-durability transaction completes. Revision checks serialize
+  competing tabs. Quota/storage refusal prevents network submission; it never
+  silently falls back to the legacy create-and-send route. The client reserves
+  its local draft identity before the initial storage await. Delayed commits,
+  navigation, queued edits and account switches cannot replace a newer selection
+  or resurrect a discarded draft. Empty abandoned drafts are removed only if
+  still empty and mutable when the transaction runs.
+- Explicit Send freezes and persists the operation and attachment hashes before
+  any preparation request, then uses the existing prepare/upload/accept/
+  materialize/dispatch APIs. All retries keep the original operation, workspace,
+  manifest and public session identity. Only durable acceptance publishes a
+  session. The composer clears after known admission and opens the actual server
+  snapshot; it does not fabricate an accepted transcript locally.
+- Necessary recovery controls use existing styles: saved drafts/pending sends,
+  collapsed original input, Check result, explicit Continue, Take control, Stop
+  and the existing conversation/memory deletion confirmation. Check result and
+  reconnect reconciliation only query outcomes; they do not open the normal
+  controlled session, acquire/renew a lease, allocate or replay a prompt.
+  Admitted results offer explicit Open conversation. Unknown dispatch stays
+  query-only. A missing preparation after a lost prepare response permits an
+  explicit continuation with that same idempotency key. Known Stop releases the
+  pending gate explicitly while retaining the original input for inspection.
+- Capabilities now return `ownerUser`, `canFenceAccount` and
+  `canFindPendingSession`. Durable requests pin the expected account using
+  `x-pirc-account` (encodeURIComponent of the authenticated owner); a changed
+  account receives `409 account_changed` before mutation. Preparation also pins
+  `expectedOwner` in its body so an older strict backend rejects the new request
+  rather than accepting it under changed browser cookies. The optional header
+  does not change legacy clients. Cold recovery first requires authenticated
+  capabilities; transient offline checks retain already-open local content.
+- `GET /api/conversation-submissions/session/{publicSessionId}` finds only the
+  authenticated owner's accepted, non-deleted first intent without known
+  admission. Another device can inspect/adopt that pending input without local
+  attachment bytes or automatically dispatching it. Stop, draft discard and
+  accepted conversation deletion retain their separate permission/lifetime rules;
+  confirmed deletion scrubs the local text/bytes and retains cleanup status until
+  completion. The seven-day deadline still covers only unaccepted Gateway file
+  staging, not accepted attachments or private local drafts.
+
+Validation: **478 Web tests across 64 files** (including **25 focused first-send
+tests**), typecheck (zero errors/warnings) and production build pass. Gateway
+**284 unit/HTTP tests** and strict all-target Clippy pass, including
+account-change refusal and owner-scoped pending discovery
+without a Node request/lease. Focused client tests cover real App-state send,
+storage refusal, competing revisions, delayed writes/navigation, lost replies,
+read-only checking, remote pending adoption and account isolation. The dedicated
+Headless Shell proof (`node apps/web/tool/check-first-send-storage.mjs`) exercises
+the production IndexedDB adapter across page reload and browser close/relaunch,
+Blob restoration, aborted-write rollback and two-tab contention. It uses only a
+run-owned profile and the repository's isolated test browser, never user Chrome.
+This is a real storage-browser proof, not a full browser-to-Gateway/Node/Agent or
+Android-device acceptance. The production build reports a non-fatal large-chunk
+warning; UI redesign/performance work remains outside this slice.
+
+Remaining U1: native Android private durable storage and controller/recovery
+adoption; the full multi-device/restart/permission matrix and a real integrated
+client-to-Gateway/Node/Agent proof. Stop before a Node mapping is known is still
+unimplemented in the client (Delete is not its substitute). Removed-workspace/
+model and cancellation-before-preparation recovery also need full matrix proof;
+input stays retained rather than claiming completion. Keep `canSubmit` closed
+until those gates pass. Later binding/revocation/tasks/pots stages remain open.
+No Flutter code changed or device/emulator/Nix/remote-CI verification ran in this
+slice. Source and commit stay local; only run-owned build/log/scratch artifacts
+are removed, preserving APKs, test-browser cache and others' work.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.
