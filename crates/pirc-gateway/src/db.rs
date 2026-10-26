@@ -41,13 +41,14 @@ pub(crate) use sql_text_enum;
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1011;
+pub const SCHEMA_VERSION: i64 = 1012;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = concat!(
     include_str!("schema.sql"),
     include_str!("calendar/schema.sql"),
-    include_str!("pots/schema.sql")
+    include_str!("pots/schema.sql"),
+    include_str!("conversation_submissions/schema.sql")
 );
 /// Each migration takes a database from the version before it to its own;
 /// [`SCHEMA`] assembles the newest whole schema, including calendar tables.
@@ -118,6 +119,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     // Execution statuses/accepted instructions are not readable by old Gateways.
     // No SQL shape changes; the version fence prevents unsafe downgrade.
     (1011, "SELECT 1;"),
+    (1012, include_str!("conversation_submissions/schema.sql")),
 ];
 
 /// Placeholder name of a new session until the agent's title replaces it.
@@ -1126,6 +1128,17 @@ impl Store for Connection {
         atomic(self, |tx| {
             if tx.find_workspace(workspace_id)?.is_none() {
                 return Err(ApiError::not_found("Workspace not found"));
+            }
+            let other_preparations: bool = tx.query_row(
+                "SELECT EXISTS(SELECT 1 FROM conversation_submissions WHERE workspace_id=?1 AND owner_user!=?2 AND state='preparing')",
+                params![workspace_id,user], |r| r.get(0),
+            )?;
+            if other_preparations {
+                return Err(ApiError::new(
+                    403,
+                    "forbidden",
+                    "The project has another user's pending conversations",
+                ));
             }
             let sessions = tx.workspace_session_ids(workspace_id)?;
             for session_id in &sessions {

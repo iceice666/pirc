@@ -84,6 +84,13 @@ The [message-admission checkpoint](unified-conversations.md#g0-implementation-ch
 also fixes false success after a refused initial append, stops failed starts before
 inference, preserves uncertain outcomes and keeps Stop available during admission.
 It does not yet provide durable Gateway/client recovery.
+The [Gateway preparation checkpoint](unified-conversations.md#u1-implementation-checkpoint-gateway-preparation-2026-10-26)
+is now local: owner-scoped immutable intents, stable identity reservation,
+restart lookup and transactional cancellation/deletion fences. Its capability
+still says `canSubmit: false`; attachments, acceptance and client recovery remain.
+The user explicitly requested a one-off push through `a926ea38` for the completed
+checkpoints, license packaging and protocol snapshot repair. Subsequent Gateway
+preparation remains local under the active goal's default publication boundary.
 
 Then establish environment bindings, implement actual resource transitions, map
 canonical tasks/collaboration, and extend bounded proactive pots. The user deferred

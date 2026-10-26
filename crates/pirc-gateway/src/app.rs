@@ -310,6 +310,7 @@ pub fn forward(response: NodeHttpResponse) -> Response {
 
 pub fn router(app: AppState) -> Router {
     Router::new()
+        .merge(crate::conversation_submissions::router())
         .route("/node/connect", get(sockets::node_connect))
         .route("/api/events", get(sockets::events))
         .route(

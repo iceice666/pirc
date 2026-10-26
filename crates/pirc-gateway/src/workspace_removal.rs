@@ -92,13 +92,13 @@ fn begin(
             .ok_or_else(|| ApiError::not_found("Workspace not found"))?;
         removable(app, &workspace)?;
         let other: bool = conn.query_row(
-            "SELECT EXISTS(SELECT 1 FROM sessions WHERE workspace_id=?1 AND (owner_user IS NULL OR owner_user!=?2)) OR EXISTS(SELECT 1 FROM schedules WHERE workspace_id=?1 AND owner_user!=?2) OR EXISTS(SELECT 1 FROM workspace_removals WHERE workspace_id=?1 AND owner_user!=?2)",
+            "SELECT EXISTS(SELECT 1 FROM sessions WHERE workspace_id=?1 AND (owner_user IS NULL OR owner_user!=?2)) OR EXISTS(SELECT 1 FROM schedules WHERE workspace_id=?1 AND owner_user!=?2) OR EXISTS(SELECT 1 FROM workspace_removals WHERE workspace_id=?1 AND owner_user!=?2) OR EXISTS(SELECT 1 FROM conversation_submissions WHERE workspace_id=?1 AND owner_user!=?2 AND state='preparing')",
             params![id, user], |row| row.get(0))?;
         if other {
             return Err(ApiError::new(
                 403,
                 "forbidden",
-                "Workspace contains another user's sessions or schedules",
+                "Workspace contains another user's sessions, pending conversations or schedules",
             ));
         }
         let status: Option<String> = conn

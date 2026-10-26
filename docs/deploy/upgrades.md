@@ -1,5 +1,23 @@
 # Upgrades
 
+## Unreleased local checkpoint: Gateway first-send preparation
+
+Gateway schema **1012** adds durable owner-scoped first-send preparation and
+cancellation fences. Back up Gateway state before upgrading. Older Gateways
+refuse the migrated database; do not downgrade by changing `user_version`.
+Existing sessions, Node mappings, history, leases, memory and checkpoint recovery
+ownership are preserved. Node schema **2004** and protocol **15** are unchanged
+by this Gateway checkpoint.
+
+This local intermediate stage reserves identities and stores pending input, but
+creates no ordinary session or command and starts no Agent. The new capability
+route reports `canPrepare: true, canSubmit: false`; existing Web/Android continue
+their current flow. Preparation is not acceptance, Node admission or execution.
+Attachment contents, acceptance, delivery and client recovery still need their
+remaining U1 gates before activation. Cancellation and workspace/session deletion
+remove the payload while retaining its non-reusable operation identity; existing
+[backup and WAL limits](backup-and-recovery.md) still apply.
+
 ## Unreleased: Node session creation ledger
 
 Node schema **2004** adds durable, owner-scoped creation identities. Back up Node

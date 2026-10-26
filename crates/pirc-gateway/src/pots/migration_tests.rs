@@ -5,8 +5,13 @@ fn migration_1009_adds_empty_disabled_pots_without_changing_existing_state() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("gateway.sqlite");
     {
-        let db = Db::open(&path).unwrap();
-        let conn = db.lock();
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(concat!(
+            include_str!("../schema.sql"),
+            include_str!("../calendar/schema.sql"),
+            "PRAGMA user_version=1009;"
+        ))
+        .unwrap();
         conn.sync_remote_workspaces(
             "work",
             &[(
@@ -19,7 +24,6 @@ fn migration_1009_adds_empty_disabled_pots_without_changing_existing_state() {
         conn.create_session("work:repo", "node://work/s", "work", "s", "alice")
             .unwrap();
         conn.execute("INSERT INTO workspace_removals (workspace_id,owner_user,removed_at) VALUES ('work:repo','alice',1)", []).unwrap();
-        conn.execute_batch("DROP TABLE pots_tasks; DROP TABLE pots_suggestions; DROP TABLE pots_responsibilities; PRAGMA user_version=1009;").unwrap();
     }
     for _ in 0..2 {
         let db = Db::open(&path).unwrap();

@@ -878,6 +878,53 @@ A real-process `node_link` run and all seven `agent_loop_order` cases passed
 locally after the integration; strict conformance Clippy passed too. This changes
 only tests and their expected transcript, not the App/Gateway/Node wire behavior.
 
+### U1 implementation checkpoint: Gateway preparation (2026-10-26)
+
+Local only, following the one-off integration push through `a926ea38`. Gateway
+schema **1012** adds owner-scoped preparation records. This is an intermediate
+U1 stage; **`canSubmit: false`** remains the explicit capability response, and
+neither client uses this path yet.
+
+- `POST /api/conversation-submissions/prepare` binds an operation ID to the
+  workspace, first-message text, optional model/thinking and attachment manifest.
+  Gateway reserves stable public session, Node creation and command identities
+  before any Node request. It creates no ordinary session, command or file.
+- `GET /api/conversation-submissions/{id}` recovers the same preparation after
+  restart or a lost response. The same owner/key with changed content, workspace,
+  settings or attachment manifest conflicts; separate drafts and accounts remain
+  independent even with identical text. Private Node/command identities and the
+  fingerprint are not returned to clients.
+- `DELETE /api/conversation-submissions/{id}` cancels and removes the payload while
+  keeping the operation fence. Replaying that identity cannot revive it. Workspace
+  deletion/removal and session deletion clear corresponding pending payloads in
+  the same SQLite transaction as their fence. This is logical database removal;
+  existing WAL/backup limitations remain as documented in backup/recovery.
+- New preparations respect current mode/model availability and private checkpoint
+  workspace ownership. Outcome lookup/cancellation remains available to its owner
+  after configuration changes. Work removal and project deletion cannot silently
+  discard another user's pending input. Content access never grants execution.
+- Browser authentication and paired-device bearer tokens reach the same
+  owner-scoped operation. A local HTTP test prepares/queries using only the paired
+  token, without a browser Origin or management grant; revoking it blocks access.
+  This is route-level proof, not an end-to-end Android first-send/device pass.
+
+Validation: all **227** Gateway binary unit/HTTP tests passed, including 17 new
+preparation cases plus a Work-removal ownership case. Cases use independent SQLite
+connections, concurrent reserve/retry/cancel/delete, restart, immutable payloads,
+strict upload/text limits, private recovery ownership and 1011→1012 migration.
+Historical 1000/1006/1007/1008/1009 fixtures continue testing real old schemas,
+without accidentally including the newly added table/triggers. Strict Gateway
+Clippy, Rust/changed-doc formatting and diff checks passed.
+
+Remaining U1: validated attachment bytes and idempotent promotion; acceptance with
+fresh authority/online checks; Node allocation/admission reconciliation and stable
+lease/command authority; Web/Android persistence/recovery; the complete first-send
+acceptance table. An attachment manifest is not a verified upload, and a stored
+preparation is not an accepted message. No model or tool runs from these routes.
+Cleanup retention and staging policy must be explicit before client activation.
+No Web/Flutter source, device or emulator work was included. Run-owned outputs are
+removed after verification; existing APKs, other worktrees and their artifacts stay.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

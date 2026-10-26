@@ -153,6 +153,7 @@ fn migrates_the_first_rust_schema() {
     let first = format!("{}{}", &SCHEMA[..links], &SCHEMA[end..])
             .replace(include_str!("../calendar/schema.sql"), "")
             .replace(include_str!("../pots/schema.sql"), "")
+            .replace(include_str!("../conversation_submissions/schema.sql"), "")
             .replace(
                 ",\n  -- The repository's normalized origin (pirc_protocol::normalize_origin), as the node reports it.\n  repo TEXT\n",
                 "\n",
@@ -270,7 +271,9 @@ fn reconciles_upstream_memory_and_local_calendar_checkpoint_schemas() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("gateway.sqlite");
         let conn = Connection::open(&path).unwrap();
-        let mut schema = SCHEMA.replace(include_str!("../pots/schema.sql"), "");
+        let mut schema = SCHEMA
+            .replace(include_str!("../pots/schema.sql"), "")
+            .replace(include_str!("../conversation_submissions/schema.sql"), "");
         if !calendar {
             schema = schema.replace(include_str!("../calendar/schema.sql"), "");
         }

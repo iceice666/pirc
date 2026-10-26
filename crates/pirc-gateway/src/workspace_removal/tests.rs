@@ -410,8 +410,13 @@ fn migration_from_1008_preserves_workspace_and_history() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("db.sqlite");
     {
-        let db = Db::open(&path).unwrap();
-        let conn = db.lock();
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(concat!(
+            include_str!("../schema.sql"),
+            include_str!("../calendar/schema.sql"),
+            "PRAGMA user_version=1008;"
+        ))
+        .unwrap();
         conn.sync_remote_workspaces(
             "work",
             &[(
@@ -423,7 +428,7 @@ fn migration_from_1008_preserves_workspace_and_history() {
         .unwrap();
         conn.create_session("work:repo", "node://work/s", "work", "s", "u")
             .unwrap();
-        conn.execute_batch("DROP TABLE pots_tasks; DROP TABLE pots_suggestions; DROP TABLE pots_responsibilities; DROP TABLE workspace_removals; PRAGMA user_version=1008;")
+        conn.execute_batch("DROP TABLE workspace_removals;")
             .unwrap();
     }
     let db = Db::open(&path).unwrap();
@@ -610,4 +615,33 @@ fn cancelled_probe_guard_rolls_back_only_its_pending_fence() {
         armed: true,
     });
     assert!(completed(&app.db.lock(), "work:repo").unwrap());
+}
+
+#[test]
+fn pending_input_from_another_owner_blocks_workspace_removal() {
+    let (app, _dir) = fixture();
+    let conn = app.db.lock();
+    conn.execute("INSERT INTO conversation_submissions(owner_user,operation_id,workspace_id,node_id,local_workspace_id,session_id,node_operation_id,command_id,submission_hash,payload_json,state,created_at,updated_at) VALUES('other','draft','work:repo','work','repo','pending-session','pending-creation','pending-command',?1,'{}','preparing',1,1)", ["a".repeat(64)]).unwrap();
+    assert_eq!(
+        begin(&app, &conn, "work:repo", "u", true)
+            .unwrap_err()
+            .status,
+        403
+    );
+    assert!(!removed(&conn, "work:repo").unwrap());
+    let content: Option<String> = conn
+        .query_row(
+            "SELECT payload_json FROM conversation_submissions",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(content.as_deref(), Some("{}"));
+    conn.execute(
+        "UPDATE conversation_submissions SET state='cancelled',payload_json=NULL",
+        [],
+    )
+    .unwrap();
+    remove(&app, &conn, "work:repo", "u").unwrap();
+    assert!(completed(&conn, "work:repo").unwrap());
 }
