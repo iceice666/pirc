@@ -3,11 +3,13 @@
 [Plans](README.md) · [Workspace modes](modes.md) · [Mobile](mobile.md) · [Assistant contracts](../docs/architecture/assistant-memory.md) · [Checkpoints](checkpoints.md) · [pots](pots/README.md) · [Rust foundations](library-extraction.md) · [Conversation execution contracts](conversation-execution-contracts.md)
 
 Status: adopted architecture baseline, with the next implementation sequence
-reviewed against `6d87f97f` on 2026-10-26. Separately authorized library and pots
-checkpoints are recorded in their own plans. This follow-up is planning only,
-explicitly confirmed by the user: it does not authorize the proposed implementation
-steps, schema migration, deployment, release or changes to running permissions.
-Keep this update local; publication requires a separate request.
+reviewed against `6d87f97f` on 2026-10-26. The user subsequently activated the
+implementation goal for first Send, environment bindings, resource transitions,
+canonical tasks/collaboration and bounded pots. UI redesign/navigation reorganization
+is deferred; Web/Android changes are limited to necessary functional integration.
+Use only focused simple Flutter checks when Flutter changes. Keep work in local
+commits; no push, deployment or release is authorized. Undecided numerical settings
+still need confirmation. Earlier library and pots checkpoints remain in their plans.
 Accepted design choices and still-open details are distinguished below.
 
 ## Agreed direction and priority
@@ -587,9 +589,10 @@ replace arbitrary content with simplified output or authorize WebView fallback.
 ## Next implementation sequence (2026-10-26)
 
 Baseline: fetched `origin/main` at `6d87f97f`, product version 0.10.0, including
-unreleased changes after that tag. The user requested the next-stage plan and
-recommendations, not code. The sequence below refines stages A–C; it does not
-supersede the accepted behavior or treat old acceptance scenarios as passed.
+unreleased changes after that tag. This sequence was initially prepared as planning
+only; the later active implementation goal is recorded above. It refines stages
+A–C without superseding accepted behavior or treating old acceptance cases as passed.
+U3's navigation redesign is now explicitly deferred.
 
 ### What the updated code already provides
 
@@ -736,8 +739,55 @@ open until actually exercised.
 App authentication/bootstrap/renewal and server-exposure design remain a separate
 user discussion, not a prerequisite for fixing ordinary paired-App workflows.
 Flutter Web, iOS transport, external crate publication and a new release are not
-part of these proposed deliveries. The next recommended approval is **U1 with its
-G0 checks**, keeping the resulting code local until publication is requested.
+part of these deliveries. The active goal starts with **U1 and its G0 checks**,
+then proceeds through the authorized core stages while deferring U3's navigation
+redesign. Keep commits local until publication is requested.
+
+### U1 implementation checkpoint: Node allocation (2026-10-26)
+
+Implemented locally; U1 remains **in progress**. `session_creation.rs` adds the
+Node's durable allocation and read-only lookup primitive. Gateway first-message
+acceptance, attachments and Web/Android adoption are not connected yet, so the
+existing first-send UX has not changed and the end-to-end guarantee is not complete.
+
+- `POST /api/session-creations` accepts `operationId` (1–100 URL-safe ASCII
+  characters), `workspaceId` and a lowercase SHA-256 `submissionHash`. Owner comes
+  from the authenticated Node request. The hash binds the future immutable
+  submission; the allocation primitive does not validate or store message content.
+- `GET /api/session-creations/:id` looks up only that owner's operation without
+  allocating anything. Both endpoints return `creation` with `operationId`,
+  `workspaceId`, `sessionId` and `state`; the hash/owner are not returned.
+- States: `reserved` has a durable identity but no published Node session;
+  `ready` has an allocated Node session, not an admitted message or running agent;
+  `deleting` and `deleted` reflect the existing fences without recreating anything.
+- Same owner/key with different workspace/hash conflicts. Independent drafts or
+  different owners get independent identities. Independent SQLite connections are
+  serialized when reserving and finalizing, and retries survive reopening the DB.
+- Filesystem preparation can fail after reservation. Retry uses the same identity;
+  a pre-commit crash's empty directory may be reused, but unexpected content and
+  symlinks are refused without deletion. Missing storage for an already-ready
+  session is never silently recreated.
+- Node schema **2004** adds a content-free operation ledger; identity survives
+  session/project deletion to fence delayed requests. Existing sessions, memory,
+  uploads, checkpoints and pots records are preserved. See [upgrade notes](../docs/deploy/upgrades.md#unreleased-node-session-creation-ledger).
+- New routes are additive to protocol 15; legacy creation/command routes are
+  unchanged. Future Gateway integration must require this route and fail closed
+  on an old Node, never fall back to a non-idempotent creation request.
+
+Verification for this local allocation checkpoint (2026-10-26):
+`cargo test --offline --locked -p pirc-node --lib` with filters `session_creation`,
+`store::tests`, `checkpoints::` and `pots::tests` passed **44 tests** (14 + 12 + 7 + 11).
+The checkpoint subprocess-helper test is ignored by the normal harness; its parent
+hard-kill acceptance test passed. This is synthetic/local-process coverage, not a
+full Gateway/client/device journey. Strict `cargo clippy --offline --locked -p
+pirc-node --lib --tests -- -D warnings` passed. No Flutter files changed, so no
+Flutter suite, emulator or browser was run. Full U1 and historical workspace/
+conformance gates remain open. Builds use a disposable target removed after checks.
+
+Remaining U1 work: Gateway durable intent and public-ID reservation; initial
+command/admission and storage-refusal outcome reconciliation; attachment staging;
+account-scoped client submission recovery; mixed-version failure handling; and the
+full U1 acceptance table. The Node allocation proof alone closes none of those.
 
 ## Design stages and later implementation gates
 

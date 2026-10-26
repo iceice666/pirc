@@ -70,6 +70,11 @@ pub fn routes(config: &NodeConfig) -> Vec<Route> {
         get("/api/workspaces/:id/project-config", project_config),
         post("/api/workspaces/:id/project-trust", project_trust),
         post("/api/sessions", create_session),
+        post("/api/session-creations", crate::session_creation::prepare),
+        get(
+            "/api/session-creations/:id",
+            crate::session_creation::status,
+        ),
         delete("/api/sessions/:id", move |node, request| {
             delete_session(node, request, deletions.clone())
         }),

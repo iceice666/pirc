@@ -201,6 +201,7 @@ fn migrates_the_first_node_schema() {
     // Schema 2000: no upload provenance, no project fence.
     let first = SCHEMA
             .replace(include_str!("pots.sql"), "")
+            .replace(include_str!("session_creations.sql"), "")
             .replace(
                 "  kind TEXT NOT NULL DEFAULT 'image',\n  -- Where it was uploaded; it is usable in that workspace only and is\n  -- deleted with it. NULL for uploads older than schema 2001.\n  workspace_id TEXT,\n  session_id TEXT\n);\nCREATE INDEX uploads_workspace ON uploads(workspace_id);",
                 "  kind TEXT NOT NULL DEFAULT 'image'\n);",

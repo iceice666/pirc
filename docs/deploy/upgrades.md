@@ -1,5 +1,27 @@
 # Upgrades
 
+## Unreleased: Node session creation ledger
+
+Node schema **2004** adds durable, owner-scoped creation identities. Back up Node
+state before upgrading; older executables refuse the migrated schema. Existing
+sessions and workspace identities, memory, uploads, checkpoint data and pots
+records are unchanged. Do not downgrade by changing `user_version`.
+
+This is a local first-send foundation, not a deployment instruction or a complete
+client workflow. The new Node-only `POST /api/session-creations` and
+`GET /api/session-creations/:id` routes allocate/reconcile a session but do not
+send a message or start an agent. Gateway and clients do not use them yet. The
+allocation ledger stores only identifiers, a submission hash and creation state;
+it survives deletion so old retries cannot recreate a deleted conversation.
+`deleting` is distinct from `deleted`; neither allows reallocation.
+
+The Node link envelope remains protocol **15**, with additive HTTP routes. The
+existing pots requirement to upgrade compatible Gateway/Nodes together still
+applies. Future first-send integration must detect an unsupported route and fail
+closed; it must not silently use legacy non-idempotent creation. Existing session
+commands and specialized schedule/delegation/checkpoint/pots flows are unchanged.
+See the [implementation checkpoint](../../plans/unified-conversations.md#u1-implementation-checkpoint-node-allocation-2026-10-26).
+
 ## Unreleased: explicit pots execution
 
 Back up both Gateway and Node state before upgrading. Gateway schema **1011**

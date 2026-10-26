@@ -71,19 +71,24 @@ approval to implement every unchecked stage.
 
 ## Recommended next implementation slice (2026-10-26)
 
-After rebasing to `6d87f97f`, the user requested planning only. The
+After rebasing to `6d87f97f`, the user requested a plan, then activated a local
+implementation goal. The
 [next implementation sequence](unified-conversations.md#next-implementation-sequence-2026-10-26)
 recommends **reliable first Send** across Gateway, Node, Web and Android: a durable,
 queryable creation/admission identity, preserving local drafts and existing
 command deduplication. Current creation and first-message admission are separate,
-so the whole flow still needs failure/restart proof. No implementation is claimed.
+so the whole flow still needs failure/restart proof. The
+[Node allocation checkpoint](unified-conversations.md#u1-implementation-checkpoint-node-allocation-2026-10-26)
+is implemented locally; Gateway acceptance, attachments and client adoption remain.
 
-Then establish environment bindings, unify navigation, implement actual resource
-transitions, map canonical tasks/collaboration, and extend bounded proactive pots.
+Then establish environment bindings, implement actual resource transitions, map
+canonical tasks/collaboration, and extend bounded proactive pots. The user deferred
+UI redesign and navigation reorganization; retain only necessary functional changes.
 Existing library and pots work is reused. Storage-refusal handling and relevant
 verification debt are entry gates; App authentication and Flutter Web stay deferred.
 See the linked sequence for patch boundaries, failure cases and acceptance. This
-planning update stays local and does not authorize deployment or a release.
+implementation goal stays local and does not authorize deployment or a release.
+Run only focused simple Flutter checks when changing Flutter, as requested.
 
 ## Existing work and acceptance backlog
 

@@ -796,3 +796,132 @@ fn pots_dispatch_provenance_cannot_be_minted_by_custom_delivery() {
         .is_err()
     );
 }
+
+#[tokio::test]
+async fn session_creation_routes_are_durable_strict_and_read_only_on_lookup() {
+    use crate::router::Router;
+    use pirc_protocol::{HttpMethod, NodeHttpRequest};
+
+    let (_dir, node) = workspace_test_node().await;
+    node.db
+        .lock()
+        .add_workspace(
+            "repo",
+            "test-node",
+            "Repository",
+            "/repo",
+            ModeId::new("directory").unwrap(),
+        )
+        .unwrap();
+    let router = Router::new(routes(&node.config));
+    let wire = |method, url: &str, payload| NodeHttpRequest {
+        method,
+        url: url.into(),
+        user: "test-user".into(),
+        payload,
+        body_base64: None,
+        content_type: None,
+    };
+    let body = json!({"operationId":"first-send-1", "workspaceId":"repo", "submissionHash":"a".repeat(64)});
+    let create = || {
+        wire(
+            HttpMethod::Post,
+            "/api/session-creations",
+            Some(body.clone()),
+        )
+    };
+    let first = router.handle(&node, create()).await;
+    assert_eq!(first.status, 200, "{:?}", first.body);
+    let first_body = first.body.unwrap();
+    assert_eq!(first_body["creation"]["state"], "ready");
+    assert!(first_body["creation"].get("submissionHash").is_none());
+    let duplicate = router.handle(&node, create()).await;
+    assert_eq!(duplicate.status, 200);
+    assert_eq!(duplicate.body, Some(first_body.clone()));
+    let changes = node.db.lock().total_changes();
+    let status = router
+        .handle(
+            &node,
+            wire(HttpMethod::Get, "/api/session-creations/first-send-1", None),
+        )
+        .await;
+    assert_eq!(status.status, 200);
+    assert_eq!(status.body, Some(first_body.clone()));
+    assert_eq!(node.db.lock().total_changes(), changes);
+    assert_eq!(
+        router
+            .handle(
+                &node,
+                wire(HttpMethod::Get, "/api/session-creations/missing", None)
+            )
+            .await
+            .status,
+        404
+    );
+    let mut extra = body.clone();
+    extra["user"] = json!("other-user");
+    assert_eq!(
+        router
+            .handle(
+                &node,
+                wire(HttpMethod::Post, "/api/session-creations", Some(extra))
+            )
+            .await
+            .status,
+        400
+    );
+    let mut too_long = body.clone();
+    too_long["operationId"] = json!("a".repeat(101));
+    assert_eq!(
+        router
+            .handle(
+                &node,
+                wire(HttpMethod::Post, "/api/session-creations", Some(too_long))
+            )
+            .await
+            .status,
+        400
+    );
+    let mut forbidden = create();
+    forbidden.user = "not-allowed".into();
+    assert_eq!(router.handle(&node, forbidden).await.status, 403);
+
+    // The additive route does not change legacy callers (schedules/delegations).
+    let legacy = router
+        .handle(
+            &node,
+            wire(
+                HttpMethod::Post,
+                "/api/sessions",
+                Some(json!({"workspaceId":"repo"})),
+            ),
+        )
+        .await;
+    assert_eq!(legacy.status, 201);
+    assert_ne!(
+        legacy.body.unwrap()["session"]["id"],
+        first_body["creation"]["sessionId"]
+    );
+
+    // Lookup stays available when execution is no longer enabled for the mode.
+    node.replace_modes(vec![]).await;
+    assert!(router.handle(&node, create()).await.status >= 400);
+    assert_eq!(
+        router
+            .handle(
+                &node,
+                wire(HttpMethod::Get, "/api/session-creations/first-send-1", None)
+            )
+            .await
+            .status,
+        200
+    );
+    let id = first_body["creation"]["sessionId"].as_str().unwrap();
+    node.db
+        .lock()
+        .begin_session_deletion(id, "test-user")
+        .unwrap();
+    let deleted = router.handle(&node, create()).await;
+    assert_eq!(deleted.status, 200);
+    assert_eq!(deleted.body.unwrap()["creation"]["state"], "deleting");
+}
