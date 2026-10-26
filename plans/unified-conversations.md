@@ -870,6 +870,14 @@ Nix build/evaluation remains waived, and no APK, device test or Release was run.
 The unfinished Gateway preparation remains local and is excluded from this
 integration push. Full U1 acceptance and later architecture stages stay open.
 
+The earlier remote Check run at `e34586b2` failed only its `node_link`
+conformance snapshot: the two protocol-refusal reasons still named daemon 14
+although the production protocol is 15. The snapshot now records 15, with
+independent assertions for the mismatch close code and current protocol number.
+A real-process `node_link` run and all seven `agent_loop_order` cases passed
+locally after the integration; strict conformance Clippy passed too. This changes
+only tests and their expected transcript, not the App/Gateway/Node wire behavior.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

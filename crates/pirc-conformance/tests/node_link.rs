@@ -102,6 +102,20 @@ async fn node_link() {
             .open();
         socket.send_json(&frame).await;
         let (code, reason) = socket.closed().await;
+        if let Some(old_protocol) = match step {
+            "older protocol" => Some(9),
+            "no protocol" => Some(1),
+            _ => None,
+        } {
+            assert_eq!(code, pirc_protocol::PROTOCOL_MISMATCH_CLOSE);
+            assert_eq!(
+                reason,
+                format!(
+                    "node protocol {old_protocol} != daemon {}",
+                    pirc_protocol::NODE_PROTOCOL_VERSION
+                ),
+            );
+        }
         t.note(step, json!({ "closed": code, "reason": reason }));
     }
 
