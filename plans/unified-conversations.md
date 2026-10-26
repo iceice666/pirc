@@ -2,11 +2,12 @@
 
 [Plans](README.md) · [Workspace modes](modes.md) · [Mobile](mobile.md) · [Assistant contracts](../docs/architecture/assistant-memory.md) · [Checkpoints](checkpoints.md) · [pots](pots/README.md) · [Rust foundations](library-extraction.md) · [Conversation execution contracts](conversation-execution-contracts.md)
 
-Status: architecture planning baseline, updated 2026-10-24. The user accepted the
-recommendations from the specification review for inclusion in this plan. Only
-planning is authorized: this does not authorize implementation, schema migration,
-deployment, release or changes to running permissions. Repository publication is
-separately governed by the user's explicit review/rebase/push request.
+Status: adopted architecture baseline, with the next implementation sequence
+reviewed against `6d87f97f` on 2026-10-26. Separately authorized library and pots
+checkpoints are recorded in their own plans. This follow-up is planning only,
+explicitly confirmed by the user: it does not authorize the proposed implementation
+steps, schema migration, deployment, release or changes to running permissions.
+Keep this update local; publication requires a separate request.
 Accepted design choices and still-open details are distinguished below.
 
 ## Agreed direction and priority
@@ -583,6 +584,161 @@ replace arbitrary content with simplified output or authorize WebView fallback.
   incrementally. Avoid a simultaneous renderer rewrite, authentication cutover
   and task-storage migration.
 
+## Next implementation sequence (2026-10-26)
+
+Baseline: fetched `origin/main` at `6d87f97f`, product version 0.10.0, including
+unreleased changes after that tag. The user requested the next-stage plan and
+recommendations, not code. The sequence below refines stages A–C; it does not
+supersede the accepted behavior or treat old acceptance scenarios as passed.
+
+### What the updated code already provides
+
+| Area                      | Evidence in the fetched tree                                                                                                                                                                                             | Consequence for the next slice                                                                                                                    |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Reusable foundations      | Types, transport/OAuth, loop and tool-schema crates exist; production `run_loop.rs` drives the core                                                                                                                      | Extend the existing adapters; do not repeat the extraction or require a second loop rewrite before product work                                   |
+| pots                      | Tracking, explicit dispatch, ownership-based Stop, archive and revocation-fence paging exist at `6d87f97f`                                                                                                               | Those are delivered subsets; content observation, autonomous suggestions and full acceptance remain open                                          |
+| Draft conversations       | Web `app.svelte.ts` and Android `gateway.dart` create a local draft and persist it during first Send                                                                                                                     | Preserve this UX; harden the split between creation and first-message admission rather than build drafts again                                    |
+| Creation versus commands  | Gateway `routes.rs::create_session` accepts only `workspaceId`; Node `app.rs::create_session` allocates a fresh session. Existing session commands already have command IDs, payload hashes and unknown-outcome handling | First creation needs a durable operation identity across both hosts; reuse the command contracts instead of claiming all sends lack deduplication |
+| Conversation identity     | Gateway `db.rs::Session` already has a public stable ID, with private Node-session mapping                                                                                                                               | Keep public IDs/deep links; separate future environment binding from identity without renumbering conversations                                   |
+| Current workspace removal | `workspace_removal.rs` fences mutations and requires an online, idle Work workspace; Node registration/files are retained                                                                                                | This is not live per-conversation mount revocation or project departure; do not enable switching by reusing its UI alone                          |
+| Task identity             | `pots/schema.sql` requires a unique suggestion origin for each pots task                                                                                                                                                 | This cannot represent every direct user task unchanged; map existing tasks before adding a competing universal task table                         |
+
+The creation gap is a code-path finding, not a reproduced device failure in this
+review. Both clients currently create the server session, obtain control and then
+send. A lost create response or a later admission failure can leave creation and
+the first message with different outcomes. Existing command deduplication starts
+after there is a session and does not cover that entire sequence.
+
+### Recommended order and bounded deliveries
+
+| Order                                                      | Deliverable                                                                                                                                                      | Visible result and exit gate                                                                                                                                                      |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| G0. Relevant reliability baseline                          | Reproduce/classify the recorded storage-refusal admission issue and the relevant failed tests; inventory current identities, versions and control boundaries     | Failure stays visible and user text is retained; focused gates establish the actual starting point without relabelling historical failures as passed                              |
+| U1. Reliable first Send — recommended first implementation | A durable creation/admission operation spanning Gateway, Node, Web and Android, with queryable outcome and stable retry identity                                 | Open/abandon drafts stays local; one accepted Send creates one conversation and one admitted first message despite lost responses/restarts                                        |
+| U2. Environment-binding foundation                         | Map existing workspaces, project membership, mode/capabilities, public session IDs and private Node sessions; define separate binding and membership revisions   | Existing sessions retain their permissions, links and content; clients can show one authoritative current environment without silently moving files or granting rights            |
+| U3. Unified navigation and creation                        | One conversation entry point, projects and environment selection using the U1/U2 contracts; retain current styling and renderer                                  | Web and App offer the same create/open/send behavior. Unsupported environment combinations remain explicitly unavailable rather than appearing enabled                            |
+| U4. Real resource transitions                              | Stage single-Node idle transitions first, then live revocation/rebuild and interrupted/offline reconciliation; add project mounts/rules with explicit provenance | Context is retained, removed authority is actually withdrawn, and new-generation work starts only after host acknowledgement; cross-Node handoff is a separately tested extension |
+| U5. Canonical work and collaboration                       | Map pots tasks, goal/todo/team work, attempts and decisions to one identity; then add shared notes/board and structured resource waits                           | The same task appears from a project, conversation or pots; parallel agents see blockers and cannot overwrite each other's notes or bypass a write lease                          |
+| U6. Bounded proactive pots                                 | Add explicit content-read scopes, finite observer budgets, event-driven analysis and then quiet digest/push delivery                                             | Useful sourced suggestions with no automatic execution grant; stale suggestions/notifications reconcile to the same task or handled decision                                      |
+
+G0 is scoped preparation for each affected slice, not an instruction to repeatedly
+run every expensive test before any progress. The existing library/workspace and
+conformance failures remain release/acceptance debt until reproduced and fixed or
+explicitly classified. Do not weaken tests, change golden files merely to pass,
+or call sandbox-looking failures pre-existing without evidence.
+
+U2's identity/contract inventory can be done while specifying U1. Its binding
+changes must not be smuggled into the first-send patch. U3 is a navigation delivery,
+not completion of same-conversation environment switching: the latter depends on
+U4. Do not remove the current mode checks for full-assistant/workspace-directory
+combinations just to combine the tabs. Users keep the existing execution behavior
+until an explicitly supported capability/resource combination is delivered.
+
+### U1: the first implementation proposal
+
+**Scope:** existing workspaces and an explicit first user message, including the
+current model/thinking choices and supported attachments. No new mount rights,
+project moves, managed-folder allocator, automatic task creation or pots standing
+grants. Managed folder allocation later attaches to this operation identity;
+creating an empty folder explicitly remains an independent user action.
+
+Before code, name the API and persisted states in a short contract review. The
+behavior is constrained as follows:
+
+1. Generate a stable, account-scoped creation-operation key for one draft submission.
+   Persist it through reconnects and bind it to the selected workspace and immutable
+   submission payload. The same key with a different target/payload conflicts;
+   distinct drafts with identical text remain distinct conversations.
+2. Validate current workspace/mode/owner access, payload and attachment preparation
+   before accepting the submission. Define **accepted** as durable storage of the
+   validated first-message intent and its target, not a successful model answer or
+   merely an HTTP connection. A failure before that boundary leaves a local draft.
+3. Reserve the Gateway operation and stable public conversation ID before requesting
+   Node creation. Node records a corresponding durable mapping so a retry cannot allocate another session.
+   Publish one conversation when its first-message intent is durably accepted;
+   internal preparation rows without an accepted message are not ordinary sessions.
+   An accepted message awaiting delivery has a visible pending/failed status.
+4. Correlate the initial command and Node admission with that operation. Reuse
+   existing command deduplication and control-lease checks; do not bypass ownership
+   to make first Send more convenient. Durable acceptance, Node message admission
+   and model execution are different acknowledgements. Do not promise a distributed
+   SQLite transaction or exactly-once arbitrary tool effects.
+5. A lost response becomes a queryable pending/unknown result. Reconcile using the
+   same key and recorded Node/message receipt; never allocate a fresh session or
+   rerun an ambiguous send automatically. Stop/revocation/deletion fences still
+   apply during reconciliation. A duplicate lookup cannot revive deleted work.
+6. Keep unsent/rejected content and attachment bytes until their authoritative
+   outcome is known. After acceptance, retain a recoverable pending-message record
+   rather than presenting the same text as a new unsent message. Navigating away
+   or changing accounts cannot append the result to another conversation/account.
+7. Stage attachments under their owner/submission identity and promote/reconcile
+   them once. Cleanup only positively owned, unaccepted staging data, with an
+   explicit retention policy; never delete user folders or accepted attachments.
+8. Preserve old-session commands and caller-specific creation flows used by pots,
+   schedules, delegation and checkpoint continuation. Inventory them before API
+   changes. Negotiate support for the new workflow: an old Node must yield a clear
+   unsupported state, not silently fall back to the unsafe split flow. Existing
+   clients keep their documented behavior; do not claim the new guarantee for them.
+
+Suggested patch boundaries: U1a contracts plus failure fixtures; U1b Gateway/Node
+operation persistence and reconciliation; U1c Web/native Android integration and
+cross-client verification. Keep intermediate code gated until the complete flow
+has the required backend/client support. The initial proof uses local fake
+inference and temporary state, not provider credentials or a user's live database.
+
+| Case                                                                                | Required outcome                                                                                                        |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Abandon a draft or open another                                                     | No remote session or managed-folder allocation; explicit user-created folders remain                                    |
+| Submit the same operation concurrently                                              | One public conversation, one Node session and one initial admission; same result returned to authorized callers         |
+| Lose the response after either host commits                                         | Same operation can be queried after restart; no second session/message, and no blind replay of an unknown effect        |
+| Reuse a key with different text, workspace or attachment manifest                   | Conflict; do not mutate the accepted original request or retarget it                                                    |
+| Node offline, mode unavailable, revoked grant or malformed upload before acceptance | Draft remains usable; no visible empty conversation or implicit fallback to another Node                                |
+| Session storage refuses an append after acceptance                                  | Show a recoverable failure/pending outcome with retained input; do not claim the message ran or automatically resend it |
+| Navigate away, switch account or delete during creation                             | No cross-account result/cache leak, selection jump or resurrection; authorized outcome remains discoverable             |
+| Upload fails, reconnects or completes twice                                         | No duplicate attachments; accepted references survive cleanup; abandoned staging stays owner-scoped                     |
+| Receive events before the HTTP response or reconnect with an old cursor             | Reconcile to one authoritative conversation and message; no duplicate list row                                          |
+| Web is closed while native Android creates and sends                                | The paired App completes the flow directly with Gateway/Node; browser setup/management limitations remain separate      |
+| Existing schedules, pots dispatch or checkpoint continuation                        | Their targeting, attribution, at-most-once fences and isolated recovery behavior are unchanged                          |
+
+A storage-failure reopening path needs its own correctness proof. Do not blindly
+reopen an uncertain journal or repeat tools as part of retrying message admission.
+
+### U2–U6: decisions to make at their entry, not new blanket approvals
+
+- **U2:** produce a concrete old-to-new identity/migration table. Keep the public
+  session ID; distinguish project membership revision, execution-binding generation,
+  Node runner epoch and device-control generation. Record write-time membership for
+  new memory versions before enabling cross-project moves. Missing historical
+  provenance is not inferred from today's project. Old clients cannot bypass a
+  new authority fence.
+- **U4:** prove removal of access through live processes, open descriptors,
+  descendants and overlapping paths on each supported sandbox. Ambient read access
+  cannot defeat removal. Offline stays pending; a failed transition never silently
+  restores revoked grants. Preserve context decision A and report partial effects.
+- **U5:** keep existing immutable pots suggestion origins and task links when mapping
+  direct user origins/attempts. Ordinary questions need no task form. Board messages
+  are coordination evidence, never grants; note revisions and blocked-writer wakeups
+  must be enforced independently of model instructions.
+- **U6:** choose finite budget/concurrency values and notification settings before
+  enabling observation. Progress-read does not authorize transcript/file reads.
+  Start with scoped manual opt-in and sourced suggestions; standing dispatch is
+  still a separate later grant. Archive/pagination improvements can ship separately
+  without waiting for proactivity or expanding read authority.
+
+Each slice has Gateway/Node, Web and Android acceptance appropriate to its scope,
+including restart/concurrency and memory/checkpoint regressions where touched.
+Record synthetic, real-process, browser and device evidence separately. No current
+P7/N4/L5/C6 acceptance case closes because this sequence was documented. Use
+disposable test state, preserve user APKs and delete only run-created build/test
+outputs. Nix verification remains waived; physical-device and real-push gaps stay
+open until actually exercised.
+
+App authentication/bootstrap/renewal and server-exposure design remain a separate
+user discussion, not a prerequisite for fixing ordinary paired-App workflows.
+Flutter Web, iOS transport, external crate publication and a new release are not
+part of these proposed deliveries. The next recommended approval is **U1 with its
+G0 checks**, keeping the resulting code local until publication is requested.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.
@@ -626,8 +782,9 @@ its review scope is this architecture family, not every historical repository pl
 
 ### C. Implementation proposal, only after approval
 
-- [ ] Propose incremental changes: unified navigation and stable conversation
-      identity, then environment-bound execution and canonical task tracking.
+- [x] Propose a bounded delivery sequence: reliable first Send, environment-binding
+      foundations, unified navigation, real resource transitions and canonical tasks
+      (2026-10-26, above). This completes planning of the sequence, not implementation.
 - [ ] Propose App setup/synchronization independence as a parallel contract concern,
       with mobile-only acceptance for every delivered flow.
 - [ ] Add pots overview, authenticated dispatch attribution and durable decisions

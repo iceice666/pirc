@@ -29,10 +29,11 @@ attributed **pirc pots** coordination. The user subsequently authorized phased c
 implementation, not deployment or crate publication. Two plans carry that work:
 
 - **[pots](pots/README.md)** (own folder: README, [design](pots/design.md),
-  [acceptance](pots/acceptance.md)). Delivered locally: progress-only tracking
-  (shipped in v0.10.0) and explicit controlled dispatch (`d4f1efbd`, unreleased,
-  Gateway schema 1011 / Node protocol 15). Open: a Stop/run-correlation risk,
-  device and full-conformance acceptance, content observation, proactive analysis,
+  [acceptance](pots/acceptance.md)). Delivered: progress-only tracking
+  (shipped in v0.10.0), explicit controlled dispatch (`d4f1efbd`, unreleased,
+  Gateway schema 1011 / Node protocol 15), and ownership-based Stop, archive and
+  revocation-fence paging (`6d87f97f`, unreleased). Open: device and full-conformance
+  acceptance, remaining inbox lifecycle, content observation, proactive analysis,
   digests/push and standing grants.
 - **[Reusable Rust foundations](library-extraction.md)**. Delivered: pure types,
   transport/OAuth extraction, the native runtime contract, and a loop core that
@@ -67,6 +68,22 @@ with optional default-off OAuth. Exact amounts/times and board-retention/editor
 presets remain configuration work; App sign-in and Flutter Web stay deferred.
 The architecture documents can be published as a planning baseline; this is not
 approval to implement every unchecked stage.
+
+## Recommended next implementation slice (2026-10-26)
+
+After rebasing to `6d87f97f`, the user requested planning only. The
+[next implementation sequence](unified-conversations.md#next-implementation-sequence-2026-10-26)
+recommends **reliable first Send** across Gateway, Node, Web and Android: a durable,
+queryable creation/admission identity, preserving local drafts and existing
+command deduplication. Current creation and first-message admission are separate,
+so the whole flow still needs failure/restart proof. No implementation is claimed.
+
+Then establish environment bindings, unify navigation, implement actual resource
+transitions, map canonical tasks/collaboration, and extend bounded proactive pots.
+Existing library and pots work is reused. Storage-refusal handling and relevant
+verification debt are entry gates; App authentication and Flutter Web stay deferred.
+See the linked sequence for patch boundaries, failure cases and acceptance. This
+planning update stays local and does not authorize deployment or a release.
 
 ## Existing work and acceptance backlog
 

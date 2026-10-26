@@ -16,17 +16,19 @@ the host/library boundary lives in [Reusable LLM foundations](../../docs/archite
 
 ## Authorization
 
-This is a work queue, not authorization. The user authorized two bounded
-checkpoints: progress-only tracking (2026-10-24) and explicit controlled dispatch
-(2026-10-25). Neither authorizes transcript/file observation, model-driven
-suggestions, periodic or autonomous work, standing execution grants, digests or
-push, deployment, paid evaluation or publication. Each item in the queue below
+This is a work queue, not authorization. The user authorized bounded checkpoints:
+progress-only tracking (2026-10-24), explicit controlled dispatch (2026-10-25), and
+Stop ownership, archive and fence paging (2026-10-26). Those checkpoints do not
+authorize transcript/file observation, model-driven suggestions, periodic or
+autonomous work, standing execution grants, digests or push, deployment, paid
+evaluation or publication. Each item in the queue below
 needs its own go-ahead.
 
 ## Delivered
 
-Both checkpoints are local implementations. Neither is deployment, device
-acceptance or a finished autonomous assistant.
+The checkpoints below are implemented in the fetched mainline. Tracking shipped
+in v0.10.0; dispatch and its follow-up are unreleased. Implementation does not
+establish deployment, device acceptance or a finished autonomous assistant.
 
 ### 1. Tracking (`24abca5e`, shipped in v0.10.0)
 
@@ -71,7 +73,7 @@ acceptance or a finished autonomous assistant.
 Verification details, including exact test counts, are in the guide's
 [verification section](../../docs/guides/pots.md#explicit-execution-checkpoint-verification).
 
-### 3. Stop ownership, archive and fence paging (uncommitted, 2026-10-26)
+### 3. Stop ownership, archive and fence paging (`6d87f97f`, unreleased)
 
 Authorized by the user on 2026-10-26 as queue items 1 and part of 4. No schema
 change; Node protocol stays **15** but gains the `Release` control, so Gateway
