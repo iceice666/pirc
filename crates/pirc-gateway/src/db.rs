@@ -41,14 +41,15 @@ pub(crate) use sql_text_enum;
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1012;
+pub const SCHEMA_VERSION: i64 = 1013;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = concat!(
     include_str!("schema.sql"),
     include_str!("calendar/schema.sql"),
     include_str!("pots/schema.sql"),
-    include_str!("conversation_submissions/schema.sql")
+    include_str!("conversation_submissions/schema.sql"),
+    include_str!("conversation_submissions/attachments.sql")
 );
 /// Each migration takes a database from the version before it to its own;
 /// [`SCHEMA`] assembles the newest whole schema, including calendar tables.
@@ -120,6 +121,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     // No SQL shape changes; the version fence prevents unsafe downgrade.
     (1011, "SELECT 1;"),
     (1012, include_str!("conversation_submissions/schema.sql")),
+    (1013, include_str!("conversation_submissions/attachments.sql")),
 ];
 
 /// Placeholder name of a new session until the agent's title replaces it.
@@ -673,8 +675,10 @@ pub struct Deletion {
     pub status: DeletionStatus,
 }
 
-/// Run `body` atomically: a savepoint, so it nests inside a caller's
-/// transaction as bun:sqlite's `transaction()` did.
+/// Run a mutation atomically. Reserve the writer before reading at the outer
+/// boundary: upgrading a WAL read snapshot after another writer commits fails
+/// immediately with SQLITE_BUSY_SNAPSHOT, regardless of the busy timeout.
+/// Savepoints still nest inside a caller's transaction without committing it.
 pub fn atomic<T>(
     connection: &Connection,
     body: impl FnOnce(&Connection) -> ApiResult<T>,
@@ -688,11 +692,22 @@ pub fn atomic<T>(
             }
         }
     }
+    let transaction = if connection.is_autocommit() {
+        Some(rusqlite::Transaction::new_unchecked(
+            connection,
+            rusqlite::TransactionBehavior::Immediate,
+        )?)
+    } else {
+        None
+    };
     connection.execute_batch("SAVEPOINT atomic")?;
     let mut guard = Guard(connection, false);
     let value = body(connection)?;
     connection.execute_batch("RELEASE atomic")?;
     guard.1 = true;
+    if let Some(transaction) = transaction {
+        transaction.commit()?;
+    }
     Ok(value)
 }
 

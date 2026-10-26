@@ -154,6 +154,7 @@ fn migrates_the_first_rust_schema() {
             .replace(include_str!("../calendar/schema.sql"), "")
             .replace(include_str!("../pots/schema.sql"), "")
             .replace(include_str!("../conversation_submissions/schema.sql"), "")
+            .replace(include_str!("../conversation_submissions/attachments.sql"), "")
             .replace(
                 ",\n  -- The repository's normalized origin (pirc_protocol::normalize_origin), as the node reports it.\n  repo TEXT\n",
                 "\n",
@@ -273,7 +274,11 @@ fn reconciles_upstream_memory_and_local_calendar_checkpoint_schemas() {
         let conn = Connection::open(&path).unwrap();
         let mut schema = SCHEMA
             .replace(include_str!("../pots/schema.sql"), "")
-            .replace(include_str!("../conversation_submissions/schema.sql"), "");
+            .replace(include_str!("../conversation_submissions/schema.sql"), "")
+            .replace(
+                include_str!("../conversation_submissions/attachments.sql"),
+                "",
+            );
         if !calendar {
             schema = schema.replace(include_str!("../calendar/schema.sql"), "");
         }
@@ -615,4 +620,89 @@ fn capabilities() {
     assert!(serde_json::from_value::<CapabilitiesPatch>(json!({ "version": 2 })).is_err());
     assert!(serde_json::from_value::<CapabilitiesPatch>(json!({ "other": 1 })).is_err());
     assert!(serde_json::from_value::<CapabilitiesPatch>(json!({ "schedules": null })).is_err());
+}
+
+#[test]
+fn atomic_write_reserves_before_reading_across_connections() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("gateway.sqlite");
+    let first = Db::open(&path).unwrap();
+    first
+        .lock()
+        .execute_batch(
+            "CREATE TABLE atomic_probe(value INTEGER); INSERT INTO atomic_probe VALUES(0);",
+        )
+        .unwrap();
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+    let (start_tx, start_rx) = std::sync::mpsc::channel();
+    let (done_tx, done_rx) = std::sync::mpsc::channel();
+    std::thread::scope(|scope| {
+        let path = &path;
+        let second = scope.spawn(move || {
+            let db = Db::open(path).unwrap();
+            ready_tx.send(()).unwrap();
+            start_rx.recv().unwrap();
+            atomic(&db.lock(), |conn| {
+                let value: i64 =
+                    conn.query_row("SELECT value FROM atomic_probe", [], |r| r.get(0))?;
+                conn.execute("UPDATE atomic_probe SET value=?1", [value + 1])?;
+                Ok(())
+            })
+            .unwrap();
+            done_tx.send(()).unwrap();
+        });
+        ready_rx.recv().unwrap();
+        atomic(&first.lock(), |conn| {
+            let value: i64 = conn.query_row("SELECT value FROM atomic_probe", [], |r| r.get(0))?;
+            start_tx.send(()).unwrap();
+            assert!(
+                done_rx
+                    .recv_timeout(std::time::Duration::from_millis(30))
+                    .is_err(),
+                "second writer must wait for this read/mutation transaction"
+            );
+            conn.execute("UPDATE atomic_probe SET value=?1", [value + 1])?;
+            Ok(())
+        })
+        .unwrap();
+        second.join().unwrap();
+    });
+    assert_eq!(
+        first
+            .lock()
+            .query_row("SELECT value FROM atomic_probe", [], |r| r.get::<_, i64>(0))
+            .unwrap(),
+        2
+    );
+}
+
+#[test]
+fn nested_atomic_failure_preserves_the_callers_transaction() {
+    let mut conn = Connection::open_in_memory().unwrap();
+    conn.execute_batch("CREATE TABLE atomic_probe(value INTEGER);")
+        .unwrap();
+    let outer = conn.transaction().unwrap();
+    outer
+        .execute("INSERT INTO atomic_probe VALUES(1)", [])
+        .unwrap();
+    let result: ApiResult<()> = atomic(&outer, |db| {
+        db.execute("INSERT INTO atomic_probe VALUES(2)", [])?;
+        Err(ApiError::invalid_input())
+    });
+    assert!(result.is_err());
+    assert!(!outer.is_autocommit());
+    assert_eq!(
+        outer
+            .query_row("SELECT sum(value) FROM atomic_probe", [], |r| r
+                .get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+    outer.commit().unwrap();
+    assert_eq!(
+        conn.query_row("SELECT sum(value) FROM atomic_probe", [], |r| r
+            .get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
 }

@@ -16,7 +16,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Upgrade notes
 
-- Back up Gateway and Node state before the next upgrade. Gateway schema 1012 adds internal, unaccepted first-send preparation to the 1011 task lifecycle; Node schema 2004 adds durable conversation-allocation identities to the dispatch deduplication/control records; client adoption remains in progress. Node protocol 15 requires updating Gateway and all Nodes together. These changes are not part of the 0.10.0 tracking-only release.
+- Back up Gateway and Node state before the next upgrade. Gateway schema 1013 adds internal first-send preparation and seven-day unaccepted attachment staging to the 1011 task lifecycle; client adoption remains in progress; Node schema 2004 adds durable conversation-allocation identities to the dispatch deduplication/control records; client adoption remains in progress. Node protocol 15 requires updating Gateway and all Nodes together. These changes are not part of the 0.10.0 tracking-only release.
 
 ## [0.10.0] - 2026-10-25
 

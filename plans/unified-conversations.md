@@ -921,9 +921,65 @@ fresh authority/online checks; Node allocation/admission reconciliation and stab
 lease/command authority; Web/Android persistence/recovery; the complete first-send
 acceptance table. An attachment manifest is not a verified upload, and a stored
 preparation is not an accepted message. No model or tool runs from these routes.
-Cleanup retention and staging policy must be explicit before client activation.
+The later attachment checkpoint below records the selected staging retention policy; full client activation remains gated.
 No Web/Flutter source, device or emulator work was included. Run-owned outputs are
 removed after verification; existing APKs, other worktrees and their artifacts stay.
+
+### U1 implementation checkpoint: durable attachment staging (2026-10-27)
+
+Local only. The user chose **seven days** for unaccepted attachment staging.
+Gateway schema **1013** adds file receipts, expiry metadata and durable cleanup
+jobs; Node schema 2004 / protocol 15 stay unchanged. The backend capability now
+includes `canStageAttachments: true` and `attachmentRetentionDays: 7`, while
+**`canSubmit: false` remains in force**. Web/Android still use the old flow.
+
+- `PUT /api/conversation-submissions/{id}/attachments/{attachment}` receives raw
+  `application/octet-stream` bytes, even for JSON/HTML content. The immutable
+  manifest owns the original name/MIME. Size, SHA-256, ownership, private recovery
+  workspace access and current cancellation/removal fences are checked. A wrong
+  body never substitutes new contents under an existing operation/attachment ID.
+- Files use 0700 directories and 0600 files under the Gateway's private
+  `submission-staging/<reserved-public-session-id>/`, using only manifest IDs as
+  storage names. Uploaded user filenames never become storage paths. File bytes
+  are kept outside the metadata SQLite file so expiry can release their space.
+- A partial file is created exclusively, synced and published by an atomic
+  no-clobber link; the directory is synced before committing its receipt. After
+  a lost response/restart, the same complete file can be revalidated and adopted.
+  Existing unexpected content or links are refused and preserved. A discovered
+  bad file invalidates its old ready receipt; the local original remains needed.
+- The seven-day deadline is committed before filesystem work, covering crash
+  orphans without a receipt. It is refreshed by a manifest-valid upload attempt;
+  GET/status and prepare retries do not refresh it. Expiry only removes staging:
+  the pending text, immutable manifest and operation identity remain available,
+  and the owner may restage under the same identity. This introduces no expiry
+  rule for accepted conversation attachments or shared project notes.
+- Status includes `stagedAttachmentIds`, `attachmentsExpiresAt`,
+  `attachmentsExpiredAt` and `cleanupPending`. Cancel/project/session removal
+  queues cleanup in the same transaction that removes payload/receipts. The
+  Gateway retries jobs at startup and every minute in bounded pages. It removes
+  only manifest-owned final/partial files, refuses unknown files/directories or
+  symlinks, and persists directory deletion before retiring a job. Failed jobs
+  rotate so a blocked first page cannot starve later work.
+- A cross-connection cancellation test exposed a real WAL snapshot-upgrade race
+  in the shared mutation helper. Outermost `atomic` now reserves the writer with
+  `BEGIN IMMEDIATE` before reading, retaining nested savepoints and rollback.
+  This changes lock acquisition, not memory provenance or deletion ownership.
+
+Validation: **243 Gateway unit/HTTP tests passed**, including 14 new attachment
+cases and two explicit transaction regressions. Evidence covers duplicate uploads
+through independent SQLite connections, cancel versus upload, response/receipt
+loss, 1012→1013 migration, database reopening/startup cleanup, seven-day boundaries,
+orphans, workspace deletion isolation, bad files/links, cleanup pagination and
+native-device HTTP transfer of a JSON file without a browser Origin. Strict
+Gateway Clippy, Rust/changed-document formatting and diff checks passed. These
+are local HTTP/storage tests, not an Android device or complete first-send pass.
+
+Remaining U1: idempotent Node upload promotion, durable acceptance and public
+publication with fresh authority checks, Node allocation/admission outcome
+reconciliation, stable lease/command authority and Web/Android draft persistence
+and recovery. No model/tool executes from preparation/staging, and the complete
+U1 acceptance table remains open. Source, tests and plan stay local; run-owned
+build artifacts are removed after verification, preserving APKs and other work.
 
 ## Design stages and later implementation gates
 

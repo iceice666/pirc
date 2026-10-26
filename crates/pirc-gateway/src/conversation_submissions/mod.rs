@@ -1,6 +1,9 @@
 //! Durable, owner-scoped first-send preparation. These routes do not accept a
-//! message for execution: attachment bytes and Node admission are separate gates.
+//! message for execution: attachment staging and Node admission are separate gates.
 //! A prepared intent has stable identities but is not a published session.
+mod attachments;
+pub(crate) use attachments::start_cleanup;
+
 use axum::{
     Extension, Router,
     extract::{Path, State},
@@ -131,6 +134,10 @@ struct Preparation {
     /// Never true at this checkpoint. Persisting an unverified preparation is
     /// not acceptance; callers must keep the unsent message/attachment bytes.
     accepted: bool,
+    staged_attachment_ids: Vec<String>,
+    attachments_expires_at: Option<i64>,
+    attachments_expired_at: Option<i64>,
+    cleanup_pending: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     submission: Option<Spec>,
     #[serde(skip)]
@@ -138,17 +145,31 @@ struct Preparation {
 }
 
 fn lookup(db: &Connection, owner: &str, operation: &str) -> ApiResult<Preparation> {
-    db.query_row(
-        "SELECT operation_id,session_id,workspace_id,state,payload_json,submission_hash FROM conversation_submissions WHERE owner_user=?1 AND operation_id=?2",
+    let mut row=db.query_row(
+        "SELECT operation_id,session_id,workspace_id,state,payload_json,submission_hash,attachments_expires_at,attachments_expired_at FROM conversation_submissions WHERE owner_user=?1 AND operation_id=?2",
         params![owner,operation],
         |r| {
             let state:String=r.get(3)?;
             let state=match state.as_str() { "preparing"=>Phase::Preparing,"cancelled"=>Phase::Cancelled,_=>return Err(rusqlite::Error::InvalidQuery) };
             let raw:Option<String>=r.get(4)?;
             let submission=raw.map(|raw|serde_json::from_str(&raw)).transpose().map_err(|_|rusqlite::Error::InvalidQuery)?;
-            Ok(Preparation { operation_id:r.get(0)?,session_id:r.get(1)?,workspace_id:r.get(2)?,state,accepted:false,submission,hash:r.get(5)? })
+            Ok(Preparation { operation_id:r.get(0)?,session_id:r.get(1)?,workspace_id:r.get(2)?,state,accepted:false,submission,hash:r.get(5)?,staged_attachment_ids:vec![],attachments_expires_at:r.get(6)?,attachments_expired_at:r.get(7)?,cleanup_pending:false })
         }
-    ).optional()?.ok_or_else(||ApiError::not_found("Submission not found"))
+    ).optional()?.ok_or_else(||ApiError::not_found("Submission not found"))?;
+    let expired = row.state == Phase::Preparing
+        && row
+            .attachments_expires_at
+            .is_some_and(|deadline| deadline <= now_ms());
+    row.cleanup_pending = expired
+        || db.query_row(
+            "SELECT EXISTS(SELECT 1 FROM conversation_submission_cleanup WHERE session_id=?1)",
+            [&row.session_id],
+            |r| r.get(0),
+        )?;
+    if row.state == Phase::Preparing && !row.cleanup_pending {
+        row.staged_attachment_ids=db.prepare("SELECT attachment_id FROM conversation_submission_attachments WHERE owner_user=?1 AND operation_id=?2 ORDER BY attachment_id")?.query_map(params![owner,operation],|r|r.get(0))?.collect::<Result<Vec<_>,_>>()?;
+    }
+    Ok(row)
 }
 
 fn same(row: Preparation, input: &Input) -> ApiResult<Preparation> {
@@ -201,6 +222,7 @@ fn cancel(db: &Connection, owner: &str, operation: &str) -> ApiResult<Preparatio
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        .merge(attachments::routes())
         .route(
             "/api/conversation-submissions/capabilities",
             get(capabilities),
@@ -214,7 +236,9 @@ pub fn router() -> Router<AppState> {
 async fn capabilities() -> axum::Json<Value> {
     // Existing clients stay on their current flow until the acceptance,
     // attachment and admission paths are implemented together.
-    axum::Json(json!({"version":1,"canPrepare":true,"canSubmit":false}))
+    axum::Json(
+        json!({"version":1,"canPrepare":true,"canStageAttachments":true,"attachmentRetentionDays":7,"canSubmit":false}),
+    )
 }
 async fn prepare(
     State(app): State<AppState>,

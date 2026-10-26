@@ -88,6 +88,10 @@ The [Gateway preparation checkpoint](unified-conversations.md#u1-implementation-
 is now local: owner-scoped immutable intents, stable identity reservation,
 restart lookup and transactional cancellation/deletion fences. Its capability
 still says `canSubmit: false`; attachments, acceptance and client recovery remain.
+The [attachment staging checkpoint](unified-conversations.md#u1-implementation-checkpoint-durable-attachment-staging-2026-10-27)
+adds verified private files, durable cleanup and the user-selected seven-day
+unaccepted staging policy. The current local Gateway schema is 1013. Node
+promotion, acceptance and Web/Android adoption still remain gated.
 The user explicitly requested a one-off push through `a926ea38` for the completed
 checkpoints, license packaging and protocol snapshot repair. Subsequent Gateway
 preparation remains local under the active goal's default publication boundary.

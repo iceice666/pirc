@@ -1,5 +1,27 @@
 # Upgrades
 
+## Unreleased local checkpoint: attachment staging
+
+Gateway schema **1013** adds owner-scoped attachment receipts, expiry and durable
+cleanup jobs to the 1012 preparation ledger. Back up Gateway state before
+upgrading; old Gateways refuse the migrated database. Node schema 2004 and
+protocol 15 are unchanged. No existing accepted attachment is migrated or expired.
+
+New unaccepted files are stored under `PIRC_STATE_DIR/submission-staging/`, with
+private directories/files. They expire seven days after the latest manifest-valid
+upload attempt, as selected by the user. The deadline is stored before file work
+so a crash without a receipt cannot leave an untracked file indefinitely. Status
+reads do not extend the deadline. Expiry retains pending text/manifest/operation
+identity for recovery; uploading the same content can restage the same operation.
+
+Cancellation/deletion queues file cleanup transactionally. Startup and periodic
+workers remove only known staging files; status remains `cleanupPending` until
+cleanup is complete. Unknown files or links block that operation's cleanup,
+without deleting their contents. Do not place user files in the staging directory.
+The new backend supports staging but still reports **`canSubmit: false`**: Node
+promotion/admission and client adoption remain incomplete. Existing clients keep
+their current upload path. This local checkpoint does not authorize deployment.
+
 ## Unreleased local checkpoint: Gateway first-send preparation
 
 Gateway schema **1012** adds durable owner-scoped first-send preparation and

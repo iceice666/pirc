@@ -2,13 +2,13 @@ use super::*;
 use crate::{app::App, db::Db};
 use std::sync::Arc;
 
-fn input() -> Input {
+pub(super) fn input() -> Input {
     serde_json::from_value(json!({"operationId":"draft-1","submission":{
         "workspaceId":"node:repo","message":"Keep this first message",
         "attachments":[{"id":"file-1","name":"notes.txt","mimeType":"text/plain","byteSize":4,"sha256":"a".repeat(64)}]
     }})).unwrap()
 }
-fn setup(db: &Connection) {
+pub(super) fn setup(db: &Connection) {
     db.sync_remote_workspaces(
         "node",
         &[
@@ -26,7 +26,7 @@ fn setup(db: &Connection) {
     )
     .unwrap();
 }
-fn count(db: &Connection, table: &str) -> i64 {
+pub(super) fn count(db: &Connection, table: &str) -> i64 {
     db.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))
         .unwrap()
 }
@@ -355,7 +355,7 @@ fn migration_from_1011_preserves_sessions_and_installs_cleanup_triggers() {
         db.lock()
             .query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        1012
+        crate::db::SCHEMA_VERSION
     );
     reserve(&mut db.lock(), "alice", &input()).unwrap();
     db.lock()
@@ -367,7 +367,13 @@ fn migration_from_1011_preserves_sessions_and_installs_cleanup_triggers() {
     );
 }
 
-fn app() -> (AppState, tempfile::TempDir) {
+pub(super) fn app() -> (AppState, tempfile::TempDir) {
+    app_with_database(false)
+}
+pub(super) fn disk_app() -> (AppState, tempfile::TempDir) {
+    app_with_database(true)
+}
+fn app_with_database(on_disk: bool) -> (AppState, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
     let state = dir.path().join("state");
     let env = pirc_config::Env::new(
@@ -387,10 +393,17 @@ fn app() -> (AppState, tempfile::TempDir) {
         ],
         "/work",
     );
+    let backends =
+        pirc_providers::backends::BackendService::open(&state, crate::app::empty_models()).unwrap();
+    let db = if on_disk {
+        Db::open(&state.join("gateway.sqlite")).unwrap()
+    } else {
+        Db::memory()
+    };
     let app = App::new(
         pirc_config::GatewayConfig::load(&env).unwrap(),
-        Arc::new(Db::memory()),
-        pirc_providers::backends::BackendService::open(&state, crate::app::empty_models()).unwrap(),
+        Arc::new(db),
+        backends,
         crate::app::test_modes(),
     );
     setup(&app.db.lock());
