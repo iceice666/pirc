@@ -588,7 +588,15 @@ fn migration_from_2004_preserves_creation_identity_and_existing_uploads() {
         "PRAGMA user_version=2004;"
     ))
     .unwrap();
-    let original = creation(&mut Connection::open(&path).unwrap(), dir.path());
+    setup(&old);
+    let original = old
+        .create_session(
+            "repo",
+            dir.path().join("legacy-private").to_str().unwrap(),
+            "alice",
+        )
+        .unwrap();
+    old.execute("INSERT INTO session_creations(owner_user,operation_id,workspace_id,submission_hash,session_id,state,created_at) VALUES('alice','creation-1','repo',?1,?2,'ready',1)",params!["a".repeat(64),original.id]).unwrap();
     let legacy = UploadRow {
         id: "legacy".into(),
         owner_user: "alice".into(),
@@ -599,7 +607,7 @@ fn migration_from_2004_preserves_creation_identity_and_existing_uploads() {
         kind: crate::store::UploadKind::File,
         filename: Some("legacy.txt".into()),
         workspace_id: Some("repo".into()),
-        session_id: Some(original.session_id.clone()),
+        session_id: Some(original.id.clone()),
     };
     old.create_upload(&legacy).unwrap();
     drop(old);
@@ -611,7 +619,7 @@ fn migration_from_2004_preserves_creation_identity_and_existing_uploads() {
             .unwrap()
             .unwrap()
             .session_id,
-        original.session_id
+        original.id
     );
     assert_eq!(count(&conn, "creation_uploads"), 0);
     assert_eq!(

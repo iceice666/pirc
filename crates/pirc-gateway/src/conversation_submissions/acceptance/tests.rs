@@ -35,7 +35,7 @@ pub(crate) fn connected() -> ConnectedNode {
     }
 }
 pub(crate) fn caps() -> Value {
-    json!({"version":1,"canAllocate":true,"canTransferAttachments":true,"attachmentMimeInQuery":true,"canAdmitFirstMessage":true,"canReadFirstMessageReceipt":true,"maxUploadBytes":1024,"maxAttachments":16})
+    json!({"version":1,"canAllocate":true,"canTransferAttachments":true,"attachmentMimeInQuery":true,"canAdmitFirstMessage":true,"canReadFirstMessageReceipt":true,"canCancelCreation":true,"maxUploadBytes":1024,"maxAttachments":16})
 }
 pub(crate) fn fake(request: &NodeHttpRequest) -> NodeHttpResponse {
     let value = if request.url.ends_with("/capabilities") {

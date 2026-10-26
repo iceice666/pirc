@@ -1,5 +1,37 @@
 # Upgrades
 
+## Unreleased local checkpoint: cancellation before Node mapping
+
+Gateway schema **1016** and Node schema **2007** add durable remote cleanup jobs
+and Node creation-cancellation tombstones. Back up both state directories before
+upgrading; old executables refuse these schemas. Do not downgrade by changing
+`user_version`. Protocol 15 is unchanged, but new intent acceptance requires
+Node's `canCancelCreation: true` capability as well as the earlier admission/file
+capabilities. Upgrade compatible Nodes first. Dependencies/lockfile/Nix cargo
+hashes are unchanged.
+
+For accepted-first-send conversations, authorized Delete can commit while the
+Node is offline or its allocation response/mapping is missing. **202** means the
+conversation is deletion-fenced and cleanup is pending; **204** means remote
+cleanup has been confirmed. Gateway retries that identity-scoped job after
+restart/reconnect without a Web page or a fresh device/management grant. Outcome
+reads report `cleanupPending` and optional `cleanupError`; they do not replay a
+message or initiate allocation/cleanup. Existing owner/mode permission checks for
+fresh Delete still apply. Stop and unaccepted-draft discard keep separate meanings.
+
+Node cancellation can precede creation and permanently blocks delayed allocation,
+transfer and initial admission. Ready-session cleanup uses the existing shutdown,
+checkpoint retention and session/upload deletion flow. Unexpected reserved files
+or an unavailable mode/storage/checkpoint stay pending; do not erase an unexpected
+path to force success. User workspace roots are retained. Gateway verifies the
+original operation/workspace/hash and any known Node session mapping before
+finishing source-aware memory deletion and retiring the job. Migrations also
+queue previously cancelled accepted operations with their original identities.
+
+This checkpoint stays local. **`canSubmit: false` remains** until Web/Android
+persistent draft/reconnect/deleting-state handling and multi-client gates pass.
+It is not a completed client-flow guarantee or a deployment instruction.
+
 ## Unreleased local checkpoint: first-message admission and Stop
 
 Gateway schema **1015** and Node schema **2006** add durable first-command

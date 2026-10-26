@@ -87,6 +87,16 @@ pub fn routes(config: &NodeConfig) -> Vec<Route> {
             "/api/session-creations/:id/attachments/:attachment",
             crate::session_creation::uploads::status,
         ),
+        post("/api/session-creations/:id/cancel", {
+            let deletions = deletions.clone();
+            move |node, request| {
+                crate::session_creation::cancellation::cancel(node, request, deletions.clone())
+            }
+        }),
+        get(
+            "/api/session-creations/:id/cancel",
+            crate::session_creation::cancellation::status,
+        ),
         delete("/api/sessions/:id", move |node, request| {
             delete_session(node, request, deletions.clone())
         }),
@@ -751,7 +761,7 @@ type Deletion = Shared<BoxFuture<'static, ApiResult<()>>>;
 
 /// Chat deletions in flight: a retried DELETE joins the running one.
 #[derive(Default)]
-struct Deletions(Mutex<HashMap<String, Deletion>>);
+pub(crate) struct Deletions(Mutex<HashMap<String, Deletion>>);
 
 async fn delete_session(
     node: Node,
@@ -760,6 +770,18 @@ async fn delete_session(
 ) -> ApiResult<Response> {
     let session_id = param(&request, "id").to_owned();
     let user = request.user.clone();
+    delete_owned_session(node, session_id, user, deletions, true).await?;
+    Ok(Response::empty(204))
+}
+/// Only creation cancellation calls this with `check_mode = false`: it can
+/// discard the Node-allocated private session, never the user's workspace.
+pub(crate) async fn delete_owned_session(
+    node: Node,
+    session_id: String,
+    user: String,
+    deletions: Arc<Deletions>,
+    check_mode: bool,
+) -> ApiResult<()> {
     let (session, workspace) = {
         let db = node.db.lock();
         let deletion = db.session_deletion(&session_id)?;
@@ -768,12 +790,12 @@ async fn delete_session(
                 return Err(ApiError::forbidden("Chat belongs to another user"));
             }
             if deletion.status == DeletionStatus::Deleted {
-                return Ok(Response::empty(204));
+                return Ok(());
             }
         }
         let session = db.claim_session(&session_id, &user, true)?;
         let workspace = db.get_workspace(&session.workspace_id)?;
-        if !node.workspace_mode(&workspace)?.delete_sessions {
+        if check_mode && !node.workspace_mode(&workspace)?.delete_sessions {
             return Err(ApiError::bad_request("Only chats can be deleted"));
         }
         db.begin_session_deletion(&session_id, &user)?;
@@ -798,8 +820,7 @@ async fn delete_session(
             })
             .clone()
     };
-    task.await?;
-    Ok(Response::empty(204))
+    task.await
 }
 
 async fn finish_deletion(
@@ -836,10 +857,10 @@ impl Drop for DeletionEntry {
 }
 
 async fn remove_session(node: &Node, session: &SessionRow, workspace: &Workspace) -> ApiResult<()> {
-    let mode = node.workspace_mode(workspace)?;
     node.runners.stop_session(&session.id).await?;
     node.terminals.dispose_session(&session.id).await;
     node.browser.close_session(&session.id).await;
+    let mode = node.workspace_mode(workspace)?;
     // Both paths are allocated by the node, never supplied by the caller.
     let sessions_dir = node.config.sessions_dir.to_string_lossy().into_owned();
     let private = pirc_policy::resolve_path("/", &session.private_session_path);

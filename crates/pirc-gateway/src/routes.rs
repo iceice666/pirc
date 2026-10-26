@@ -939,6 +939,11 @@ pub async fn delete_session(
     Extension(identity): Extension<Identity>,
     Path(session_id): Path<String>,
 ) -> Handled {
+    if let Some(response) =
+        crate::conversation_submissions::try_delete(&app, &identity, &session_id).await?
+    {
+        return Ok(response);
+    }
     let user = identity.user.as_str();
     let session = {
         let conn = app.db.lock();

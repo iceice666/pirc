@@ -5,6 +5,7 @@
 //! persists and reconciles the intent and its outcome.
 
 pub(crate) mod admission;
+pub(crate) mod cancellation;
 pub(crate) mod uploads;
 
 use std::fs::DirBuilder;
@@ -101,6 +102,14 @@ fn read(db: &Connection, owner: &str, operation: &str) -> ApiResult<Option<Creat
 /// A read never recreates files, sessions or missing workspaces. Deletion
 /// tombstones are authoritative even between reservation and initialization.
 fn current(db: &Connection, owner: &str, mut row: Creation) -> ApiResult<Creation> {
+    if let Some(cancel) = cancellation::read(db, owner, &row.operation_id)? {
+        row.state = if cancel.complete {
+            State::Deleted
+        } else {
+            State::Deleting
+        };
+        return Ok(row);
+    }
     if let Some(deletion) = db
         .session_deletion(&row.session_id)?
         .or(db.workspace_deletion(&row.workspace_id)?)
@@ -136,6 +145,7 @@ fn matches(row: &Creation, input: &Input) -> ApiResult<()> {
 fn reserve(db: &mut Connection, owner: &str, input: &Input) -> ApiResult<Creation> {
     input.validate()?;
     let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    cancellation::require_live(&tx, owner, input)?;
     let row = if let Some(row) = read(&tx, owner, &input.operation_id)? {
         matches(&row, input)?;
         current(&tx, owner, row)?
@@ -174,6 +184,7 @@ fn initialize(
     sessions_dir: &Path,
 ) -> ApiResult<Creation> {
     let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    cancellation::require_live(&tx, owner, input)?;
     let row = read(&tx, owner, &input.operation_id)?
         .ok_or_else(|| ApiError::not_found("Conversation creation not found"))?;
     matches(&row, input)?;
@@ -224,6 +235,7 @@ pub(crate) async fn prepare(node: Node, request: Request) -> ApiResult<Response>
     let input: Input = request.parse_body()?;
     input.validate()?;
     let mut db = node.db.lock();
+    cancellation::require_live(&db, &request.user, &input)?;
     // Check identity conflicts and tombstones before attempting any new work.
     if let Some(row) = read(&db, &request.user, &input.operation_id)? {
         matches(&row, &input)?;
@@ -240,7 +252,7 @@ pub(crate) async fn prepare(node: Node, request: Request) -> ApiResult<Response>
 
 pub(crate) async fn capabilities(node: Node, _request: Request) -> ApiResult<Response> {
     Ok(Response::json(
-        json!({"version":1,"canAllocate":true,"canTransferAttachments":true,"attachmentMimeInQuery":true,"canAdmitFirstMessage":true,"canReadFirstMessageReceipt":true,"canReadCommandReceipts":true,"maxUploadBytes":node.config.upload_max_bytes,"maxAttachments":16}),
+        json!({"version":1,"canAllocate":true,"canTransferAttachments":true,"attachmentMimeInQuery":true,"canAdmitFirstMessage":true,"canReadFirstMessageReceipt":true,"canReadCommandReceipts":true,"canCancelCreation":true,"maxUploadBytes":node.config.upload_max_bytes,"maxAttachments":16}),
     ))
 }
 

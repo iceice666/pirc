@@ -448,7 +448,14 @@ pub(super) async fn call(
     let bytes = axum::body::to_bytes(response.into_body(), 4 * 1024 * 1024)
         .await
         .unwrap();
-    (code, serde_json::from_slice(&bytes).unwrap())
+    (
+        code,
+        if bytes.is_empty() {
+            Value::Null
+        } else {
+            serde_json::from_slice(&bytes).unwrap()
+        },
+    )
 }
 fn body() -> Value {
     json!({"operationId":"draft-1","submission":serde_json::to_value(input().submission).unwrap()})

@@ -155,6 +155,7 @@ fn migrates_the_first_rust_schema() {
             .replace(include_str!("../pots/schema.sql"), "")
             .replace(include_str!("../conversation_submissions/schema.sql"), "")
             .replace(include_str!("../conversation_submissions/dispatch.sql"), "")
+        .replace(include_str!("../conversation_submissions/cancellation.sql"), "")
             .replace(include_str!("../conversation_submissions/acceptance.sql"), "")
             .replace(include_str!("../conversation_submissions/attachments.sql"), "")
             .replace(
@@ -278,6 +279,10 @@ fn reconciles_upstream_memory_and_local_calendar_checkpoint_schemas() {
             .replace(include_str!("../pots/schema.sql"), "")
             .replace(include_str!("../conversation_submissions/schema.sql"), "")
             .replace(include_str!("../conversation_submissions/dispatch.sql"), "")
+            .replace(
+                include_str!("../conversation_submissions/cancellation.sql"),
+                "",
+            )
             .replace(
                 include_str!("../conversation_submissions/acceptance.sql"),
                 "",

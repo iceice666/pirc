@@ -264,6 +264,7 @@ async fn supported(
         || caps["attachmentMimeInQuery"] != true
         || caps["canAdmitFirstMessage"] != true
         || caps["canReadFirstMessageReceipt"] != true
+        || caps["canCancelCreation"] != true
         || caps["maxAttachments"]
             .as_u64()
             .is_none_or(|n| n < spec.attachments.len() as u64)

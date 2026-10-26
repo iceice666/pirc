@@ -111,6 +111,12 @@ are never replayed automatically; accepted staging sources clean after admission
 `canSubmit` stays false pending uncertain-allocation cancellation and client recovery.
 275 Gateway tests, 416 Node library tests (three existing ignores), strict Clippy
 and paired-token first-admission/restart/Stop process cases passed locally.
+The [uncertain-allocation deletion checkpoint](unified-conversations.md#u1-implementation-checkpoint-uncertain-allocation-deletion-2026-10-27)
+adds Gateway 1016 / Node 2007: owner-authorized durable deletion before the Node
+mapping is known, honest pending status while offline, and operation-scoped
+cancellation/cleanup on reconnect. 282 Gateway tests, 422 Node library tests,
+strict Clippy and five process cases passed locally. Client adoption and the full
+failure table remain open; `canSubmit` stays false.
 The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
 records local fixture/transcript repairs and 50 Agent plus five Node process
 passes; the remote Check is still failed, and full Chromium/Linux verification

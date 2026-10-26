@@ -1253,6 +1253,88 @@ remaining pieces are implemented and verified. Later environment bindings,
 mount revocation, canonical collaboration and bounded pots stages remain open.
 No frontend redesign, push, deployment or Release is included.
 
+## U1 implementation checkpoint: uncertain allocation deletion (2026-10-27)
+
+Local only. Gateway schema **1016** queues remote cleanup by immutable creation
+identity; Node schema **2007** records cancellation even before allocation exists.
+Protocol 15 is unchanged. Gateway requires `canCancelCreation: true` before new
+acceptance. **`canSubmit: false` remains** until durable Web/Android adoption and
+complete multi-client failure/recovery handling are verified.
+
+- Accepted-first-send conversations now use the ordinary
+  `DELETE /api/sessions/{id}` entry point even when the Node session ID was never
+  received, or the Node is offline. A fresh Delete still checks the existing
+  owner and mode's `delete_sessions` permission. It commits the deletion fence,
+  payload/settings scrubbing and an identity-only remote cleanup job together.
+  Stop is distinct: this route is an explicit conversation deletion, not a
+  replacement for stopping a run while retaining its conversation/history.
+- The response is **202** with `deletion.state: deleting` and `cleanupPending:
+true` while remote cleanup remains unconfirmed; **204** follows confirmation.
+  Owner-scoped preparation reads report `cleanupPending` for local and remote
+  cleanup and an optional `cleanupError`. Read queries do not initiate cleanup,
+  create a conversation, take a lease or replay a message. Discarding an
+  unaccepted draft still has no Node side effect and keeps the seven-day policy.
+- Gateway's startup/periodic worker retries up to 32 queued jobs per page with
+  four in flight, ordering by last attempt so failed jobs do not hold a fixed
+  first page forever. The original owner-authorized deletion survives its device
+  token/browser disappearing and is scoped to that one recorded creation.
+  Reconnection after Gateway or Node restart does not require a browser login,
+  management grant or Web page. No arbitrary Node action is authorized by the job.
+- Node `POST /api/session-creations/{id}/cancel` takes the immutable workspace ID
+  and submission hash; `GET` at the same path reads its outcome. A cancellation
+  that beats allocation commits a permanent owner/operation tombstone without
+  creating a session or files. If allocation already exists, it fences its
+  session in that same SQLite write transaction. Late allocation, attachment and
+  first-admission requests cannot revive it. A changed hash/workspace conflicts;
+  another owner's operation and private recovery workspace remain protected.
+- Ready sessions use the existing runner/terminal/browser shutdown, checkpoint
+  retention check, upload/session cleanup and shared in-flight deletion task.
+  The new internal path is restricted to creation-owned data; the legacy public
+  delete route keeps its existing mode permission check. Workspace roots and
+  user files there are retained. An interrupted reservation can remove only an
+  empty allocated directory; unexpected contents/symlinks remain untouched with
+  cleanup pending. Unavailable mode/storage/checkpoint cleanup also stays pending;
+  the deletion fence persists and cleanup retries without claiming success.
+- Gateway validates the cancellation's operation/workspace/hash and, if already
+  known, exact Node session ID. It retires the remote job and completes local
+  session deletion/source-aware memory forgetting together only after matching
+  `complete: true` evidence. A missing mapping never causes a fresh allocation
+  merely to discover what to delete. A late allocation response cannot publish
+  its mapping after the local deletion fence. Project/session deletion triggers
+  also enqueue accepted first-send cleanups, including previously cancelled rows
+  migrated from schema 1015. No prompt/file contents are copied to the job table.
+
+Validation: **282 Gateway unit/HTTP tests**, **422 Node library tests** (three
+existing ignores) and strict all-target Clippy for Gateway/Node/config/conformance
+passed. New cases cover independent-connection allocation/cancel races,
+pre-allocation tombstones, crash/reopen recovery, malformed completion evidence,
+mode permissions/removal, owner isolation, unexpected reserved contents, late
+mapping publication and 1015→1016 / 2006→2007 migrations. Existing memory
+concurrency/large-history, checkpoints, pots and legacy Node library cases pass.
+
+Five real Gateway/Node/Agent process cases pass with the new binaries: the two
+new cancellation cases accept through a paired token, stop only the fixture
+Node, request deletion while it is offline, crash/restart Gateway, observe
+honest pending cleanup, then resume the same Node and verify eventual cleanup.
+Both a missing Node mapping and already-materialized attachment are covered;
+late accept/materialize/dispatch/prepare requests do not revive work, workspace
+sentinel data survives and no model request occurs. Earlier first-admission/Stop
+and accepted-attachment restart/deletion cases remain passing. Legacy
+`node_session_commands` and `node_panels_uploads` process transcripts also pass
+unchanged. These are local
+HTTP/storage/process results, not Flutter UI, Android-device, Chromium, Linux
+sandbox, Nix build or remote-CI verification. Only this run's build/log artifacts
+are removed after the local commit; user APKs, other agents' work and data remain.
+
+Remaining U1: persist/account-scope Web and Android drafts/files and operation
+identities; wire accepted-pending display, initial control/admission, receipt and
+deleting-state recovery; complete the multi-client failure table (including
+controls while an accepted conversation still lacks a Node mapping). Keep fresh
+mode/owner permissions and the distinction between Stop, draft discard and
+conversation deletion when adding those client controls. Later binding/resource
+transition/collaboration/pots stages and frontend redesign deferrals are unchanged.
+No remote push, deployment or Release is included.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

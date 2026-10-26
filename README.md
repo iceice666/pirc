@@ -90,7 +90,7 @@ The Nix gateway includes the static Web UI; the node includes native sandbox/bro
 
 ### Upgrading
 
-Upgrade the gateway and every chat/coding node together. The unreleased workspace-mode implementation uses node protocol **12**; protocol 11 nodes cannot connect to it. Database schemas remain gateway **1004** and node **2001** (introduced in 0.6.0). Back up state and configuration first; see [Upgrades](docs/deploy/upgrades.md) for mode defaults, accepted node ids and rollback limitations.
+Upgrade the gateway and every chat/coding node together. The current tree uses node protocol **15**; older-protocol nodes cannot connect. The local, unreleased first-send checkpoints migrate databases to gateway **1016** and node **2007**. Their client flow remains gated by `canSubmit: false` pending Web/Android recovery integration, and acceptance requires compatible Node file/admission/cancellation capabilities. Back up state and configuration first; older executables refuse these schemas. See [Upgrades](docs/deploy/upgrades.md) for capability requirements, migration notes and rollback limitations.
 
 Upgrading from the pre-Rust **0.3.x** releases still requires fresh state: re-pair devices, re-login providers and start new sessions rather than reusing the old databases. See [migration and rollback guidance](docs/deploy/upgrades.md).
 

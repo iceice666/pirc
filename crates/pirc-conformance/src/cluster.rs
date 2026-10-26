@@ -307,17 +307,27 @@ impl Cluster {
     /// The real Node reconnects over its existing WebSocket retry path.
     pub async fn restart_gateway(&mut self, crash: bool) {
         self.gateway.restart(crash);
-        self.wait_ready(u64::from(self.node.is_some()))
-            .await
-            .unwrap();
+        self.wait_ready(u64::from(
+            self.node.as_ref().is_some_and(|node| !node.stopped),
+        ))
+        .await
+        .unwrap();
     }
 
     /// Restart only this fixture's Node. Source files/config are never reseeded.
     /// Await the actual disconnect before starting the replacement, so a cached
     /// health result from the old registration cannot count as readiness.
     pub async fn restart_node(&mut self, crash: bool) {
-        let mut old = self.node.take().expect("cluster has a node");
-        old.stop_for_restart(crash);
+        self.stop_node(crash).await;
+        self.resume_node().await;
+    }
+
+    /// Stop only this fixture's Node, retaining its launch/state for recovery tests.
+    pub async fn stop_node(&mut self, crash: bool) {
+        self.node
+            .as_mut()
+            .expect("cluster has a node")
+            .stop_for_restart(crash);
         let api = self.api();
         let deadline = Instant::now() + Duration::from_secs(10);
         loop {
@@ -330,6 +340,12 @@ impl Cluster {
             assert!(Instant::now() < deadline, "old Node did not disconnect");
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
+    }
+
+    /// Resume the same stopped fixture Node; never reseed its configuration/files.
+    pub async fn resume_node(&mut self) {
+        let old = self.node.take().expect("cluster has a stopped node");
+        assert!(old.stopped, "Node must be stopped before resuming");
         self.node = Some(Process::from_launch("node", &old.launch));
         self.wait_ready(1).await.unwrap();
     }
@@ -379,6 +395,7 @@ impl Cluster {
                 return Err(format!("the gateway exited during startup ({status})"));
             }
             if let Some(node) = &mut self.node
+                && !node.stopped
                 && let Some(status) = node.exited()
             {
                 node.dump();
