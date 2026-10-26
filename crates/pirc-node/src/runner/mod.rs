@@ -73,6 +73,7 @@
 //! - Starts run in their own task: a start goes on when its asker (a
 //!   relayed request) goes away.
 
+mod command_gate;
 pub mod framing;
 mod host;
 mod process;
@@ -83,6 +84,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
+use command_gate::CommandGate;
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use tokio::sync::watch;
@@ -205,6 +207,18 @@ fn error_text(response: &Map<String, Value>, fallback: &str) -> String {
     }
 }
 
+/// An admission failure may follow a partial journal commit. Never mark that
+/// response retryable merely because the agent is still alive.
+fn response_status(response: &Map<String, Value>) -> CommandStatus {
+    if response.get("errorCode").and_then(Value::as_str) == Some("admission_outcome_unknown") {
+        CommandStatus::OutcomeUnknown
+    } else if truthy(response.get("success")) {
+        CommandStatus::Accepted
+    } else {
+        CommandStatus::Rejected
+    }
+}
+
 /// `path.basename`.
 fn basename(text: &str) -> &str {
     text.split('/')
@@ -230,7 +244,7 @@ pub struct RunnerManager {
     state: Mutex<Managed>,
     /// Serialize all writers, including delivery, across a branch mutation
     /// and runner restart. Never hold the synchronous manager lock at await.
-    commands: Mutex<HashMap<String, std::sync::Weak<tokio::sync::Mutex<()>>>>,
+    commands: Mutex<HashMap<String, std::sync::Weak<CommandGate>>>,
 }
 
 impl RunnerManager {
@@ -248,7 +262,7 @@ impl RunnerManager {
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
-    fn command_lock(&self, session_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+    fn command_lock(&self, session_id: &str) -> Arc<CommandGate> {
         let mut commands = self
             .commands
             .lock()
@@ -257,7 +271,7 @@ impl RunnerManager {
             return lock;
         }
         commands.retain(|_, lock| lock.strong_count() > 0);
-        let lock = Arc::new(tokio::sync::Mutex::new(()));
+        let lock = Arc::new(CommandGate::default());
         commands.insert(session_id.to_owned(), Arc::downgrade(&lock));
         lock
     }
@@ -410,7 +424,11 @@ impl RunnerManager {
         lease: (&str, i64),
     ) -> ApiResult<Map<String, Value>> {
         let lock = self.command_lock(session_id);
-        let _command = lock.lock().await;
+        let _command = if matches!(payload, CommandPayload::Stop) {
+            lock.stop_lock().await
+        } else {
+            Some(lock.lock().await)
+        };
         let node = self.node()?;
         if !matches!(payload, CommandPayload::Stop) {
             crate::pots::require_generic_input(&node.db.lock(), session_id)?;
@@ -466,6 +484,7 @@ impl RunnerManager {
         node.db
             .lock()
             .update_command(command_id, CommandStatus::Dispatched, None, None)?;
+        let mut admission_wait = None;
         let outcome: Result<Map<String, Value>, Failure> = async {
             if matches!(payload, CommandPayload::Stop) {
                 let mut clear = Map::new();
@@ -483,6 +502,20 @@ impl RunnerManager {
                 }
                 response.insert("data".into(), Value::Object(data));
                 Ok(response)
+            } else if matches!(
+                payload,
+                CommandPayload::Prompt { .. }
+                    | CommandPayload::Steer { .. }
+                    | CommandPayload::FollowUp { .. }
+            ) {
+                // Keep ordinary commands/deliveries serialized. Stop can
+                // overtake only once this RPC is actually queued, so it cannot
+                // miss a not-yet-sent prompt or allow a model change to retarget it.
+                let answer = runner.send_request(rpc)?;
+                admission_wait = Some(lock.admission());
+                Ok(answer
+                    .await
+                    .map_err(|_| Failure::Other("Agent response was lost".into()))??)
             } else {
                 Ok(runner.request(rpc).await?)
             }
@@ -491,7 +524,8 @@ impl RunnerManager {
         match outcome {
             Ok(response) => {
                 let db = node.db.lock();
-                if truthy(response.get("success")) {
+                let status = response_status(&response);
+                if status == CommandStatus::Accepted {
                     db.update_command(
                         command_id,
                         CommandStatus::Accepted,
@@ -501,14 +535,18 @@ impl RunnerManager {
                 } else {
                     db.update_command(
                         command_id,
-                        CommandStatus::Rejected,
+                        status,
                         Some(&Value::Object(response.clone())),
                         Some(&error_text(&response, "Agent rejected command")),
                     )?;
                     if let Some(run) = &run_id {
                         db.update_run(
                             run,
-                            RunStatus::Failed,
+                            if status == CommandStatus::OutcomeUnknown {
+                                RunStatus::Interrupted
+                            } else {
+                                RunStatus::Failed
+                            },
                             Some(&error_text(&response, "Agent rejected prompt")),
                         )?;
                         node.activity.notify_one();
@@ -521,7 +559,7 @@ impl RunnerManager {
                 let alive = runner.alive();
                 {
                     let db = node.db.lock();
-                    let status = if alive {
+                    let status = if alive && admission_wait.is_none() {
                         CommandStatus::Rejected
                     } else {
                         CommandStatus::OutcomeUnknown
@@ -767,7 +805,7 @@ impl RunnerManager {
         check: impl FnOnce() -> ApiResult<()> + Send,
     ) -> ApiResult<()> {
         let lock = self.command_lock(session_id);
-        let _command = lock.lock().await;
+        let _command = lock.stop_lock().await;
         let node = self.node()?;
         // A start already probing the sandbox must finish before its files
         // can be removed.
@@ -1208,6 +1246,25 @@ mod tests {
         assert!(other.try_lock().is_ok());
         drop(held);
         assert!(second.try_lock().is_ok());
+    }
+
+    #[test]
+    fn ambiguous_admission_is_not_a_retryable_rejection() {
+        let classify = |value: Value| response_status(value.as_object().unwrap());
+        assert_eq!(classify(json!({"success":true})), CommandStatus::Accepted);
+        assert_eq!(
+            classify(json!({"success":false,"error":"already running"})),
+            CommandStatus::Rejected
+        );
+        assert_eq!(
+            classify(json!({"success":false,"errorCode":"admission_outcome_unknown"})),
+            CommandStatus::OutcomeUnknown
+        );
+        // An inconsistent success must not erase a failure fence.
+        assert_eq!(
+            classify(json!({"success":true,"errorCode":"admission_outcome_unknown"})),
+            CommandStatus::OutcomeUnknown
+        );
     }
 
     #[test]

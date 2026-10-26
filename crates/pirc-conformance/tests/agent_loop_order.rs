@@ -38,7 +38,13 @@ fn label(agent: &AgentRun, line: &Value) -> Value {
     let kind = line["type"].as_str().unwrap_or_default();
     let text = |value: &Value| value.as_str().unwrap_or_default().to_owned();
     json!(match kind {
-        "response" => format!("response {} {}", text(&line["command"]), line["success"]),
+        "response" => {
+            let mut label = format!("response {} {}", text(&line["command"]), line["success"]);
+            if let Some(code) = line["errorCode"].as_str() {
+                label += &format!(" ({code})");
+            }
+            label
+        }
         "message_start" => format!("message_start {}", text(&line["message"]["role"])),
         "message_end" => {
             let message = &line["message"];

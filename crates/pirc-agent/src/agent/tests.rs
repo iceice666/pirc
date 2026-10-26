@@ -715,7 +715,16 @@ impl ScriptedRun {
         }
     }
 
-    fn agent(&self, dir: &std::path::Path, mut config: AgentConfig) -> Rc<Agent> {
+    fn agent(&self, dir: &std::path::Path, config: AgentConfig) -> Rc<Agent> {
+        self.agent_with_emitter(dir, config, None)
+    }
+
+    fn agent_with_emitter(
+        &self,
+        dir: &std::path::Path,
+        mut config: AgentConfig,
+        extra_emit: Option<crate::rpc::Write>,
+    ) -> Rc<Agent> {
         config.models = serde_json::from_value(json!({"providers":{"fake":{"api":"openai-completions","baseUrl":"https://example.test","models":[{"id":"main","contextWindow":8192,"maxTokens":512}]}},"defaultModel":{"provider":"fake","id":"main"}})).unwrap();
         let weak: Rc<RefCell<Weak<Agent>>> = Rc::default();
         let ended = self.ended.clone();
@@ -726,6 +735,9 @@ impl ScriptedRun {
                 && let Some(run_loop) = agent.run_loop.borrow().as_ref()
             {
                 ended.borrow_mut().push(run_loop.status());
+            }
+            if let Some(emit) = &extra_emit {
+                emit(event);
             }
         });
         let workspace = config.workspace.clone();
@@ -1106,3 +1118,5 @@ fn parses_slash_commands() {
         assert_eq!(parsed(text), None, "{text:?}");
     }
 }
+
+mod admission;

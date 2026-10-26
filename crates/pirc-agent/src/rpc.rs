@@ -426,6 +426,14 @@ pub(crate) trait Commands: 'static {
         Err("Branch resume is unsupported".into())
     }
     fn prompt(self: &Rc<Self>, text: String, images: Vec<UserBlock>) -> Result<(), String>;
+    fn prompt_admitted(
+        self: &Rc<Self>,
+        text: String,
+        images: Vec<UserBlock>,
+    ) -> LocalBoxFuture<'_, Result<(), String>> {
+        let result = self.prompt(text, images);
+        Box::pin(async move { result })
+    }
     fn steer(self: &Rc<Self>, text: String, images: Vec<UserBlock>);
     fn follow_up(self: &Rc<Self>, text: String, images: Vec<UserBlock>);
     fn abort(self: &Rc<Self>);
@@ -475,6 +483,13 @@ impl Commands for Agent {
     }
     fn prompt(self: &Rc<Self>, text: String, images: Vec<UserBlock>) -> Result<(), String> {
         Agent::prompt(self, text, images)
+    }
+    fn prompt_admitted(
+        self: &Rc<Self>,
+        text: String,
+        images: Vec<UserBlock>,
+    ) -> LocalBoxFuture<'_, Result<(), String>> {
+        Box::pin(Agent::prompt_admitted(self, text, images))
     }
     fn steer(self: &Rc<Self>, text: String, images: Vec<UserBlock>) {
         Agent::steer(self, text, images);
@@ -592,16 +607,24 @@ pub(crate) async fn dispatch<A: Commands>(
                     _ => return Err("Agent is already running; use steer or follow_up".to_owned()),
                 }
             } else {
-                agent.prompt(message, images(command))?;
+                agent.prompt_admitted(message, images(command)).await?;
             }
             Ok(None)
         }
         Some("steer") => {
-            agent.steer(message, images(command));
+            if agent.is_running() {
+                agent.steer(message, images(command));
+            } else {
+                agent.prompt_admitted(message, images(command)).await?;
+            }
             Ok(None)
         }
         Some("follow_up") => {
-            agent.follow_up(message, images(command));
+            if agent.is_running() {
+                agent.follow_up(message, images(command));
+            } else {
+                agent.prompt_admitted(message, images(command)).await?;
+            }
             Ok(None)
         }
         Some("abort") => {
@@ -818,6 +841,9 @@ pub(crate) fn response(command: &Value, outcome: Result<Option<Value>, String>) 
             }
         }
         Err(error) => {
+            if error == crate::agent::ADMISSION_OUTCOME_UNKNOWN {
+                out.insert("errorCode".to_owned(), json!("admission_outcome_unknown"));
+            }
             out.insert("success".to_owned(), json!(false));
             out.insert("error".to_owned(), json!(error));
         }

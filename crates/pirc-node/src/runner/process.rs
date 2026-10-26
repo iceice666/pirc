@@ -1283,3 +1283,7 @@ mod memory_concurrency_tests {
         f.node.close().await;
     }
 }
+
+#[cfg(test)]
+#[path = "admission_tests.rs"]
+mod admission_tests;

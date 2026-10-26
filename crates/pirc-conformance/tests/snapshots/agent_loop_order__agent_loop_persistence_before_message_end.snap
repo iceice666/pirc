@@ -72,7 +72,7 @@ expression: r.into_value()
     "observed": [
       "agent_start",
       "notify error: Failed to start run: commit_outcome_unknown_reopen",
-      "response prompt true",
+      "response prompt false (admission_outcome_unknown)",
       "agent_end",
       "agent_settled"
     ],

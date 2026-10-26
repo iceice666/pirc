@@ -16,7 +16,7 @@ use pirc_protocol::{
     ToolChoice, ToolSpec, UserBlock, UserContent,
 };
 use serde_json::{Map, Value, json};
-use tokio::sync::Notify;
+use tokio::sync::{Notify, oneshot};
 
 use crate::auto_mode::{
     APPROVAL_MODE_ENTRY, ApprovalMode, AutoMode, default_approval_mode, recorded_approval_mode,
@@ -238,9 +238,16 @@ pub struct Agent {
 /// The features' start of a run: `start_features`' outcome and the
 /// prompt sections they added.
 type StartResult = (Result<(), String>, Vec<PromptSection>);
+type AdmissionReceipt = oneshot::Sender<Result<(), String>>;
+
+/// A journal append may have reached disk before returning an error. Neither
+/// RPC nor its caller may turn this into a safely retryable rejection.
+pub(crate) const ADMISSION_OUTCOME_UNKNOWN: &str =
+    "Message admission could not be confirmed; inspect the conversation before retrying.";
 
 /// What of a run's start is left for the run task.
 enum Start {
+    Failed(String),
     /// No features: the queued items still to admit when `beforePrompt`
     /// hooks made admitting wait.
     Admit(Option<Vec<QueueItem>>),
@@ -1683,16 +1690,46 @@ impl Agent {
         Ok(())
     }
 
-    /// `prompt`: start a run; `Err` while one is active.
+    /// Start a run; `Err` while one is active. Internal callers acknowledge
+    /// scheduling here; the RPC path uses `prompt_admitted` to await storage.
     pub fn prompt(self: &Rc<Self>, text: String, images: Vec<UserBlock>) -> Result<(), String> {
+        self.begin_prompt(text, images, None)
+    }
+
+    /// RPC acknowledgement waits for initial admission, including deferred
+    /// feature/hook context. It does not wait for inference or tool execution.
+    pub(crate) async fn prompt_admitted(
+        self: &Rc<Self>,
+        text: String,
+        images: Vec<UserBlock>,
+    ) -> Result<(), String> {
+        let (receipt, answer) = oneshot::channel();
+        self.begin_prompt(text, images, Some(receipt))?;
+        match answer.await {
+            Ok(Ok(())) => Ok(()),
+            // A panic, cancellation or partial journal write is not proof that
+            // nothing was admitted. Preserve the caller's operation identity.
+            _ => Err(ADMISSION_OUTCOME_UNKNOWN.to_owned()),
+        }
+    }
+
+    fn begin_prompt(
+        self: &Rc<Self>,
+        text: String,
+        images: Vec<UserBlock>,
+        receipt: Option<AdmissionReceipt>,
+    ) -> Result<(), String> {
         if self.try_command(&text) {
+            if let Some(receipt) = receipt {
+                let _ = receipt.send(Ok(()));
+            }
             return Ok(());
         }
         if self.running.get() {
             return Err("Agent is already running; use steer or follow_up".to_owned());
         }
         self.user_input(&text);
-        self.start_run(vec![Self::user_item(text, images)]);
+        self.start_run_receipted(vec![Self::user_item(text, images)], receipt);
         Ok(())
     }
 
@@ -1834,6 +1871,14 @@ impl Agent {
     /// are that await), the admitted messages go out before the command
     /// that started the run is answered.
     fn start_run(self: &Rc<Self>, initial: Vec<QueueItem>) {
+        self.start_run_receipted(initial, None);
+    }
+
+    fn start_run_receipted(
+        self: &Rc<Self>,
+        initial: Vec<QueueItem>,
+        mut receipt: Option<AdmissionReceipt>,
+    ) {
         self.running.set(true);
         self.run_active.set(true);
         let controller = AbortController::new();
@@ -1861,25 +1906,29 @@ impl Agent {
         } else {
             Vec::new()
         };
-        let pending = match self.admit_now(now) {
-            Ok(()) if !later.is_empty() => Some(later),
-            Ok(()) => None,
+        let admitted = self.admit_now(now);
+        // Keep synchronous admission/response ordering when no feature or hook
+        // deferred it. On failure the spawned task only settles; it cannot infer
+        // from old history after failing to append the new user's message.
+        if (admitted.is_err() || (!with_features && later.is_empty()))
+            && let Some(receipt) = receipt.take()
+        {
+            let _ = receipt.send(admitted.clone());
+        }
+        let start = match admitted {
             Err(error) => {
                 self.start_failed(&error);
-                None
+                Start::Failed(error)
             }
-        };
-        let start = if with_features {
-            let agent = self.clone();
-            Start::Starting(Box::pin(async move {
-                let mut extra_prompt = Vec::new();
-                let result = agent
-                    .start_features(pending.unwrap_or_default(), &mut extra_prompt)
-                    .await;
-                (result, extra_prompt)
-            }))
-        } else {
-            Start::Admit(pending)
+            Ok(()) if with_features => {
+                let agent = self.clone();
+                Start::Starting(Box::pin(async move {
+                    let mut extra_prompt = Vec::new();
+                    let result = agent.start_features(later, &mut extra_prompt).await;
+                    (result, extra_prompt)
+                }))
+            }
+            Ok(()) => Start::Admit((!later.is_empty()).then_some(later)),
         };
         let agent = self.clone();
         tokio::task::spawn_local(async move {
@@ -1887,7 +1936,8 @@ impl Agent {
             let signal = controller.signal();
             // A panic is a bug; it ends the run like a crash.
             let outcome =
-                tokio::task::spawn_local(async move { run.run(signal, start).await }).await;
+                tokio::task::spawn_local(async move { run.run(signal, start, receipt).await })
+                    .await;
             let error = match outcome {
                 Ok(Ok(())) => None,
                 Ok(Err(error)) => Some(error),
@@ -1971,7 +2021,7 @@ impl Agent {
         self.admit(items).await
     }
 
-    /// The run's start failed (`Failed to start run`); it goes on.
+    /// Report a failed start; the caller ends the run before inference.
     fn start_failed(&self, error: &str) {
         self.ui
             .notify(&format!("Failed to start run: {error}"), NotifyLevel::Error);
@@ -2671,29 +2721,35 @@ impl Agent {
 
     /// The run after its start (`run`): `start` says what of the start is
     /// still to do.
-    async fn run(self: &Rc<Self>, signal: AbortSignal, start: Start) -> Result<(), String> {
-        let mut extra_prompt = Vec::new();
-        let started = match start {
-            Start::Admit(pending) => {
-                if let Some(items) = pending
-                    && let Err(error) = self.admit(items).await
-                {
-                    self.start_failed(&error);
-                }
-                None
+    async fn run(
+        self: &Rc<Self>,
+        signal: AbortSignal,
+        start: Start,
+        receipt: Option<AdmissionReceipt>,
+    ) -> Result<(), String> {
+        let initial = match start {
+            Start::Failed(error) => Err(error),
+            Start::Admit(None) => Ok(()),
+            Start::Admit(Some(items)) => tokio::select! {
+                biased;
+                _ = signal.cancelled() => Err("Run interrupted before admission".to_owned()),
+                result = self.admit(items) => result,
             }
-            Start::Starting(started) => Some(started.await),
+            .inspect_err(|e| self.start_failed(e)),
+            Start::Starting(started) => tokio::select! {
+                biased;
+                _ = signal.cancelled() => Err("Run interrupted before admission".to_owned()),
+                (result, _) = started => result,
+            }
+            .inspect_err(|e| self.start_failed(e)),
         };
-        if let Some((result, extra)) = started {
-            extra_prompt = extra;
-            if let Err(error) = result {
-                self.start_failed(&error);
-            }
+        if let Some(receipt) = receipt {
+            let _ = receipt.send(initial.clone());
         }
-        drop(extra_prompt);
-        // After a failed write the store refuses every append until it is
-        // reopened: no turn could be recorded, so none is asked for.
-        if self.store.borrow().write_failed() {
+        // Any failed initial admission stops this run. Some refusals (such as a
+        // stale writer) occur before SessionStore marks a write as uncertain.
+        // Those must not run the model on the previous conversation either.
+        if initial.is_err() || self.store.borrow().write_failed() {
             *self.turn.borrow_mut() = None;
             self.interrupt_pending.set(false);
             self.emit(json!({ "type": "agent_end", "willRetry": false }));

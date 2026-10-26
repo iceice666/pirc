@@ -789,6 +789,69 @@ command/admission and storage-refusal outcome reconciliation; attachment staging
 account-scoped client submission recovery; mixed-version failure handling; and the
 full U1 acceptance table. The Node allocation proof alone closes none of those.
 
+### G0 implementation checkpoint: message admission (2026-10-26)
+
+Implemented locally as a prerequisite for U1. The existing persistence-order
+fixture recorded a successful prompt response after a refused journal append.
+This checkpoint changes that failure response intentionally; it does not mark
+U1's creation/admission/attachment transaction complete.
+
+- For ordinary idle `prompt` input (also idle `steer` / `follow_up`), the Agent RPC
+  waits for initial message admission, including feature and `beforePrompt` hook
+  work. Synchronous successful admission retains its prior event order. This is
+  not an acknowledgement that inference or tools completed.
+- A failed start ends before inference, even when an early stale-writer refusal
+  has not set the store's write-failed flag. It cannot answer using old history
+  after failing to admit the new user message.
+- A failed, cancelled or lost admission receipt reports
+  `errorCode: admission_outcome_unknown`. Some initial entries may already be on
+  disk; Node stores `outcome_unknown`, not a safely retryable rejection. The same
+  command ID keeps its existing receipt. No journal reopening, new operation ID
+  or automatic replay is added. Proven reconciliation after restart remains U1
+  work, not something this in-process receipt alone guarantees.
+- Ordinary commands and deliveries remain serialized while admission waits.
+  Stop/deletion may overtake only after the input RPC is queued, including a Stop
+  already waiting during preparation. This avoids blocking Stop behind hooks
+  without letting model/settings changes retarget the pending message.
+- Startup cancellation drops hook work. Hook shells now use their own process
+  groups and the existing group cleanup guard, so cancellation/timeout cannot
+  leave those hook children running. This covers owned hook processes, not
+  revocation of all sandbox capabilities or external effects already performed.
+- Slash-command acknowledgement and input queued during an active run retain
+  their existing semantics; a queued response is not proof of journal admission.
+  Public session IDs, database schemas, memory provenance and checkpoint
+  ownership are unchanged by this checkpoint.
+
+Validation (2026-10-26), using one disposable target with debug info/incremental
+compilation disabled:
+
+- `cargo test --offline --locked -p pirc-agent --lib`: **420 passed**, including
+  seven new admission cases. They cover delayed acknowledgement, stale storage,
+  failed feature startup, Stop, concurrent prompts, a partially committed first
+  message and cleanup of a real hook child process.
+- Node library filters `runner::`, `checkpoints::`, `pots::tests`: **28 + 7 + 11
+  passed**. The two subprocess helper entries remain ignored by their normal
+  harness; their parent tests passed. New Node cases exercise the actual command
+  manager, SQLite receipts and RPC channels with a fake agent process, including
+  Stop overtaking, settings staying serialized, duplicate requests, and a lost
+  answer while the runner is still alive.
+- Built the current `pirc-node` binary and ran all **7** `agent_loop_order`
+  conformance cases with `PIRC_CONFORMANCE_REQUIRED=1`. These use real local
+  Agent processes and fake inference. The persistence fixture changes only the
+  refused prompt response to `false (admission_outcome_unknown)`; ordinary
+  successful ordering and the other snapshots passed unchanged.
+- Strict `cargo clippy --offline --locked -p pirc-agent -p pirc-node --lib --tests
+-- -D warnings`, formatting and diff checks passed.
+
+No Web/Flutter source changed and no browser, emulator or device test ran. Code
+inspection confirms both clients keep input after HTTP failure; Android also has
+an explicit unknown-send guard. Web receipt checking and stable retry identity
+still need the U1 client work. This is not new end-to-end App acceptance. Full
+workspace/conformance debt,
+Gateway creation reconciliation, attachment staging and client recovery remain
+open. The run-created build target is removed after validation; existing APKs
+and other worktrees' outputs are preserved.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

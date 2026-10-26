@@ -154,8 +154,13 @@ impl HookRunner {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
+            .process_group(0)
+            .kill_on_drop(true)
             .spawn()
             .map_err(|error| fs_error(&error, "posix_spawn", Some(SHELL)))?;
+        // Admission can now be cancelled while a beforePrompt hook waits.
+        // Reuse shell cleanup so neither the hook nor its children outlive it.
+        let _group = crate::tools::bash::GroupGuard::new(child.id());
         let input = js::stringify(payload);
         let mut stdin = child.stdin.take();
         let mut stdout = child.stdout.take().expect("piped stdout");
@@ -184,12 +189,7 @@ impl HookRunner {
                 status = child.wait() => status,
                 () = tokio::time::sleep(Duration::from_millis(hook.timeout_ms)) => {
                     timed_out = true;
-                    if let Some(pid) = pid.and_then(|pid| i32::try_from(pid).ok()) {
-                        let _ = nix::sys::signal::kill(
-                            nix::unistd::Pid::from_raw(pid),
-                            nix::sys::signal::Signal::SIGKILL,
-                        );
-                    }
+                    crate::tools::bash::kill_group(pid, nix::sys::signal::Signal::SIGKILL);
                     child.wait().await
                 }
             }

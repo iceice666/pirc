@@ -80,12 +80,17 @@ command deduplication. Current creation and first-message admission are separate
 so the whole flow still needs failure/restart proof. The
 [Node allocation checkpoint](unified-conversations.md#u1-implementation-checkpoint-node-allocation-2026-10-26)
 is implemented locally; Gateway acceptance, attachments and client adoption remain.
+The [message-admission checkpoint](unified-conversations.md#g0-implementation-checkpoint-message-admission-2026-10-26)
+also fixes false success after a refused initial append, stops failed starts before
+inference, preserves uncertain outcomes and keeps Stop available during admission.
+It does not yet provide durable Gateway/client recovery.
 
 Then establish environment bindings, implement actual resource transitions, map
 canonical tasks/collaboration, and extend bounded proactive pots. The user deferred
 UI redesign and navigation reorganization; retain only necessary functional changes.
-Existing library and pots work is reused. Storage-refusal handling and relevant
-verification debt are entry gates; App authentication and Flutter Web stay deferred.
+Existing library and pots work is reused. Storage-refusal acknowledgement is fixed
+locally; durable recovery and remaining verification debt stay open. App
+authentication and Flutter Web stay deferred.
 See the linked sequence for patch boundaries, failure cases and acceptance. This
 implementation goal stays local and does not authorize deployment or a release.
 Run only focused simple Flutter checks when changing Flutter, as requested.
