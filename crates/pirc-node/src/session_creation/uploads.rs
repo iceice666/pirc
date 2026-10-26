@@ -519,4 +519,4 @@ pub(crate) fn remove_session_files(node: &Node, session: &str) -> ApiResult<()> 
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

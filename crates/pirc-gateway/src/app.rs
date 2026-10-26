@@ -379,6 +379,10 @@ pub fn router(app: AppState) -> Router {
         .route("/api/sessions/{id}/read", post(routes::read_session))
         .route("/api/sessions/{id}/snapshot", get(routes::snapshot))
         .route("/api/sessions/{id}/commands", post(routes::command))
+        .route(
+            "/api/sessions/{id}/commands/{command_id}",
+            get(routes::command_receipt),
+        )
         .route("/api/sessions/{id}/control", get(routes::control))
         .route("/api/sessions/{id}/control/acquire", post(routes::acquire))
         .route(
@@ -468,6 +472,7 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
     ),
     ("GET", "/api/sessions/{id}/checkpoints/{capture}/file"),
     ("POST", "/api/sessions/{id}/commands"),
+    ("GET", "/api/sessions/{id}/commands/{command_id}"),
     ("GET", "/api/sessions/{id}/control"),
     ("POST", "/api/sessions/{id}/control/acquire"),
     ("POST", "/api/sessions/{id}/control/heartbeat"),

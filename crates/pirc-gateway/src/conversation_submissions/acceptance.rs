@@ -21,16 +21,20 @@ pub(super) fn summary(
     Ok(db.query_row("SELECT phase,accepted_at,last_error_code FROM conversation_submission_acceptances WHERE owner_user=?1 AND operation_id=?2", params![owner,op], |r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?)
 }
 #[derive(Clone)]
-struct Target {
-    node: String,
-    workspace: String,
-    creation: String,
-    hash: String,
+pub(super) struct Target {
+    pub(super) node: String,
+    pub(super) workspace: String,
+    pub(super) creation: String,
+    pub(super) hash: String,
 }
-fn target(db: &Connection, owner: &str, op: &str) -> ApiResult<Target> {
+pub(super) fn target(db: &Connection, owner: &str, op: &str) -> ApiResult<Target> {
     db.query_row("SELECT node_id,local_workspace_id,node_operation_id,submission_hash FROM conversation_submissions WHERE owner_user=?1 AND operation_id=?2",params![owner,op],|r|Ok(Target{node:r.get(0)?,workspace:r.get(1)?,creation:r.get(2)?,hash:r.get(3)?})).optional()?.ok_or_else(||ApiError::not_found("Submission not found"))
 }
-fn require_caller(app: &AppState, db: &Connection, identity: &Identity) -> ApiResult<()> {
+pub(super) fn require_caller(
+    app: &AppState,
+    db: &Connection,
+    identity: &Identity,
+) -> ApiResult<()> {
     if let Some(device) = &identity.device_id {
         let stamp = now_ms();
         let idle = i64::try_from(app.config.device_token_idle_ms).unwrap_or(i64::MAX);
@@ -45,7 +49,7 @@ fn require_caller(app: &AppState, db: &Connection, identity: &Identity) -> ApiRe
     }
     Ok(())
 }
-fn pending_error() -> ApiError {
+pub(super) fn pending_error() -> ApiError {
     ApiError::new(
         409,
         "submission_unavailable",
@@ -59,7 +63,7 @@ fn bad_node() -> ApiError {
         "Node did not confirm the expected conversation or attachment",
     )
 }
-fn require_current(
+pub(super) fn require_current(
     app: &AppState,
     db: &Connection,
     owner: &str,
@@ -258,6 +262,8 @@ async fn supported(
         || caps["canAllocate"] != true
         || caps["canTransferAttachments"] != true
         || caps["attachmentMimeInQuery"] != true
+        || caps["canAdmitFirstMessage"] != true
+        || caps["canReadFirstMessageReceipt"] != true
         || caps["maxAttachments"]
             .as_u64()
             .is_none_or(|n| n < spec.attachments.len() as u64)
@@ -328,7 +334,11 @@ fn commit_acceptance(
     tx.commit()?;
     Ok(row)
 }
-async fn accept_intent(app: &AppState, identity: &Identity, op: &str) -> ApiResult<Preparation> {
+pub(super) async fn accept_intent(
+    app: &AppState,
+    identity: &Identity,
+    op: &str,
+) -> ApiResult<Preparation> {
     let (row, target) = {
         let db = app.db.lock();
         let row = lookup(&db, &identity.user, op)?;
@@ -416,7 +426,11 @@ fn publish_mapping(app: &AppState, identity: &Identity, op: &str, remote: &str) 
     tx.commit()?;
     Ok(())
 }
-async fn advance(app: &AppState, identity: &Identity, op: &str) -> ApiResult<Preparation> {
+pub(super) async fn advance(
+    app: &AppState,
+    identity: &Identity,
+    op: &str,
+) -> ApiResult<Preparation> {
     let (row, target) = {
         let db = app.db.lock();
         let row = lookup(&db, &identity.user, op)?;
@@ -427,7 +441,7 @@ async fn advance(app: &AppState, identity: &Identity, op: &str) -> ApiResult<Pre
                 "Accept the validated intent first",
             ));
         }
-        if matches!(row.state, Phase::Cancelled | Phase::Ready) {
+        if row.state != Phase::Accepted {
             return Ok(row);
         }
         require_caller(app, &db, identity)?;
@@ -466,7 +480,7 @@ async fn advance(app: &AppState, identity: &Identity, op: &str) -> ApiResult<Pre
         let bytes = tokio::task::spawn_blocking(move || {
             let db = app_for_read.db.lock();
             let row = lookup(&db, &owner, &op)?;
-            if !row.accepted || row.state == Phase::Cancelled {
+            if !row.accepted || !matches!(row.state, Phase::Accepted | Phase::Ready) {
                 return Err(pending_error());
             }
             db.require_session_available(&row.session_id)?;
@@ -565,9 +579,9 @@ async fn materialize(
     Ok(axum::Json(json!({"preparation":row})))
 }
 /// Generic commands cannot overtake the accepted first-message operation. Stop
-/// remains available. The admission stage will release this fence after proof.
+/// remains available. Known admission or confirmed Stop releases this fence.
 pub(crate) fn require_initial_submission_complete(db: &Connection, session: &str) -> ApiResult<()> {
-    let pending:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM conversation_submissions s JOIN conversation_submission_acceptances a USING(owner_user,operation_id) WHERE s.session_id=?1 AND a.phase IN ('accepted','ready'))",[session],|r|r.get(0))?;
+    let pending:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM conversation_submissions s JOIN conversation_submission_acceptances a USING(owner_user,operation_id) LEFT JOIN conversation_submission_dispatches d USING(owner_user,operation_id) WHERE s.session_id=?1 AND a.phase IN ('accepted','ready') AND d.admitted_at IS NULL AND COALESCE(d.stop_confirmed,0)=0)",[session],|r|r.get(0))?;
     if pending {
         Err(ApiError::new(
             409,
@@ -579,4 +593,4 @@ pub(crate) fn require_initial_submission_complete(db: &Connection, session: &str
     }
 }
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

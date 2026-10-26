@@ -207,7 +207,7 @@ fn conflicting_manifest_and_other_owner_do_not_retarget_the_original() {
     assert_eq!(count(&conn, "uploads"), 0);
 }
 
-async fn node() -> (tempfile::TempDir, Node, String) {
+pub(crate) async fn node() -> (tempfile::TempDir, Node, String) {
     let (dir, node) = crate::app::tests::workspace_test_node().await;
     let work = dir.path().canonicalize().unwrap().join("repository");
     fs::create_dir(&work).unwrap();

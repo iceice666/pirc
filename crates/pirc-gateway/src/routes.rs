@@ -1220,12 +1220,18 @@ pub async fn command(
         let conn = app.db.lock();
         conn.validate_lease(session_id, &input.client_id, input.generation as i64)?;
         conn.validate_lease_user(session_id, &identity.user)?;
-        conn.receive_command(
-            &input.command_id,
-            session_id,
-            &payload_hash(&payload),
-            &payload,
-        )?
+        atomic(&conn, |tx| {
+            let received = tx.receive_command(
+                &input.command_id,
+                session_id,
+                &payload_hash(&payload),
+                &payload,
+            )?;
+            if !received.1 && payload["type"] == "stop" {
+                crate::conversation_submissions::note_stop(tx, session_id, &identity.user)?;
+            }
+            Ok(received)
+        })?
     };
     if duplicate {
         return Ok(ok(json!({ "command": command, "duplicate": true })));
@@ -1273,6 +1279,11 @@ pub async fn command(
             ));
         }
         Ok(remote) => {
+            if payload["type"] == "stop"
+                && let Some(body) = &remote.body
+            {
+                crate::conversation_submissions::observe_stop(&app, &identity, session_id, body)?;
+            }
             let remote_command = remote
                 .body
                 .as_ref()
@@ -1317,6 +1328,94 @@ pub async fn command(
         code,
         &json!({ "command": command, "duplicate": false }),
     ))
+}
+
+pub async fn command_receipt(
+    State(app): State<AppState>,
+    Extension(identity): Extension<Identity>,
+    Path((session, id)): Path<(String, String)>,
+) -> Handled {
+    let (session, command) = {
+        let db = app.db.lock();
+        let session = db.get_session(&session)?;
+        if session.owner_user.as_deref() != Some(identity.user.as_str()) {
+            return Err(ApiError::not_found("Command not found").into());
+        }
+        if db.session_deletion(&session.id)?.is_some() {
+            return Err(ApiError::not_found("Command not found").into());
+        }
+        let command = db.get_command(&id)?;
+        if command.session_id != session.id {
+            return Err(ApiError::not_found("Command not found").into());
+        }
+        (session, command)
+    };
+    refresh_command_receipt(&app, &identity, &session, &command).await?;
+    let db = app.db.lock();
+    if db.session_deletion(&session.id)?.is_some() {
+        return Err(ApiError::not_found("Command not found").into());
+    }
+    let command = db.get_command(&id)?;
+    Ok(ok(json!({"command":command})))
+}
+
+/// Read-only reconciliation: no runner start, command replay or lease mutation.
+async fn refresh_command_receipt(
+    app: &AppState,
+    identity: &Identity,
+    session: &crate::db::Session,
+    command: &crate::db::Command,
+) -> Result<(), ApiError> {
+    if !matches!(
+        command.status.as_str(),
+        "received" | "dispatched" | "outcome_unknown"
+    ) {
+        return Ok(());
+    }
+    let (Some(node), Some(remote)) = (&session.node_id, &session.pi_session_id) else {
+        return Ok(());
+    };
+    let Ok(response) = app
+        .relay(
+            node,
+            identity,
+            HttpMethod::Get,
+            format!("/api/sessions/{remote}/commands/{}", command.id),
+            None,
+        )
+        .await
+    else {
+        return Ok(());
+    };
+    if response.status >= 400 {
+        return Ok(());
+    }
+    let Some(receipt) = response.body.as_ref().and_then(|v| v.get("command")) else {
+        return Ok(());
+    };
+    if receipt["id"] != command.id
+        || receipt["sessionId"] != *remote
+        || receipt["payloadHash"] != command.payload_hash
+    {
+        return Ok(());
+    }
+    let Some(status @ ("received" | "dispatched" | "accepted" | "rejected" | "outcome_unknown")) =
+        receipt["status"].as_str()
+    else {
+        return Ok(());
+    };
+    let db = app.db.lock();
+    if db.session_deletion(&session.id)?.is_none()
+        && db.get_command(&command.id)?.status != "accepted"
+    {
+        db.update_command(
+            &command.id,
+            status,
+            receipt.get("result"),
+            receipt["error"].as_str(),
+        )?;
+    }
+    Ok(())
 }
 
 pub async fn control(

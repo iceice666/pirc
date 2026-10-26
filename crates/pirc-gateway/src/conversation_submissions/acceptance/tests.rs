@@ -6,17 +6,17 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-fn identity() -> Identity {
+pub(crate) fn identity() -> Identity {
     Identity {
         user: "alice".into(),
         device_id: None,
         management_authorized: false,
     }
 }
-fn model(app: &AppState) {
+pub(crate) fn model(app: &AppState) {
     app.backends.set_baseline(serde_json::from_value(json!({"providers":{"fake":{"api":"openai-completions","baseUrl":"https://model.invalid","models":[{"id":"m","contextWindow":10000,"maxTokens":1000,"reasoning":true,"input":["text"]}]}},"defaultModel":{"provider":"fake","id":"m","thinking":"high"}})).unwrap());
 }
-fn connected() -> ConnectedNode {
+pub(crate) fn connected() -> ConnectedNode {
     ConnectedNode {
         id: "node".into(),
         role: pirc_protocol::NodeRole::Node,
@@ -34,10 +34,10 @@ fn connected() -> ConnectedNode {
         added: Default::default(),
     }
 }
-fn caps() -> Value {
-    json!({"version":1,"canAllocate":true,"canTransferAttachments":true,"attachmentMimeInQuery":true,"maxUploadBytes":1024,"maxAttachments":16})
+pub(crate) fn caps() -> Value {
+    json!({"version":1,"canAllocate":true,"canTransferAttachments":true,"attachmentMimeInQuery":true,"canAdmitFirstMessage":true,"canReadFirstMessageReceipt":true,"maxUploadBytes":1024,"maxAttachments":16})
 }
-fn fake(request: &NodeHttpRequest) -> NodeHttpResponse {
+pub(crate) fn fake(request: &NodeHttpRequest) -> NodeHttpResponse {
     let value = if request.url.ends_with("/capabilities") {
         caps()
     } else if request.url == "/api/session-creations" {
@@ -71,7 +71,7 @@ fn fake(request: &NodeHttpRequest) -> NodeHttpResponse {
         body: Some(value),
     }
 }
-fn register(app: &AppState) -> Arc<Mutex<Vec<NodeHttpRequest>>> {
+pub(crate) fn register(app: &AppState) -> Arc<Mutex<Vec<NodeHttpRequest>>> {
     let requests = Arc::new(Mutex::new(Vec::new()));
     let recorded = requests.clone();
     app.nodes.set_test_node(connected(), move |r| {
@@ -80,7 +80,7 @@ fn register(app: &AppState) -> Arc<Mutex<Vec<NodeHttpRequest>>> {
     });
     requests
 }
-fn prepared(app: &AppState, attachment: bool) -> Input {
+pub(crate) fn prepared(app: &AppState, attachment: bool) -> Input {
     let mut input = input();
     if attachment {
         input.submission.attachments[0].name = "測試 #?%.json".into();

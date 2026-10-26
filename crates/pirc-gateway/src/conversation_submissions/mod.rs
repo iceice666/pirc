@@ -1,10 +1,12 @@
 //! Owner-scoped first-send preparation and durable intent acceptance. Acceptance
 //! publishes one pending session; Node journal admission/execution remain distinct.
-//! Client activation stays gated until control/command recovery is integrated.
+//! Client activation stays gated until cancellation and client recovery are integrated.
 mod acceptance;
 mod attachments;
+mod dispatch;
 pub(crate) use acceptance::require_initial_submission_complete;
 pub(crate) use attachments::start_cleanup;
+pub(crate) use dispatch::{note_stop, observe_stop};
 
 use axum::{
     Extension, Router,
@@ -128,6 +130,12 @@ enum Phase {
     Preparing,
     Accepted,
     Ready,
+    Sending,
+    Admitted,
+    AdmissionFailed,
+    OutcomeUnknown,
+    Stopping,
+    Stopped,
     Cancelled,
 }
 
@@ -144,6 +152,8 @@ struct Preparation {
     accepted_at: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     delivery_error: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message_admission: Option<dispatch::MessageAdmission>,
     staged_attachment_ids: Vec<String>,
     attachments_expires_at: Option<i64>,
     attachments_expired_at: Option<i64>,
@@ -163,7 +173,7 @@ fn lookup(db: &Connection, owner: &str, operation: &str) -> ApiResult<Preparatio
             let state=match state.as_str() { "preparing"=>Phase::Preparing,"cancelled"=>Phase::Cancelled,_=>return Err(rusqlite::Error::InvalidQuery) };
             let raw:Option<String>=r.get(4)?;
             let submission=raw.map(|raw|serde_json::from_str(&raw)).transpose().map_err(|_|rusqlite::Error::InvalidQuery)?;
-            Ok(Preparation { operation_id:r.get(0)?,session_id:r.get(1)?,workspace_id:r.get(2)?,state,accepted:false,accepted_at:None,delivery_error:None,submission,hash:r.get(5)?,staged_attachment_ids:vec![],attachments_expires_at:r.get(6)?,attachments_expired_at:r.get(7)?,cleanup_pending:false })
+            Ok(Preparation { operation_id:r.get(0)?,session_id:r.get(1)?,workspace_id:r.get(2)?,state,accepted:false,accepted_at:None,delivery_error:None,message_admission:None,submission,hash:r.get(5)?,staged_attachment_ids:vec![],attachments_expires_at:r.get(6)?,attachments_expired_at:r.get(7)?,cleanup_pending:false })
         }
     ).optional()?.ok_or_else(||ApiError::not_found("Submission not found"))?;
     if let Some((phase, stamp, error)) = acceptance::summary(db, owner, operation)? {
@@ -177,6 +187,7 @@ fn lookup(db: &Connection, owner: &str, operation: &str) -> ApiResult<Preparatio
             _ => return Err(ApiError::internal()),
         };
     }
+    dispatch::decorate(db, owner, operation, &mut row)?;
     let expired = row.state == Phase::Preparing
         && row
             .attachments_expires_at
@@ -254,6 +265,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .merge(attachments::routes())
         .merge(acceptance::routes())
+        .merge(dispatch::routes())
         .route(
             "/api/conversation-submissions/capabilities",
             get(capabilities),
@@ -265,10 +277,10 @@ pub fn router() -> Router<AppState> {
         )
 }
 async fn capabilities() -> axum::Json<Value> {
-    // Existing clients stay on their current flow until the acceptance,
-    // attachment and admission paths are implemented together.
+    // Existing clients stay on their current flow until uncertain-allocation
+    // cancellation and durable client recovery are integrated.
     axum::Json(
-        json!({"version":1,"canPrepare":true,"canStageAttachments":true,"canAcceptIntent":true,"canMaterialize":true,"attachmentRetentionDays":7,"canSubmit":false}),
+        json!({"version":1,"canPrepare":true,"canStageAttachments":true,"canAcceptIntent":true,"canMaterialize":true,"canDispatchFirstMessage":true,"attachmentRetentionDays":7,"canSubmit":false}),
     )
 }
 async fn prepare(

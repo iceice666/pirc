@@ -1,8 +1,10 @@
 //! Durable Node-side allocation for the first-message workflow. Reservation is
 //! committed before filesystem work; session publication and readiness commit
-//! together. This prepares a session, never admits a message or starts an agent.
-//! The Gateway must separately persist and reconcile the first-message intent.
+//! together. Allocation prepares storage without starting an agent; `admission`
+//! handles the explicit, separately fenced first-message command. The Gateway
+//! persists and reconciles the intent and its outcome.
 
+pub(crate) mod admission;
 pub(crate) mod uploads;
 
 use std::fs::DirBuilder;
@@ -238,7 +240,7 @@ pub(crate) async fn prepare(node: Node, request: Request) -> ApiResult<Response>
 
 pub(crate) async fn capabilities(node: Node, _request: Request) -> ApiResult<Response> {
     Ok(Response::json(
-        json!({"version":1,"canAllocate":true,"canTransferAttachments":true,"attachmentMimeInQuery":true,"maxUploadBytes":node.config.upload_max_bytes,"maxAttachments":16}),
+        json!({"version":1,"canAllocate":true,"canTransferAttachments":true,"attachmentMimeInQuery":true,"canAdmitFirstMessage":true,"canReadFirstMessageReceipt":true,"canReadCommandReceipts":true,"maxUploadBytes":node.config.upload_max_bytes,"maxAttachments":16}),
     ))
 }
 

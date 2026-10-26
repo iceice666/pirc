@@ -1,5 +1,35 @@
 # Upgrades
 
+## Unreleased local checkpoint: first-message admission and Stop
+
+Gateway schema **1015** and Node schema **2006** add durable first-command
+bindings, outcome reconciliation and a Stop fence. Back up both state directories
+before upgrading; older executables refuse these schemas. Do not downgrade by
+changing `user_version`. Protocol 15 is unchanged, but the new first-send flow
+requires Node's `canAdmitFirstMessage` and `canReadFirstMessageReceipt` capabilities
+as well as the earlier attachment capabilities. Upgrade compatible Nodes first.
+No dependencies, lockfile or Nix cargo hash changed in this checkpoint.
+
+The internal dispatch route commits one command identity before sending fixed
+model/thinking/text/files. Duplicate requests reconcile its receipt; outcome
+queries do not start runners, acquire/renew control or replay a prompt. Lost
+acknowledgements/restarts before confirmation remain uncertain. Stop records a
+fence against delayed original sends, including before runner startup; it does
+not undo completed effects. Only known admission or confirmed Stop releases the
+pending-input gate for an explicitly new command. Ordinary command receipts also
+have an owner-scoped read endpoint; deletion hides their contents.
+
+After known admission, Gateway cleans staging sources while Node retains
+session-bound attachments. The seven-day deadline still applies only to
+**unaccepted** staging. Accepted pending input is not silently expired. Existing
+session IDs, allocation/upload identities, memory provenance and checkpoint
+recovery isolation are preserved. New initial `received` commands become unknown
+at Node startup; legacy `received` behavior is unchanged.
+
+This is a local implementation checkpoint. **`canSubmit: false` remains** until
+uncertain-allocation cancellation and Web/Android recovery are wired and verified.
+It is not a deployment instruction or completed end-to-end client guarantee.
+
 ## Unreleased local checkpoint: accepted first-message intents
 
 Gateway schema **1014** adds durable acceptance and Node materialization records.

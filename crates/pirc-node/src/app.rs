@@ -94,6 +94,18 @@ pub fn routes(config: &NodeConfig) -> Vec<Route> {
         get("/api/sessions/:id/snapshot", snapshot),
         post("/api/sessions/:id/deliver", deliver),
         post("/api/workspace-memory/recall", recall_workspace_memory),
+        post(
+            "/api/session-creations/:id/admission",
+            crate::session_creation::admission::submit,
+        ),
+        get(
+            "/api/session-creations/:id/admission",
+            crate::session_creation::admission::status,
+        ),
+        get(
+            "/api/sessions/:id/commands/:commandId",
+            crate::session_creation::admission::command_status,
+        ),
         post("/api/sessions/:id/commands", command),
         get("/api/sessions/:id/control", control),
         post("/api/sessions/:id/control/acquire", acquire),
@@ -1356,16 +1368,38 @@ async fn command(node: Node, request: Request) -> ApiResult<Response> {
     // Stopping is the only action allowed after a mode is removed.
     if !matches!(payload, CommandPayload::Stop) {
         crate::pots::require_generic_input(&node.db.lock(), &session.id)?;
+        crate::session_creation::admission::require_generic(&node.db.lock(), &session.id)?;
         node.session_mode(&session.id)?;
     }
     let stored = serde_json::to_value(&payload).unwrap_or_default();
-    let (row, duplicate) = {
-        let db = node.db.lock();
-        db.validate_lease(&session.id, &client_id, generation)?;
-        db.receive_command(&command_id, &session.id, &payload_hash(&stored), &stored)?
+    let (row, duplicate, initial_stop) = {
+        let mut db = node.db.lock();
+        let tx = db.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        tx.validate_lease(&session.id, &client_id, generation)?;
+        let (row, duplicate) =
+            tx.receive_command(&command_id, &session.id, &payload_hash(&stored), &stored)?;
+        let initial_stop = !duplicate
+            && matches!(payload, CommandPayload::Stop)
+            && crate::session_creation::admission::request_stop(&tx, &session.id, &request.user)?;
+        tx.commit()?;
+        (row, duplicate, initial_stop)
     };
     if duplicate {
         return Ok(Response::json(json!({ "command": row, "duplicate": true })));
+    }
+    if initial_stop && node.runners.get(&session.id).is_none_or(|r| !r.alive()) {
+        let db = node.db.lock();
+        db.update_command(
+            &command_id,
+            crate::store::CommandStatus::Accepted,
+            Some(&json!({"success":true,"data":{"cleared":0}})),
+            None,
+        )?;
+        crate::session_creation::admission::confirm_stop(&db, &session.id)?;
+        return Ok(Response::status(
+            202,
+            json!({"command":db.get_command(&command_id)?,"duplicate":false,"initialAdmission":crate::session_creation::admission::stop_receipt(&db,&session.id,&request.user)?}),
+        ));
     }
     node.runners
         .dispatch(
@@ -1377,15 +1411,23 @@ async fn command(node: Node, request: Request) -> ApiResult<Response> {
         )
         .await?;
     let command = node.db.lock().get_command(&command_id)?;
+    if initial_stop && command.status == crate::store::CommandStatus::Accepted {
+        crate::session_creation::admission::confirm_stop(&node.db.lock(), &session.id)?;
+    }
     let status = if command.status == crate::store::CommandStatus::Accepted {
         202
     } else {
         503
     };
-    Ok(Response::status(
-        status,
-        json!({ "command": command, "duplicate": false }),
-    ))
+    let mut body = json!({ "command": command, "duplicate": false });
+    if initial_stop {
+        body["initialAdmission"] = crate::session_creation::admission::stop_receipt(
+            &node.db.lock(),
+            &session.id,
+            &request.user,
+        )?;
+    }
+    Ok(Response::status(status, body))
 }
 
 async fn control(node: Node, request: Request) -> ApiResult<Response> {

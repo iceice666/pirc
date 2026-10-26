@@ -1167,6 +1167,92 @@ and reconnect recovery; the complete multi-client failure table. Do not enable
 `canSubmit` or claim the first message executed from an acceptance/ready receipt.
 No frontend redesign, remote push, deployment or Release is included.
 
+## U1 implementation checkpoint: first-message dispatch and Stop fence (2026-10-27)
+
+Local only. Gateway schema **1015** and Node schema **2006** add the first-message
+command ledger and durable Stop fence; protocol 15 is unchanged. This connects
+accepted intent/materialized attachments to Agent admission. **`canSubmit: false`
+remains in place** until uncertain-allocation cancellation and client recovery
+are complete. Existing Web/Android creation is not switched by these capabilities.
+
+- `POST /api/conversation-submissions/{id}/dispatch` takes a held
+  `{clientId, generation}`. Before the first attempt, a SQLite write transaction
+  checks current owner/device/workspace/mode/model availability, the original Node
+  mapping and control lease, then records the single reserved command ID. The
+  Node receives the frozen model/thinking/text/upload IDs together. Duplicates
+  reconcile receipts; they neither obtain control nor blindly resend a prompt.
+- The Node's `POST /api/session-creations/{id}/admission` commits an immutable
+  command/input-hash binding before runner work. Under the existing session
+  command gate, it sets model and thinking, then enqueues the first prompt. The
+  full hash covers settings and submission identity as well as the prompt. A
+  conflicting retry cannot substitute content/model/files or another command.
+- `GET /api/conversation-submissions/{id}/receipt` may reconcile Node's
+  `GET /api/session-creations/{id}/admission`. Ordinary commands also gain
+  `GET /api/sessions/{id}/commands/{commandId}` on both hosts. These paths do not
+  claim unowned legacy sessions, start a runner, replay commands, renew a lease
+  or need a management grant/browser connection. They verify owner, session,
+  command and hashes before recording evidence. Deletion hides command contents;
+  deletion tombstones cannot prove a previously hidden command was never admitted.
+- `sending`, `admitted`, `admission_failed`, `outcome_unknown`, `stopping` and
+  `stopped` extend the earlier preparation states. `messageAdmission` separately
+  reports `outcome`, `stopRequested` and `stopConfirmed`. Known admission and its
+  complete result survive stale pending/error responses. A lost acknowledgement
+  or restart before receipt commit stays uncertain rather than becoming success
+  or a retryable failure. `admitted` proves Agent acceptance, not task completion.
+- For a materialized conversation, Stop records a persistent fence in the same
+  transaction as its command receipt.
+  Node enqueue shares the DB lock with that fence: Stop either prevents the
+  original prompt enqueue or aborts behind the already-enqueued prompt. It cannot
+  miss a delayed original send. With no live runner, the fence itself can confirm
+  Stop without starting one. Known admission or confirmed Stop releases the
+  ordinary-input gate; an explicitly new user message may proceed, while the
+  original first-message identity remains permanently fenced. Stop does not undo
+  effects that completed earlier, and confirmed Stop can coexist with an unknown
+  original admission outcome.
+- After confirmed admission, Gateway queues staging-source cleanup and removes
+  its transfer receipts; session-bound Node attachments remain available. The
+  user-selected **seven-day expiry applies only to unaccepted staging**. Accepted
+  pending input/files have no silent age expiry. Session/project deletion retains
+  existing source-aware memory deletion and isolated checkpoint recovery rules.
+- New initial commands left `received`/`dispatched` at Node restart become
+  `outcome_unknown`; legacy `received` commands retain their existing behavior.
+  Migrations preserve old sessions, creation/acceptance IDs, command receipts,
+  control, memory and checkpoint data. Older binaries refuse the newer schemas.
+  No dependency, Cargo lockfile or Nix cargo hash changes are required.
+
+Validation: **275 Gateway unit/HTTP tests** and **416 Node library tests** passed
+(three existing Node tests remain ignored). This includes independent-connection
+first-dispatch races, foreign/stale leases, response loss, read-only reconciliation,
+wrong settings/command/session evidence, Stop-before-send, Stop during initial
+configuration, monotonic accepted results/Stop, deletion fences and migrations
+1014→1015 / 2005→2006. Existing memory concurrency/large-history, checkpoint and
+pots cases remain passing. Strict all-target Clippy passed for Gateway, Node,
+config and conformance.
+
+Real Gateway/Node/Agent checks use a paired token after setup, with no browser
+connection or management grant: an attachment and exact first message are admitted
+once, then both hosts crash/restart and repeated dispatch/receipt queries leave
+exactly one user message and one model request. Gateway staging cleans while the
+Node file remains intact. A second process case confirms Stop before dispatch,
+restarts, refusal of a delayed original send, and successful explicit new input.
+The earlier accepted/materialized attachment restart/deletion process proof also
+passes. Legacy `node_session_commands` and `node_panels_uploads` process transcripts
+pass unchanged with the updated binaries. These are local storage/HTTP/process checks, not Android-device, Flutter
+UI, Chromium, Linux sandbox, Nix build or remote-CI verification. Run-owned
+build/log artifacts are removed after this checkpoint's local commit; APKs,
+other agents' work and user data are preserved.
+
+Remaining U1: cancellation/deletion before a Node allocation mapping is known,
+including cleanup of an uncertain allocation; Web/Android durable draft and
+accepted-pending presentation/reconnect recovery; the complete multi-client
+failure table. Dispatch is deliberately attempted once: even Node
+`not_submitted` after a lost request stays uncertain, since another request may
+still be in flight. It needs an explicit proven-safe recovery policy or Stop,
+not an automatic replay. Keep the client activation gate closed until these
+remaining pieces are implemented and verified. Later environment bindings,
+mount revocation, canonical collaboration and bounded pots stages remain open.
+No frontend redesign, push, deployment or Release is included.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

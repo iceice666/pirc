@@ -1,6 +1,6 @@
 //! Exercise command locking and persisted outcomes through the real manager.
 //! The fake process answers RPC lines; no sandbox or external provider runs.
-use super::super::CommandPayload;
+use super::super::{CommandPayload, InitialSettings};
 use super::*;
 use crate::store::{CommandStatus, Store};
 use crate::workspace_memory::tests::Fixture;
@@ -207,6 +207,115 @@ async fn dropping_an_admission_answer_is_unknown_even_with_a_live_runner() {
     assert_eq!(
         f.node.db.lock().get_command("first-send").unwrap().status,
         CommandStatus::OutcomeUnknown
+    );
+    runner.exit(Some(0), None);
+    f.node.close().await;
+}
+
+fn initial(f: &Fixture) -> (CommandPayload, InitialSettings, i64) {
+    let payload = CommandPayload::Prompt {
+        message: "immutable first text".into(),
+        upload_ids: Some(vec![]),
+    };
+    receive(f, "initial-send", &payload);
+    let db = f.node.db.lock();
+    db.execute("INSERT INTO session_creations(owner_user,operation_id,workspace_id,submission_hash,session_id,state,created_at) VALUES('alice','creation-1','repo',?1,?2,'ready',1)",rusqlite::params!["a".repeat(64),f.current]).unwrap();
+    db.execute("INSERT INTO creation_initial_admissions(owner_user,operation_id,session_id,command_id,input_hash,created_at,updated_at) VALUES('alice','creation-1',?1,'initial-send','hash',1,1)",[&f.current]).unwrap();
+    let lease = db
+        .acquire_lease(&f.current, "phone", false, 60_000)
+        .unwrap();
+    (
+        payload,
+        InitialSettings {
+            provider: "fake".into(),
+            model_id: "frozen-model".into(),
+            thinking: pirc_protocol::ThinkingLevel::Low,
+        },
+        lease.generation,
+    )
+}
+#[tokio::test]
+async fn initial_settings_and_message_share_one_serialized_admission() {
+    let f = Fixture::new().await;
+    let (runner, mut lines) = register(&f);
+    let (payload, settings, generation) = initial(&f);
+    let node = f.node.clone();
+    let session = f.current.clone();
+    let send = tokio::spawn(async move {
+        node.runners
+            .dispatch_initial(
+                &session,
+                "initial-send",
+                &payload,
+                "alice",
+                ("phone", generation),
+                &settings,
+            )
+            .await
+    });
+    let model = next(&mut lines).await;
+    assert_eq!(model["type"], "set_model");
+    assert_eq!(model["modelId"], "frozen-model");
+    assert!(lines.try_recv().is_err());
+    answer(&runner, &model, json!({"success":true}));
+    let thinking = next(&mut lines).await;
+    assert_eq!(thinking["type"], "set_thinking_level");
+    assert_eq!(thinking["level"], "low");
+    answer(&runner, &thinking, json!({"success":true}));
+    let prompt = next(&mut lines).await;
+    assert_eq!(prompt["type"], "prompt");
+    assert_eq!(prompt["message"], "immutable first text");
+    answer(&runner, &prompt, json!({"success":true}));
+    send.await.unwrap().unwrap();
+    assert_eq!(
+        f.node.db.lock().get_command("initial-send").unwrap().status,
+        CommandStatus::Accepted
+    );
+    assert!(
+        crate::session_creation::admission::require_generic(&f.node.db.lock(), &f.current).is_ok()
+    );
+    assert!(lines.try_recv().is_err());
+    runner.exit(Some(0), None);
+    f.node.close().await;
+}
+#[tokio::test]
+async fn stop_during_initial_configuration_permanently_prevents_the_prompt_from_being_queued() {
+    let f = Fixture::new().await;
+    let (runner, mut lines) = register(&f);
+    let (payload, settings, generation) = initial(&f);
+    let node = f.node.clone();
+    let session = f.current.clone();
+    let send = tokio::spawn(async move {
+        node.runners
+            .dispatch_initial(
+                &session,
+                "initial-send",
+                &payload,
+                "alice",
+                ("phone", generation),
+                &settings,
+            )
+            .await
+    });
+    let model = next(&mut lines).await;
+    assert_eq!(model["type"], "set_model");
+    crate::session_creation::admission::request_stop(&f.node.db.lock(), &f.current, "alice")
+        .unwrap();
+    answer(&runner, &model, json!({"success":true}));
+    assert!(send.await.unwrap().is_err());
+    assert_eq!(
+        f.node.db.lock().get_command("initial-send").unwrap().status,
+        CommandStatus::Rejected
+    );
+    assert!(lines.try_recv().is_err());
+    assert!(
+        crate::session_creation::admission::require_sendable(
+            &f.node.db.lock(),
+            &f.current,
+            "initial-send",
+            "alice"
+        )
+        .is_err()
     );
     runner.exit(Some(0), None);
     f.node.close().await;

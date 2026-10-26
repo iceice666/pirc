@@ -79,7 +79,8 @@ queryable creation/admission identity, preserving local drafts and existing
 command deduplication. Current creation and first-message admission are separate,
 so the whole flow still needs failure/restart proof. The
 [Node allocation checkpoint](unified-conversations.md#u1-implementation-checkpoint-node-allocation-2026-10-26)
-is implemented locally; Gateway acceptance, attachments and client adoption remain.
+is implemented locally; later acceptance/attachment/admission slices are tracked
+below, while client adoption remains open.
 The [message-admission checkpoint](unified-conversations.md#g0-implementation-checkpoint-message-admission-2026-10-26)
 also fixes false success after a refused initial append, stops failed starts before
 inference, preserves uncertain outcomes and keeps Stop available during admission.
@@ -102,7 +103,14 @@ acceptance and reconciliation through the Node allocation/transfer identities.
 262 Gateway tests, 32 Node creation/transfer tests and the paired-token two-host
 restart/deletion proof passed. The JSON parser/transport mismatch found by the
 process test is fixed through raw octets plus negotiated manifest MIME. First
-command/lease recovery and Web/Android adoption remain open.
+command/lease recovery was the next slice, with Web/Android adoption still open.
+The [first-message dispatch checkpoint](unified-conversations.md#u1-implementation-checkpoint-first-message-dispatch-and-stop-fence-2026-10-27)
+adds Gateway 1015 / Node 2006, one immutable first command, held-lease admission,
+read-only receipt reconciliation and a durable Stop fence. Uncertain outcomes
+are never replayed automatically; accepted staging sources clean after admission.
+`canSubmit` stays false pending uncertain-allocation cancellation and client recovery.
+275 Gateway tests, 416 Node library tests (three existing ignores), strict Clippy
+and paired-token first-admission/restart/Stop process cases passed locally.
 The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
 records local fixture/transcript repairs and 50 Agent plus five Node process
 passes; the remote Check is still failed, and full Chromium/Linux verification

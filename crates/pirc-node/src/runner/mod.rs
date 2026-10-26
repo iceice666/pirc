@@ -95,6 +95,15 @@ use crate::store::{CommandStatus, RunStatus, RunnerState, Store, UploadKind};
 pub use process::Runner;
 pub use reducer::ReducedState;
 
+/// Frozen settings for the single first-message command; callers cannot retarget
+/// an existing admission identity by changing its current control lease.
+#[derive(Clone, Debug)]
+pub(crate) struct InitialSettings {
+    pub provider: String,
+    pub model_id: String,
+    pub thinking: pirc_protocol::ThinkingLevel,
+}
+
 /// What a client asks a session's agent to do (`CommandPayload` in
 /// `types.ts`, `commandPayload` in `node/app.ts`). Core's commands route
 /// parses and validates it (lengths, counts) and stores its JSON as the
@@ -423,6 +432,32 @@ impl RunnerManager {
         user: &str,
         lease: (&str, i64),
     ) -> ApiResult<Map<String, Value>> {
+        self.dispatch_configured(session_id, command_id, payload, user, lease, None)
+            .await
+    }
+
+    pub(crate) async fn dispatch_initial(
+        &self,
+        session_id: &str,
+        command_id: &str,
+        payload: &CommandPayload,
+        user: &str,
+        lease: (&str, i64),
+        settings: &InitialSettings,
+    ) -> ApiResult<Map<String, Value>> {
+        self.dispatch_configured(session_id, command_id, payload, user, lease, Some(settings))
+            .await
+    }
+
+    async fn dispatch_configured(
+        &self,
+        session_id: &str,
+        command_id: &str,
+        payload: &CommandPayload,
+        user: &str,
+        lease: (&str, i64),
+        initial: Option<&InitialSettings>,
+    ) -> ApiResult<Map<String, Value>> {
         let lock = self.command_lock(session_id);
         let _command = if matches!(payload, CommandPayload::Stop) {
             lock.stop_lock().await
@@ -436,6 +471,14 @@ impl RunnerManager {
         node.db
             .lock()
             .validate_lease(session_id, lease.0, lease.1)?;
+        if initial.is_some() {
+            crate::session_creation::admission::require_sendable(
+                &node.db.lock(),
+                session_id,
+                command_id,
+                user,
+            )?;
+        }
         let runner = if matches!(payload, CommandPayload::Stop) {
             self.get(session_id)
                 .filter(|runner| runner.alive())
@@ -472,11 +515,81 @@ impl RunnerManager {
         node.db
             .lock()
             .validate_lease(session_id, lease.0, lease.1)?;
+        if let Some(settings) = initial {
+            crate::session_creation::admission::require_sendable(
+                &node.db.lock(),
+                session_id,
+                command_id,
+                user,
+            )?;
+            node.db
+                .lock()
+                .update_command(command_id, CommandStatus::Dispatched, None, None)?;
+            let configured: ApiResult<()> = async {
+                let commands = [
+                    json!({"type":"set_model","provider":settings.provider,"modelId":settings.model_id}),
+                    json!({"type":"set_thinking_level","level":settings.thinking}),
+                ];
+                for rpc in commands {
+                    let answer = {
+                        let db = node.db.lock();
+                        crate::session_creation::admission::require_sendable(
+                            &db, session_id, command_id, user,
+                        )?;
+                        db.validate_lease(session_id, lease.0, lease.1)?;
+                        runner
+                            .send_request(rpc.as_object().expect("literal RPC object").clone())
+                            .map_err(|_| ApiError::runner_unavailable("Initial settings could not be queued"))?
+                    };
+                    let response = answer
+                        .await
+                        .map_err(|_| ApiError::runner_unavailable("Initial settings response was lost"))?
+                        .map_err(|_| ApiError::runner_unavailable("Initial settings failed"))?;
+                    if !truthy(response.get("success")) {
+                        return Err(ApiError::new(
+                            409,
+                            "initial_settings_rejected",
+                            "Initial model settings were refused; the message was not queued",
+                        ));
+                    }
+                }
+                node.session_mode(session_id)?;
+                Ok(())
+            }
+            .await;
+            if let Err(error) = configured {
+                node.db.lock().update_command(
+                    command_id,
+                    CommandStatus::Rejected,
+                    None,
+                    Some(&error.message),
+                )?;
+                return Err(error);
+            }
+        }
         let built = build_rpc(&node, &runner, session_id, payload, user);
         let (rpc, run_id) = match built {
             Ok(built) => built,
-            Err(Failure::Api(error)) => return Err(error),
+            Err(Failure::Api(error)) => {
+                if initial.is_some() {
+                    node.db.lock().update_command(
+                        command_id,
+                        CommandStatus::Rejected,
+                        None,
+                        Some(&error.message),
+                    )?;
+                }
+                return Err(error);
+            }
             Err(Failure::Other(message)) => {
+                if initial.is_some() {
+                    node.db.lock().update_command(
+                        command_id,
+                        CommandStatus::Rejected,
+                        None,
+                        Some(&message),
+                    )?;
+                }
                 crate::log::error(&format!("command dispatch failed: {message}"));
                 return Ok(Map::new());
             }
@@ -511,7 +624,17 @@ impl RunnerManager {
                 // Keep ordinary commands/deliveries serialized. Stop can
                 // overtake only once this RPC is actually queued, so it cannot
                 // miss a not-yet-sent prompt or allow a model change to retarget it.
-                let answer = runner.send_request(rpc)?;
+                let answer = if initial.is_some() {
+                    // Synchronous enqueue shares the Stop fence's SQLite lock.
+                    let db = node.db.lock();
+                    crate::session_creation::admission::require_sendable(
+                        &db, session_id, command_id, user,
+                    )?;
+                    db.validate_lease(session_id, lease.0, lease.1)?;
+                    runner.send_request(rpc)?
+                } else {
+                    runner.send_request(rpc)?
+                };
                 admission_wait = Some(lock.admission());
                 Ok(answer
                     .await
@@ -688,6 +811,7 @@ impl RunnerManager {
     /// The message runs next, after any run in progress.
     pub async fn deliver(&self, session_id: &str, delivery: &Delivery) -> ApiResult<()> {
         let node = self.node()?;
+        crate::session_creation::admission::require_generic(&node.db.lock(), session_id)?;
         if delivery.custom_type == "pots-dispatch" {
             return Err(ApiError::invalid_input());
         }
