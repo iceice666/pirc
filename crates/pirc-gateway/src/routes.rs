@@ -1211,6 +1211,10 @@ pub async fn command(
     let payload = Value::Object(command_payload(input.payload)?);
     if payload["type"] != "stop" {
         app.require_writable(&claimed.session)?;
+        crate::conversation_submissions::require_initial_submission_complete(
+            &app.db.lock(),
+            session_id,
+        )?;
     }
     let (command, duplicate) = {
         let conn = app.db.lock();

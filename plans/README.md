@@ -85,23 +85,31 @@ also fixes false success after a refused initial append, stops failed starts bef
 inference, preserves uncertain outcomes and keeps Stop available during admission.
 It does not yet provide durable Gateway/client recovery.
 The [Gateway preparation checkpoint](unified-conversations.md#u1-implementation-checkpoint-gateway-preparation-2026-10-26)
-is now local: owner-scoped immutable intents, stable identity reservation,
-restart lookup and transactional cancellation/deletion fences. Its capability
-still says `canSubmit: false`; attachments, acceptance and client recovery remain.
+introduced owner-scoped immutable intents, stable identity reservation,
+restart lookup and transactional cancellation/deletion fences. Preparation alone
+neither accepted a message nor created a public conversation.
 The [attachment staging checkpoint](unified-conversations.md#u1-implementation-checkpoint-durable-attachment-staging-2026-10-27)
 adds verified private files, durable cleanup and the user-selected seven-day
-unaccepted staging policy. The current local Gateway schema is 1013. The
+unaccepted staging policy introduced with Gateway schema 1013. The
 [Node attachment-transfer checkpoint](unified-conversations.md#u1-implementation-checkpoint-node-attachment-transfer-2026-10-27)
 adds schema 2005 with stable upload identities, crash reconciliation and deletion
-fences, verified through a real Node restart. Gateway acceptance/promotion,
-command reconciliation and Web/Android adoption still remain gated.
+fences, verified through a real Node restart. These file checkpoints alone do
+not constitute message acceptance or execution.
+The [Gateway intent-acceptance checkpoint](unified-conversations.md#u1-implementation-checkpoint-accepted-intent-and-node-materialization-2026-10-27)
+adds schema 1014: atomic pending-session publication, validated attachment
+acceptance and reconciliation through the Node allocation/transfer identities.
+`ready` means files prepared, not Agent admission; `canSubmit` remains false.
+262 Gateway tests, 32 Node creation/transfer tests and the paired-token two-host
+restart/deletion proof passed. The JSON parser/transport mismatch found by the
+process test is fixed through raw octets plus negotiated manifest MIME. First
+command/lease recovery and Web/Android adoption remain open.
 The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
 records local fixture/transcript repairs and 50 Agent plus five Node process
 passes; the remote Check is still failed, and full Chromium/Linux verification
 has not been rerun.
 The user explicitly requested a one-off push through `a926ea38` for the completed
-checkpoints, license packaging and protocol snapshot repair. Subsequent Gateway
-preparation remains local under the active goal's default publication boundary.
+checkpoints, license packaging and protocol snapshot repair. Subsequent implementation
+checkpoints remain local under the active goal's default publication boundary.
 
 Then establish environment bindings, implement actual resource transitions, map
 canonical tasks/collaboration, and extend bounded proactive pots. The user deferred

@@ -67,7 +67,7 @@ fn private_directory(path: &FsPath, create: bool) -> ApiResult<bool> {
     }
     Ok(true)
 }
-fn directory(app: &AppState, session: &str, create: bool) -> ApiResult<Option<PathBuf>> {
+pub(super) fn directory(app: &AppState, session: &str, create: bool) -> ApiResult<Option<PathBuf>> {
     // The server-reserved public ID is the only directory key, never a user filename.
     if !valid_id(session) {
         return Err(unavailable());
@@ -79,8 +79,9 @@ fn directory(app: &AppState, session: &str, create: bool) -> ApiResult<Option<Pa
     let dir = base.join(session);
     Ok(private_directory(&dir, create)?.then_some(dir))
 }
-fn read_verified(path: &FsPath, attachment: &Attachment) -> ApiResult<Vec<u8>> {
-    let metadata = fs::symlink_metadata(path).map_err(|_| unavailable())?;
+pub(super) fn read_verified(path: &FsPath, attachment: &Attachment) -> ApiResult<Vec<u8>> {
+    let file = pirc_config::private_files::open_private_regular(path).map_err(|_| unavailable())?;
+    let metadata = file.metadata().map_err(|_| unavailable())?;
     if !metadata.is_file()
         || metadata.file_type().is_symlink()
         || metadata.len() != attachment.byte_size
@@ -89,8 +90,8 @@ fn read_verified(path: &FsPath, attachment: &Attachment) -> ApiResult<Vec<u8>> {
         return Err(unavailable());
     }
     let mut bytes = Vec::new();
-    File::open(path)
-        .and_then(|f| f.take(attachment.byte_size + 1).read_to_end(&mut bytes))
+    file.take(attachment.byte_size + 1)
+        .read_to_end(&mut bytes)
         .map_err(|_| unavailable())?;
     if bytes.len() as u64 != attachment.byte_size || sha256_hex(&bytes) != attachment.sha256 {
         return Err(unavailable());
@@ -179,7 +180,7 @@ fn pending(
         .ok_or_else(|| ApiError::not_found("Attachment not found"))?;
     Ok((row, item))
 }
-fn stage(
+pub(super) fn stage(
     app: &AppState,
     owner: &str,
     operation: &str,
@@ -258,7 +259,7 @@ async fn upload(
 
 fn expire(db: &mut Connection, stamp: i64) -> ApiResult<()> {
     let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    let due=tx.prepare("SELECT owner_user,operation_id,session_id,payload_json FROM conversation_submissions WHERE state='preparing' AND attachments_expires_at<=?1 LIMIT 32")?.query_map([stamp],|r|Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?,r.get::<_,String>(2)?,r.get::<_,String>(3)?)))?.collect::<Result<Vec<_>,_>>()?;
+    let due=tx.prepare("SELECT owner_user,operation_id,session_id,payload_json FROM conversation_submissions WHERE state='preparing' AND attachments_expires_at<=?1 AND NOT EXISTS(SELECT 1 FROM conversation_submission_acceptances a WHERE a.owner_user=conversation_submissions.owner_user AND a.operation_id=conversation_submissions.operation_id) LIMIT 32")?.query_map([stamp],|r|Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?,r.get::<_,String>(2)?,r.get::<_,String>(3)?)))?.collect::<Result<Vec<_>,_>>()?;
     for (owner, operation, session, payload) in due {
         let spec: Spec = serde_json::from_str(&payload).map_err(|_| ApiError::internal())?;
         let ids = spec.attachments.iter().map(|a| &a.id).collect::<Vec<_>>();
@@ -329,7 +330,7 @@ fn clean_directory(app: &AppState, session: &str, ids: &HashSet<String>) -> ApiR
         .map_err(|_| unavailable())?;
     Ok(())
 }
-fn sweep(app: &AppState, stamp: i64) -> ApiResult<usize> {
+pub(super) fn sweep(app: &AppState, stamp: i64) -> ApiResult<usize> {
     expire(&mut app.db.lock(), stamp)?;
     let mut db = app.db.lock();
     let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;

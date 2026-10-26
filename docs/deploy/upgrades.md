@@ -1,5 +1,31 @@
 # Upgrades
 
+## Unreleased local checkpoint: accepted first-message intents
+
+Gateway schema **1014** adds durable acceptance and Node materialization records.
+Back up Gateway state before upgrading; old executables refuse this schema. Node
+schema 2005 and protocol 15 are unchanged. Gateway requires Node's
+`attachmentMimeInQuery: true` capability and refuses older Nodes before
+acceptance. Upgrade compatible Nodes before enabling the future client flow.
+Raw octet transport and immutable MIME metadata keep JSON files out of the
+Node's legacy JSON body parser. Existing session IDs, Node mappings,
+control, memory provenance and checkpoint recovery data are preserved. Do not
+change `user_version` to downgrade.
+
+The internal accept route commits a validated first-message intent and one public
+pending session together. Materialization reconciles the same Node allocation
+and attachment-transfer IDs. Neither route admits an Agent message, acquires
+control or executes a model/tool. Clients remain on the old flow behind
+**`canSubmit: false`** until the remaining admission/client gates are implemented.
+
+Accepted staging no longer has the seven-day unaccepted deadline. Its bytes and
+pending input remain recoverable until delivery cleanup or authorized deletion.
+Conversation/project deletion scrubs content/settings and queues file cleanup;
+non-destructive Work removal preserves accepted pending history behind the
+removal fence. Explicit restore can resume the original operation. Unaccepted
+staging/draft cleanup keeps its previous policy. This checkpoint stays local and
+is not a deployment instruction or a completed first-send guarantee.
+
 ## Unreleased local checkpoint: Node attachment transfer
 
 Node schema **2005** adds owner/creation-scoped attachment transfer records. Back

@@ -18,6 +18,7 @@ pub mod env_allowlist;
 pub mod frontmatter;
 pub mod modes;
 pub mod node;
+pub mod private_files;
 pub mod registry;
 pub mod text;
 

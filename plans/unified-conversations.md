@@ -1076,6 +1076,97 @@ The complete U1 flow remains gated; these fixture repairs are not a substitute
 for Gateway acceptance and Web/Android recovery integration. Run-owned binaries,
 logs and snapshot-comparison backups are removed after the local commit.
 
+### U1 implementation checkpoint: accepted intent and Node materialization (2026-10-27)
+
+Local only. Gateway schema **1014** records durable acceptance separately from
+unaccepted preparation. Node schema 2005 and protocol 15 stay unchanged. This
+joins the existing Gateway/Node identities and file-transfer paths; **`canSubmit:
+false` remains the client activation gate** until command admission/recovery and
+Web/Android persistence are connected. The internal capabilities additionally
+advertise `canAcceptIntent` and `canMaterialize`.
+
+| State                          | Meaning                                                            | Public conversation / execution                                                                                            |
+| ------------------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| `preparing`, `accepted: false` | Unaccepted immutable draft/manifest                                | No ordinary session; no Node mutation                                                                                      |
+| `accepted`, `accepted: true`   | Validated intent and one public pending session committed together | Node allocation/delivery may still be pending; no message admission claim                                                  |
+| `ready`, `accepted: true`      | The same Node creation and attachment receipts are durably mapped  | Files are ready; the first message has **not** been sent to the Agent                                                      |
+| `cancelled`                    | A durable non-reusable cancellation/deletion identity              | `accepted` and `acceptedAt` preserve whether acceptance previously happened; content is scrubbed; retries do not revive it |
+
+- `POST /api/conversation-submissions/{id}/accept` accepts only the prepared,
+  immutable payload. It makes a read-only Node capability request first, checks
+  current workspace/mode/private recovery ownership, available model and upload
+  limits, and revalidates file receipts, bytes, SHA-256 and image MIME before the
+  commit. A missing upload, expired staging, unsupported/offline Node or removed
+  access leaves the draft unaccepted, with no ordinary session or Node mutation.
+- One SQLite write transaction publishes the reserved public session ID and
+  acceptance together, retaining the original text/manifest, resolved model and
+  thinking choice. Rollback cannot leave an empty published conversation. A
+  duplicate acceptance returns its durable outcome without another capability
+  call or changing settings, even if later configuration becomes unavailable.
+  Native-device revocation/expiry is rechecked after the asynchronous preflight.
+- `POST /api/conversation-submissions/{id}/materialize` uses the reserved Node
+  creation identity and each immutable attachment ID to allocate/map the same
+  Node session and transfer raw bytes through the existing authenticated link.
+  Files travel in `bodyBase64` with transport `application/octet-stream`;
+  their immutable `mimeType` travels in the URL-encoded query alongside filenames.
+  Gateway requires Node's `attachmentMimeInQuery: true` capability, refusing older
+  Nodes before acceptance. A real-process test caught the earlier assumption
+  that `bodyBase64` bypassed JSON parsing: Node's legacy router still parses an
+  `application/json` body. The new raw transport preserves JSON file bytes/MIME
+  without changing that legacy parser. Remote receipt identities, workspace,
+  state, hash and byte size are checked before committing readiness. Lost responses retain acceptance and
+  can reconcile with the same allocation/transfer keys; no new public session is
+  created. An invalid or deletion-fenced receipt cannot bind another conversation.
+- `GET /api/conversation-submissions/{id}` is still a local outcome read. It does
+  not allocate, upload, renew control or run anything. Materialization failures
+  return the retained accepted intent with a machine-readable `deliveryError`;
+  they do not relabel the text as a new unsent message. Neither new POST route
+  acquires a lease, sends an Agent command or calls inference.
+- A first-message fence prevents ordinary commands from overtaking an accepted
+  pending submission; Stop keeps its existing path. The command-admission slice
+  must release that fence only after reconciling its original first-message
+  receipt. Legacy sessions and specialized creation flows have no such acceptance
+  record and retain their current behavior.
+- Acceptance removes the seven-day unaccepted deadline. Accepted source files
+  remain until the next admission/cleanup stage or authorized conversation/project
+  deletion; they are not silently expired. Private file reads now use existing
+  Rustix support through `pirc-config`, with `NOFOLLOW`, `NONBLOCK` and descriptor
+  ownership/type/mode checks. No dependency/lockfile/Nix cargo hash changed.
+- Cancel-versus-accept is fenced in SQLite across independent connections.
+  Session/project deletion clears the accepted payload/settings and queues file
+  cleanup with the existing memory/deletion ownership rules. **Removing Work is
+  different:** accepted pending history is retained behind the removal fence and
+  resumes under the same identity only after explicit restore; unaccepted drafts
+  keep their existing cancellation behavior.
+
+Validation: **262 Gateway unit/HTTP tests** passed, including 19 new
+acceptance/materialization cases; **32 Node creation/transfer tests** and the
+private-file descriptor test passed too. Coverage includes independent-connection
+publication/cancellation/expiry races, injected receipt commit failure, malformed
+receipts, lost transfer responses, staging expiry/MIME, preflight/allocation-time
+device revocation, private recovery ownership, Work remove/restore, 1013→1014
+migration, missing raw-MIME capability and bearer acceptance without an Origin.
+Strict all-target Clippy passed for Gateway, Node, config and conformance.
+
+The real Gateway/Node process proof passed using only a paired token after setup:
+prepare/upload/accept, a Gateway crash/restart, Node materialization, independent
+Node and Gateway crashes/restarts, same-operation recovery, a competing ordinary
+prompt refused, Chat deletion on both hosts, delayed retries refused revival and
+startup staging cleanup. The fake inference server saw **zero requests**. The
+previous Node-only crash proof and legacy `node_panels_uploads` process transcript
+also passed with the latest binaries; the legacy transcript stayed unchanged.
+Rust/changed-document formatting and diff checks passed. These are local HTTP,
+storage and process checks, not Flutter UI, Android-device, Chromium, Nix build or
+remote-CI verification. Run-owned build/log artifacts are removed after the local
+commit; APKs, other agents' work and user data are preserved.
+
+Remaining U1: original command/lease admission and read-only receipt reconciliation;
+first-send cancellation/deletion before a Node mapping is known (including cleanup
+of an uncertain allocation); Web/Android durable drafts, accepted pending display
+and reconnect recovery; the complete multi-client failure table. Do not enable
+`canSubmit` or claim the first message executed from an acceptance/ready receipt.
+No frontend redesign, remote push, deployment or Release is included.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

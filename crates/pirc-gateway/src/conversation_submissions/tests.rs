@@ -409,7 +409,7 @@ fn app_with_database(on_disk: bool) -> (AppState, tempfile::TempDir) {
     setup(&app.db.lock());
     (app, dir)
 }
-async fn call(
+pub(super) async fn call(
     app: &AppState,
     method: &str,
     path: &str,

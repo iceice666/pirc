@@ -1007,3 +1007,63 @@ async fn a_ready_retry_is_a_read_even_after_its_mode_was_removed() {
     assert_eq!(count(&node.db.lock(), "uploads"), 1);
     node.close().await;
 }
+
+#[tokio::test]
+async fn raw_transport_preserves_json_mime_and_rejects_ambiguous_metadata() {
+    use pirc_protocol::HttpMethod::{Get, Put};
+    let (_dir, node, _session) = node().await;
+    let caps = call(
+        &node,
+        Get,
+        "/api/session-creations/capabilities",
+        "test-user",
+        None,
+        "",
+    )
+    .await;
+    assert_eq!(caps.body.unwrap()["attachmentMimeInQuery"], true);
+    let bytes = b"{\"native\":true}\n";
+    let path = format!("{}&mimeType=application%2Fjson", url(bytes, "data.json"));
+    for (path, mime) in [
+        (
+            format!("{path}&mimeType=text%2Fplain"),
+            "application/octet-stream",
+        ),
+        (path.clone(), "text/plain"),
+    ] {
+        assert_eq!(
+            call(&node, Put, &path, "test-user", Some(bytes), mime)
+                .await
+                .status,
+            400
+        );
+    }
+    assert_eq!(count(&node.db.lock(), "creation_uploads"), 0);
+    let first = call(
+        &node,
+        Put,
+        &path,
+        "test-user",
+        Some(bytes),
+        "application/octet-stream",
+    )
+    .await;
+    assert_eq!(first.status, 200, "{first:?}");
+    let receipt = first.body.unwrap()["creationAttachment"].clone();
+    assert_eq!(receipt["upload"]["mimeType"], "application/json");
+    assert_eq!(receipt["upload"]["kind"], "file");
+    assert_eq!(receipt["upload"]["sha256"], sha256_hex(bytes));
+    let retry = call(
+        &node,
+        Put,
+        &path,
+        "test-user",
+        Some(bytes),
+        "application/octet-stream",
+    )
+    .await;
+    assert_eq!(retry.body.unwrap()["creationAttachment"], receipt);
+    assert_eq!(count(&node.db.lock(), "uploads"), 1);
+    assert_eq!(count(&node.db.lock(), "commands"), 0);
+    node.close().await;
+}

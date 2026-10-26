@@ -42,7 +42,14 @@ impl TransferInput {
     fn parse(request: &Request, content_type: &str) -> ApiResult<Self> {
         let mut query = serde_json::Map::new();
         for (key, value) in &request.query {
-            if !["submissionHash", "sha256", "byteSize", "filename"].contains(&key.as_str())
+            if ![
+                "submissionHash",
+                "sha256",
+                "byteSize",
+                "filename",
+                "mimeType",
+            ]
+            .contains(&key.as_str())
                 || query.insert(key.clone(), json!(value)).is_some()
             {
                 return Err(ApiError::invalid_input());
@@ -54,10 +61,19 @@ impl TransferInput {
                 .and_then(serde_json::Value::as_str)
                 .ok_or_else(ApiError::invalid_input)
         };
+        // JSON files must bypass the router's JSON parser. New Gateway peers
+        // transport raw octets and bind their real MIME in the immutable query.
+        let mime = match query.get("mimeType") {
+            Some(mime) if content_type == "application/octet-stream" => {
+                mime.as_str().ok_or_else(ApiError::invalid_input)?
+            }
+            Some(_) => return Err(ApiError::invalid_input()),
+            None => content_type,
+        };
         let input = Self {
             submission_hash: value("submissionHash")?.into(),
             name: value("filename")?.into(),
-            mime: content_type.into(),
+            mime: mime.into(),
             size: value("byteSize")?
                 .parse()
                 .map_err(|_| ApiError::invalid_input())?,
