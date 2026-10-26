@@ -313,6 +313,11 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
     private val recordings = RecordingPlayer(activity, engine)
     private val documentScripts = NativeDocumentScripts(activity.applicationContext)
     private val accountContextMutationLock = Mutex()
+    private val firstSend = NativeFirstSend(
+        java.io.File(activity.noBackupFilesDir, "first-send-v1"),
+        capture = { stamp -> capturePairedApi(stamp, null) },
+        validate = { stamp -> runtime.validateFirstSendStamp(stamp) },
+    )
     private val htmlMedia = HtmlMediaPlayer(activity, engine, runtime, accountContextMutationLock)
     private val externalDropTargets = ExternalImageDropTargetRegistry()
     private val externalDropJobs = ConcurrentHashMap<Job, ExternalImageDropTarget>()
@@ -356,6 +361,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
         cancelPendingDistributorPicker()
         recordings.closeAll()
         htmlMedia.dispose()
+        firstSend.clear()
         documentScripts.dispose()
     }
     private val projectFileSelections = ProjectFileSelections()
@@ -726,6 +732,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                         "completeOnboarding" -> { activity.permissionAccess.finish(); null }
                         "activity" -> PircJson.parseToJsonElement(activity.getSharedPreferences("recent_activity", Activity.MODE_PRIVATE).getString("items", "[]")!!).wire()
                         "pair" -> accountContextMutationLock.withLock {
+                            firstSend.clear()
                             clearProjectFileSelections()
                             documentScripts.closeAll()
                             clearExternalDropTargets()
@@ -734,6 +741,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             runtime.pair(str("link"))
                         }
                         "unpair" -> accountContextMutationLock.withLock {
+                            firstSend.clear()
                             clearProjectFileSelections()
                             documentScripts.closeAll()
                             clearExternalDropTargets()
@@ -899,6 +907,15 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
                             null
                         }
+                        "firstSendSubmit" -> firstSend.submit(str("pairingStamp"), str("ownerUser"), str("operationId"), (args["expectedRevision"] as? Number)?.toLong(), runtime.local.clientId)
+                        "firstSendCheck" -> firstSend.check(str("pairingStamp"), str("ownerUser"), str("operationId"))
+                        "firstSendCancel" -> firstSend.cancel(str("pairingStamp"), str("ownerUser"), str("operationId"))
+                        "firstSendStop" -> firstSend.stop(str("pairingStamp"), str("ownerUser"), str("operationId"), runtime.local.clientId)
+                        "firstSendTakeControl" -> firstSend.takeControl(str("pairingStamp"), str("ownerUser"), str("operationId"), runtime.local.clientId)
+                        "firstSendRelease" -> firstSend.release(str("pairingStamp"), str("ownerUser"), str("operationId"))
+                        "firstSendAdopt" -> firstSend.adopt(str("pairingStamp"), str("ownerUser"), str("sessionId"))
+                        "firstSendCapabilities" -> firstSend.capabilities(str("pairingStamp"))
+                        "firstSendDrafts" -> firstSend.drafts(str("pairingStamp"), str("ownerUser"), args)
                         "request" -> {
                             val expectedStamp = optionalString("pairingStamp")
                             if (expectedStamp == null) runtime.request(str("method"), str("path"), args["body"])

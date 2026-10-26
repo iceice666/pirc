@@ -221,3 +221,41 @@ it('a missing preparation receipt allows an explicit same-key continuation after
   expect(remote.entries.size).toBe(1);
   expect(remote.calls.filter((c) => c === 'dispatch')).toHaveLength(1);
 });
+
+it('same-phase admitted receipts update Stop confirmation and late older receipts cannot clear it', async () => {
+  const { flow, remote } = await setup();
+  const admitted = await flow.run(scope, 'operation-1');
+  const stopped = {
+    ...admitted.preparation!,
+    messageAdmission: { outcome: 'accepted', stopRequested: true, stopConfirmed: true },
+  };
+  remote.entries.set(remote.key('alice', 'operation-1'), stopped);
+  expect(
+    (await flow.check(scope, 'operation-1')).preparation?.messageAdmission?.stopConfirmed,
+  ).toBe(true);
+  remote.entries.set(remote.key('alice', 'operation-1'), admitted.preparation!);
+  expect(
+    (await flow.check(scope, 'operation-1')).preparation?.messageAdmission?.stopConfirmed,
+  ).toBe(true);
+  expect((await flow.release(scope, 'operation-1')).released).toBe(true);
+});
+
+it('cancelled cleanup can finish and a late pending receipt cannot undo completion', async () => {
+  const { flow, remote } = await setup();
+  await flow.run(scope, 'operation-1');
+  const original = remote.remove.bind(remote);
+  vi.spyOn(remote, 'remove').mockImplementation(async (...args) => {
+    await original(...args);
+    const current = await remote.lookup('alice', 'operation-1');
+    remote.entries.set(remote.key('alice', 'operation-1'), { ...current, cleanupPending: true });
+  });
+  expect((await flow.discard(scope, 'operation-1'))?.preparation?.cleanupPending).toBe(true);
+  const pending = await remote.lookup('alice', 'operation-1');
+  remote.entries.set(remote.key('alice', 'operation-1'), { ...pending, cleanupPending: false });
+  const finished = await flow.check(scope, 'operation-1');
+  expect(finished.preparation?.cleanupPending).toBe(false);
+  expect(finished.message).toBe('');
+  expect(finished.files).toEqual([]);
+  remote.entries.set(remote.key('alice', 'operation-1'), pending);
+  expect((await flow.check(scope, 'operation-1')).preparation?.cleanupPending).toBe(false);
+});

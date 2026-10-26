@@ -1,5 +1,33 @@
 # Upgrades
 
+## Unreleased local checkpoint: native first-send engine
+
+Android includes a native durable submission engine behind new methods on its
+existing Gateway bridge. Flutter has **not** adopted those methods yet; Gateway
+still returns **`canSubmit: false`**. Existing App behavior is unchanged. There
+is no database, node-link, dependency, version or Nix-hash change in this slice.
+
+The engine stores private drafts and attachment bytes in `noBackupFilesDir`,
+scoped by the Gateway origin and authenticated owner. It requires an authenticated
+capability response before cold recovery and validates the current pairing stamp
+for every operation. Local edits need no network round trip after that binding.
+Changing pairings hides access without repurposing another owner's draft; signing
+back into the same owner/origin can recover it. Clearing App storage or uninstalling
+removes this local recovery copy, so do not use either to resolve uncertain sends.
+
+The native path freezes/persists the original operation before preparation,
+queries unknown outcomes without replay, and keeps explicit Stop, Take control,
+draft discard and conversation deletion separate. Paired tokens connect directly
+to Gateway with the expected-account fence; no Web page or management grant is
+needed. Requests do not follow redirects or automatically replay mutation bodies.
+The seven-day expiry still covers only unaccepted Gateway staging, not accepted
+attachments or private native drafts.
+
+Only focused native JVM/filesystem/local-HTTP and Web regression checks ran here.
+Flutter adoption, Android process-death/device checks and the full multi-client
+integration matrix remain required before activation. This local checkpoint is
+not a deployment instruction or a completed Android-flow guarantee.
+
 ## Unreleased local checkpoint: negotiated Web first-send recovery
 
 Web includes private durable drafts and pending-send recovery, but Gateway still

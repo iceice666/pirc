@@ -225,9 +225,13 @@ export class FirstSend {
       const previous = row.preparation;
       // Late replies cannot un-delete content or turn a known acceptance into a draft.
       const keep =
-        previous?.state === 'cancelled' ||
-        (previous?.state === 'admitted' && value.state !== 'cancelled') ||
-        (previous?.accepted && !value.accepted);
+        (previous?.state === 'cancelled' &&
+          (value.state !== 'cancelled' || (!previous.cleanupPending && value.cleanupPending))) ||
+        (previous?.state === 'admitted' && !['admitted', 'cancelled'].includes(value.state)) ||
+        (previous?.accepted && !value.accepted) ||
+        (previous?.messageAdmission?.stopConfirmed === true &&
+          value.state !== 'cancelled' &&
+          value.messageAdmission?.stopConfirmed !== true);
       const current = keep ? previous! : value;
       return {
         ...row,

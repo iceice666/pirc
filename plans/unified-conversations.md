@@ -1409,6 +1409,83 @@ No Flutter code changed or device/emulator/Nix/remote-CI verification ran in thi
 slice. Source and commit stay local; only run-owned build/log/scratch artifacts
 are removed, preserving APKs, test-browser cache and others' work.
 
+## U1 implementation checkpoint: native durable submission engine (2026-10-27)
+
+Local only. Android now has a native storage/transport/submission engine exposed
+through the existing Gateway MethodChannel. **The Flutter LiveController and
+recovery UI have not adopted it yet**; existing App behavior is unchanged and
+Gateway still advertises **`canSubmit: false`**. This is a U1 client foundation,
+not completed Android or end-to-end first-send acceptance. Gateway 1016, Node
+2007, protocol 15 and all dependency/lockfile/Nix hashes are unchanged.
+
+- `FirstSendDraftStore` uses the App's private `noBackupFilesDir`, scoped by
+  Gateway origin and authenticated owner. Original text/model/thinking and file
+  metadata commit only after referenced attachment bytes have been synced. SHA-256
+  filenames, atomic metadata replacement and directory sync avoid a partially
+  published manifest. Thread/process locks and compare-and-swap revisions protect
+  concurrent windows; a transform runs under the same file lock. Discard leaves
+  an identifier-only tombstone before removing owned blobs, so delayed writes
+  cannot recreate it. Unexpected symlinks, corrupt metadata/bytes and storage
+  errors fail visibly instead of deleting content or falling back to sending.
+- Attachments remain private native files, not a Base64 copy of all draft bytes
+  on every keyboard edit. Upload rereads and verifies the stored bytes against
+  their size/hash. Existing Android selection limits remain 8 MiB per attachment,
+  with at most 16 manifest entries. Orphan bytes without a committed record do
+  not appear as conversations. Only positively owned files are removed; there
+  is no recursive cleanup of user directories or another account's drafts.
+- `NativeFirstSend` binds an authenticated capability response to the current
+  pairing stamp/owner and captures the original API connection. Local edits do
+  not need network calls or decrypt credentials per keystroke. Pair/unpair and
+  late old-account replies invalidate access; same-origin/owner reauthentication
+  can recover its original files. The native APIs expose controlled submission
+  actions rather than letting Flutter manufacture admission/stop states or
+  forget an uncertain send through a generic draft edit.
+- Explicit Submit commits frozen input and the prepare-attempt marker before
+  HTTP, then uses existing preparation, staged upload, acceptance,
+  materialization, control and dispatch identities. The native install's client
+  ID is used for the lease. Check is outcome-only: it never creates, takes
+  control or sends. A lost prepare response can continue under its original key
+  after lookup; unknown dispatch is never replayed. Pending discovery/adoption
+  supports another device's accepted intent without requiring its local bytes.
+- Stop persists one command ID before requesting control and checks that receipt
+  before any retry. Take control is an explicit separate action. Confirmed Stop
+  can release the input gate while retaining the original input. Cancellation
+  uses local discard before preparation and the existing owner/mode-authorized
+  Gateway deletion after acceptance; pending cleanup remains visible. Stop before
+  a Node mapping is known is still unavailable and is not replaced by Delete.
+- `FirstSendApi` pins `x-pirc-account`, uses the paired authenticated Gateway
+  directly, restricts routes and rejects normalized traversal. It sends raw
+  attachment octets, disables redirects/connection retries and marks mutation
+  bodies one-shot, including against automatic `503 Retry-After: 0` replay.
+  Neither a live Web page nor a management grant is required.
+- Native recovery checks exposed two Web receipt-merge defects. Same-phase
+  admitted receipts now update Stop confirmation, and cancelled receipts can
+  advance from cleanup pending to complete. Both clients preserve confirmed Stop
+  and completed deletion against late older evidence without reviving input.
+
+Validation: **25 focused native JVM tests** pass (**22 new first-send cases**
+and three existing ReadRecovery cases), with no skips. The Android main Kotlin
+code and targeted unit classes compile against the actual app configuration.
+**27 focused Web first-send tests** and Svelte typecheck (zero errors/warnings)
+pass for the receipt corrections. Native cases cover disk reopen/Blob verification, two independent storage connections,
+failed metadata validation, orphan files, corrupt/symlink paths, frozen input,
+account switching, lost dispatch replies, query-only unknowns, fixed Stop IDs,
+delete completion, activation gating and rejection of forged admission/unsafe
+forgetting. Transport tests use only a local MockWebServer and synthetic tokens;
+no provider or third party receives data. Web first-send regression tests and
+Svelte typecheck cover the shared receipt corrections. This is **not** a Flutter
+widget, APK/device, process-death, Linux sandbox, Nix or remote-CI pass. A reopened
+store/JVM fixture is not proof of an Android process being killed/restarted.
+
+Remaining U1: wire Flutter LiveController draft/file persistence, creation/send,
+pending recovery controls and cross-account/navigation/lifecycle guards to this
+engine, then run focused Flutter checks and the real client/Gateway/Node/Agent
+failure matrix. Keep client activation closed until that work and the unknown
+mapping/permission-removal cases pass. Later binding/revocation/tasks/pots work
+and UI redesign deferrals are unchanged. Only this run's temporary build/log
+artifacts are removed; APKs, SDKs, existing build output and other agents' work
+are preserved. No push, deployment or Release is included.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

@@ -297,6 +297,10 @@ class GatewayRuntime private constructor(val context: Context) {
             "pairingStamp" to currentStamp,
         )
     }
+    /** Local checks must not decrypt credentials or perform network I/O per keystroke. */
+    internal fun validateFirstSendStamp(stamp: String) {
+        requirePairingStamp(stamp, contexts.currentPairingStamp())
+    }
     fun validateContext(contextId: String?) {
         contextLease(contextId)
     }

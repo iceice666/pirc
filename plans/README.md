@@ -126,6 +126,13 @@ replace a newer selection. Web tests/typecheck/build, 284 Gateway tests, strict
 Gateway Clippy and an isolated real IndexedDB browser proof pass. Android
 adoption and the full client/process failure table remain open; `canSubmit` stays
 false. No schema/dependency change or Flutter modification is included.
+The [native durable-engine checkpoint](unified-conversations.md#u1-implementation-checkpoint-native-durable-submission-engine-2026-10-27)
+adds private native draft/attachment storage, revision/tombstone guards, paired
+account fencing and a persistent submit/check/Stop/cancel engine. Focused native
+filesystem/HTTP tests and Web receipt regressions pass; Flutter controller/UI
+adoption and real end-to-end acceptance remain open. Existing App behavior and
+`canSubmit: false` are unchanged. No schema/dependency or Flutter code change is
+included; run-owned build output is kept separate from existing APKs/artifacts.
 The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
 records local fixture/transcript repairs and 50 Agent plus five Node process
 passes; the remote Check is still failed, and full Chromium/Linux verification

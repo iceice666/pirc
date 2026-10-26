@@ -1,0 +1,187 @@
+package dev.pirc.pirc_mobile
+
+import dev.pirc.android.core.*
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.*
+import mockwebserver3.Dispatcher
+import mockwebserver3.MockResponse
+import mockwebserver3.MockWebServer
+import mockwebserver3.RecordedRequest
+import org.junit.Assert.*
+import org.junit.Test
+import java.io.File
+import java.nio.file.Files
+import java.util.Collections
+
+class NativeFirstSendFlowTest {
+    private class Ledger : Dispatcher() {
+        var preparation: JsonObject? = null
+        var enabled = true
+        var loseDispatch = false
+        var loseStop = false
+        var cleanupPending = false
+        var stopCommand: String? = null
+        var onAccept: (() -> Unit)? = null
+        val calls = Collections.synchronizedList(mutableListOf<String>())
+        private fun reply(body: JsonElement, code: Int = 200) = MockResponse.Builder().code(code).body(body.toString()).build()
+        private fun objectReply(body: String, code: Int = 200) = MockResponse.Builder().code(code).body(body).build()
+        private fun update(phase: String, accepted: Boolean = true) {
+            preparation = JsonObject(preparation!! + mapOf("state" to JsonPrimitive(phase), "accepted" to JsonPrimitive(accepted)))
+        }
+        @Synchronized override fun dispatch(request: RecordedRequest): MockResponse {
+            val path = request.url.encodedPath
+            calls += "${request.method} $path"
+            if (path.endsWith("/capabilities")) return objectReply("""{"version":1,"ownerUser":"alice","canFenceAccount":true,"canSubmit":$enabled}""")
+            assertEquals("alice", request.headers["x-pirc-account"])
+            if (path.endsWith("/prepare")) {
+                val input = PircJson.parseToJsonElement(request.body!!.utf8()).jsonObject
+                assertEquals("alice", input["expectedOwner"]!!.jsonPrimitive.content)
+                if (preparation == null) preparation = buildJsonObject {
+                    put("operationId", input.getValue("operationId")); put("sessionId", "public-session")
+                    put("workspaceId", input.getValue("submission").jsonObject.getValue("workspaceId"))
+                    put("submission", input.getValue("submission")); put("state", "preparing")
+                    put("accepted", false); put("cleanupPending", false)
+                }
+            } else if (path.contains("/attachments/")) {
+                assertEquals("application/octet-stream", request.headers["Content-Type"])
+                assertEquals("hello", request.body!!.utf8())
+                return objectReply("{}")
+            } else if (path.endsWith("/accept")) { update("accepted"); onAccept?.invoke() }
+            else if (path.endsWith("/materialize")) update("ready")
+            else if (path.endsWith("/control/acquire")) return objectReply("""{"lease":{"clientId":"android-fixture","generation":7}}""")
+            else if (path.endsWith("/dispatch")) {
+                update("admitted")
+                if (loseDispatch) { loseDispatch = false; return objectReply("{}", 503) }
+            } else if (path.endsWith("/commands") && request.method == "POST") {
+                val input = PircJson.parseToJsonElement(request.body!!.utf8()).jsonObject
+                stopCommand = input.getValue("commandId").jsonPrimitive.content
+                val admitted = preparation!!["state"]?.jsonPrimitive?.content == "admitted"
+                preparation = JsonObject(preparation!! + mapOf(
+                    "state" to JsonPrimitive(if (admitted) "admitted" else "stopped"), "messageAdmission" to buildJsonObject {
+                        put("outcome", if (admitted) "accepted" else "outcome_unknown"); put("stopRequested", true); put("stopConfirmed", true)
+                    },
+                ))
+                if (loseStop) { loseStop = false; return objectReply("{}", 503) }
+                return objectReply("""{"command":{"status":"accepted"}}""")
+            } else if (path.contains("/commands/")) {
+                return if (path.endsWith("/$stopCommand")) objectReply("""{"command":{"status":"accepted"}}""") else objectReply("{}", 404)
+            } else if (request.method == "DELETE") {
+                update("cancelled", preparation!!.getValue("accepted").jsonPrimitive.boolean)
+                preparation = JsonObject(preparation!! + ("cleanupPending" to JsonPrimitive(cleanupPending)))
+            }
+            return preparation?.let { reply(buildJsonObject { put("preparation", it) }) } ?: objectReply("{}", 404)
+        }
+    }
+    private class Fixture : AutoCloseable {
+        val parent = Files.createTempDirectory("pirc-first-flow-").toFile()
+        val ledger = Ledger()
+        val server = MockWebServer().apply { dispatcher = ledger; start() }
+        val api = PircApi(Pairing(server.url("/").toString().trimEnd('/'), "fixture-token"))
+        var stamp = "pair-a"
+        fun connection() = NativeFirstSend(File(parent, "drafts"), { requested -> requirePairingStamp(requested, stamp); api }, { requested -> requirePairingStamp(requested, stamp) })
+        suspend fun saved(connection: NativeFirstSend, withFile: Boolean = true): Map<*, *> {
+            connection.capabilities(stamp)
+            val files = if (withFile) listOf(mapOf("id" to "file1", "name" to "note.txt", "mimeType" to "text/plain", "byteSize" to 5)) else emptyList()
+            return connection.drafts(stamp, "alice", mapOf("action" to "put", "operationId" to "op", "record" to mapOf(
+                "workspaceId" to "node:repo", "message" to "Original", "model" to mapOf("provider" to "fake", "id" to "model"),
+                "thinking" to "low", "frozen" to false, "prepareAttempted" to false, "files" to files,
+            ), "files" to if (withFile) listOf(mapOf("id" to "file1", "bytes" to "hello".toByteArray())) else emptyList<Any>())) as Map<*, *>
+        }
+        suspend fun row(connection: NativeFirstSend) = connection.drafts(stamp, "alice", mapOf("action" to "get", "operationId" to "op")) as Map<*, *>?
+        override fun close() { server.close(); parent.deleteRecursively() }
+    }
+    private fun prep(row: Any?) = (row as Map<*, *>)["preparation"] as Map<*, *>
+    @Test fun firstSendUsesSavedTextFilesAndIdentityWithoutLegacyCreationOrCommands() = runTest { Fixture().use { f ->
+        val connection = f.connection()
+        f.saved(connection)
+        val result = connection.submit(f.stamp, "alice", "op", 1, "android-fixture")
+        assertEquals("admitted", prep(result)["state"])
+        assertEquals("Original", (result as Map<*, *>)["message"])
+        assertEquals(1, f.ledger.calls.count { it.endsWith("/prepare") })
+        assertEquals(1, f.ledger.calls.count { it.endsWith("/dispatch") })
+        assertFalse(f.ledger.calls.contains("POST /api/sessions"))
+        assertFalse(f.ledger.calls.any { it.endsWith("/commands") })
+    } }
+    @Test fun lostDispatchReplyRestoresFromDiskAndChecksWithoutTakingControlOrReplaying() = runTest { Fixture().use { f ->
+        val first = f.connection(); f.saved(first); f.ledger.loseDispatch = true
+        try { first.submit(f.stamp, "alice", "op", 1, "android-fixture"); fail("lost reply must stay uncertain") }
+        catch (error: ApiException) { assertEquals(503, error.status) }
+        assertEquals(true, f.row(first)!!["uncertain"])
+        val restored = f.connection(); restored.capabilities(f.stamp); f.ledger.calls.clear()
+        assertEquals("admitted", prep(restored.check(f.stamp, "alice", "op"))["state"])
+        restored.submit(f.stamp, "alice", "op", null, "android-fixture")
+        assertEquals(listOf("GET /api/conversation-submissions/op/receipt", "GET /api/conversation-submissions/op/receipt"), f.ledger.calls)
+    } }
+    @Test fun anUnknownAdmissionStaysQueryOnlyEvenOnExplicitContinue() = runTest { Fixture().use { f ->
+        val connection = f.connection(); f.saved(connection); f.ledger.loseDispatch = true
+        try { connection.submit(f.stamp, "alice", "op", 1, "android-fixture") } catch (_: ApiException) {}
+        f.ledger.preparation = JsonObject(f.ledger.preparation!! + ("state" to JsonPrimitive("outcome_unknown")))
+        f.ledger.calls.clear()
+        assertEquals("outcome_unknown", prep(connection.submit(f.stamp, "alice", "op", null, "android-fixture"))["state"])
+        assertEquals(listOf("GET /api/conversation-submissions/op/receipt"), f.ledger.calls)
+    } }
+    @Test fun localDiscardNeverCreatesARemoteSessionAndCannotBeResurrected() = runTest { Fixture().use { f ->
+        val connection = f.connection(); f.saved(connection); f.ledger.calls.clear()
+        assertNull(connection.cancel(f.stamp, "alice", "op")); assertNull(f.row(connection))
+        assertTrue(f.ledger.calls.isEmpty())
+        try { connection.submit(f.stamp, "alice", "op", 1, "android-fixture"); fail("discarded draft must be fenced") } catch (_: IllegalStateException) {}
+        assertTrue(f.ledger.calls.isEmpty())
+    } }
+    @Test fun activationGateRefusesANewSendBeforeAnyNetworkMutation() = runTest { Fixture().use { f ->
+        f.ledger.enabled = false
+        val connection = f.connection(); f.saved(connection); f.ledger.calls.clear()
+        try { connection.submit(f.stamp, "alice", "op", 1, "android-fixture"); fail("must stay gated") } catch (_: IllegalStateException) {}
+        assertEquals(false, f.row(connection)!!["frozen"]); assertTrue(f.ledger.calls.isEmpty())
+    } }
+    @Test fun anUncertainStopReusesItsCommandAndPreservesOriginalInput() = runTest { Fixture().use { f ->
+        val connection = f.connection(); f.saved(connection)
+        connection.submit(f.stamp, "alice", "op", 1, "android-fixture")
+        f.ledger.loseStop = true
+        try { connection.stop(f.stamp, "alice", "op", "android-fixture"); fail("Stop result must be checked") } catch (_: ApiException) {}
+        val command = f.ledger.stopCommand
+        connection.stop(f.stamp, "alice", "op", "android-fixture")
+        assertEquals(command, f.row(connection)!!["stopCommandId"])
+        assertEquals(1, f.ledger.calls.count { it == "POST /api/sessions/public-session/commands" })
+        assertEquals("Original", f.row(connection)!!["message"])
+        assertEquals(true, (connection.release(f.stamp, "alice", "op") as Map<*, *>)["released"])
+    } }
+    @Test fun pendingDeletionCanFinishAndLatePendingEvidenceCannotUndoCompletion() = runTest { Fixture().use { f ->
+        val connection = f.connection(); f.saved(connection)
+        connection.submit(f.stamp, "alice", "op", 1, "android-fixture")
+        f.ledger.cleanupPending = true
+        assertEquals(true, prep(connection.cancel(f.stamp, "alice", "op"))["cleanupPending"])
+        val pending = f.ledger.preparation!!
+        f.ledger.preparation = JsonObject(pending + ("cleanupPending" to JsonPrimitive(false)))
+        assertEquals(false, prep(connection.check(f.stamp, "alice", "op"))["cleanupPending"])
+        assertEquals("", f.row(connection)!!["message"])
+        assertTrue((f.row(connection)!!["files"] as List<*>).isEmpty())
+        f.ledger.preparation = pending
+        assertEquals(false, prep(connection.check(f.stamp, "alice", "op"))["cleanupPending"])
+    } }
+    @Test fun platformDraftEditsCannotForgeAdmissionOrForgetAnUncertainSend() = runTest { Fixture().use { f ->
+        val connection = f.connection(); val saved = f.saved(connection)
+        try {
+            connection.drafts(f.stamp, "alice", mapOf("action" to "put", "operationId" to "op", "expectedRevision" to 1,
+                "record" to (saved + ("preparation" to mapOf("accepted" to true, "state" to "admitted")))))
+            fail("Caller cannot forge admission")
+        } catch (_: IllegalArgumentException) {}
+        f.ledger.loseDispatch = true
+        try { connection.submit(f.stamp, "alice", "op", 1, "android-fixture") } catch (_: ApiException) {}
+        val frozen = f.row(connection)!!
+        try {
+            connection.drafts(f.stamp, "alice", mapOf("action" to "delete", "operationId" to "op", "expectedRevision" to frozen["revision"]))
+            fail("Uncertain input must be kept")
+        } catch (_: IllegalStateException) {}
+        assertEquals("Original", f.row(connection)!!["message"])
+    } }
+    @Test fun accountChangeDuringAcceptanceCannotContinueOrReturnOldAccountData() = runTest { Fixture().use { f ->
+        val connection = f.connection(); f.saved(connection)
+        f.ledger.onAccept = { f.stamp = "pair-b" }
+        try { connection.submit("pair-a", "alice", "op", 1, "android-fixture"); fail("old reply must not reach the new account") }
+        catch (error: ApiException) { assertEquals("account_changed", error.code) }
+        assertFalse(f.ledger.calls.any { it.endsWith("/materialize") || it.endsWith("/dispatch") })
+        connection.capabilities(f.stamp)
+        assertEquals("accepted", prep(connection.check(f.stamp, "alice", "op"))["state"])
+        assertEquals("Original", f.row(connection)!!["message"])
+    } }
+}
