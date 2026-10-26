@@ -1,5 +1,4 @@
-//! Owner-authenticated tracking API. There is deliberately no observation-injection
-//! endpoint and no runnable dispatch adapter in this checkpoint.
+//! Owner-authenticated pots API. No observation injection or autonomous dispatch.
 use axum::{
     Router,
     extract::{Extension, Path, Query, State},
@@ -77,7 +76,7 @@ async fn overview(
         "actor": {"kind":"pots", "id":"personal"},
         "accountKey": &crate::util::sha256_hex(format!("pirc-pots:{}", who.user))[..32],
         "workspaces": conn.list_workspaces_for_user(&who.user)?.into_iter().take(LIST_MAX as usize).map(|w|json!({"id":w.id,"name":w.display_name})).collect::<Vec<_>>(),
-        "executionAvailable": false,
+        "executionAvailable": true,
         "observationMode":"session_progress_events",
         "responsibilities": list_responsibilities(&conn, &who.user, page.limit)?,
         "suggestions": list_suggestions(&conn, &who.user, page.limit)?,
@@ -122,9 +121,9 @@ async fn control_responsibility_route(
 ) -> Handled {
     id_ok(&id)?;
     let input: ResponsibilityControl = body.parse()?;
-    Ok(ok(
-        json!({"responsibility":control_responsibility(&app.db.lock(), &who.user, &id, input, now_ms())?}),
-    ))
+    let responsibility = control_responsibility(&app.db.lock(), &who.user, &id, input, now_ms())?;
+    execution::fence_invalid_pending(&app, Some(&who.user), None).await?;
+    Ok(ok(json!({"responsibility":responsibility})))
 }
 async fn suggestions(
     State(app): State<AppState>,
@@ -197,7 +196,7 @@ async fn control_task_route(
     id_ok(&id)?;
     let input: TaskControl = body.parse()?;
     Ok(ok(
-        json!({"task":control_task(&app.db.lock(), &who.user, &id, input, now_ms())?}),
+        json!({"task":execution::control_task_route(&app, &who.user, &id, input).await?}),
     ))
 }
 async fn start(
@@ -209,6 +208,6 @@ async fn start(
     id_ok(&id)?;
     let input: StartInput = body.parse()?;
     Ok(ok(
-        json!({"task":start_task(&app.db.lock(), &who.user, &id, input, now_ms())?}),
+        json!({"task":execution::start_task_route(&app, &who.user, &id, input).await?}),
     ))
 }

@@ -782,3 +782,17 @@ fn answers_and_deliveries() {
     assert_eq!(sniff_image(b"RIFF\0\0\0\0WEBPVP8"), Some("image/webp"));
     assert_eq!(sniff_image(b"hello"), None);
 }
+
+#[test]
+fn pots_dispatch_provenance_cannot_be_minted_by_custom_delivery() {
+    assert!(
+        delivery(&json!({"customType":"pots-dispatch","content":"run",
+        "details":{"dispatchId":"d","bindingId":"task","generation":1}}))
+        .is_err()
+    );
+    assert!(
+        delivery(&json!({"customType":"scheduled-run","content":"run",
+        "pots":{"dispatchId":"d"}}))
+        .is_err()
+    );
+}

@@ -4,6 +4,15 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ## [Unreleased]
 
+### Added
+
+- Explicit pots Start in Web and Android: authorize a written instruction in a dedicated same-workspace execution conversation, with backend-attributed “From pots” messages, progress/results, takeover fences and execution-scoped Stop. Tracking and reading still never execute work; autonomous observation/dispatch remain unavailable.
+- Durable one-shot dispatch identities and fail-closed recovery. Uncertain sends are never automatically replayed; pending Stop is reconciled when its Node reconnects.
+
+### Upgrade notes
+
+- Back up Gateway and Node state before the next upgrade. Gateway schema 1011 fences the new task lifecycle; Node schema 2003 stores dispatch deduplication/control records. Node protocol 15 requires updating Gateway and all Nodes together. These changes are not part of the 0.10.0 tracking-only release.
+
 ## [0.10.0] - 2026-10-25
 
 ### Added

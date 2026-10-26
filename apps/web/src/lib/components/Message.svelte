@@ -128,7 +128,10 @@
     data-level={message.level ?? 'info'}
     aria-label={message.label ?? tr('System message')}
   >
-    {#if kind === 'notice'}
+    {#if kind === 'pots'}
+      <div class="system-line"><strong>{tr('From pots')}</strong></div>
+      <div class="system-body"><pre>{message.content}</pre></div>
+    {:else if kind === 'notice'}
       <button
         class="system-line"
         type="button"

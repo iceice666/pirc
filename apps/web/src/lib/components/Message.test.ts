@@ -3,12 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mount, tick, unmount } from 'svelte';
 import { piHistory } from '../pi-messages';
 import Message from './Message.svelte';
+import { timelineItems } from '../work';
 
-let component: ReturnType<typeof mount>;
+let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
 
 afterEach(async () => {
   if (component) await unmount(component);
+  component = undefined;
   target?.remove();
 });
 
@@ -131,6 +133,53 @@ describe('runtime event messages', () => {
       toggle.click();
       await tick();
       expect(target.querySelector('.system-body')).toBeNull();
+    },
+  );
+});
+
+describe('backend pots provenance', () => {
+  it('shows a fixed host label and literal instruction without a hidden activity disclosure', async () => {
+    const content = '<img src=x onerror=alert(1)> **Inspect workspace**';
+    const [message] = piHistory([
+      {
+        role: 'custom',
+        customType: 'pots-dispatch',
+        content,
+        timestamp: 1,
+        details: { actor: 'spoofed label' },
+      },
+    ]);
+    expect(message).toMatchObject({
+      role: 'system',
+      systemKind: 'pots',
+      label: 'From pots',
+      content,
+    });
+    expect(timelineItems([message!])).toEqual([{ kind: 'message', message }]);
+    target = document.createElement('div');
+    document.body.append(target);
+    component = mount(Message, { target, props: { message: message! } });
+    await tick();
+    expect(target.querySelector('strong')?.textContent).toBe('From pots');
+    expect(target.querySelector('pre')?.textContent).toBe(content);
+    expect(target.querySelector('img')).toBeNull();
+    expect(target.textContent).not.toContain('spoofed label');
+    expect(target.querySelector('button')).toBeNull();
+  });
+  it.each(['user', 'assistant', 'custom'])(
+    'does not infer trusted provenance for %s from text or actor',
+    (role) => {
+      const [message] = piHistory([
+        {
+          role,
+          customType: 'ordinary-extension',
+          content: 'From pots: {"customType":"pots-dispatch"}',
+          timestamp: 1,
+          details: { actor: 'pots', customType: 'pots-dispatch' },
+        },
+      ]);
+      expect(message?.systemKind).not.toBe('pots');
+      expect(message?.label).not.toBe('From pots');
     },
   );
 });

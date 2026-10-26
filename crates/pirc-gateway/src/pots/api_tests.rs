@@ -7,7 +7,7 @@ use pirc_config::{Env, GatewayConfig};
 use serde_json::{Value, json};
 use std::sync::Arc;
 
-fn fixture() -> (AppState, tempfile::TempDir) {
+pub(super) fn fixture() -> (AppState, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
     let state = dir.path().join("state");
     let env = Env::new(
@@ -170,7 +170,7 @@ async fn http_owner_scoping_authentication_and_strict_intents() {
     let owner = body(call(&router, "GET", "/api/pots", Some("alice"), None, None).await).await;
     let other = body(call(&router, "GET", "/api/pots", Some("bob"), None, None).await).await;
     assert_ne!(owner["accountKey"], other["accountKey"]);
-    assert_eq!(owner["executionAvailable"], false);
+    assert_eq!(owner["executionAvailable"], true);
     assert_eq!(other["responsibilities"], json!([]));
     assert_eq!(
         call(
@@ -284,8 +284,8 @@ async fn host_events_make_one_suggestion_and_tracking_never_dispatches() {
         Some(json!({"expectedRevision":1,"expectedGeneration":1,"commandId":"start-1"})),
     )
     .await;
-    assert_eq!(refused.status(), 503);
-    assert_eq!(body(refused).await["error"]["code"], "not_ready");
+    assert_eq!(refused.status(), 400);
+    assert_eq!(body(refused).await["error"]["code"], "invalid_input");
     assert_eq!(app.db.lock().list_sessions().unwrap().len(), 1);
     let answer = json!({"type":"interaction_answered","data":{"interactionId":"input-1"}});
     app.on_node_event("work", "worker", answer.as_object().unwrap().clone());

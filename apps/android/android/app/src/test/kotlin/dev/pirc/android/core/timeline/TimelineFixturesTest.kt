@@ -46,6 +46,25 @@ class TimelineFixturesTest {
     }
 
     @Test
+    fun onlyReservedPotsCustomTypeCarriesTrustedProvenance() {
+        val content = "<b>literal instruction</b>"
+        fun raw(role: String, type: String) = buildJsonObject {
+            put("role", role); put("customType", type); put("content", content)
+            put("details", buildJsonObject { put("actor", "pots") })
+        }
+        val trusted = piMessage(raw("custom", "pots-dispatch"), now = clock)!!
+        assertEquals("system", trusted.role)
+        assertEquals("pots", trusted.systemKind)
+        assertEquals("From pots", trusted.label)
+        assertEquals(content, trusted.content)
+        for (role in listOf("user", "assistant", "custom")) {
+            val ordinary = piMessage(raw(role, "ordinary-extension"), now = clock)!!
+            assertFalse(ordinary.systemKind == "pots")
+            assertFalse(ordinary.label == "From pots")
+        }
+    }
+
+    @Test
     fun matchesTheWebClient() {
         val files = dir.listFiles { file -> file.extension == "json" }.orEmpty().sortedBy { it.name }
         assertTrue("no fixtures in $dir", files.isNotEmpty())

@@ -2497,5 +2497,20 @@
   "Tracked tasks": "Tracked tasks",
   "Tracking controls do not stop tools running in the source conversation.": "Tracking controls do not stop tools running in the source conversation.",
   "Unable to load pots. Refresh to try again.": "Unable to load pots. Refresh to try again.",
-  "Your personal coordinator. Suggestions are not instructions or permission to act.": "Your personal coordinator. Suggestions are not instructions or permission to act."
+  "Your personal coordinator. Suggestions are not instructions or permission to act.": "Your personal coordinator. Suggestions are not instructions or permission to act.",
+  "Progress events only: no transcript reading. Execution requires your explicit instruction and Start.": "Progress events only: no transcript reading. Execution requires your explicit instruction and Start.",
+  "Start authorizes one execution in a new session in the same workspace, using only your instruction. No source transcript or approval is copied or answered. The instruction cannot be changed after Start.": "Start authorizes one execution in a new session in the same workspace, using only your instruction. No source transcript or approval is copied or answered. The instruction cannot be changed after Start.",
+  "Start requires an enabled responsibility with coordination unpaused, dispatch budget remaining and a concurrency slot. Pausing coordination does not stop already-running execution.": "Start requires an enabled responsibility with coordination unpaused, dispatch budget remaining and a concurrency slot. Pausing coordination does not stop already-running execution.",
+  "Taken over by you; pots coordination is fenced. Already-running execution continues.": "Taken over by you; pots coordination is fenced. Already-running execution continues.",
+  "Execution instruction": "Execution instruction",
+  "Instruction must be 1–20000 UTF-8 bytes.": "Instruction must be 1–20000 UTF-8 bytes.",
+  "Authorized instruction: {0}": "Authorized instruction: {0}",
+  "Outcome: {0}": "Outcome: {0}",
+  "Failure: {0}": "Failure: {0}",
+  "Open execution session": "Open execution session",
+  "Stop execution": "Stop execution",
+  "Starting": "Starting",
+  "Queued": "Queued",
+  "Waiting for input": "Waiting for input",
+  "Execution session not yet confirmed. Refresh to check current state; do not assume it is stopped.": "Execution session not yet confirmed. Refresh to check current state; do not assume it is stopped."
 }

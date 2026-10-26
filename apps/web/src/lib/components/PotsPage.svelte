@@ -4,7 +4,15 @@
   import { tr } from '../i18n.svelte';
   import { ApiError, isAbort } from '../http';
   import { uuid } from '../id';
-  import { potsApi, type PotsOverview, type ResponsibilityInput } from '../pots';
+  import {
+    potsApi,
+    potsTaskLabels,
+    potsTaskTerminal,
+    validPotsInstruction,
+    type PotsTask,
+    type PotsOverview,
+    type ResponsibilityInput,
+  } from '../pots';
 
   interface Props {
     sidebarCollapsed?: boolean;
@@ -21,6 +29,7 @@
   let observations = $state<number | undefined>();
   let dispatches = $state<number | undefined>();
   let concurrency = $state<number | undefined>();
+  let instructions = $state<Record<string, string>>({});
   let owner = '';
   let epoch = 0;
   let controller: AbortController | undefined;
@@ -30,6 +39,7 @@
 
   function clearDraft() {
     purpose = '';
+    instructions = {};
     selected = [];
     observations = undefined;
     dispatches = undefined;
@@ -108,6 +118,21 @@
     const input = createAttempt.input;
     void act(() => potsApi.create(input), true);
   }
+  function start(task: PotsTask) {
+    const instruction = instructions[task.id] ?? '';
+    if (
+      !snapshot?.tasks.includes(task) ||
+      !snapshot.executionAvailable ||
+      task.status !== 'tracked' ||
+      task.coordinationPaused ||
+      task.takenOver ||
+      task.executionSessionId ||
+      task.execution ||
+      !validPotsInstruction(instruction)
+    )
+      return;
+    void act(() => potsApi.start(task, instruction));
+  }
   onMount(() => {
     void refresh();
     const focus = () => {
@@ -143,7 +168,7 @@
   <p>{tr('Your personal coordinator. Suggestions are not instructions or permission to act.')}</p>
   <p class="notice">
     {tr(
-      'Progress events only: no transcript reading. Automatic execution is unavailable in this checkpoint.',
+      'Progress events only: no transcript reading. Execution requires your explicit instruction and Start.',
     )}
   </p>
   {#if error}<p role="alert">{error}</p>{/if}
@@ -360,29 +385,76 @@
       {#each snapshot.tasks as task (task.id)}
         <article aria-label={task.id}>
           <h3>{tr('Review session input')}</h3>
-          <p>{tr(task.status === 'stopped' ? 'Stopped' : 'Tracked')} · {task.id}</p>
+          <p>{tr(potsTaskLabels[task.status] ?? task.status)} · {task.id}</p>
           <p>
             {task.takenOver
-              ? tr('Taken over by you; pots coordination is fenced.')
+              ? tr(
+                  'Taken over by you; pots coordination is fenced. Already-running execution continues.',
+                )
               : tr(task.coordinationPaused ? 'Coordination paused' : 'Coordination unpaused')}
           </p>
           <p>{tr('Origin suggestion: {0}', [task.originSuggestionId])}</p>
           <p>
             {task.executionSessionId
               ? tr('Execution session: {0}', [task.executionSessionId])
-              : tr('No execution session. Tracking is not running.')}
+              : task.status === 'tracked' || (task.status === 'stopped' && !task.execution)
+                ? tr('No execution session. Tracking is not running.')
+                : tr(
+                    'Execution session not yet confirmed. Refresh to check current state; do not assume it is stopped.',
+                  )}
           </p>
+          {#if task.outcome}<p>{tr('Outcome: {0}', [task.outcome])}</p>{/if}
+          {#if task.failure}<p role="status">{tr('Failure: {0}', [task.failure])}</p>{/if}
+          {#if task.execution}
+            <p>{tr('Authorized instruction: {0}', [task.execution.instruction])}</p>
+          {:else if task.status === 'tracked'}
+            <p>
+              {tr(
+                'Start authorizes one execution in a new session in the same workspace, using only your instruction. No source transcript or approval is copied or answered. The instruction cannot be changed after Start.',
+              )}
+            </p>
+            <label
+              ><span>{tr('Execution instruction')}</span><textarea
+                bind:value={instructions[task.id]}
+                disabled={busy || task.coordinationPaused || task.takenOver}
+                required
+              ></textarea></label
+            >
+            <p>{tr('Instruction must be 1–20000 UTF-8 bytes.')}</p>
+            <p>
+              {tr(
+                'Start requires an enabled responsibility with coordination unpaused, dispatch budget remaining and a concurrency slot. Pausing coordination does not stop already-running execution.',
+              )}
+            </p>
+            <button
+              type="button"
+              class="button"
+              disabled={busy ||
+                !snapshot.executionAvailable ||
+                task.coordinationPaused ||
+                task.takenOver ||
+                !validPotsInstruction(instructions[task.id] ?? '')}
+              onclick={() => start(task)}
+              >{tr(snapshot.executionAvailable ? 'Start' : 'Start unavailable')}</button
+            >
+          {/if}
           <div class="actions">
             <button
               type="button"
               class="button"
-              disabled={busy || task.status === 'stopped' || task.takenOver}
+              disabled={busy ||
+                potsTaskTerminal(task) ||
+                task.status === 'stopping' ||
+                task.takenOver}
               onclick={() => act(() => potsApi.task(task, 'take_over'))}>{tr('Take over')}</button
             >
             <button
               type="button"
               class="button"
-              disabled={busy || task.status === 'stopped' || task.takenOver}
+              disabled={busy ||
+                potsTaskTerminal(task) ||
+                task.status === 'stopping' ||
+                task.takenOver}
               onclick={() =>
                 act(() =>
                   potsApi.task(
@@ -395,16 +467,20 @@
             <button
               type="button"
               class="button"
-              disabled={busy || task.status === 'stopped'}
-              onclick={() => act(() => potsApi.task(task, 'stop'))}>{tr('Stop tracking')}</button
+              disabled={busy || potsTaskTerminal(task) || task.status === 'stopping'}
+              onclick={() => act(() => potsApi.task(task, 'stop'))}
+              >{tr(
+                task.execution || task.executionSessionId ? 'Stop execution' : 'Stop tracking',
+              )}</button
             >
-            <button
-              type="button"
-              class="button"
-              disabled
-              title={tr('Dispatch is not ready. No execution session was started.')}
-              >{tr('Start unavailable')}</button
-            >
+            {#if task.executionSessionId}
+              <button
+                type="button"
+                class="button"
+                onclick={() => onopenchat(task.executionSessionId!)}
+                >{tr('Open execution session')}</button
+              >
+            {/if}
           </div>
         </article>
       {:else}<p>{tr('No tracked tasks.')}</p>{/each}

@@ -11,7 +11,32 @@ The three adopted crate names and default-off OAuth/wire-feature direction are
 now represented in code; remaining contracts and acceptance gates below stay open.
 See the [accepted design decisions](unified-conversations.md#accepted-specification-review-recommendations-2026-10-24).
 
-## Implementation checkpoint — not the complete target
+## Explicit execution follow-up — 2026-10-25, unreleased
+
+The user authorized the next bounded checkpoint after reviewing the tracking-only
+state: explicit Start with a written instruction, one dedicated same-workspace
+execution conversation, trusted pots attribution, progress/results, takeover and
+execution-scoped Stop. Implementation uses atomic Gateway reservation and a
+backend-only Node link command with a durable at-most-once send ledger. Recovery
+observes/cancels; it never automatically replays Prepare/Start or revives stopped
+work. Unknown sends retain the concurrency reservation until reconciled.
+
+This does not authorize transcript/file observation, model-driven suggestions,
+periodic autonomous work, standing execution grants, digests/push, unified-workflow
+completion, deployment or publication. Gateway schema 1011, Node schema 2003 and
+protocol 15 require state backups and a coordinated future upgrade. The tracking
+checkpoint and its historical gates below remain historical, not the current
+execution-unavailable contract. Current behavior and remaining limits are in the
+[pots guide](../docs/guides/pots.md). Full P7 acceptance is still open.
+
+Focused follow-up verification: Gateway 202, Web 452, Android pots/timeline 35,
+protocol 23 and fresh-binary executable conformance 23 cases across 7 suites
+(including 3 pots cases) passed, as did workspace strict clippy. The full sandboxed
+Rust workspace run still failed at 2 Linux Node socket-enumeration tests (369
+passed / 3 ignored in that target); outside-sandbox retry was declined. This is
+not a clean full-workspace or full-conformance claim. See the guide for details.
+
+## Original tracking implementation checkpoint — not the complete target
 
 Current behavior is documented in [pots](../docs/guides/pots.md) and
 [Reusable LLM foundations](../docs/architecture/reusable-llm.md). Implementation

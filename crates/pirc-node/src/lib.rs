@@ -61,6 +61,7 @@ pub mod node;
 pub mod panels;
 #[doc(hidden)]
 pub mod persistence;
+pub mod pots;
 pub mod private_dir;
 pub mod project_files;
 pub mod recap;

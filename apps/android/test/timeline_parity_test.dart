@@ -32,6 +32,36 @@ Widget shell(LiveController c, {double scale = 1}) => MaterialApp(
   ),
 );
 void main() {
+  testWidgets(
+    'trusted pots instruction stays visible outside activity with fixed label',
+    (t) async {
+      final g = FakeGateway(), c = LiveController(g);
+      const content = '<b>Inspect workspace</b> **literal instruction**';
+      final message = <String, dynamic>{
+        'id': 'pots',
+        'role': 'system',
+        'systemKind': 'pots',
+        'label': 'untrusted override',
+        'content': content,
+        'createdAt': '2026-10-25T08:00:00Z',
+      };
+      c.state = {
+        'messages': [message],
+      };
+      expect(timelineItems([message]).single.run, false);
+      await t.pumpWidget(shell(c));
+      await t.pumpAndSettle();
+      expect(find.text('From pots'), findsOneWidget);
+      expect(find.text(content), findsOneWidget);
+      expect(find.text('untrusted override'), findsNothing);
+      expect(find.text('Activity details'), findsNothing);
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+      c.dispose();
+      await g.stream.close();
+    },
+  );
+
   testWidgets('message clock keeps the web two-digit hour in 12-hour locales', (
     t,
   ) async {

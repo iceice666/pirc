@@ -152,7 +152,6 @@ describe('pots tracking checkpoint', () => {
     expect(target.textContent).toContain('From pots');
     expect(target.textContent).toContain('No execution session. Tracking is not running.');
     expect(button('Start unavailable').disabled).toBe(true);
-    expect(button('Start unavailable').title).toContain('Dispatch is not ready');
     await click('Review source conversation');
     expect(open).toHaveBeenCalledWith('session1');
     expect(posts()).toHaveLength(0);
@@ -338,7 +337,9 @@ describe('pots tracking checkpoint', () => {
 
   it('does not invent a running task when start returns not_ready', async () => {
     handler = async () => response({ error: { code: 'not_ready', message: 'No adapter' } }, 503);
-    await expect(potsApi.start(state.tasks[0]!, 'start-key')).rejects.toMatchObject({
+    await expect(
+      potsApi.start(state.tasks[0]!, 'Inspect the workspace', 'start-key'),
+    ).rejects.toMatchObject({
       status: 503,
       code: 'not_ready',
     });
@@ -346,8 +347,125 @@ describe('pots tracking checkpoint', () => {
       expectedRevision: 2,
       expectedGeneration: 5,
       commandId: 'start-key',
+      instruction: 'Inspect the workspace',
     });
     expect(state.tasks[0]!.status).toBe('tracked');
+  });
+
+  it('requires an explicit bounded instruction and dispatches once, then opens only the execution session', async () => {
+    state.executionAvailable = true;
+    state.tasks[0]!.coordinationPaused = false;
+    await mountPage();
+    expect(button('Start').disabled).toBe(true);
+    expect(posts()).toHaveLength(0);
+    expect(target.textContent).toContain('No source transcript or approval is copied or answered');
+    await enter('Execution instruction', '界'.repeat(6667));
+    expect(button('Start').disabled).toBe(true);
+    await enter('Execution instruction', 'Inspect the workspace and report findings');
+    expect(button('Start').disabled).toBe(false);
+    handler = async (_url, init) => {
+      if (init.method === 'POST') {
+        state.tasks[0]!.status = 'running';
+        state.tasks[0]!.executionSessionId = 'dedicated-execution';
+        state.tasks[0]!.execution = {
+          instruction: JSON.parse(String(init.body)).instruction,
+          dispatchId: 'dispatch',
+          generation: 5,
+          acceptedRevision: 2,
+          acceptedAt: 1,
+        };
+        return response({ task: state.tasks[0] });
+      }
+      return response(state);
+    };
+    await click('Start');
+    expect(posts()).toHaveLength(1);
+    expect(posts()[0]!.url).toBe('/api/pots/tasks/t1/start');
+    expect(posts()[0]!.body).toEqual({
+      expectedRevision: 2,
+      expectedGeneration: 5,
+      commandId: expect.any(String),
+      instruction: 'Inspect the workspace and report findings',
+    });
+    expect(target.textContent).toContain('Running');
+    expect(button('Start')).toBeUndefined();
+    expect(button('Stop execution').disabled).toBe(false);
+    await click('Open execution session');
+    expect(open).toHaveBeenCalledWith('dedicated-execution');
+    expect(posts()).toHaveLength(1);
+  });
+
+  it.each(['coordinationPaused', 'takenOver'] as const)('does not Start when %s', async (flag) => {
+    state.executionAvailable = true;
+    state.tasks[0]!.coordinationPaused = false;
+    state.tasks[0]![flag] = true;
+    await mountPage();
+    await enter('Execution instruction', 'Inspect workspace');
+    expect(button('Start').disabled).toBe(true);
+    await click('Start');
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('never retries an uncertain Start and keeps Stop available with delivery warning', async () => {
+    state.executionAvailable = true;
+    state.tasks[0]!.coordinationPaused = false;
+    await mountPage();
+    await enter('Execution instruction', 'Inspect workspace');
+    handler = async (_url, init) => {
+      if (init.method === 'POST') {
+        state.tasks[0]!.status = 'starting';
+        state.tasks[0]!.execution = {
+          instruction: 'Inspect workspace',
+          dispatchId: 'd',
+          generation: 5,
+          acceptedRevision: 2,
+          acceptedAt: 1,
+        };
+        state.tasks[0]!.failure = 'Delivery could not be confirmed';
+        throw new TypeError('Connection lost');
+      }
+      return response(state);
+    };
+    await click('Start');
+    expect(posts()).toHaveLength(1);
+    expect(target.textContent).toContain('Starting');
+    expect(button('Stop execution').disabled).toBe(false);
+    expect(target.textContent).toContain('do not assume it is stopped');
+    expect(target.textContent).toContain('Delivery could not be confirmed');
+    expect(button('Start')).toBeUndefined();
+  });
+
+  it.each([
+    'starting',
+    'queued',
+    'waiting_input',
+    'completed',
+    'failed',
+    'stopping',
+    'stopped',
+  ] as const)('renders %s without offering another Start', async (status) => {
+    state.executionAvailable = true;
+    state.tasks[0]!.status = status;
+    state.tasks[0]!.executionSessionId = 'exec';
+    state.tasks[0]!.outcome = 'Result summary';
+    await mountPage();
+    expect(button('Start')).toBeUndefined();
+    expect(target.textContent).toContain('Result summary');
+    expect(button('Open execution session')).toBeDefined();
+    expect(posts()).toHaveLength(0);
+  });
+
+  it('clears private execution instruction drafts on account changes', async () => {
+    state.executionAvailable = true;
+    state.tasks[0]!.coordinationPaused = false;
+    await mountPage();
+    await enter('Execution instruction', 'Private old account instruction');
+    state.accountKey = 'account-b';
+    await click('Refresh');
+    const instruction = target.querySelectorAll('textarea')[1]!;
+    expect(instruction.value).toBe('');
+    expect(button('Start').disabled).toBe(true);
+    expect(posts()).toHaveLength(0);
   });
 
   it('renders the safety boundary and controls in Traditional Chinese', async () => {

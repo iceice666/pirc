@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use axum::extract::ws::WebSocket;
 use pirc_protocol::{
     AssistantDelta, InferenceRequest, Message, NODE_FRAME_MAX_BYTES, NODE_PROTOCOL_VERSION,
-    NodeHttpRequest, NodeHttpResponse, NodeMessage, NodeRole, PROTOCOL_MISMATCH_CLOSE,
+    NodeHttpRequest, NodeHttpResponse, NodeMessage, NodeRole, PROTOCOL_MISMATCH_CLOSE, PotsRequest,
     RegisteredWorkspace, Registration,
 };
 use serde::Serialize;
@@ -182,6 +182,8 @@ struct State {
     test_connections: HashMap<String, ConnectedNode>,
     #[cfg(test)]
     test_request: Option<Arc<dyn Fn(NodeHttpRequest) -> ApiResult<NodeHttpResponse> + Send + Sync>>,
+    #[cfg(test)]
+    test_pots: Option<Arc<dyn Fn(PotsRequest) -> ApiResult<NodeHttpResponse> + Send + Sync>>,
     pending_registrations: usize,
     requests: HashMap<String, Pending>,
     streams: HashMap<String, Stream>,
@@ -308,6 +310,14 @@ impl NodeRegistry {
         state.test_request = Some(Arc::new(request));
     }
 
+    #[cfg(test)]
+    pub(crate) fn set_test_pots(
+        &self,
+        request: impl Fn(PotsRequest) -> ApiResult<NodeHttpResponse> + Send + Sync + 'static,
+    ) {
+        self.lock().test_pots = Some(Arc::new(request));
+    }
+
     /// `raw` is the node's answer the workspace was parsed from, listed
     /// as it is (see [`ConnectedNode::added`]).
     pub fn add_workspace(
@@ -416,6 +426,41 @@ impl NodeRegistry {
                 return test_request(data);
             }
         }
+        self.correlated_request(
+            node_id,
+            "request",
+            serde_json::to_value(data).map_err(|_| ApiError::internal())?,
+        )
+        .await
+    }
+
+    /// Host-only pots commands are separate link frames, never relayed HTTP.
+    pub(crate) async fn pots_request(
+        &self,
+        node_id: &str,
+        data: PotsRequest,
+    ) -> ApiResult<NodeHttpResponse> {
+        #[cfg(test)]
+        {
+            let handler = self.lock().test_pots.clone();
+            if let Some(handler) = handler {
+                return handler(data);
+            }
+        }
+        self.correlated_request(
+            node_id,
+            "pots_request",
+            serde_json::to_value(data).map_err(|_| ApiError::internal())?,
+        )
+        .await
+    }
+
+    async fn correlated_request(
+        &self,
+        node_id: &str,
+        kind: &str,
+        data: Value,
+    ) -> ApiResult<NodeHttpResponse> {
         let request_id = uuid();
         let (reply, answer) = oneshot::channel();
         {
@@ -428,7 +473,7 @@ impl NodeRegistry {
                 ));
             }
             let link = Self::link_of(&state, node_id)?;
-            let frame = json!({ "type": "request", "requestId": request_id, "data": data });
+            let frame = json!({ "type": kind, "requestId": request_id, "data": data });
             if let Err(failure) = link.send(&frame, 0) {
                 return Err(match failure {
                     SendFailure::TooLarge => ApiError::new(

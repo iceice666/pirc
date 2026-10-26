@@ -64,7 +64,27 @@ export interface PotsTask {
   action: 'review_session_input';
   targetSessionId: string;
   executionSessionId: string | null;
-  status: 'tracked' | 'stopped';
+  status:
+    | 'tracked'
+    | 'starting'
+    | 'queued'
+    | 'running'
+    | 'waiting_input'
+    | 'completed'
+    | 'failed'
+    | 'interrupted'
+    | 'stopping'
+    | 'stopped';
+  execution?: {
+    instruction: string;
+    dispatchId: string;
+    generation: number;
+    acceptedRevision: number;
+    acceptedAt: number;
+    state?: string;
+  };
+  outcome?: string | null;
+  failure?: string | null;
   revision: number;
   controlGeneration: number;
   coordinationPaused: boolean;
@@ -129,10 +149,28 @@ export const potsApi = {
       expectedGeneration: record.controlGeneration,
       action: { type },
     }),
-  start: (record: PotsTask, commandId = uuid()) =>
+  start: (record: PotsTask, instruction: string, commandId = uuid()) =>
     send<{ task: PotsTask }>(`/api/pots/tasks/${part(record.id)}/start`, {
       expectedRevision: record.revision,
       expectedGeneration: record.controlGeneration,
       commandId,
+      instruction,
     }),
 };
+
+export const potsTaskLabels: Record<PotsTask['status'], string> = {
+  tracked: 'Tracked',
+  starting: 'Starting',
+  queued: 'Queued',
+  running: 'Running',
+  waiting_input: 'Waiting for input',
+  completed: 'Completed',
+  failed: 'Failed',
+  interrupted: 'Interrupted',
+  stopping: 'Stopping',
+  stopped: 'Stopped',
+};
+export const potsTaskTerminal = (task: PotsTask) =>
+  ['completed', 'failed', 'interrupted', 'stopped'].includes(task.status);
+export const validPotsInstruction = (instruction: string) =>
+  instruction.trim().length > 0 && new TextEncoder().encode(instruction).length <= 20000;

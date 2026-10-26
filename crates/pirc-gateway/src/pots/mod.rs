@@ -1,6 +1,8 @@
-//! Durable bounded pots tracking. No model scheduler or execution adapter.
+//! Durable bounded pots tracking and explicit one-shot execution.
 //! Only authenticated host events may call ingest_progress/resolve_progress.
 mod api;
+mod execution;
+pub use execution::start;
 pub mod host;
 pub use api::routes;
 mod store;

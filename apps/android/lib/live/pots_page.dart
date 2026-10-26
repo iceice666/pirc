@@ -30,6 +30,7 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
   final dispatches = TextEditingController();
   final concurrency = TextEditingController();
   final selected = <String>{};
+  final instructions = <String, TextEditingController>{};
   int _draftEpoch = 0;
 
   @override
@@ -46,6 +47,10 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
     dispatches.clear();
     concurrency.clear();
     selected.clear();
+    for (final c in instructions.values) {
+      c.dispose();
+    }
+    instructions.clear();
   }
 
   void _changed() {
@@ -79,7 +84,13 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     state.removeListener(_changed);
     state.dispose();
-    for (final c in [purpose, observations, dispatches, concurrency]) {
+    for (final c in [
+      purpose,
+      observations,
+      dispatches,
+      concurrency,
+      ...instructions.values,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -306,17 +317,41 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
   }
 
   Widget task(Json t) {
-    final stopped = t['status'] == 'stopped', takeover = t['takenOver'] == true;
+    final stopped = const [
+      'completed',
+      'failed',
+      'interrupted',
+      'stopped',
+      'stopping',
+    ].contains(t['status']);
+    final takeover = t['takenOver'] == true;
+    final execution = t['execution'] != null || t['executionSessionId'] != null;
+    final instruction = instructions.putIfAbsent(
+      '${t['id']}',
+      TextEditingController.new,
+    );
+    const labels = {
+      'tracked': 'Tracked',
+      'starting': 'Starting',
+      'queued': 'Queued',
+      'running': 'Running',
+      'waiting_input': 'Waiting for input',
+      'completed': 'Completed',
+      'failed': 'Failed',
+      'interrupted': 'Interrupted',
+      'stopping': 'Stopping',
+      'stopped': 'Stopped',
+    };
     return card([
       Text(
         tr('Review session input'),
         style: Theme.of(context).textTheme.titleMedium,
       ),
-      Text("${tr(stopped ? 'Stopped' : 'Tracked')} · ${t['id']}"),
+      Text("${tr(labels[t['status']] ?? '${t['status']}')} · ${t['id']}"),
       Text(
         tr(
           takeover
-              ? 'Taken over by you; pots coordination is fenced.'
+              ? 'Taken over by you; pots coordination is fenced. Already-running execution continues.'
               : t['coordinationPaused'] == true
               ? 'Coordination paused'
               : 'Coordination unpaused',
@@ -326,9 +361,52 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
       Text(tr('Target session: {0}', [t['targetSessionId']])),
       Text(
         t['executionSessionId'] == null
-            ? tr('No execution session. Tracking is not running.')
+            ? t['status'] == 'tracked' ||
+                      (t['status'] == 'stopped' && !execution)
+                  ? tr('No execution session. Tracking is not running.')
+                  : tr(
+                      'Execution session not yet confirmed. Refresh to check current state; do not assume it is stopped.',
+                    )
             : tr('Execution session: {0}', [t['executionSessionId']]),
       ),
+      if (t['outcome'] != null) Text(tr('Outcome: {0}', [t['outcome']])),
+      if (t['failure'] != null) Text(tr('Failure: {0}', [t['failure']])),
+      if (t['execution'] != null)
+        Text(
+          tr('Authorized instruction: {0}', [
+            obj(t['execution'])['instruction'],
+          ]),
+        )
+      else if (t['status'] == 'tracked') ...[
+        Text(
+          tr(
+            'Start authorizes one execution in a new session in the same workspace, using only your instruction. No source transcript or approval is copied or answered. The instruction cannot be changed after Start.',
+          ),
+        ),
+        TextField(
+          key: ValueKey('instruction-${t['id']}'),
+          controller: instruction,
+          enabled: state.canStart(t),
+          minLines: 3,
+          maxLines: 8,
+          decoration: InputDecoration(labelText: tr('Execution instruction')),
+          onChanged: (_) => setState(() {}),
+        ),
+        Text(tr('Instruction must be 1–20000 UTF-8 bytes.')),
+        Text(
+          tr(
+            'Start requires an enabled responsibility with coordination unpaused, dispatch budget remaining and a concurrency slot. Pausing coordination does not stop already-running execution.',
+          ),
+        ),
+        button(
+          state.snapshot?['executionAvailable'] == true
+              ? 'Start'
+              : 'Start unavailable',
+          state.canStart(t) && PotsState.validInstruction(instruction.text)
+              ? () => unawaited(state.start(t, instruction.text))
+              : null,
+        ),
+      ],
       actions([
         button(
           'Take over',
@@ -352,10 +430,14 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
                 ),
         ),
         button(
-          'Stop tracking',
+          execution ? 'Stop execution' : 'Stop tracking',
           stopped ? null : () => unawaited(state.task(t, 'stop')),
         ),
-        const OutlinedButton(onPressed: null, child: _StartUnavailable()),
+        if (t['executionSessionId'] != null)
+          button(
+            'Open execution session',
+            () => widget.onOpenChat('${t['executionSessionId']}'),
+          ),
       ]),
     ]);
   }
@@ -401,7 +483,7 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
                 ),
                 Text(
                   tr(
-                    'Progress events only: no transcript reading. Automatic execution is unavailable in this checkpoint.',
+                    'Progress events only: no transcript reading. Execution requires your explicit instruction and Start.',
                   ),
                 ),
                 Text(
@@ -482,10 +564,4 @@ class _PotsPageState extends State<PotsPage> with WidgetsBindingObserver {
       ),
     );
   }
-}
-
-class _StartUnavailable extends StatelessWidget {
-  const _StartUnavailable();
-  @override
-  Widget build(BuildContext context) => Text(tr('Start unavailable'));
 }

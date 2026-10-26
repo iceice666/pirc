@@ -3316,6 +3316,27 @@ const englishMessages = <String, String>{
   "Tracking controls do not stop tools running in the source conversation.": "Tracking controls do not stop tools running in the source conversation.",
   "Unable to load pots. Refresh to try again.": "Unable to load pots. Refresh to try again.",
   "Your personal coordinator. Suggestions are not instructions or permission to act.": "Your personal coordinator. Suggestions are not instructions or permission to act.",
+  "Progress events only: no transcript reading. Execution requires your explicit instruction and Start.":
+      "Progress events only: no transcript reading. Execution requires your explicit instruction and Start.",
+  "Start authorizes one execution in a new session in the same workspace, using only your instruction. No source transcript or approval is copied or answered. The instruction cannot be changed after Start.":
+      "Start authorizes one execution in a new session in the same workspace, using only your instruction. No source transcript or approval is copied or answered. The instruction cannot be changed after Start.",
+  "Start requires an enabled responsibility with coordination unpaused, dispatch budget remaining and a concurrency slot. Pausing coordination does not stop already-running execution.":
+      "Start requires an enabled responsibility with coordination unpaused, dispatch budget remaining and a concurrency slot. Pausing coordination does not stop already-running execution.",
+  "Taken over by you; pots coordination is fenced. Already-running execution continues.":
+      "Taken over by you; pots coordination is fenced. Already-running execution continues.",
+  "Execution instruction": "Execution instruction",
+  "Instruction must be 1–20000 UTF-8 bytes.":
+      "Instruction must be 1–20000 UTF-8 bytes.",
+  "Authorized instruction: {0}": "Authorized instruction: {0}",
+  "Outcome: {0}": "Outcome: {0}",
+  "Failure: {0}": "Failure: {0}",
+  "Open execution session": "Open execution session",
+  "Stop execution": "Stop execution",
+  "Starting": "Starting",
+  "Queued": "Queued",
+  "Waiting for input": "Waiting for input",
+  "Execution session not yet confirmed. Refresh to check current state; do not assume it is stopped.":
+      "Execution session not yet confirmed. Refresh to check current state; do not assume it is stopped.",
 };
 const traditionalChineseMessages = <String, String>{
   "無法確認最新狀態，請重試": "無法確認最新狀態，請重試",
@@ -5941,7 +5962,7 @@ const traditionalChineseMessages = <String, String>{
   "Untitled event": "未命名活動",
   "A calendar item has an invalid time.": "行事曆項目的時間無效。",
   "Unable to format calendar time in this time zone.": "無法依此時區格式化行事曆時間。",
-  "Start": "開始",
+  "Start": "啟動",
   "Taipei": "台北",
   "These permissions apply to agent tools only. They do not change your personal calendar view.":
       "這些權限僅適用於代理程式工具，不會變更你的個人行事曆檢視。",
@@ -6121,4 +6142,24 @@ const traditionalChineseMessages = <String, String>{
   "Tracking controls do not stop tools running in the source conversation.": "追蹤控制不會停止來源對話中正在執行的工具。",
   "Unable to load pots. Refresh to try again.": "無法載入 pots，請重新整理後再試。",
   "Your personal coordinator. Suggestions are not instructions or permission to act.": "你的個人協調助手。建議不是指令，也不代表行動授權。",
+  "Progress events only: no transcript reading. Execution requires your explicit instruction and Start.":
+      "僅使用進度事件，不讀取對話內容。執行需要您提供明確指示並按下「啟動」。",
+  "Start authorizes one execution in a new session in the same workspace, using only your instruction. No source transcript or approval is copied or answered. The instruction cannot be changed after Start.":
+      "啟動會授權在同一工作區的新工作階段執行一次，僅使用您提供的指示。不會複製來源對話或核准要求，也不會回答來源核准。啟動後無法變更指示。",
+  "Start requires an enabled responsibility with coordination unpaused, dispatch budget remaining and a concurrency slot. Pausing coordination does not stop already-running execution.":
+      "啟動需要已啟用且未暫停協調的責任、剩餘派送額度及可用的並行名額。暫停協調不會停止已在執行的工作。",
+  "Taken over by you; pots coordination is fenced. Already-running execution continues.":
+      "您已接管，pots 協調已隔離。已在執行的工作會繼續。",
+  "Execution instruction": "執行指示",
+  "Instruction must be 1–20000 UTF-8 bytes.": "指示必須為 1–20000 個 UTF-8 位元組。",
+  "Authorized instruction: {0}": "已授權的指示：{0}",
+  "Outcome: {0}": "結果：{0}",
+  "Failure: {0}": "失敗原因：{0}",
+  "Open execution session": "開啟執行工作階段",
+  "Stop execution": "停止執行",
+  "Starting": "正在啟動",
+  "Queued": "已排入佇列",
+  "Waiting for input": "等待輸入",
+  "Execution session not yet confirmed. Refresh to check current state; do not assume it is stopped.":
+      "尚未確認執行工作階段。請重新整理以查看目前狀態，切勿假定工作已停止。",
 };

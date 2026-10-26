@@ -241,6 +241,11 @@ internal fun piMessage(raw: JsonElement?, id: String = piMessageId(raw), now: ()
             val display = raw["display"]
             if (display is JsonPrimitive && display.booleanOrNull == false) return null
             val type = raw["customType"].text
+            // Backend-reserved provenance. Never infer it from content or details.actor.
+            if (type == "pots-dispatch") return Message(
+                id = id, role = "system", systemKind = "pots", label = "From pots",
+                content = text(raw["content"]), createdAt = createdAt,
+            )
             val team = type == "agent-team"
             val background = type == "background-task-finished" || type == "background-task-output"
             val skill = type == "skill"

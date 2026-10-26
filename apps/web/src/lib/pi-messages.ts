@@ -202,6 +202,17 @@ export function piMessage(
       };
     case 'custom': {
       if (raw.display === false) return null;
+      // Reserved by the backend; prompt text and details.actor are never provenance.
+      if (raw.customType === 'pots-dispatch') {
+        return {
+          id,
+          role: 'system',
+          systemKind: 'pots',
+          label: tr('From pots'),
+          content: text(raw.content),
+          createdAt,
+        };
+      }
       const found = images(raw.content);
       const team = raw.customType === 'agent-team';
       const background =

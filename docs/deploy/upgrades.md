@@ -1,5 +1,21 @@
 # Upgrades
 
+## Unreleased: explicit pots execution
+
+Back up both Gateway and Node state before upgrading. Gateway schema **1011**
+fences the extended task lifecycle (the existing pots SQL tables are unchanged);
+Node schema **2003** adds durable dispatch identities, immutable instructions and
+send/control fences. Older executables refuse the migrated schemas. Node protocol
+**15** requires updating Gateway and every Node together; do not mix protocol 14
+and 15. Update Web/Android clients to expose explicit instruction-based Start.
+
+This is a local implementation checkpoint, not a deployment instruction. Start
+requires an enabled responsibility, resumed coordination, remaining dispatch and
+concurrency budgets, current source evidence and a written user instruction. It
+uses a new dedicated conversation in the same workspace, never answers the source
+interaction, and does not enable autonomous dispatch. Unknown sends are not
+automatically retried. See [pots](../guides/pots.md).
+
 ## 0.10.0: pots tracking and gateway schema 1010
 
 This release adds an opt-in, progress-only **pirc pots** inbox. Back

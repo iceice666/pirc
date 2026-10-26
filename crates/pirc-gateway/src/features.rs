@@ -225,6 +225,7 @@ pub fn start(app: &AppState) -> Result<(), String> {
     crate::push::start(app)?;
     crate::delegations::start(app);
     crate::schedules::start(app);
+    crate::pots::start(app);
     crate::calendar::reminders::start(app);
     Ok(())
 }

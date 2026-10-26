@@ -301,6 +301,239 @@ void main() {
     },
   );
 
+  test(
+    'Start validates UTF-8 instruction, guards task controls, sends one fenced POST and never retries',
+    () async {
+      var current = overview()..['executionAvailable'] = true;
+      final g = FakeGateway()..handler = (m, a) async => current;
+      final c = paired(g), state = PotsState(c);
+      await state.load();
+      final task = state.tasks.single;
+      expect(await state.start(task, ''), false);
+      expect(await state.start(task, List.filled(6667, '界').join()), false);
+      task['coordinationPaused'] = true;
+      expect(await state.start(task, 'Inspect workspace'), false);
+      task['coordinationPaused'] = false;
+      task['takenOver'] = true;
+      expect(await state.start(task, 'Inspect workspace'), false);
+      task['takenOver'] = false;
+      expect(posts(g), isEmpty);
+      g.handler = (m, a) async {
+        if (a['method'] == 'POST') {
+          current = overview()..['executionAvailable'] = true;
+          (current['tasks'] as List).single['status'] = 'interrupted';
+          throw PlatformException(code: 'offline');
+        }
+        return current;
+      };
+      expect(await state.start(task, 'Inspect workspace'), false);
+      expect(posts(g).length, 1);
+      expect(posts(g).single['path'], '/api/pots/tasks/t%20%2F/start');
+      expect(posts(g).single['body'], {
+        'expectedRevision': 5,
+        'expectedGeneration': 3,
+        'commandId': isNotEmpty,
+        'instruction': 'Inspect workspace',
+      });
+      expect(await state.start(state.tasks.single, 'Inspect workspace'), false);
+      expect(await state.start(task, 'Inspect workspace'), false);
+      expect(posts(g).length, 1);
+      state.dispose();
+      c.dispose();
+      await g.stream.close();
+    },
+  );
+
+  test(
+    'Start rejects stale task after re-pair and late mutation cannot overwrite new account',
+    () async {
+      final mutation = Completer<Json>();
+      final g = FakeGateway()
+        ..handler = (m, a) async => a['method'] == 'POST'
+            ? mutation.future
+            : (overview(
+                account: a['pairingStamp'] == 'old-pairing' ? 'alice' : 'bob',
+              )..['executionAvailable'] = true);
+      final c = paired(g), state = PotsState(c);
+      await state.load();
+      final oldTask = state.tasks.single;
+      final pending = state.start(oldTask, 'Private instruction');
+      c.pairingStamp = 'new-pairing';
+      c.changed();
+      await Future<void>.delayed(Duration.zero);
+      mutation.complete({});
+      expect(await pending, false);
+      expect(await state.start(oldTask, 'Private instruction'), false);
+      expect(state.snapshot?['accountKey'], 'bob');
+      expect(posts(g).length, 1);
+      state.dispose();
+      c.dispose();
+      await g.stream.close();
+    },
+  );
+
+  testWidgets(
+    'explicit Start uses instruction then exposes running execution session without another Start',
+    (t) async {
+      var current = overview()..['executionAvailable'] = true;
+      final g = FakeGateway()
+        ..handler = (m, a) async {
+          if (a['method'] == 'POST') {
+            final task = (current['tasks'] as List).single as Json;
+            task['status'] = 'running';
+            task['executionSessionId'] = 'dedicated-execution';
+            task['execution'] = {'instruction': obj(a['body'])['instruction']};
+          }
+          return current;
+        };
+      final c = paired(g);
+      String? opened;
+      await t.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PotsPage(controller: c, onOpenChat: (id) => opened = id),
+          ),
+        ),
+      );
+      await t.pumpAndSettle();
+      final scroll = find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await t.scrollUntilVisible(
+        find.byKey(const ValueKey('instruction-t /')),
+        500,
+        scrollable: scroll,
+      );
+      await t.enterText(
+        find.byKey(const ValueKey('instruction-t /')),
+        'Inspect workspace',
+      );
+      await t.pumpAndSettle();
+      await t.scrollUntilVisible(find.text('Start'), 150, scrollable: scroll);
+      await t.tap(find.text('Start'));
+      await t.pumpAndSettle();
+      expect(posts(g).length, 1);
+      expect(obj(posts(g).single['body'])['instruction'], 'Inspect workspace');
+      await t.scrollUntilVisible(
+        find.text('Open execution session'),
+        300,
+        scrollable: scroll,
+      );
+      await t.tap(find.text('Open execution session'));
+      await t.pump();
+      expect(opened, 'dedicated-execution');
+      expect(find.text('Start'), findsNothing);
+      expect(find.text('Stop execution'), findsOneWidget);
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+      c.dispose();
+      await g.stream.close();
+    },
+  );
+
+  for (final entry in {
+    'starting': 'Starting',
+    'queued': 'Queued',
+    'waiting_input': 'Waiting for input',
+    'completed': 'Completed',
+    'failed': 'Failed',
+    'interrupted': 'Interrupted',
+    'stopping': 'Stopping',
+    'stopped': 'Stopped',
+  }.entries) {
+    testWidgets(
+      'execution status ${entry.key} shows result and never offers another Start',
+      (t) async {
+        final current = overview()..['executionAvailable'] = true;
+        final task = (current['tasks'] as List).single as Json;
+        task['status'] = entry.key;
+        task['executionSessionId'] = 'execution';
+        task['outcome'] = 'Result summary';
+        task['failure'] = 'Diagnostic';
+        task['takenOver'] = true;
+        final g = FakeGateway()..handler = (m, a) async => current;
+        final c = paired(g);
+        await t.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: PotsPage(controller: c, onOpenChat: (_) {}),
+            ),
+          ),
+        );
+        await t.pumpAndSettle();
+        await t.scrollUntilVisible(
+          find.text('Open execution session'),
+          500,
+          scrollable: find
+              .descendant(
+                of: find.byType(ListView),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        );
+        expect(find.text('${entry.value} · t /'), findsOneWidget);
+        expect(find.text('Outcome: Result summary'), findsOneWidget);
+        expect(find.text('Failure: Diagnostic'), findsOneWidget);
+        expect(
+          find.textContaining('Already-running execution continues.'),
+          findsOneWidget,
+        );
+        expect(find.text('Start'), findsNothing);
+        expect(posts(g), isEmpty);
+        expect(t.takeException(), isNull);
+        await t.pumpWidget(const SizedBox());
+        c.dispose();
+        await g.stream.close();
+      },
+    );
+  }
+
+  testWidgets(
+    're-pair clears private execution instruction and disables stale Start',
+    (t) async {
+      final g = FakeGateway()
+        ..handler = (m, a) async => overview()..['executionAvailable'] = true;
+      final c = paired(g);
+      await t.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: PotsPage(controller: c, onOpenChat: (_) {}),
+          ),
+        ),
+      );
+      await t.pumpAndSettle();
+      final field = find.byKey(const ValueKey('instruction-t /'));
+      final scroll = find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first;
+      await t.scrollUntilVisible(field, 500, scrollable: scroll);
+      await t.enterText(field, 'Private execution draft');
+      await t.pumpAndSettle();
+      c.pairingStamp = 'new-pairing';
+      c.changed();
+      await t.pumpAndSettle();
+      expect(find.text('Private execution draft'), findsNothing);
+      final start = t.widget<OutlinedButton>(
+        find.ancestor(
+          of: find.text('Start'),
+          matching: find.byType(OutlinedButton),
+        ),
+      );
+      expect(start.onPressed, isNull);
+      expect(posts(g), isEmpty);
+      expect(t.takeException(), isNull);
+      await t.pumpWidget(const SizedBox());
+      c.dispose();
+      await g.stream.close();
+    },
+  );
+
   for (final size in [const Size(390, 844), const Size(1024, 900)]) {
     testWidgets(
       'native pots at $size shows truthful tracking and source without dispatch',

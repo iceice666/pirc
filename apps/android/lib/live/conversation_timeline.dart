@@ -755,6 +755,29 @@ class _TimelineMessageState extends State<TimelineMessage> {
     final m = widget.message,
         p = palette(context),
         phone = MediaQuery.sizeOf(context).width <= 650;
+    if (m['systemKind'] == 'pots') {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              tr('From pots'),
+              style: webText(
+                context,
+                size: 13,
+                color: 'text.secondary',
+              ).copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            SelectableText(
+              value(m, 'content'),
+              style: webText(context, size: 13, color: 'text.secondary'),
+            ),
+          ],
+        ),
+      );
+    }
     final kind = m['systemKind'] ?? 'custom',
         notice = kind == 'notice',
         runtime = kind == 'team' || kind == 'background',

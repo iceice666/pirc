@@ -7,8 +7,8 @@ import 'package:flutter/foundation.dart';
 import '../l10n/app_i18n.dart';
 import 'gateway.dart';
 
-/// Tracking-only pots client. Uses the existing paired transport, never a socket,
-/// autonomous timer, model call, approval grant or execution command.
+/// Explicit-action pots client using the existing paired transport.
+/// Reading never authorizes execution or answers source approvals.
 class PotsState extends ChangeNotifier {
   PotsState(this.controller, {DateTime Function()? clock})
     : clock = clock ?? DateTime.now {
@@ -264,6 +264,29 @@ class PotsState extends ChangeNotifier {
         if (action == 'snooze')
           'until': clock().millisecondsSinceEpoch + 3600000,
       },
+    });
+  }
+
+  static bool validInstruction(String instruction) =>
+      instruction.trim().isNotEmpty && utf8.encode(instruction).length <= 20000;
+
+  bool canStart(Json t) =>
+      ready &&
+      _record(t, 'tasks') &&
+      snapshot?['executionAvailable'] == true &&
+      t['status'] == 'tracked' &&
+      t['coordinationPaused'] != true &&
+      t['takenOver'] != true &&
+      t['execution'] == null &&
+      t['executionSessionId'] == null;
+
+  Future<bool> start(Json t, String instruction) async {
+    if (!canStart(t) || !validInstruction(instruction)) return false;
+    return _mutate('/api/pots/tasks/${enc('${t['id']}')}/start', {
+      'expectedRevision': t['revision'],
+      'expectedGeneration': t['controlGeneration'],
+      'commandId': _commandId(),
+      'instruction': instruction,
     });
   }
 

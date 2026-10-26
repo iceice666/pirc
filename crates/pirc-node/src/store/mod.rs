@@ -33,7 +33,7 @@ use crate::util::{now_ms, prefix_uuid, safe_json};
 /// the gateway's migrations (1 to 19) and the Rust gateway's schema is 1000;
 /// the node's line starts apart from both, so each is recognized.
 /// 2001: uploads record their workspace and session; `workspace_deletions`.
-pub const SCHEMA_VERSION: i64 = 2002;
+pub const SCHEMA_VERSION: i64 = 2003;
 /// Upgrades from each earlier node schema, applied in order.
 const MIGRATIONS: &[(i64, &str)] = &[
     (
@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS checkpoint_workspaces (
   created_at INTEGER NOT NULL
 );"#,
     ),
+    (2003, include_str!("pots.sql")),
 ];
 /// The first node schema.
 const FIRST_SCHEMA_VERSION: i64 = 2000;
@@ -1235,6 +1236,12 @@ impl Store for Connection {
                 )?;
             }
             db.execute("DELETE FROM sessions WHERE id=?1", [session_id])?;
+            // Files and runner have already been stopped/removed. Preserve the
+            // dispatch tombstone so cancellation can settle after deletion.
+            db.execute(
+                "UPDATE pots_dispatches SET state='stopped',fenced=1 WHERE session_id=?1",
+                [session_id],
+            )?;
             db.execute(
                 "UPDATE session_deletions SET status='deleted' WHERE session_id=?1",
                 [session_id],

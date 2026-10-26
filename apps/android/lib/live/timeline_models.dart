@@ -53,7 +53,8 @@ List<TimelineItem> timelineItems(List<Json> messages) {
   for (final m in messages) {
     if (m['role'] == 'user' ||
         m['systemKind'] == 'bash' ||
-        m['systemKind'] == 'branch') {
+        m['systemKind'] == 'branch' ||
+        m['systemKind'] == 'pots') {
       flush();
       result.add(TimelineItem([m]));
       anchor = value(m, 'id');

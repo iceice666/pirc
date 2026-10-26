@@ -135,7 +135,8 @@ export function timelineItems(messages: ConversationMessage[]): TimelineItem[] {
     if (
       message.role === 'user' ||
       message.systemKind === 'bash' ||
-      message.systemKind === 'branch'
+      message.systemKind === 'branch' ||
+      message.systemKind === 'pots'
     ) {
       flush();
       items.push({ kind: 'message', message });

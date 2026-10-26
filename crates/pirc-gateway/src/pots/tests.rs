@@ -215,11 +215,12 @@ fn track_is_atomic_without_session_and_devices_reconcile() {
             expected_revision: 1,
             expected_generation: 1,
             command_id: "start".into(),
+            instruction: "Review this work".into(),
         },
         10,
     )
     .unwrap_err();
-    assert_eq!(err.code, "not_ready");
+    assert_eq!(err.code, "not_actionable");
     assert_eq!(get_task(&conn, USER, &task.id).unwrap().revision, 1);
     assert_eq!(
         conn.query_row("SELECT count(*) FROM sessions", [], |r| r.get::<_, i64>(0))
@@ -960,4 +961,702 @@ fn runner_lifecycle_invalidation_does_not_complete_task_or_restore_suggestions()
             .unwrap()
             .is_empty()
     );
+}
+
+fn executable(conn: &Connection, dispatches: u32, concurrency: u32) -> (String, Responsibility) {
+    let source = seed(conn);
+    let mut spec = input();
+    spec.budgets.dispatches = dispatches;
+    spec.budgets.concurrency = concurrency;
+    let mut r = create_responsibility(conn, USER, spec, 1).unwrap();
+    for action in [
+        ResponsibilityAction::Activate,
+        ResponsibilityAction::ResumeCoordination,
+    ] {
+        r = control_responsibility(
+            conn,
+            USER,
+            &r.id,
+            ResponsibilityControl {
+                expected_revision: r.revision,
+                expected_generation: r.generation,
+                action,
+            },
+            2,
+        )
+        .unwrap();
+    }
+    (source, r)
+}
+fn start_input(t: &Task, command: &str) -> StartInput {
+    StartInput {
+        expected_revision: t.revision,
+        expected_generation: t.control_generation,
+        command_id: command.into(),
+        instruction: "Review the selected workspace; do not act on source prompt contents.".into(),
+    }
+}
+fn tracked(conn: &Connection, source: &str, event: &str) -> Task {
+    let s = ingest(conn, source, event).remove(0);
+    accept(conn, &s, "track")
+}
+fn dedicated(conn: &Connection) -> String {
+    conn.create_session("node:work", "/private/execution", "node", "dedicated", USER)
+        .unwrap()
+        .id
+}
+fn progress(conn: &Connection, task: &Task, status: TaskStatus) -> Task {
+    set_execution_progress(
+        conn,
+        USER,
+        &task.id,
+        &task.execution.as_ref().unwrap().dispatch_id,
+        status,
+        None,
+        None,
+        20,
+    )
+    .unwrap()
+}
+#[test]
+fn execution_reservation_is_one_lifetime_no_io_and_instruction_is_immutable() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let (source, r) = executable(&conn, 2, 1);
+    let t = tracked(&conn, &source, "one");
+    let (reserved, fresh) =
+        reserve_start_task(&conn, USER, &t.id, start_input(&t, "web"), 10).unwrap();
+    assert!(fresh);
+    assert_eq!(reserved.status, TaskStatus::Starting);
+    assert!(reserved.execution_session_id.is_none());
+    let e = reserved.execution.as_ref().unwrap();
+    assert_eq!(e.workspace_id, "node:work");
+    assert_eq!(e.accepted_revision, t.revision);
+    assert_eq!(e.responsibility_generation, r.generation);
+    let (again, fresh) =
+        reserve_start_task(&conn, USER, &t.id, start_input(&t, "phone"), 11).unwrap();
+    assert!(!fresh);
+    assert_eq!(again.execution.unwrap().dispatch_id, e.dispatch_id);
+    let mut changed = start_input(&t, "phone");
+    changed.instruction = "Different work".into();
+    assert_eq!(
+        start_task(&conn, USER, &t.id, changed, 12)
+            .unwrap_err()
+            .code,
+        "idempotency_conflict"
+    );
+    assert_eq!(
+        get_responsibility(&conn, USER, &r.id)
+            .unwrap()
+            .dispatches_used,
+        1
+    );
+    assert_eq!(
+        conn.query_row("SELECT count(*) FROM sessions", [], |r| r.get::<_, i64>(0))
+            .unwrap(),
+        1
+    );
+    let stopped = task_control(&conn, &reserved, TaskAction::Stop);
+    let stopped = progress(&conn, &stopped, TaskStatus::Stopped);
+    let (retry, fresh) =
+        reserve_start_task(&conn, USER, &t.id, start_input(&t, "third-device"), 13).unwrap();
+    assert!(!fresh);
+    assert_eq!(retry.status, TaskStatus::Stopped);
+    assert_eq!(retry.revision, stopped.revision);
+}
+#[test]
+fn execution_inputs_freshness_and_failed_sql_reservation_do_not_consume_quota() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let (source, r) = executable(&conn, 2, 1);
+    let t = tracked(&conn, &source, "one");
+    assert!(
+        serde_json::from_value::<StartInput>(
+            json!({"expectedRevision":1,"expectedGeneration":1,"commandId":"missing"})
+        )
+        .is_err()
+    );
+    for instruction in [" ".into(), "界".repeat(6667)] {
+        let mut i = start_input(&t, "bad");
+        i.instruction = instruction;
+        assert_eq!(
+            start_task(&conn, USER, &t.id, i, 10).unwrap_err().status,
+            400
+        );
+    }
+    conn.execute_batch("CREATE TRIGGER deny_start BEFORE UPDATE ON pots_tasks BEGIN SELECT RAISE(ABORT,'test'); END;").unwrap();
+    assert!(start_task(&conn, USER, &t.id, start_input(&t, "rollback"), 10).is_err());
+    assert_eq!(
+        get_responsibility(&conn, USER, &r.id)
+            .unwrap()
+            .dispatches_used,
+        0
+    );
+    assert_eq!(
+        get_task(&conn, USER, &t.id).unwrap().status,
+        TaskStatus::Tracked
+    );
+    conn.execute_batch("DROP TRIGGER deny_start").unwrap();
+    resolve_progress(&conn, USER, &source, 0, "one", 10).unwrap();
+    assert_eq!(
+        start_task(&conn, USER, &t.id, start_input(&t, "resolved"), 11)
+            .unwrap_err()
+            .code,
+        "not_actionable"
+    );
+    assert_eq!(
+        get_responsibility(&conn, USER, &r.id)
+            .unwrap()
+            .dispatches_used,
+        0
+    );
+}
+#[test]
+fn execution_binding_checks_owner_workspace_source_and_is_idempotent_after_stop() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let (source, _) = executable(&conn, 2, 1);
+    let t = tracked(&conn, &source, "one");
+    let reserved = start_task(&conn, USER, &t.id, start_input(&t, "start"), 10).unwrap();
+    let dispatch = &reserved.execution.as_ref().unwrap().dispatch_id;
+    assert!(bind_execution(&conn, USER, &t.id, dispatch, &source, 11).is_err());
+    let foreign = conn
+        .create_session("node:work", "/foreign", "node", "foreign", OTHER)
+        .unwrap();
+    assert!(bind_execution(&conn, USER, &t.id, dispatch, &foreign.id, 11).is_err());
+    conn.sync_remote_workspaces(
+        "node",
+        &[
+            (
+                "work".into(),
+                "Work".into(),
+                ModeId::new("directory").unwrap(),
+            ),
+            (
+                "other".into(),
+                "Other".into(),
+                ModeId::new("directory").unwrap(),
+            ),
+        ],
+    )
+    .unwrap();
+    let wrong = conn
+        .create_session("node:other", "/wrong", "node", "wrong", USER)
+        .unwrap();
+    assert!(bind_execution(&conn, USER, &t.id, dispatch, &wrong.id, 11).is_err());
+    let stopped = task_control(&conn, &reserved, TaskAction::Stop);
+    let session = dedicated(&conn);
+    let bound = bind_execution(&conn, USER, &t.id, dispatch, &session, 12).unwrap();
+    assert_eq!(bound.status, TaskStatus::Stopping);
+    assert!(bound.revision > stopped.revision);
+    assert_eq!(
+        bind_execution(&conn, USER, &t.id, dispatch, &session, 13)
+            .unwrap()
+            .revision,
+        bound.revision
+    );
+    assert!(authorize_dispatch(&conn, USER, &t.id, dispatch, 14).is_err());
+    assert_eq!(
+        progress(&conn, &bound, TaskStatus::Running).status,
+        TaskStatus::Stopping
+    );
+    assert_eq!(
+        progress(&conn, &bound, TaskStatus::Stopped).status,
+        TaskStatus::Stopped
+    );
+}
+#[test]
+fn dispatch_boundary_rechecks_controls_responsibility_and_source_access() {
+    for change in [
+        "pause",
+        "takeover",
+        "responsibility",
+        "epoch",
+        "revoke",
+        "resolved",
+    ] {
+        let db = Db::memory();
+        let conn = db.lock();
+        let (source, r) = executable(&conn, 2, 1);
+        let t = tracked(&conn, &source, "one");
+        let reserved = start_task(&conn, USER, &t.id, start_input(&t, "start"), 10).unwrap();
+        let dispatch = &reserved.execution.as_ref().unwrap().dispatch_id;
+        authorize_dispatch(&conn, USER, &t.id, dispatch, 11).unwrap();
+        match change {
+            "pause" => {
+                task_control(&conn, &reserved, TaskAction::PauseCoordination);
+            }
+            "takeover" => {
+                task_control(&conn, &reserved, TaskAction::TakeOver);
+            }
+            "responsibility" => {
+                let r = get_responsibility(&conn, USER, &r.id).unwrap();
+                control_responsibility(
+                    &conn,
+                    USER,
+                    &r.id,
+                    ResponsibilityControl {
+                        expected_revision: r.revision,
+                        expected_generation: r.generation,
+                        action: ResponsibilityAction::PauseCoordination,
+                    },
+                    12,
+                )
+                .unwrap();
+            }
+            "epoch" => {
+                conn.execute("UPDATE sessions SET runner_epoch=1 WHERE id=?", [&source])
+                    .unwrap();
+            }
+            "revoke" => {
+                conn.mark_checkpoint_workspace_private("node:work").unwrap();
+                conn.claim_checkpoint_workspace("node:work", OTHER).unwrap();
+            }
+            "resolved" => {
+                resolve_progress(&conn, USER, &source, 0, "one", 12).unwrap();
+            }
+            _ => unreachable!(),
+        }
+        assert!(
+            authorize_dispatch(&conn, USER, &t.id, dispatch, 13).is_err(),
+            "{change}"
+        );
+        assert_eq!(
+            get_responsibility(&conn, USER, &r.id)
+                .unwrap()
+                .dispatches_used,
+            1
+        );
+    }
+}
+#[test]
+fn execution_concurrency_releases_only_terminal_and_never_refunds_dispatch_budget() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let (source, r) = executable(&conn, 2, 1);
+    let one = tracked(&conn, &source, "one");
+    let two = tracked(&conn, &source, "two");
+    let reserved = start_task(&conn, USER, &one.id, start_input(&one, "one"), 10).unwrap();
+    assert_eq!(
+        start_task(&conn, USER, &two.id, start_input(&two, "two"), 10)
+            .unwrap_err()
+            .code,
+        "concurrency_exhausted"
+    );
+    let stopping = task_control(&conn, &reserved, TaskAction::Stop);
+    assert_eq!(
+        start_task(&conn, USER, &two.id, start_input(&two, "two"), 10)
+            .unwrap_err()
+            .code,
+        "concurrency_exhausted"
+    );
+    progress(&conn, &stopping, TaskStatus::Stopped);
+    let second = start_task(&conn, USER, &two.id, start_input(&two, "two"), 11).unwrap();
+    progress(&conn, &second, TaskStatus::Failed);
+    let three = tracked(&conn, &source, "three");
+    assert_eq!(
+        start_task(&conn, USER, &three.id, start_input(&three, "three"), 12)
+            .unwrap_err()
+            .code,
+        "budget_exhausted"
+    );
+    assert_eq!(
+        get_responsibility(&conn, USER, &r.id)
+            .unwrap()
+            .dispatches_used,
+        2
+    );
+}
+#[test]
+fn running_takeover_continues_but_owner_can_stop_after_source_revoked() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let (source, _) = executable(&conn, 1, 1);
+    let t = tracked(&conn, &source, "one");
+    let reserved = start_task(&conn, USER, &t.id, start_input(&t, "start"), 10).unwrap();
+    let dispatch = &reserved.execution.as_ref().unwrap().dispatch_id;
+    let session = dedicated(&conn);
+    let bound = bind_execution(&conn, USER, &t.id, dispatch, &session, 11).unwrap();
+    let running = progress(&conn, &bound, TaskStatus::Running);
+    let takeover = task_control(&conn, &running, TaskAction::TakeOver);
+    let waiting = progress(&conn, &takeover, TaskStatus::WaitingInput);
+    assert!(waiting.taken_over);
+    assert!(waiting.coordination_paused);
+    conn.mark_checkpoint_workspace_private("node:work").unwrap();
+    conn.claim_checkpoint_workspace("node:work", OTHER).unwrap();
+    assert!(get_task(&conn, USER, &t.id).is_err());
+    assert!(list_tasks(&conn, USER, 100).unwrap().is_empty());
+    assert_eq!(
+        get_task_for_control(&conn, OTHER, &t.id)
+            .unwrap_err()
+            .status,
+        404
+    );
+    assert_eq!(list_tasks_for_host(&conn, USER, 100).unwrap().len(), 1);
+    let stopping = task_control(&conn, &waiting, TaskAction::Stop);
+    assert_eq!(stopping.status, TaskStatus::Stopping);
+    let late = progress(&conn, &stopping, TaskStatus::Completed);
+    assert_eq!(late.status, TaskStatus::Stopping);
+    assert_eq!(
+        progress(&conn, &late, TaskStatus::Stopped).status,
+        TaskStatus::Stopped
+    );
+}
+#[test]
+fn execution_results_are_redacted_clipped_and_terminal_updates_are_fenced() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let (source, _) = executable(&conn, 1, 1);
+    let t = tracked(&conn, &source, "one");
+    let reserved = start_task(&conn, USER, &t.id, start_input(&t, "start"), 10).unwrap();
+    let dispatch = &reserved.execution.as_ref().unwrap().dispatch_id;
+    let session = dedicated(&conn);
+    let bound = bind_execution(&conn, USER, &t.id, dispatch, &session, 11).unwrap();
+    let running = progress(&conn, &bound, TaskStatus::Running);
+    let result = format!("sk-abcdefghijklmnopqrstuvwxyz\0{}", "界".repeat(3000));
+    let done = set_execution_progress(
+        &conn,
+        USER,
+        &t.id,
+        dispatch,
+        TaskStatus::Completed,
+        Some(&result),
+        Some("node raw secret error"),
+        20,
+    )
+    .unwrap();
+    assert!(done.outcome.as_ref().unwrap().chars().count() <= 2000);
+    assert!(!done.outcome.as_ref().unwrap().contains('\0'));
+    assert!(
+        !done
+            .outcome
+            .as_ref()
+            .unwrap()
+            .contains("abcdefghijklmnopqrstuvwxyz")
+    );
+    assert!(done.outcome.as_ref().unwrap().contains("[REDACTED]"));
+    assert_eq!(done.failure.as_deref(), Some("Execution failed"));
+    let late = progress(&conn, &running, TaskStatus::Running);
+    assert_eq!(late.revision, done.revision);
+    assert_eq!(late.status, TaskStatus::Completed);
+    assert!(
+        set_execution_progress(
+            &conn,
+            USER,
+            &t.id,
+            "wrong-dispatch",
+            TaskStatus::Failed,
+            None,
+            None,
+            21
+        )
+        .is_err()
+    );
+}
+#[test]
+fn legacy_task_json_without_execution_fields_remains_tracking_only() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let source = seed(&conn);
+    active(&conn);
+    let t = tracked(&conn, &source, "legacy");
+    let mut data = serde_json::to_value(&t).unwrap();
+    for key in ["execution", "outcome", "failure"] {
+        data.as_object_mut().unwrap().remove(key);
+    }
+    conn.execute(
+        "UPDATE pots_tasks SET data=? WHERE id=?",
+        params![data.to_string(), t.id],
+    )
+    .unwrap();
+    let old = get_task(&conn, USER, &t.id).unwrap();
+    assert!(old.execution.is_none());
+    assert!(old.outcome.is_none());
+    assert!(old.failure.is_none());
+    assert_eq!(old.status, TaskStatus::Tracked);
+}
+#[test]
+fn concurrent_start_reserves_last_dispatch_once_across_connections() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("start-race.sqlite");
+    let db = Db::open(&path).unwrap();
+    let (tasks, rid) = {
+        let conn = db.lock();
+        let (source, r) = executable(&conn, 1, 2);
+        (
+            vec![
+                tracked(&conn, &source, "one"),
+                tracked(&conn, &source, "two"),
+            ],
+            r.id,
+        )
+    };
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let threads: Vec<_> = tasks
+        .into_iter()
+        .map(|t| {
+            let path = path.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                let db = Db::open(&path).unwrap();
+                barrier.wait();
+                let conn = db.lock();
+                reserve_start_task(&conn, USER, &t.id, start_input(&t, "racing"), 10).is_ok()
+            })
+        })
+        .collect();
+    assert_eq!(
+        threads
+            .into_iter()
+            .map(|h| usize::from(h.join().unwrap()))
+            .sum::<usize>(),
+        1
+    );
+    assert_eq!(
+        get_responsibility(&db.lock(), USER, &rid)
+            .unwrap()
+            .dispatches_used,
+        1
+    );
+}
+
+#[test]
+fn concurrent_start_same_task_has_one_canonical_dispatch_and_one_new_reservation() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("start-dedup.sqlite");
+    let db = Db::open(&path).unwrap();
+    let (t, rid) = {
+        let conn = db.lock();
+        let (source, r) = executable(&conn, 2, 2);
+        (tracked(&conn, &source, "one"), r.id)
+    };
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let threads: Vec<_> = (0..2)
+        .map(|i| {
+            let path = path.clone();
+            let t = t.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                let db = Db::open(&path).unwrap();
+                barrier.wait();
+                let conn = db.lock();
+                let (task, fresh) = reserve_start_task(
+                    &conn,
+                    USER,
+                    &t.id,
+                    start_input(&t, &format!("device-{i}")),
+                    10,
+                )
+                .unwrap();
+                (task.execution.unwrap().dispatch_id, fresh)
+            })
+        })
+        .collect();
+    let results: Vec<_> = threads.into_iter().map(|h| h.join().unwrap()).collect();
+    assert_eq!(results[0].0, results[1].0);
+    assert_eq!(results.iter().filter(|(_, fresh)| *fresh).count(), 1);
+    assert_eq!(
+        get_responsibility(&db.lock(), USER, &rid)
+            .unwrap()
+            .dispatches_used,
+        1
+    );
+}
+#[test]
+fn concurrent_start_reserves_last_concurrency_slot_once_across_connections() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("start-concurrency.sqlite");
+    let db = Db::open(&path).unwrap();
+    let (tasks, rid) = {
+        let conn = db.lock();
+        let (source, r) = executable(&conn, 2, 1);
+        (
+            vec![
+                tracked(&conn, &source, "one"),
+                tracked(&conn, &source, "two"),
+            ],
+            r.id,
+        )
+    };
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let threads: Vec<_> = tasks
+        .into_iter()
+        .map(|t| {
+            let path = path.clone();
+            let barrier = barrier.clone();
+            std::thread::spawn(move || {
+                let db = Db::open(&path).unwrap();
+                barrier.wait();
+                let conn = db.lock();
+                reserve_start_task(&conn, USER, &t.id, start_input(&t, "racing"), 10)
+                    .map(|_| "ok".to_owned())
+                    .unwrap_or_else(|e| e.code.to_owned())
+            })
+        })
+        .collect();
+    let results: Vec<_> = threads.into_iter().map(|h| h.join().unwrap()).collect();
+    assert_eq!(results.iter().filter(|r| r.as_str() == "ok").count(), 1);
+    assert_eq!(
+        results
+            .iter()
+            .filter(|r| r.as_str() == "concurrency_exhausted")
+            .count(),
+        1
+    );
+    assert_eq!(
+        get_responsibility(&db.lock(), USER, &rid)
+            .unwrap()
+            .dispatches_used,
+        1
+    );
+}
+#[test]
+fn suggestion_reconnect_refresh_cannot_renew_execution_source_binding() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let (source, _) = executable(&conn, 1, 1);
+    let t = tracked(&conn, &source, "one");
+    let reserved = start_task(&conn, USER, &t.id, start_input(&t, "start"), 10).unwrap();
+    conn.execute("UPDATE sessions SET runner_epoch=1 WHERE id=?", [&source])
+        .unwrap();
+    let refreshed =
+        ingest_progress(&conn, USER, "node:work", &source, 1, "one", i64::MAX, 11).unwrap();
+    assert_eq!(refreshed.len(), 1);
+    assert_eq!(refreshed[0].disposition, Disposition::Linked);
+    assert!(get_task(&conn, USER, &t.id).is_ok());
+    assert!(
+        authorize_dispatch(
+            &conn,
+            USER,
+            &t.id,
+            &reserved.execution.unwrap().dispatch_id,
+            12
+        )
+        .is_err()
+    );
+}
+#[test]
+fn already_sent_acknowledgement_reports_reality_after_takeover_without_reauthorizing() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let (source, _) = executable(&conn, 1, 1);
+    let t = tracked(&conn, &source, "one");
+    let reserved = start_task(&conn, USER, &t.id, start_input(&t, "start"), 10).unwrap();
+    let dispatch = &reserved.execution.as_ref().unwrap().dispatch_id;
+    let session = dedicated(&conn);
+    let bound = bind_execution(&conn, USER, &t.id, dispatch, &session, 11).unwrap();
+    authorize_dispatch(&conn, USER, &t.id, dispatch, 12).unwrap();
+    let takeover = task_control(&conn, &bound, TaskAction::TakeOver);
+    assert!(authorize_dispatch(&conn, USER, &t.id, dispatch, 13).is_err());
+    let running = progress(&conn, &takeover, TaskStatus::Running);
+    assert_eq!(running.status, TaskStatus::Running);
+    assert!(running.taken_over);
+    assert!(running.coordination_paused);
+}
+#[test]
+fn uncertain_dispatch_warning_keeps_quota_reserved_without_retrying() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let (source, _) = executable(&conn, 2, 1);
+    let t = tracked(&conn, &source, "one");
+    let other = tracked(&conn, &source, "two");
+    let reserved = start_task(&conn, USER, &t.id, start_input(&t, "start"), 10).unwrap();
+    let failure = "Dispatch outcome is uncertain; inspect the execution conversation. It will not be retried.";
+    let uncertain = set_execution_progress(
+        &conn,
+        USER,
+        &t.id,
+        &reserved.execution.as_ref().unwrap().dispatch_id,
+        TaskStatus::Starting,
+        None,
+        Some(failure),
+        11,
+    )
+    .unwrap();
+    assert_eq!(uncertain.status, TaskStatus::Starting);
+    assert_eq!(uncertain.failure.as_deref(), Some(failure));
+    assert!(start_task(&conn, USER, &other.id, start_input(&other, "blocked"), 12).is_err());
+    let (retry, fresh) =
+        reserve_start_task(&conn, USER, &t.id, start_input(&t, "retry"), 13).unwrap();
+    assert!(!fresh);
+    assert_eq!(retry.revision, uncertain.revision);
+}
+
+#[test]
+fn reopened_database_keeps_execution_instruction_controls_and_consumed_budget() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("execution-reopen.sqlite");
+    let (original, stopping, rid) = {
+        let db = Db::open(&path).unwrap();
+        let conn = db.lock();
+        let (source, r) = executable(&conn, 1, 1);
+        let t = tracked(&conn, &source, "one");
+        let reserved = start_task(&conn, USER, &t.id, start_input(&t, "start"), 10).unwrap();
+        let session = dedicated(&conn);
+        let bound = bind_execution(
+            &conn,
+            USER,
+            &t.id,
+            &reserved.execution.as_ref().unwrap().dispatch_id,
+            &session,
+            11,
+        )
+        .unwrap();
+        let stopping = task_control(&conn, &bound, TaskAction::Stop);
+        let warning = set_execution_progress(
+            &conn,
+            USER,
+            &t.id,
+            &reserved.execution.as_ref().unwrap().dispatch_id,
+            TaskStatus::Stopping,
+            None,
+            Some("Stop is pending until the execution node reconnects."),
+            12,
+        )
+        .unwrap();
+        assert!(warning.failure.is_some());
+        assert_eq!(warning.status, stopping.status);
+        (t, warning, r.id)
+    };
+    for _ in 0..2 {
+        let db = Db::open(&path).unwrap();
+        let conn = db.lock();
+        let recovered = get_task_for_control(&conn, USER, &original.id).unwrap();
+        assert_eq!(recovered.status, TaskStatus::Stopping);
+        assert!(recovered.coordination_paused);
+        assert_eq!(
+            recovered.execution_session_id,
+            stopping.execution_session_id
+        );
+        assert_eq!(
+            recovered.execution.as_ref().unwrap().instruction,
+            start_input(&original, "read").instruction
+        );
+        let (retry, fresh) = reserve_start_task(
+            &conn,
+            USER,
+            &original.id,
+            start_input(&original, "reopen-retry"),
+            20,
+        )
+        .unwrap();
+        assert!(!fresh);
+        assert_eq!(retry.revision, stopping.revision);
+        assert_eq!(
+            get_responsibility(&conn, USER, &rid)
+                .unwrap()
+                .dispatches_used,
+            1
+        );
+        assert!(
+            authorize_dispatch(
+                &conn,
+                USER,
+                &original.id,
+                &recovered.execution.unwrap().dispatch_id,
+                21
+            )
+            .is_err()
+        );
+    }
 }

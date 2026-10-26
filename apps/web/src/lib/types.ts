@@ -205,7 +205,8 @@ export type SystemKind =
   | 'bash'
   | 'custom'
   | 'team'
-  | 'background';
+  | 'background'
+  | 'pots';
 export type NoticeLevel = 'info' | 'warning' | 'error';
 
 export interface ConversationMessage {

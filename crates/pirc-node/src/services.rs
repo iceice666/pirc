@@ -67,6 +67,7 @@ pub struct Services {
     pub agent_gateway: AgentGateway,
     pub inference: InferenceServer,
     pub runners: RunnerManager,
+    pub(crate) pots: crate::pots::Pots,
     // panels
     pub terminals: Terminals,
     pub streams: Streams,
@@ -282,6 +283,7 @@ impl Services {
             agent_gateway: AgentGateway::new(weak.clone()),
             inference: InferenceServer::new(weak.clone()),
             runners: RunnerManager::new(weak.clone()),
+            pots: crate::pots::Pots::default(),
             terminals: Terminals::new(weak.clone()),
             streams: Streams::new(weak.clone()),
             mirror: MemoryMirror::new(weak.clone()),

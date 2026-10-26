@@ -41,7 +41,7 @@ pub(crate) use sql_text_enum;
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1010;
+pub const SCHEMA_VERSION: i64 = 1011;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = concat!(
@@ -115,6 +115,9 @@ const MIGRATIONS: &[(i64, &str)] = &[
     ),
     (1009, "CREATE TABLE workspace_removals (workspace_id TEXT PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE, owner_user TEXT NOT NULL, removed_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'removed' CHECK(status IN ('checking','removed')), token TEXT NOT NULL DEFAULT '');"),
     (1010, include_str!("pots/schema.sql")),
+    // Execution statuses/accepted instructions are not readable by old Gateways.
+    // No SQL shape changes; the version fence prevents unsafe downgrade.
+    (1011, "SELECT 1;"),
 ];
 
 /// Placeholder name of a new session until the agent's title replaces it.

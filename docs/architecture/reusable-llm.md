@@ -213,6 +213,17 @@ tests do not enable parallel production tools. See the
 [crate contract](../../crates/pirc-agent-loop/README.md) for the complete API and
 the local `Rc`/`RefCell` versus separate Send examples.
 
+## Unreleased pots execution boundary
+
+The explicit pots execution adapter is host-owned in Gateway/Node, not part of
+`pirc-agent-loop` or `pirc-llm`. Atomic task reservation, authority/budget checks,
+a dedicated session binding and a backend-only `PotsRequest` link frame precede
+Node delivery. A Node SQLite ledger retains dispatch identity, immutable instruction,
+evidence expiry and control generations. Its send claim is at-most-once and
+fail-closed on uncertain outcomes; recovery never automatically repeats execution.
+See [pots](../guides/pots.md) for controls, limitations and upgrade fences. The
+historical no-dispatch checkpoint/gates below are not current feature limitations.
+
 ## Verification actually run
 
 These are local checkpoint results, not deployment or real-provider acceptance.

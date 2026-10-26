@@ -412,6 +412,9 @@ impl RunnerManager {
         let lock = self.command_lock(session_id);
         let _command = lock.lock().await;
         let node = self.node()?;
+        if !matches!(payload, CommandPayload::Stop) {
+            crate::pots::require_generic_input(&node.db.lock(), session_id)?;
+        }
         node.db
             .lock()
             .validate_lease(session_id, lease.0, lease.1)?;
@@ -646,6 +649,26 @@ impl RunnerManager {
     /// `set_thinking_level` (each must succeed, else 503), then `deliver`.
     /// The message runs next, after any run in progress.
     pub async fn deliver(&self, session_id: &str, delivery: &Delivery) -> ApiResult<()> {
+        let node = self.node()?;
+        if delivery.custom_type == "pots-dispatch" {
+            return Err(ApiError::invalid_input());
+        }
+        crate::pots::require_generic_input(&node.db.lock(), session_id)?;
+        self.deliver_checked(session_id, delivery, || {
+            crate::pots::require_generic_input(&node.db.lock(), session_id)?;
+            Ok(true)
+        })
+        .await
+        .map(|_| ())
+    }
+
+    /// Claim a backend send only after startup/configuration and the command lock.
+    pub(crate) async fn deliver_checked(
+        &self,
+        session_id: &str,
+        delivery: &Delivery,
+        check: impl FnOnce() -> ApiResult<bool> + Send,
+    ) -> ApiResult<bool> {
         let lock = self.command_lock(session_id);
         let _command = lock.lock().await;
         let node = self.node()?;
@@ -681,6 +704,9 @@ impl RunnerManager {
                 )));
             }
         }
+        if !check()? {
+            return Ok(false);
+        }
         let mut message = Map::new();
         message.insert("customType".into(), json!(delivery.custom_type));
         message.insert("content".into(), json!(delivery.content));
@@ -697,7 +723,7 @@ impl RunnerManager {
                 "The agent refused the message",
             )));
         }
-        Ok(())
+        Ok(true)
     }
 
     /// `answer`: 409 `stale_interaction` unless the session's live runner
@@ -731,6 +757,15 @@ impl RunnerManager {
     /// "The chat process has not stopped yet; retry deletion" when it lives
     /// on; release its write leases.
     pub async fn stop_session(&self, session_id: &str) -> ApiResult<()> {
+        self.stop_session_checked(session_id, || Ok(())).await
+    }
+
+    /// Recheck a backend dispatch fence after waiting for startup/commands.
+    pub(crate) async fn stop_session_checked(
+        &self,
+        session_id: &str,
+        check: impl FnOnce() -> ApiResult<()> + Send,
+    ) -> ApiResult<()> {
         let lock = self.command_lock(session_id);
         let _command = lock.lock().await;
         let node = self.node()?;
@@ -740,6 +775,7 @@ impl RunnerManager {
         if let Some(mut starting) = starting {
             let _ = starting.wait_for(Option::is_some).await;
         }
+        check()?;
         if let Some(runner) = self.get(session_id) {
             runner
                 .stop(Duration::from_millis(node.config.shutdown_grace_ms))

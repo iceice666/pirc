@@ -5,16 +5,64 @@
 ## Current checkpoint
 
 pots has a personal, owner-scoped overview, responsibilities, a durable suggestion
-inbox and tracking-only tasks. The Web sidebar and native Android navigation open
-**pots**. Both clients have locally tested tracking-only views; APK installation,
+inbox and tracking tasks with optional explicitly authorized execution. The Web sidebar and native Android navigation open
+**pots**. Both clients expose written-instruction Start and tracking views; APK installation,
 physical-device and push acceptance remain open. These are locally implemented staged changes, not a
 deployment or a completed autonomous assistant.
 
-**Automatic execution is unavailable.** The overview reports
-`executionAvailable: false`. The Web shows **Start unavailable**; calling the
-Start API returns `503` / `not_ready` without creating an execution session or
-marking a task running. Configuring a dispatch budget or resuming coordination
-does not change this.
+**Autonomous execution is unavailable.** Reading, tracking, budget configuration
+and resuming coordination never dispatch. The unreleased explicit Start flow is
+available through `executionAvailable: true`: enter a specific instruction and
+choose Start for that task. It does not interpret a generic “session needs input”
+suggestion as permission to answer the source interaction.
+
+## Explicit Start, progress and results
+
+1. Activate the responsibility and explicitly resume its coordination. Supply a
+   positive remaining dispatch budget and an available concurrency slot. Observation
+   permission alone never dispatches.
+2. Track a current suggestion, then write the exact instruction you authorize
+   (nonblank, at most 20,000 UTF-8 bytes). Start creates a **new dedicated execution
+   conversation in the same workspace**. No source transcript, interaction prompt
+   or approval answer is copied. Referencing an inaccessible source is not a grant.
+3. Start rechecks source ownership/binding/freshness, workspace availability,
+   responsibility/task controls and budgets. Gateway binds the execution session
+   before Node delivery. The destination still applies its normal tool/approval
+   policy. The instruction is a backend-created **From pots** custom message, not
+   a forged direct user message; arbitrary prompt text/actor labels cannot mint it.
+4. Follow Starting, Queued, Running, Waiting input and terminal status in pots;
+   open the execution conversation to answer its own approvals and see full output.
+   A redacted, bounded final answer is recorded as the outcome. Completion describes
+   the execution run, not user acceptance of the deliverable. Internal background
+   messages remain part of the execution; later ordinary user/external input makes
+   attribution ambiguous and is not reported as a pots result.
+
+There is one lifetime dispatch per tracking task. Concurrent devices and retries
+with different command IDs return the same accepted instruction/session; changed
+instructions conflict. A new objective requires a new task, not silent reuse of
+an old acceptance. Failed attempts consume their reserved dispatch budget.
+
+The Node durably claims a send immediately before agent RPC. A crash after that
+claim can leave delivery uncertain; it is **at-most-once, not lossless exactly-once**.
+Neither client nor recovery automatically replays execution. Unknown delivery
+retains Starting and its concurrency slot until Node status/Stop reconciles it.
+Gateway restart between reserve/prepare/start fences unfinished preparation rather
+than silently restarting it. Progress uses coalesced runtime events and a slow
+recovery sweep while clients are closed; there are no observer model workers.
+
+A new dedicated session temporarily refuses ordinary input while its first pots
+instruction is prepared/sending, preventing another run from queuing ahead of it.
+Takeover fences undelivered work but does not abort already-delivered execution.
+Stop stops only that dedicated execution session, never the original source.
+An offline Stop stays **Stopping** until confirmed; reconnect does not resume it.
+Completed/stopped tasks cannot be restarted by Start or coordination Resume.
+Node checks immutable evidence expiry at the final send claim. Host control changes
+are propagated as Node fences; a command already delivered before a fence is not
+claimed to have been prevented. This is not OS-level project-mount revocation.
+
+Back up both states before upgrading: unreleased Gateway schema **1011**, Node
+schema **2003**, Node protocol **15**. Update Gateway/Nodes together. These changes
+are not part of the original 0.10.0 tracking-only release.
 
 ## Configure and explicitly activate
 
@@ -24,9 +72,8 @@ does not change this.
    - **Observation budget:** 1–1,000,000 distinct sourced issues, over the
      responsibility's lifetime.
    - **Dispatch budget:** 0–1,000,000. Zero records that dispatch is disabled;
-     positive values still cannot enable execution in this checkpoint.
-   - **Concurrency limit:** 1–32. This is recorded configuration, not a running
-     worker pool. There are no background model workers in this checkpoint.
+     positive values permit only an explicitly authorized Start with current controls.
+   - **Concurrency limit:** 1–32. This caps reserved/in-flight executions. There are no background observer model workers.
 3. Choose **Save disabled responsibility**. Saving does not begin observation.
 4. Review the selected scopes and limits, then choose **Activate observation**.
    Observation and coordination are separate controls; coordination starts paused.
@@ -54,14 +101,14 @@ operation in this checkpoint.
 | Dismiss                        | Keep that occurrence quiet. A replay cannot restore it to pending.                                                         |
 | Snooze                         | Persist a chosen wake time. Web currently offers one hour. It does not dispatch or automatically accept when time elapses. |
 | Track only                     | Atomically create/link one canonical task for the suggestion, without an execution session or run.                         |
-| Start                          | Unavailable; the API returns `503 not_ready`.                                                                              |
+| Start                          | Authorize the written instruction once in a new dedicated same-workspace execution conversation.                           |
 
 Two devices tracking the same current suggestion, even with different command IDs
 or a lost response, receive the same canonical task. A stale revision instead
 requires refreshing and reviewing the current record; the client does not silently
 retry a changed decision. A tracking task records its immutable originating
 suggestion and accepted action/target separately from its owner and optional
-execution-session binding. In this checkpoint that binding remains empty.
+execution-session binding. The binding remains empty until explicit Start.
 
 Snooze is not a freshness extension. While snoozed, Track is blocked until the
 chosen time; afterwards the source, binding and expiry are still checked. An
@@ -72,13 +119,13 @@ current.
 
 ## Controls have different scopes
 
-| Control                                    | What changes                                                          | What does not change                                                         |
-| ------------------------------------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Pause observation / Disable responsibility | Stop new observations and evidence refreshes for that responsibility. | Existing records are not erased; independent sessions are not stopped.       |
-| Pause coordination                         | Persist a fence against future pots coordination in that scope.       | It is not an observation pause, and no dispatcher exists here to start/stop. |
-| Resume observation / coordination          | Change the corresponding durable control.                             | Do not replenish budgets, replay suppressed events or restart stopped tasks. |
-| Take over task                             | Fence that task's pots coordination with a new control generation.    | Do not kill tools, complete the task or take over another task.              |
-| Stop tracking                              | Mark the tracking task stopped and fence its coordination.            | Do not cancel or kill the pre-existing source conversation's runner.         |
+| Control                                    | What changes                                                                                | What does not change                                                              |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Pause observation / Disable responsibility | Stop new observations and evidence refreshes for that responsibility.                       | Existing records are not erased; independent sessions are not stopped.            |
+| Pause coordination                         | Persist a fence against future pots coordination in that scope.                             | Already delivered authorized execution can continue; no new dispatch is implied.  |
+| Resume observation / coordination          | Change the corresponding durable control.                                                   | Do not replenish budgets, replay suppressed events or restart stopped tasks.      |
+| Take over task                             | Fence that task's pots coordination with a new control generation.                          | Do not kill already-delivered tools, complete the task or take over another task. |
+| Stop tracking / Stop execution             | Fence coordination; for an execution, stay Stopping until its dedicated session is stopped. | Do not cancel or kill the pre-existing source conversation's runner.              |
 
 Taking over or stopping one task does not affect unrelated responsibilities or
 tasks. Resuming coordination elsewhere cannot release a takeover. There is no
@@ -119,13 +166,40 @@ creation without spending extra quota. Historical records remain part of that ca
 
 Still absent: transcript/content observation grants, periodic or model-driven
 analysis, digests and dedicated pots push delivery, standing execution grants,
-attributed dispatch, first-Start session mapping, worker cancellation/reconciliation,
-and the full P7 cross-client/runtime acceptance cases. Real browser/device journeys
+cross-workspace or existing-conversation dispatch, execution retries, and the full
+P7 cross-client/runtime acceptance cases. Real browser/device journeys
 still require verification; synthetic Web/backend/Android tests do not close those
 gaps. Local browser acceptance was blocked by the operator setting
 `PIRC_BROWSER_ALLOW_PRIVATE`; no alternate route was used.
 
-## Verification at this checkpoint
+## Explicit-execution checkpoint verification
+
+Local verification on the uncommitted follow-up to `3615ae3b`:
+
+- Gateway: 202 tests; 46 pots tests include 9 orchestration regressions for
+  bind-before-send, no replay, uncertain/restart recovery, control fences and
+  revoked-source result hiding.
+- Node: 8 dispatch-ledger tests plus the reserved-provenance HTTP regression;
+  protocol: 23 tests.
+- Real fresh debug Gateway/Node/agent processes with fake inference: 23 executable
+  conformance cases across 7 suites, including 3 pots scenarios (concurrent Start,
+  completion/privacy, dedicated-only Stop and running takeover). The Node-link
+  snapshot changed only the intentional protocol number 14 → 15.
+- Web: 61 files / 452 tests, clean Svelte check and production build (existing
+  large-chunk warning). Android: 35 focused pots/timeline widget tests; native
+  Kotlin timeline unit tests also passed. No physical-device/APK journey.
+- Workspace formatting and strict all-target clippy passed.
+
+The full sandboxed `cargo test --locked --offline --workspace` exited 101 at the
+Node library: 369 passed, 2 failed, 3 ignored. Both failures are in Linux host Unix
+socket enumeration (`host_unix_sockets_are_the_listed_sockets_but_the_allowed`,
+`host_rules_hide_bound_sockets_but_the_allowed`); this run did not establish a
+clean full-workspace gate or prove baseline causation. An outside-sandbox rerun
+was not approved and was not performed. No safety assertions were relaxed. Full
+executable conformance was not rerun; focused passes do not close full P7 or real
+browser/device acceptance.
+
+## Historical tracking-checkpoint verification
 
 Local focused verification passed `cargo test -p pirc-gateway pots::`: 22 tests
 (19 store, 2 HTTP/host tests and a 1009-to-1010 migration test). Coverage includes persistent controls/reopen,

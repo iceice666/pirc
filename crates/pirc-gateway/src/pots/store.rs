@@ -137,7 +137,37 @@ pub struct SuggestionControl {
 #[serde(rename_all = "snake_case")]
 pub enum TaskStatus {
     Tracked,
+    Starting,
+    Queued,
+    Running,
+    WaitingInput,
+    Completed,
+    Failed,
+    Interrupted,
+    Stopping,
     Stopped,
+}
+impl TaskStatus {
+    pub fn is_terminal(self) -> bool {
+        matches!(
+            self,
+            Self::Completed | Self::Failed | Self::Interrupted | Self::Stopped
+        )
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Execution {
+    pub dispatch_id: String,
+    pub generation: i64,
+    pub accepted_revision: i64,
+    pub accepted_at: i64,
+    pub instruction: String,
+    pub responsibility_generation: i64,
+    pub responsibility_id: String,
+    pub workspace_id: String,
+    /// Immutable source binding at Start; a refreshed suggestion cannot renew execution authority.
+    pub source_runner_epoch: i64,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -149,6 +179,12 @@ pub struct Task {
     pub action: SuggestedAction,
     pub target_session_id: String,
     pub execution_session_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution: Option<Execution>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure: Option<String>,
     pub status: TaskStatus,
     pub revision: i64,
     pub control_generation: i64,
@@ -177,6 +213,7 @@ pub struct StartInput {
     pub expected_revision: i64,
     pub expected_generation: i64,
     pub command_id: String,
+    pub instruction: String,
 }
 
 // Serde's tagged *unit* variants ignore unknown fields even with
@@ -668,6 +705,9 @@ pub fn accept_tracking(
             action: s.action,
             target_session_id: s.target_session_id.clone(),
             execution_session_id: None,
+            execution: None,
+            outcome: None,
+            failure: None,
             status: TaskStatus::Tracked,
             revision: 1,
             control_generation: 1,
@@ -713,7 +753,13 @@ pub fn control_task(
 ) -> ApiResult<Task> {
     atomic(conn, |conn| {
         lock_owner(conn, user)?;
-        let mut task = get_task(conn, user, id)?;
+        // Cancellation and fencing must remain available after source access is
+        // revoked. Only Resume can amplify authority and requires current grants.
+        let mut task = if matches!(input.action, TaskAction::ResumeCoordination) {
+            get_task(conn, user, id)?
+        } else {
+            get_task_for_control(conn, user, id)?
+        };
         if task.revision != input.expected_revision
             || task.control_generation != input.expected_generation
         {
@@ -722,7 +768,10 @@ pub fn control_task(
         match input.action {
             TaskAction::PauseCoordination => task.coordination_paused = true,
             TaskAction::ResumeCoordination => {
-                if task.taken_over || task.status == TaskStatus::Stopped {
+                if task.taken_over
+                    || task.status.is_terminal()
+                    || task.status == TaskStatus::Stopping
+                {
                     return Err(ApiError::new(
                         409,
                         "not_actionable",
@@ -736,7 +785,13 @@ pub fn control_task(
                 task.coordination_paused = true;
             }
             TaskAction::Stop => {
-                task.status = TaskStatus::Stopped;
+                if !task.status.is_terminal() {
+                    task.status = if task.execution.is_some() {
+                        TaskStatus::Stopping
+                    } else {
+                        TaskStatus::Stopped
+                    };
+                }
                 task.coordination_paused = true;
             }
         }
@@ -756,26 +811,352 @@ pub fn control_task(
         Ok(task)
     })
 }
-/// Explicitly unavailable: cannot create fake running state or an empty session.
+/// Reserve exactly one lifetime execution, before any Node/network IO. A client
+/// command ID is diagnostic only; accepted task revision/generation is canonical.
+#[cfg(test)]
 pub fn start_task(
     conn: &Connection,
     user: &str,
     id: &str,
     input: StartInput,
-    _now: i64,
+    now: i64,
 ) -> ApiResult<Task> {
+    reserve_start_task(conn, user, id, input, now).map(|(task, _)| task)
+}
+pub fn reserve_start_task(
+    conn: &Connection,
+    user: &str,
+    id: &str,
+    input: StartInput,
+    now: i64,
+) -> ApiResult<(Task, bool)> {
     text(&input.command_id, 256)?;
-    let task = get_task(conn, user, id)?;
-    if task.revision != input.expected_revision
-        || task.control_generation != input.expected_generation
+    text(&input.instruction, 20_000)?;
+    atomic(conn, |conn| {
+        lock_owner(conn, user)?;
+        let mut task = get_task(conn, user, id)?;
+        if let Some(execution) = &task.execution {
+            if execution.instruction != input.instruction {
+                return Err(ApiError::new(
+                    409,
+                    "idempotency_conflict",
+                    "Task already has a different execution instruction",
+                ));
+            }
+            if (execution.accepted_revision == input.expected_revision
+                && execution.generation == input.expected_generation)
+                || (task.revision == input.expected_revision
+                    && task.control_generation == input.expected_generation)
+            {
+                return Ok((task, false));
+            }
+            return Err(conflict());
+        }
+        if task.revision != input.expected_revision
+            || task.control_generation != input.expected_generation
+        {
+            return Err(conflict());
+        }
+        if task.status != TaskStatus::Tracked || task.coordination_paused || task.taken_over {
+            return Err(not_actionable());
+        }
+        let s: Suggestion = row(conn, "pots_suggestions", user, &task.origin_suggestion_id)?;
+        current_link(conn, user, &task, &s, now)?;
+        let mut r = get_responsibility(conn, user, &s.responsibility_id)?;
+        coordination(&r, &s.evidence.workspace_id)?;
+        if r.dispatches_used >= r.budgets.dispatches {
+            return Err(ApiError::new(
+                409,
+                "budget_exhausted",
+                "Dispatch budget exhausted",
+            ));
+        }
+        let active = list_tasks_for_host(conn, user, LIST_MAX)?
+            .into_iter()
+            .filter(|t| {
+                !t.status.is_terminal()
+                    && t.execution
+                        .as_ref()
+                        .is_some_and(|e| e.responsibility_id == r.id)
+            })
+            .count();
+        if active >= r.budgets.concurrency as usize {
+            return Err(ApiError::new(
+                409,
+                "concurrency_exhausted",
+                "Execution concurrency exhausted",
+            ));
+        }
+        task.execution = Some(Execution {
+            dispatch_id: new_id("pd"),
+            generation: task.control_generation,
+            accepted_revision: task.revision,
+            accepted_at: now,
+            instruction: input.instruction,
+            responsibility_generation: r.generation,
+            responsibility_id: r.id.clone(),
+            workspace_id: s.evidence.workspace_id,
+            source_runner_epoch: s.evidence.runner_epoch,
+        });
+        task.status = TaskStatus::Starting;
+        task.revision += 1;
+        task.updated_at = now;
+        r.dispatches_used += 1;
+        r.revision += 1;
+        r.updated_at = now;
+        save_responsibility(conn, &r)?;
+        save_task(conn, &task)?;
+        Ok((task, true))
+    })
+}
+fn not_actionable() -> ApiError {
+    ApiError::new(
+        409,
+        "not_actionable",
+        "Task execution is not currently authorized",
+    )
+}
+fn save_task(conn: &Connection, task: &Task) -> ApiResult<()> {
+    conn.execute(
+        "UPDATE pots_tasks SET revision=?,generation=?,data=? WHERE id=? AND owner_user=?",
+        params![
+            task.revision,
+            task.control_generation,
+            encode(task)?,
+            task.id,
+            task.owner_user
+        ],
+    )?;
+    Ok(())
+}
+fn current_link(
+    conn: &Connection,
+    user: &str,
+    task: &Task,
+    s: &Suggestion,
+    now: i64,
+) -> ApiResult<()> {
+    source(conn, user, &s.evidence)?;
+    if s.disposition != Disposition::Linked
+        || s.evidence.expires_at <= now
+        || s.task_id.as_deref() != Some(task.id.as_str())
+        || s.target_session_id != task.target_session_id
     {
-        return Err(conflict());
+        return Err(not_actionable());
     }
-    Err(ApiError::new(
-        503,
-        "not_ready",
-        "Pots execution adapter is not available; task remains tracking-only",
-    ))
+    Ok(())
+}
+fn coordination(r: &Responsibility, workspace_id: &str) -> ApiResult<()> {
+    if !r.enabled
+        || r.coordination_paused
+        || !r.scopes.iter().any(|s| s.workspace_id == workspace_id)
+    {
+        return Err(not_actionable());
+    }
+    Ok(())
+}
+/// HOST ONLY: owner-scoped raw task read for cancellation/reconciliation. Never
+/// return this through ordinary list/get routes, which revalidate source access.
+pub fn get_task_for_control(conn: &Connection, user: &str, id: &str) -> ApiResult<Task> {
+    row(conn, "pots_tasks", user, id)
+}
+/// HOST ONLY: include hidden-source tasks so restart reconciliation cannot strand
+/// accepted or stopping work. This is not permission to dispatch any task.
+pub fn list_tasks_for_host(conn: &Connection, user: &str, limit: u32) -> ApiResult<Vec<Task>> {
+    list(conn, "pots_tasks", user, limit)
+}
+fn execution_matches<'a>(task: &'a Task, dispatch_id: &str) -> ApiResult<&'a Execution> {
+    task.execution
+        .as_ref()
+        .filter(|e| e.dispatch_id == dispatch_id)
+        .ok_or_else(conflict)
+}
+/// HOST ONLY: bind a newly created dedicated session, even if controls changed
+/// while Node IO was pending, so it remains addressable for cancellation.
+pub fn bind_execution(
+    conn: &Connection,
+    user: &str,
+    id: &str,
+    dispatch_id: &str,
+    session_id: &str,
+    now: i64,
+) -> ApiResult<Task> {
+    atomic(conn, |conn| {
+        lock_owner(conn, user)?;
+        let mut task = get_task_for_control(conn, user, id)?;
+        let execution = execution_matches(&task, dispatch_id)?;
+        let session = conn.get_session(session_id)?;
+        if session.owner_user.as_deref() != Some(user)
+            || session.workspace_id != execution.workspace_id
+            || session_id == task.target_session_id
+        {
+            return Err(missing());
+        }
+        if let Some(bound) = &task.execution_session_id {
+            return if bound == session_id {
+                Ok(task)
+            } else {
+                Err(conflict())
+            };
+        }
+        if list_tasks_for_host(conn, user, LIST_MAX)?
+            .iter()
+            .any(|t| t.id != task.id && t.execution_session_id.as_deref() == Some(session_id))
+        {
+            return Err(conflict());
+        }
+        task.execution_session_id = Some(session_id.into());
+        task.revision += 1;
+        task.updated_at = now;
+        save_task(conn, &task)?;
+        Ok(task)
+    })
+}
+/// HOST ONLY: call at every external dispatch boundary (before create and again
+/// before execution). No mutation and no additional quota charge. Node must also
+/// enforce its dispatch token/generation fence against delayed duplicate IO.
+pub fn authorize_dispatch(
+    conn: &Connection,
+    user: &str,
+    id: &str,
+    dispatch_id: &str,
+    now: i64,
+) -> ApiResult<Task> {
+    atomic(conn, |conn| {
+        lock_owner(conn, user)?;
+        let task = get_task_for_control(conn, user, id)?;
+        let execution = execution_matches(&task, dispatch_id)?;
+        if !matches!(task.status, TaskStatus::Starting | TaskStatus::Queued)
+            || task.coordination_paused
+            || task.taken_over
+            || task.control_generation != execution.generation
+        {
+            return Err(not_actionable());
+        }
+        let s: Suggestion = row(conn, "pots_suggestions", user, &task.origin_suggestion_id)?;
+        current_link(conn, user, &task, &s, now)?;
+        let r = get_responsibility(conn, user, &execution.responsibility_id)?;
+        coordination(&r, &execution.workspace_id)?;
+        if r.generation != execution.responsibility_generation
+            || s.responsibility_id != r.id
+            || s.evidence.workspace_id != execution.workspace_id
+            || s.evidence.runner_epoch != execution.source_runner_epoch
+        {
+            return Err(not_actionable());
+        }
+        if let Some(session_id) = &task.execution_session_id {
+            let session = conn.claim_session(session_id, user, false)?;
+            workspace(conn, user, &session.workspace_id)?;
+            if session.workspace_id != execution.workspace_id
+                || session_id == &task.target_session_id
+            {
+                return Err(missing());
+            }
+        }
+        Ok(task)
+    })
+}
+/// HOST ONLY: monotonic lifecycle updates. Delayed acknowledgements never undo
+/// owner controls or terminal state. Once running, takeover/pause affect future
+/// coordination, not the user's already-authorized running execution.
+#[allow(clippy::too_many_arguments)]
+pub fn set_execution_progress(
+    conn: &Connection,
+    user: &str,
+    id: &str,
+    dispatch_id: &str,
+    status: TaskStatus,
+    outcome: Option<&str>,
+    failure: Option<&str>,
+    now: i64,
+) -> ApiResult<Task> {
+    atomic(conn, |conn| {
+        lock_owner(conn, user)?;
+        let mut task = get_task_for_control(conn, user, id)?;
+        execution_matches(&task, dispatch_id)?;
+        if task.status.is_terminal() || (task.status == status && failure.is_none()) {
+            return Ok(task);
+        }
+        if task.status == TaskStatus::Stopping
+            && !matches!(status, TaskStatus::Stopping | TaskStatus::Stopped)
+        {
+            return Ok(task);
+        }
+        let allowed = task.status == status
+            || match task.status {
+                TaskStatus::Starting => matches!(
+                    status,
+                    TaskStatus::Queued
+                        | TaskStatus::Running
+                        | TaskStatus::WaitingInput
+                        | TaskStatus::Completed
+                        | TaskStatus::Failed
+                        | TaskStatus::Interrupted
+                        | TaskStatus::Stopped
+                ),
+                TaskStatus::Queued => matches!(
+                    status,
+                    TaskStatus::Running
+                        | TaskStatus::WaitingInput
+                        | TaskStatus::Completed
+                        | TaskStatus::Failed
+                        | TaskStatus::Interrupted
+                        | TaskStatus::Stopped
+                ),
+                TaskStatus::Running | TaskStatus::WaitingInput => matches!(
+                    status,
+                    TaskStatus::Running
+                        | TaskStatus::WaitingInput
+                        | TaskStatus::Completed
+                        | TaskStatus::Failed
+                        | TaskStatus::Interrupted
+                        | TaskStatus::Stopped
+                ),
+                TaskStatus::Stopping => status == TaskStatus::Stopped,
+                _ => false,
+            };
+        if !allowed {
+            return Err(not_actionable());
+        }
+        if matches!(task.status, TaskStatus::Starting | TaskStatus::Queued)
+            && matches!(
+                status,
+                TaskStatus::Queued | TaskStatus::Running | TaskStatus::WaitingInput
+            )
+        {
+            // Status is observed reality, not permission to perform new IO. A
+            // delayed acknowledgement must survive takeover/pause/revocation.
+            if task.execution_session_id.is_none() {
+                return Err(not_actionable());
+            }
+        }
+        task.status = status;
+        if status.is_terminal() {
+            task.outcome = outcome.map(|s| {
+                let clean: String = crate::dispatch::redact_secrets(s)
+                    .chars()
+                    .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+                    .take(2000)
+                    .collect();
+                clean
+            });
+        }
+        if failure.is_some() || status.is_terminal() {
+            task.failure = failure.map(|s| match s {
+                "Dispatch preparation failed; no work was started."
+                | "Dispatch outcome is uncertain; inspect the execution conversation. It will not be retried."
+                | "Dispatch authorization changed; no further work was sent."
+                | "Execution is unavailable; inspect the execution conversation."
+                | "Execution ended without completing the task."
+                | "Stop is pending until the execution node reconnects." => s.to_owned(),
+                _ => "Execution failed".to_owned(),
+            });
+        }
+        task.revision += 1;
+        task.updated_at = now;
+        save_task(conn, &task)?;
+        Ok(task)
+    })
 }
 /// Host-only interaction resolution. Do not complete a linked task or replay it.
 /// Query is bounded by the maximum number of owner responsibilities, and targets
