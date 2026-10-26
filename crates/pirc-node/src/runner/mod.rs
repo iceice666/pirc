@@ -1092,6 +1092,13 @@ fn uploads(
             {
                 return Err(ApiError::forbidden("Upload belongs to another workspace"));
             }
+            let other_creation: bool = db.query_row(
+                "SELECT EXISTS(SELECT 1 FROM creation_uploads WHERE upload_id=?1 AND session_id!=?2)",
+                rusqlite::params![id,session_id],|r|r.get(0),
+            )?;
+            if other_creation {
+                return Err(ApiError::forbidden("First-send attachment belongs to another conversation"));
+            }
             Ok(upload)
         })
         .collect()
@@ -1189,6 +1196,52 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    #[tokio::test]
+    async fn first_send_uploads_are_session_bound_while_legacy_scope_is_preserved() {
+        let f = crate::workspace_memory::tests::Fixture::new().await;
+        let other = f
+            .node
+            .db
+            .lock()
+            .create_session("repo", "/other-session", "alice")
+            .unwrap();
+        let make = |id: &str| crate::store::UploadRow {
+            id: id.into(),
+            owner_user: "alice".into(),
+            mime_type: "text/plain".into(),
+            byte_size: 4,
+            storage_name: format!("{}.bin", &crate::util::sha256_hex(id)[..48]),
+            sha256: crate::util::sha256_hex(b"test"),
+            kind: UploadKind::File,
+            filename: Some("file.txt".into()),
+            workspace_id: Some("repo".into()),
+            session_id: Some(f.current.clone()),
+        };
+        let legacy = make("legacy");
+        let durable = make("durable");
+        {
+            let db = f.node.db.lock();
+            db.create_upload(&legacy).unwrap();
+            db.create_upload(&durable).unwrap();
+            db.execute("INSERT INTO creation_uploads(owner_user,operation_id,attachment_id,session_id,upload_id,request_hash,upload_json,state,created_at) VALUES('alice','op','attachment',?1,'durable',?2,?3,'ready',1)",rusqlite::params![f.current,"a".repeat(64),serde_json::to_string(&durable).unwrap()]).unwrap();
+        }
+        assert_eq!(
+            uploads(&f.node, &["durable".into()], "alice", &f.current).unwrap(),
+            [durable]
+        );
+        assert_eq!(
+            uploads(&f.node, &["durable".into()], "alice", &other.id)
+                .unwrap_err()
+                .status,
+            403
+        );
+        assert_eq!(
+            uploads(&f.node, &["legacy".into()], "alice", &other.id).unwrap(),
+            [legacy]
+        );
+        f.node.close().await;
+    }
 
     #[test]
     fn js_helpers() {

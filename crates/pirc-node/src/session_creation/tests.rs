@@ -406,7 +406,7 @@ fn migration_from_2003_preserves_existing_sessions() {
     let version: i64 = conn
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 2004);
+    assert_eq!(version, crate::store::SCHEMA_VERSION);
 }
 
 #[test]

@@ -72,8 +72,20 @@ pub fn routes(config: &NodeConfig) -> Vec<Route> {
         post("/api/sessions", create_session),
         post("/api/session-creations", crate::session_creation::prepare),
         get(
+            "/api/session-creations/capabilities",
+            crate::session_creation::capabilities,
+        ),
+        get(
             "/api/session-creations/:id",
             crate::session_creation::status,
+        ),
+        put(
+            "/api/session-creations/:id/attachments/:attachment",
+            crate::session_creation::uploads::transfer,
+        ),
+        get(
+            "/api/session-creations/:id/attachments/:attachment",
+            crate::session_creation::uploads::status,
         ),
         delete("/api/sessions/:id", move |node, request| {
             delete_session(node, request, deletions.clone())
@@ -837,6 +849,7 @@ async fn remove_session(node: &Node, session: &SessionRow, workspace: &Workspace
             .map_err(|_| ApiError::internal())?
             .map_err(|error| ApiError::new(409, "checkpoint_retained", error))?;
     }
+    crate::session_creation::uploads::remove_session_files(node, &session.id)?;
     remove_tree(Path::new(&session.private_session_path))?;
     let base = session
         .id
@@ -933,7 +946,7 @@ async fn delete_workspace(
 }
 
 /// An upload's storage name as the node makes them: `<48 hex>.bin`.
-fn storage_name(name: &str) -> bool {
+pub(crate) fn storage_name(name: &str) -> bool {
     name.strip_suffix(".bin").is_some_and(|stem| {
         stem.len() == 48
             && stem
@@ -1543,6 +1556,46 @@ fn sniff_image(bytes: &[u8]) -> Option<&'static str> {
     }
 }
 
+/// Shared by legacy uploads and durable first-send transfers.
+pub(crate) fn classify_upload(
+    bytes: &[u8],
+    declared: &str,
+    filename: Option<&str>,
+) -> ApiResult<(String, UploadKind, Option<String>)> {
+    Ok(match sniff_image(bytes) {
+        Some(sniffed) => {
+            if !declared.is_empty() && declared != "application/octet-stream" && declared != sniffed
+            {
+                return Err(ApiError::bad_request(
+                    "Declared Content-Type does not match image content",
+                ));
+            }
+            (sniffed.to_owned(), UploadKind::Image, None)
+        }
+        None => {
+            let Some(filename) = filename else {
+                return Err(ApiError::bad_request(
+                    "filename is required for non-image uploads",
+                ));
+            };
+            let base = filename
+                .split('/')
+                .rfind(|part| !part.is_empty())
+                .unwrap_or_default();
+            let cleaned = chat::js_trim(base);
+            if cleaned.is_empty() {
+                return Err(ApiError::bad_request("filename is invalid"));
+            }
+            let mime = if declared.is_empty() {
+                "application/octet-stream".to_owned()
+            } else {
+                declared.to_owned()
+            };
+            (mime, UploadKind::File, Some(cleaned.to_owned()))
+        }
+    })
+}
+
 /// Images and generic files are stored on the node that runs the
 /// session's agent.
 async fn upload(node: Node, request: Request) -> ApiResult<Response> {
@@ -1566,40 +1619,7 @@ async fn upload(node: Node, request: Request) -> ApiResult<Response> {
     let filename = optional_string(query, "filename", true, 1, 255)?;
     // `headers['content-type'].split(';', 1)[0]`, untrimmed.
     let declared = content_type.split(';').next().unwrap_or_default();
-    let (mime_type, kind, filename) = match sniff_image(bytes) {
-        Some(sniffed) => {
-            if !declared.is_empty() && declared != "application/octet-stream" && declared != sniffed
-            {
-                return Err(ApiError::bad_request(
-                    "Declared Content-Type does not match image content",
-                ));
-            }
-            (sniffed.to_owned(), UploadKind::Image, None)
-        }
-        None => {
-            // Not an image: a file the agent can read from the workspace
-            // once the prompt is sent.
-            let Some(filename) = filename else {
-                return Err(ApiError::bad_request(
-                    "filename is required for non-image uploads",
-                ));
-            };
-            let base = filename
-                .split('/')
-                .rfind(|part| !part.is_empty())
-                .unwrap_or_default();
-            let cleaned = chat::js_trim(base);
-            if cleaned.is_empty() {
-                return Err(ApiError::bad_request("filename is invalid"));
-            }
-            let mime = if declared.is_empty() {
-                "application/octet-stream".to_owned()
-            } else {
-                declared.to_owned()
-            };
-            (mime, UploadKind::File, Some(cleaned.to_owned()))
-        }
-    };
+    let (mime_type, kind, filename) = classify_upload(bytes, declared, filename.as_deref())?;
     let upload = UploadRow {
         id: prefix_uuid("upload"),
         owner_user: request.user.clone(),
@@ -1684,4 +1704,4 @@ pub fn apply_session_name(
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

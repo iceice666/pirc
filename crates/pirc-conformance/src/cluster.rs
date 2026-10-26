@@ -446,6 +446,12 @@ impl LoneNode {
         Some(Self { process, dir })
     }
 
+    /// Restart this fixture's process with its original state/config. The caller
+    /// accepts the replacement connection on its FakeGateway.
+    pub fn restart(&mut self, crash: bool) {
+        self.process.restart(crash);
+    }
+
     /// The node's exit status, once it has exited.
     pub fn exited(&mut self) -> Option<std::process::ExitStatus> {
         self.process.exited()

@@ -981,6 +981,60 @@ and recovery. No model/tool executes from preparation/staging, and the complete
 U1 acceptance table remains open. Source, tests and plan stay local; run-owned
 build artifacts are removed after verification, preserving APKs and other work.
 
+### U1 implementation checkpoint: Node attachment transfer (2026-10-27)
+
+Local only. Node schema **2005** adds durable creation-scoped upload identities;
+Gateway stays at schema 1013 and the link stays protocol 15. Gateway still reports
+**`canSubmit: false`** and clients keep the existing flow. This checkpoint stores
+files; it neither accepts the first message nor grants execution.
+
+- Node-only `GET /api/session-creations/capabilities` advertises allocation and
+  attachment transfer support. `PUT /api/session-creations/{operation}/attachments/{attachment}`
+  binds owner, creation, immutable submission hash, filename, MIME, byte size and
+  SHA-256 to one durable upload ID. `GET` on the same path reconciles it. Future
+  Gateway integration must refuse unsupported Nodes rather than fall back to
+  non-idempotent allocation or uploads.
+- A reserved upload ID and random storage name are committed before filesystem
+  work. Private files are synced and published without clobbering. A crash after
+  file publication or before receipt commit adopts the same complete file on
+  retry. A partial file resumes only when its existing bytes match the expected
+  prefix. Wrong content, metadata, symlinks, special files and unexpected partial
+  bytes fail closed; missing/corrupt ready files return a storage error rather
+  than silently recreating an already acknowledged upload.
+- Image/file classification matches the legacy upload route. Transfers allow at
+  most 16 attachments and honor configured byte limits. Newly created uploads
+  are bound to their source session, preventing another conversation from
+  retaining a cache ID whose source deletion would invalidate it. Legacy uploads
+  retain their existing workspace scope and response shape.
+- Session deletion removes both ready files and reserved crash partials after
+  checkpoint retention checks and the committed deletion fence. Payload metadata
+  is scrubbed; the minimal upload ID/hash tombstone prevents delayed retries from
+  reviving files or the session. Existing user workspace files remain intact.
+  Project deletion also checks other owners' reserved creations before a session
+  row exists. An already completed transfer can still be queried/reconciled after
+  mode removal, without granting a new mutation.
+- These Node copies are intended for transfer **after durable Gateway acceptance**
+  in the next integration slice, not as an additional draft staging location.
+  The user's seven-day expiry applies to unaccepted Gateway staging; no new
+  accepted-attachment expiry is introduced here.
+
+Validation: **31 creation/transfer tests** passed, plus focused upload/router,
+store, runner, checkpoint and pots regressions. Cases include independent SQLite
+connections, concurrent delete/transfer, reserved orphans, injected receipt-write
+failure, GIF metadata parity, changed bytes/owner, missing storage, symlink/FIFO
+refusal, 2004→2005 preservation and deletion of ready/reserved files. Strict
+Node/conformance Clippy and Rust formatting passed. A real Node process was killed
+and restarted across the WebSocket link: lookup/retry retained the upload and
+conversation IDs, and deletion rejected revival. The legacy `node_panels_uploads`
+real-process transcript also passed unchanged. No Web/Flutter source, emulator,
+Android device, provider or user browser was exercised.
+
+Remaining U1: Gateway durable acceptance/public publication, immutable transfer
+integration, fresh execution authority and lease/command admission reconciliation,
+then Web/Android draft persistence/recovery and the full acceptance table. The
+transfer API alone does not resolve an uncertain command or guarantee execution.
+Run-owned artifacts are removed after verification; this checkpoint stays local.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

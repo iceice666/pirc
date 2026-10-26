@@ -1,5 +1,25 @@
 # Upgrades
 
+## Unreleased local checkpoint: Node attachment transfer
+
+Node schema **2005** adds owner/creation-scoped attachment transfer records. Back
+up Node state before upgrading; old executables refuse the migrated database.
+Existing sessions, legacy uploads, allocation identities, memory provenance and
+checkpoint recovery data are preserved. Gateway schema 1013 and protocol 15 stay
+unchanged. Do not downgrade by changing `user_version`.
+
+The new Node-only capability and `PUT`/`GET` attachment routes under
+`/api/session-creations/` reserve one upload ID before file work and reconcile
+lost responses, partial writes and restarts. New uploads are session-bound;
+legacy upload scope is unchanged. Session deletion cleans reserved/ready files
+and scrubs metadata while retaining a non-reusable identity. Missing/corrupt
+acknowledged files produce an error instead of silently replaying the upload.
+
+Gateway/client adoption is still gated with **`canSubmit: false`**. This is local
+foundation work, not a deployment instruction or a completed first-send flow.
+Future integration must detect unsupported Nodes and fail closed. The seven-day
+unaccepted Gateway staging policy does not expire accepted Node attachments.
+
 ## Unreleased local checkpoint: attachment staging
 
 Gateway schema **1013** adds owner-scoped attachment receipts, expiry and durable

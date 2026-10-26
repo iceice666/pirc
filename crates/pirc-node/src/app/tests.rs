@@ -64,7 +64,7 @@ fn request(id: Option<&str>, body: Value) -> Request {
     }
 }
 
-async fn workspace_test_node() -> (tempfile::TempDir, Node) {
+pub(crate) async fn workspace_test_node() -> (tempfile::TempDir, Node) {
     use pirc_config::Env;
     use pirc_protocol::NodeRole;
     use pirc_protocol::mode::default_work;

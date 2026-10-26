@@ -3,6 +3,8 @@
 //! together. This prepares a session, never admits a message or starts an agent.
 //! The Gateway must separately persist and reconcile the first-message intent.
 
+pub(crate) mod uploads;
+
 use std::fs::DirBuilder;
 use std::os::unix::fs::DirBuilderExt;
 use std::path::Path;
@@ -232,6 +234,12 @@ pub(crate) async fn prepare(node: Node, request: Request) -> ApiResult<Response>
     reserve(&mut db, &request.user, &input)?;
     let row = initialize(&mut db, &request.user, &input, &node.config.sessions_dir)?;
     Ok(Response::json(json!({ "creation": row })))
+}
+
+pub(crate) async fn capabilities(node: Node, _request: Request) -> ApiResult<Response> {
+    Ok(Response::json(
+        json!({"version":1,"canAllocate":true,"canTransferAttachments":true,"maxUploadBytes":node.config.upload_max_bytes,"maxAttachments":16}),
+    ))
 }
 
 pub(crate) async fn status(node: Node, request: Request) -> ApiResult<Response> {
