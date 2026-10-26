@@ -1005,12 +1005,6 @@ expression: r.into_value()
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c18",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "What is the goal?",
           "role": "user",
@@ -1048,6 +1042,12 @@ expression: r.into_value()
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c18",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {

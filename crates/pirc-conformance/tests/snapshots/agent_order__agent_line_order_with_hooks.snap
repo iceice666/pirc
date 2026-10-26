@@ -27,12 +27,12 @@ expression: r.into_value()
   {
     "observed": [
       "agent_start",
-      "response prompt true",
       "message_start custom",
       "message_end custom",
       "message_start user",
       "message_end user",
       "turn_start",
+      "response prompt true",
       "message_start assistant",
       "panel_changed",
       "message_update text_start",

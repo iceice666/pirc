@@ -95,6 +95,10 @@ unaccepted staging policy. The current local Gateway schema is 1013. The
 adds schema 2005 with stable upload identities, crash reconciliation and deletion
 fences, verified through a real Node restart. Gateway acceptance/promotion,
 command reconciliation and Web/Android adoption still remain gated.
+The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
+records local fixture/transcript repairs and 50 Agent plus five Node process
+passes; the remote Check is still failed, and full Chromium/Linux verification
+has not been rerun.
 The user explicitly requested a one-off push through `a926ea38` for the completed
 checkpoints, license packaging and protocol snapshot repair. Subsequent Gateway
 preparation remains local under the active goal's default publication boundary.

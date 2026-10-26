@@ -9,12 +9,6 @@ expression: "feature_support::without_ptc_progress(r.into_value())"
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c1",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "Every weekday at 9, check CI",
           "role": "user",
@@ -32,6 +26,12 @@ expression: "feature_support::without_ptc_progress(r.into_value())"
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c1",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {
@@ -3040,12 +3040,6 @@ expression: "feature_support::without_ptc_progress(r.into_value())"
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c2",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "Search",
           "role": "user",
@@ -3063,6 +3057,12 @@ expression: "feature_support::without_ptc_progress(r.into_value())"
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c2",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {

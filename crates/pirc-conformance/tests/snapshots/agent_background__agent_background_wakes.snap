@@ -66,12 +66,6 @@ expression: run.r.into_value()
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c2",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "build in background",
           "role": "user",
@@ -89,6 +83,12 @@ expression: run.r.into_value()
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c2",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {
@@ -761,12 +761,6 @@ expression: run.r.into_value()
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c5",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "work",
           "role": "user",
@@ -784,6 +778,12 @@ expression: run.r.into_value()
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c5",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {

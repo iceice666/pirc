@@ -83,12 +83,6 @@ expression: run.r.into_value()
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c3",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "go",
           "role": "user",
@@ -106,6 +100,12 @@ expression: run.r.into_value()
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c3",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {

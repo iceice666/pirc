@@ -10,12 +10,6 @@ expression: "feature_support::without_ptc_progress(r.into_value())"
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c1",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "Browse example.com",
           "role": "user",
@@ -33,6 +27,12 @@ expression: "feature_support::without_ptc_progress(r.into_value())"
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c1",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {
@@ -2256,12 +2256,6 @@ expression: "feature_support::without_ptc_progress(r.into_value())"
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c2",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "Log in for me",
           "role": "user",
@@ -2279,6 +2273,12 @@ expression: "feature_support::without_ptc_progress(r.into_value())"
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c2",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {
@@ -3738,12 +3738,6 @@ expression: "feature_support::without_ptc_progress(r.into_value())"
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c3",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "Log in for me",
           "role": "user",
@@ -3761,6 +3755,12 @@ expression: "feature_support::without_ptc_progress(r.into_value())"
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c3",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {
@@ -5510,12 +5510,6 @@ expression: "feature_support::without_ptc_progress(r.into_value())"
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c4",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "Log in for me",
           "role": "user",
@@ -5533,6 +5527,12 @@ expression: "feature_support::without_ptc_progress(r.into_value())"
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c4",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {
@@ -7555,12 +7555,6 @@ expression: "feature_support::without_ptc_progress(r.into_value())"
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c5",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "Hand off",
           "role": "user",
@@ -7578,6 +7572,12 @@ expression: "feature_support::without_ptc_progress(r.into_value())"
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c5",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {

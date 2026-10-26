@@ -1,7 +1,7 @@
 //! The order of everything the agent writes, responses included: a command
-//! that starts a run is answered after the run's synchronous start
-//! (`agent_start` and the admitted messages), as the TS event loop ordered
-//! them. The other agent transcripts leave responses out of event streams.
+//! that starts a run is answered after initial admission, including deferred
+//! context hooks. Agent events retain their order; successful prompt responses
+//! no longer precede the messages they acknowledge.
 
 use pirc_conformance::{AgentOptions, AgentRun, ModelReply, Recorder};
 use serde_json::{Value, json};
@@ -88,8 +88,8 @@ async fn agent_line_order() {
     insta::assert_json_snapshot!("agent_line_order", r.into_value());
 }
 
-/// With a `beforePrompt` hook only a user message waits for the hook: a
-/// delivered custom message is still admitted before the response.
+/// Prompt acknowledgement waits for the `beforePrompt` hook and persisted
+/// user message. Deliver keeps its existing synchronous acknowledgement.
 #[tokio::test(flavor = "multi_thread")]
 async fn agent_line_order_with_hooks() {
     let options = AgentOptions {
@@ -116,6 +116,15 @@ async fn agent_line_order_with_hooks() {
         .command(json!({ "type": "prompt", "message": "Hello" }))
         .await;
     let order = lines_until_settled(&mut agent).await;
+    let position = |expected: &str| {
+        order
+            .iter()
+            .position(|line| line == expected)
+            .unwrap_or_else(|| panic!("missing {expected}: {order:?}"))
+    };
+    assert!(position("message_end user") < position("response prompt true"));
+    assert!(position("turn_start") < position("response prompt true"));
+    assert!(position("response prompt true") < position("message_start assistant"));
     r.note("prompt while idle", json!(order));
     insta::assert_json_snapshot!("agent_line_order_with_hooks", r.into_value());
 }

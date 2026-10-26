@@ -284,17 +284,24 @@ async fn agent_assistant_coding_session_unreachable() {
 /// A turn of a coding session whose `assistant.context` gets no answer:
 /// how long the model request came after the context request.
 async fn held_turn(log: &mut Log, agent: &mut AgentRun, step: &str, message: &str) -> Duration {
-    let response = agent
-        .call(json!({ "type": "prompt", "message": message }))
+    let id = agent
+        .command(json!({ "type": "prompt", "message": message }))
         .await;
-    log.note(&format!("{step}: response"), response);
+    // Admission waits for this context hook, so `call` would return only after
+    // the timeout. Observe the request as it arrives, before awaiting the ACK.
     let mut events = agent
         .until(|line| line["type"] == "gateway_request" && line["op"] == "assistant.context")
         .await;
     let asked = Instant::now();
     agent.wait_for_request().await;
     let waited = asked.elapsed();
-    events.extend(agent.settle().await);
+    events.extend(agent.until(|line| line["type"] == "agent_settled").await);
+    let response = events
+        .iter()
+        .find(|line| line["type"] == "response" && line["id"] == id)
+        .expect("prompt admission response");
+    assert_eq!(response["success"], true);
+    log.note(&format!("{step}: response"), response.clone());
     let events: Vec<Value> = events
         .into_iter()
         .filter(|line| line["type"] != "response")

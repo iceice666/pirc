@@ -21,12 +21,6 @@ expression: r.into_value()
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c2",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "Search",
           "role": "user",
@@ -44,6 +38,12 @@ expression: r.into_value()
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c2",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {

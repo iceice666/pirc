@@ -304,12 +304,6 @@ expression: r.into_value()
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c12",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "Show the schedule tool",
           "role": "user",
@@ -327,6 +321,12 @@ expression: r.into_value()
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c12",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {

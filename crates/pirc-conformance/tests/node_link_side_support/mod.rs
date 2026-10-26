@@ -89,9 +89,13 @@ impl Gateway {
     /// Relay `data` (a whole `request` frame's `data`).
     pub async fn relay(&mut self, data: Value) -> Value {
         let id = self.next_id();
-        tokio::time::timeout(DEADLINE, self.link.request(&id, data))
+        self.link
+            .send(&json!({ "type": "request", "requestId": id, "data": data }))
+            .await;
+        // Prompt admission can ask Gateway for authority before acknowledging
+        // the command. Service those reads while awaiting the response too.
+        self.wait(|frame| frame["type"] == "response" && frame["requestId"] == id)
             .await
-            .expect("timed out waiting for a response")
     }
 
     /// A relayed request and its answer, for a transcript.
@@ -192,8 +196,11 @@ impl Gateway {
         match tokio::time::timeout(DEADLINE, waiting).await {
             Ok(frame) => frame,
             Err(_) => {
-                let got: Vec<String> = self.link.skipped[before..]
+                let got: Vec<String> = self
+                    .link
+                    .skipped
                     .iter()
+                    .skip(before)
                     .map(|frame| {
                         let mut text = frame.to_string();
                         text.truncate(600);

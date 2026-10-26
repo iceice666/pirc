@@ -17,12 +17,6 @@ expression: value
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c1",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "Do the hard thing",
           "role": "user",
@@ -40,6 +34,12 @@ expression: value
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c1",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {
@@ -5840,12 +5840,6 @@ expression: value
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c2",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "Raise the limit to 3 and go on",
           "role": "user",
@@ -5883,6 +5877,12 @@ expression: value
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c2",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {
@@ -13301,12 +13301,6 @@ expression: value
         "type": "agent_start"
       },
       {
-        "command": "prompt",
-        "id": "c3",
-        "success": true,
-        "type": "response"
-      },
-      {
         "message": {
           "content": "Try plan B",
           "role": "user",
@@ -13324,6 +13318,12 @@ expression: value
       },
       {
         "type": "turn_start"
+      },
+      {
+        "command": "prompt",
+        "id": "c3",
+        "success": true,
+        "type": "response"
       },
       {
         "message": {

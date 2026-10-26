@@ -870,8 +870,8 @@ Nix build/evaluation remains waived, and no APK, device test or Release was run.
 The unfinished Gateway preparation remains local and is excluded from this
 integration push. Full U1 acceptance and later architecture stages stay open.
 
-The earlier remote Check run at `e34586b2` failed only its `node_link`
-conformance snapshot: the two protocol-refusal reasons still named daemon 14
+The earlier remote Check diagnosis at `e34586b2` identified a `node_link`
+conformance snapshot mismatch: the two protocol-refusal reasons still named daemon 14
 although the production protocol is 15. The snapshot now records 15, with
 independent assertions for the mismatch close code and current protocol number.
 A real-process `node_link` run and all seven `agent_loop_order` cases passed
@@ -1034,6 +1034,47 @@ integration, fresh execution authority and lease/command admission reconciliatio
 then Web/Android draft persistence/recovery and the full acceptance table. The
 transfer API alone does not resolve an uncertain command or guarantee execution.
 Run-owned artifacts are removed after verification; this checkpoint stays local.
+
+### G0 verification checkpoint: admission-aware conformance (2026-10-27)
+
+A cache-bypassing GitHub API read corrected an earlier stale status: the remote
+[Check run at `a926ea38`](https://github.com/mozufu/pirc/actions/runs/40350193507)
+finished **failed**, not still running. Its failures included initial-context
+measurement, feature transcripts and Node/browser relay timeouts. These repairs
+remain **local**; the remote run has not been rerun or made green by this work.
+
+- A real Node reproduced the relay timeout. The fake Gateway waited only for a
+  command response while the Agent awaited its `history.authority` or
+  `workspace.mirrorState` pre-admission read. Relay now services those existing
+  fixture reads while awaiting the matching response, preserving unrelated
+  buffered events, strict frame round trips and the finite timeout. The real
+  Node's five `node_link_side` cases pass. Production permission/admission behavior
+  is unchanged; no early success is restored to break the wait.
+- The context-timeout test previously started its clock after `call` returned,
+  which is now after the context hook finishes. It now observes the request
+  before awaiting acknowledgement, retaining the 2.5–10 second timeout assertion,
+  successful admission check and unavailable/stale-memory assertions.
+- **42 feature/order transcripts** now place a successful prompt response after
+  deferred initial admission. Structured comparison of old/new JSON confirmed
+  that all non-response events, tool results, model requests and response values
+  stayed identical; only those successful response positions changed. Hook-order
+  assertions independently require the user message end and turn start before
+  the ACK, and the ACK before the assistant message. Existing synchronous prompt,
+  slash command and delivery behavior remains covered.
+
+Validation: **50 Agent real-process tests** across the 13 affected test targets
+passed with snapshot updates disabled, plus the five real Node link cases. Strict
+conformance Clippy, Rust formatting and diff checks passed. Browser-feature tests
+here use fake browser replies; real Chromium Node/browser scenarios and a fresh
+Linux CI run are **not** verified. One unrelated `agent_background_tty` transcript
+was excluded from the final macOS pass because BSD `od -c` formats spaces
+differently from the Linux baseline (that case passed in the recorded Linux CI).
+Its original expected transcript is unchanged. No user Chrome was started or
+closed, and no Flutter/device, Nix build, remote push or Release was performed.
+
+The complete U1 flow remains gated; these fixture repairs are not a substitute
+for Gateway acceptance and Web/Android recovery integration. Run-owned binaries,
+logs and snapshot-comparison backups are removed after the local commit.
 
 ## Design stages and later implementation gates
 
