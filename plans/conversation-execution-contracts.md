@@ -1,6 +1,6 @@
 # Unified conversation execution contracts
 
-[Plans](README.md) · [Unified conversations](unified-conversations.md) · [pots and Rust foundations](pots-and-library-extraction.md)
+[Plans](README.md) · [Unified conversations](unified-conversations.md) · [pots](pots/README.md) · [Rust foundations](library-extraction.md)
 
 Status: planning specification, 2026-10-24. The user accepted the seven follow-up
 recommendations, first detailed items 1–3, then requested the same depth for
@@ -713,166 +713,14 @@ this plan does not choose a new authentication topology or public port.
 
 ## 7. Make pots a bounded coordinator with one task record
 
-### Entry points and durable records
+This contract has moved to the [pots folder](pots/README.md) so that pots can be
+planned independently. The contract and case text are unchanged:
 
-pots has one assistant identity with an overview/inbox and ongoing responsibilities.
-Its main input can answer a question, refine a responsibility or initiate a task.
-An accepted work suggestion links to the same canonical task and source conversation
-used elsewhere. Opening it from pots, a project, a notification or the App changes
-the view, not task ownership or the number of work conversations.
-
-Separate a task's immutable origin (user message or pots responsibility/suggestion),
-record owner and optional execution-conversation binding. A tracking-only task can
-exist without an execution conversation or attempt. Reopening/accepting it for
-tracking does not create an empty session. On the first authorized dispatch, reuse
-the explicitly selected conversation or create/map one through the idempotent
-first-message flow. Retrying Start returns that same mapping. An origin link alone
-does not confer ownership for deletion or authority for execution.
-
-Coordination history may record the user's request and task links, but must not
-mirror every worker message into a second independently actionable work transcript.
-
-| Record         | Minimum facts and purpose                                                                                                                                      |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Responsibility | User owner, purpose, observed scopes, separately granted actions, triggering policy, configuration revision and pause/budget state                             |
-| Observation    | Authorized source IDs/revisions, observed time, freshness and trigger; retrieved content is evidence, not a new instruction                                    |
-| Suggestion     | Stable identity, material condition, evidence references, proposed target/action, current revision and pending/snoozed/dismissed/superseded/linked disposition |
-| Task link      | Canonical task/conversation, originating suggestion/request and any existing target; created atomically with acceptance reconciliation                         |
-| Dispatch       | Backend-issued pots actor, user request or standing grant, target task/attempt, directive/binding/grant generations and idempotency identity                   |
-| Notification   | Reference to the durable suggestion/task/decision, delivery/read/dismissed state and reconciliation revision; never authority to act                           |
-
-### Observe, suggest, accept and report flow
-
-1. **Observe within scope.** Filter events by current observation grants before
-   accessing content or calling a model. A progress-read grant does not authorize
-   reading complete transcripts, files or external accounts. Coalesce routine tool
-   progress; use event/scheduled wake-ups and budgets instead of continuous polling.
-2. **Evaluate relevance.** Record the evidence and its freshness. Verify the material
-   condition still holds and check whether the same actionable issue already has
-   a suggestion/task. Stale evidence can produce a needs-refresh state, not a
-   fabricated current fact. Untrusted source text never changes pots permissions.
-3. **Persist a suggestion.** Show why it matters, the intended target/action and
-   what would require permission. Persist the item before notification delivery.
-   Ordinary results/suggestions use the inbox/digest; decisions, blockers or events
-   marked urgent follow notification preferences. Unchanged state remains quiet.
-4. **Choose an explicit action.** Opening or reading is not acceptance. Dismiss and
-   Snooze do not dispatch. A tracking-only action creates/links a proposed task
-   without starting it. A clearly labelled Start action uses the user's specific
-   instruction and current grants; ask only for missing scope/required approval,
-   not an extra generic confirmation of an already authorized action.
-5. **Create/link once.** Accept against the current suggestion revision and atomically
-   reconcile its task link. Two devices accepting with different command IDs must
-   still return one task for that suggestion's accepted objective. A materially
-   changed action/target requires review rather than inheriting the old acceptance.
-6. **Dispatch with attribution.** Recheck execution grants, current task control,
-   workspace readiness and effect policy. The target receives a backend-attributed
-   “From pots” instruction carrying its actual authority. Worker results return to
-   the task and item 2's response flow; no forged user quote or authority from a label.
-7. **Report a meaningful outcome.** Link deliverables, blockers or required decisions
-   without copying all tool events into pots. Required child/background work must
-   finish before completion; explicit user acceptance remains Ready for review.
-   Opening the result does not automatically accept it or resume coordination.
-
-Record the displayed action/target and accepted revision as the user's scoped
-instruction. Extra model-written details are not automatically part of that
-instruction, and an attributed approval must not be forged as a direct user quote.
-
-A user-authorized standing responsibility may dispatch without a new suggestion
-acceptance only within its recorded execution scope. Observation/suggestion
-permission alone never enables this. Existing operation approval policy still
-applies at the destination. A changed grant narrows subsequent dispatch; no agent
-may grant itself permission or produce a mutual-dispatch loop to evade limits.
-
-### Distinct controls and their scope
-
-| Control                                                   | New pots activity                                                                                               | Already-running work                                                               |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Pause observation for a responsibility                    | Stop new analysis/content fetches in that scope; keep existing items readable under current rights              | Independent tasks continue; no invented fresh observations                         |
-| Pause new coordination for a task/responsibility/all pots | Fence pending/new pots dispatch and follow-ups in the selected scope                                            | Already delivered authorized tasks continue; UI says they are still running        |
-| Take over task                                            | Fence conflicting queued pots directives for that task and its scoped children; route the user's input directly | Do not silently kill tools; unrelated responsibilities continue                    |
-| Stop task                                                 | Fence new work and request host cancellation/reconciliation of that execution scope                             | Show stopping until workers/descendants are acknowledged; preserve partial effects |
-| Revoke a resource/action grant                            | Reject subsequent affected effects and apply live revocation where necessary                                    | Reconcile affected workers; unrelated authorized work stays separate               |
-| Resume coordination/observation                           | Revalidate current settings, grants, evidence and target before new activity                                    | Does not replay missed directives or restart an explicitly stopped task            |
-
-Expose these distinctions in both clients; an ambiguous “pause pots” action must
-state which scopes and effects it changes. Merely viewing a task is not takeover.
-A user correction follows item 2; a conflicting pots instruction cannot overrule it.
-If takeover races dispatch, persist their ordering/generations: queued stale
-instructions are rejected; already-applied effects are reported and reconciled,
-not described as prevented. Taking over one task does not grant pots access to
-other conversations, and resuming pots elsewhere does not release that takeover.
-
-### Quiet operation, failure and recovery
-
-- **Deduplication:** repeated source events update the same material condition;
-  timestamps/retries alone do not create a new suggestion. A dismissed item remains
-  quiet until a meaningful condition changes. Snooze waits for the chosen time and
-  rechecks relevance/authority then. A new occurrence of a recurring responsibility
-  can be distinct, but its occurrence identity must be explicit; do not suppress
-  all future work or resend the same occurrence repeatedly.
-- **Adopted activation:** observation starts only for user-selected scopes, with
-  progress/content rights separate. Suggestions do not imply dispatch authority.
-  Require finite configured budgets and bounded concurrency before proactive work;
-  absent values cannot mean unlimited. Nonurgent suggestions use the digest/inbox.
-- **Budgets:** track observation and dispatch usage under their scoped configured
-  limits, including concurrent workers. Reserve/check budget before new costly
-  work; exhausted/unknown accounting blocks new discretionary analysis/dispatch
-  with one useful status. It does not silently terminate unrelated user work or
-  authorize a fallback provider/spending increase. Numerical defaults stay open.
-- **Availability:** backend events/tasks persist with Web closed or App suspended.
-  If the authorized agent runtime is unavailable, record pending/stale status and
-  coalesce wake-ups; Gateway alone does not manufacture agent results. Reconnect
-  reconciles current state before invoking queued observation or dispatch.
-- **Changed evidence or permission:** recheck on acceptance and at effect time.
-  Revoked/deleted sources become unavailable; remove known managed suggestion/
-  notification previews covered by deletion. Do not quote formerly accessible
-  private data into a new task to keep using it after revocation.
-- **Lost responses/duplicate events:** reconcile the stable suggestion/task/dispatch
-  identity. Unknown outcomes do not trigger another task, instruction or external
-  effect; late results stay attributed and cannot restart stopped work.
-- **Notification limits:** delivery failure does not lose the canonical item.
-  Reading, dismissing a delivery, dismissing a suggestion and resolving a decision
-  are different actions. One resolved decision disables other devices' stale
-  actions when they synchronize; tapping an old push checks the current outcome.
-- **No cascading authority:** a board message, worker result or other bot's request
-  may inform a suggestion, but cannot become a new user instruction. Preserve
-  delegation lineage and bounded loop/depth/concurrency policy at every dispatch.
-
-The activation policy is adopted; exact quiet hours, digest cadence and budget/
-concurrency/depth numbers still require concrete settings. User-selected scopes
-and standing grants must be explicit; approval of the plan does not grant access
-to every project or authorize autonomous dispatch across all conversations. Native sign-in
-and real background push delivery retain their separate design/acceptance gates.
-
-### Acceptance cases to implement later
-
-- **P7-1:** Repeated events for one issue produce one sourced suggestion; unchanged
-  tool progress is silent. Dismiss/snooze survives restart, and a genuinely new
-  recurring occurrence is distinguished from a redelivery.
-- **P7-2:** Web and App start the same suggestion concurrently with different request
-  IDs or lost responses. One canonical task/conversation and dispatch result remain.
-- **P7-3:** Opening, reading, dismissing or choosing tracking-only never starts work.
-  Start with sufficient grants runs without redundant generic approval; missing
-  scope shows the exact decision and does not dispatch early. Tracking without
-  a target conversation creates no empty session; first Start creates/maps one
-  execution conversation once, with origin and ownership still separately recorded.
-- **P7-4:** Take over A while pots coordinates A and B. Stale A follow-ups are fenced,
-  A's running effects are truthfully reported, B continues, and an explicit Stop A
-  reconciles only the affected execution scope. Resume B cannot release A's takeover.
-- **P7-5:** Pause observation versus coordination versus Stop. Both clients show the
-  actual difference; restarting pots or reconnecting a device does not resume
-  stopped tasks or replay suppressed directives.
-- **P7-6:** Remove a project/grant or delete a source between observation, acceptance,
-  dispatch and tool effect. Every boundary rechecks authority; old context cannot
-  restore revoked rights or leak deleted preview content through a new notification.
-- **P7-7:** Exhaust budget across concurrent observations or lose the agent runtime.
-  Pending/stale status is durable, there is no inference retry storm or implicit
-  spending increase, and unrelated direct user work remains usable.
-- **P7-8:** Miss a phone push, close all Web clients, resolve a decision elsewhere,
-  then tap the stale push. The App opens the authoritative handled result without
-  duplicate execution; delivery failure never loses the inbox item.
-- **P7-9:** Inject a forged user instruction through a board post/worker result or a
-  pots-to-pots loop. It cannot acquire dispatch authority or bypass lineage/budgets.
+- Records, the observe/suggest/accept/dispatch/report flow, controls and quiet
+  operation: [pots design — coordination contract](pots/design.md#coordination-contract).
+- Acceptance cases P7-1 to P7-9, now with their current local evidence:
+  [pots acceptance](pots/acceptance.md).
+- Delivered checkpoints and remaining work: [pots](pots/README.md).
 
 ## Remaining specification work
 

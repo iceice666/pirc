@@ -25,16 +25,21 @@ execution remains governed by user-granted authority. Flutter Web is evaluation
 only. Domain relationships and workflows come before new interface implementation.
 The 2026-10-24 clarification adds configurable conversation workspaces, shared
 project mounts/rules, project departure revocation, collaboration boards and
-attributed **pirc pots** coordination. [pots and reusable Rust foundations](pots-and-library-extraction.md)
-connects those requirements to the proposed provider/loop extraction, with
-confirmed coupling, corrections and staged acceptance gates. The user subsequently
-authorized phased code implementation, not deployment or crate publication. A
-[bounded implementation checkpoint](pots-and-library-extraction.md#implementation-checkpoint--not-the-complete-target)
-now includes pure types, transport/OAuth extraction, a loop core that the
-production agent run drives through a thin adapter, and progress-only pots
-tracking with locally tested Web and native Android views. Start remains
-unavailable; the adapter's follow-ups, APK/device acceptance and the wider
-architecture remain open. Existing security/data-loss issues and acceptance gaps below remain
+attributed **pirc pots** coordination. The user subsequently authorized phased code
+implementation, not deployment or crate publication. Two plans carry that work:
+
+- **[pots](pots/README.md)** (own folder: README, [design](pots/design.md),
+  [acceptance](pots/acceptance.md)). Delivered locally: progress-only tracking
+  (shipped in v0.10.0) and explicit controlled dispatch (`d4f1efbd`, unreleased,
+  Gateway schema 1011 / Node protocol 15). Open: a Stop/run-correlation risk,
+  device and full-conformance acceptance, content observation, proactive analysis,
+  digests/push and standing grants.
+- **[Reusable Rust foundations](library-extraction.md)**. Delivered: pure types,
+  transport/OAuth extraction, the native runtime contract, and a loop core that
+  the production agent run drives through a thin adapter. Open: the adapter
+  follow-ups, API stabilization and a clean full workspace/conformance gate.
+
+Existing security/data-loss issues and acceptance gaps below remain
 valid; this does not mark mobile parity complete. The user subsequently accepted
 [the specification-review recommendations](unified-conversations.md#accepted-specification-review-recommendations-2026-10-24)
 as the planning baseline. Accepted choices are no longer repeated as approval

@@ -1,6 +1,6 @@
 # pots: bounded progress suggestions and tracking
 
-[User guides](README.md) · [Library boundaries](../architecture/reusable-llm.md) · [Remaining plan](../../plans/pots-and-library-extraction.md)
+[User guides](README.md) · [Library boundaries](../architecture/reusable-llm.md) · [Remaining plan](../../plans/pots/README.md)
 
 ## Current checkpoint
 

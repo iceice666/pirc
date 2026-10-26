@@ -1,109 +1,57 @@
-# pirc pots and reusable Rust foundations
+# Reusable Rust foundations (library extraction)
 
-[Plans](README.md) · [Unified conversations](unified-conversations.md) · [Modes](modes.md) · [Checkpoints](checkpoints.md)
+[Plans](README.md) · [pots](pots/README.md) · [Unified conversations](unified-conversations.md) · [Architecture reference](../docs/architecture/reusable-llm.md)
 
-Status: adopted design with a staged local implementation checkpoint, 2026-10-24.
-The original handoff/research task authorized planning only. The user subsequently
-authorized phased implementation of the reusable foundations and a bounded pots
-checkpoint. That authorization does **not** authorize deployment, paid evaluation,
-crates.io publication or wholesale completion of the unified-conversation design.
-The three adopted crate names and default-off OAuth/wire-feature direction are
-now represented in code; remaining contracts and acceptance gates below stay open.
+Adopted design, 2026-10-24. The user then authorized phased implementation of the
+reusable foundations. That does **not** authorize deployment, paid evaluation,
+crates.io publication or completing the unified-conversation design wholesale.
+The pots product plan, which used to share this file, now lives in [pots](pots/README.md).
 See the [accepted design decisions](unified-conversations.md#accepted-specification-review-recommendations-2026-10-24).
 
-## Explicit execution follow-up — 2026-10-25, unreleased
+## Delivered
 
-The user authorized the next bounded checkpoint after reviewing the tracking-only
-state: explicit Start with a written instruction, one dedicated same-workspace
-execution conversation, trusted pots attribution, progress/results, takeover and
-execution-scoped Stop. Implementation uses atomic Gateway reservation and a
-backend-only Node link command with a durable at-most-once send ledger. Recovery
-observes/cancels; it never automatically replays Prepare/Start or revives stopped
-work. Unknown sends retain the concurrency reservation until reconciled.
+Implementation baseline: `eb45f71d`. Current contracts, feature names and the exact
+gates that were run are in
+[Reusable LLM foundations](../docs/architecture/reusable-llm.md). That file is
+the source of truth; the summary below is for orientation only.
 
-This does not authorize transcript/file observation, model-driven suggestions,
-periodic autonomous work, standing execution grants, digests/push, unified-workflow
-completion, deployment or publication. Gateway schema 1011, Node schema 2003 and
-protocol 15 require state backups and a coordinated future upgrade. The tracking
-checkpoint and its historical gates below remain historical, not the current
-execution-unavailable contract. Current behavior and remaining limits are in the
-[pots guide](../docs/guides/pots.md). Full P7 acceptance is still open.
+- **`pirc-llm-types`** (`24abca5e`): unpublished, serialization-only leaf crate.
+  `pirc-protocol` re-exports it, so existing imports and envelopes are unchanged.
+  Pure data is not a safe public projection: Provider/Model DTOs may still carry
+  credentials.
+- **`pirc-llm`** (`24abca5e`, `bb1e8374`): owns the six native/Pi transports.
+  The client, cache and cancellation are passed in explicitly, and each wire API
+  has its own feature. OAuth is optional and off by default. The runtime contract
+  is `run_request(Route, &RunRequest)` with typed outcomes that keep partial
+  messages and safe error summaries. pirc keeps accounts, catalogs, credential
+  storage, environment/TLS policy, cache identity and error redaction.
+- **`pirc-agent-loop`** (`a5485cc8` → `4bb08c91`): executable state-machine core
+  with correlated effects, generation fences, partial/error records, cancellation,
+  overlapping wait tokens and snapshot-bound history rewrites. The production
+  `Agent::run` goes through a thin adapter (`crates/pirc-agent/src/run_loop.rs`)
+  that emits and writes nothing itself, so event order and persistence are
+  unchanged. Retries, persistence, tools, approvals, queues and completion waits
+  stay in the host.
+- **`pirc-tool-schema`**: validation for a compatible schema subset, plus
+  TypeScript documentation generated from tool metadata. PTC routing, tool policy
+  and prompt budgets stay in the agent.
 
-Focused follow-up verification: Gateway 202, Web 452, Android pots/timeline 35,
-protocol 23 and fresh-binary executable conformance 23 cases across 7 suites
-(including 3 pots cases) passed, as did workspace strict clippy. The full sandboxed
-Rust workspace run still failed at 2 Linux Node socket-enumeration tests (369
-passed / 3 ignored in that target); outside-sandbox retry was declined. This is
-not a clean full-workspace or full-conformance claim. See the guide for details.
+Validation is not clean. Focused gates passed, but the last recorded full
+workspace and full conformance runs had environment-looking failures that were
+not proven pre-existing. Remaining adapter follow-ups are listed under
+[Remaining gates](../docs/architecture/reusable-llm.md#remaining-gates).
 
-## Original tracking implementation checkpoint — not the complete target
-
-Current behavior is documented in [pots](../docs/guides/pots.md) and
-[Reusable LLM foundations](../docs/architecture/reusable-llm.md). Implementation
-baseline: eb45f71d8fdefb35a796704ebd9ba7accdf098ff.
-
-- **Pure types:** pirc-llm-types is an unpublished serialization-only leaf;
-  protocol re-exports preserve existing imports/envelopes. Compatible Provider/Model
-  DTOs may still contain credentials: pure data is not a safe public projection.
-- **Transport/OAuth:** six existing native/Pi paths moved to pirc-llm with
-  explicit client/cache/cancellation inputs and separate wire features; OAuth is
-  optional and default off. pirc retains accounts, catalogs, credential storage,
-  host environment/TLS policy, routing/cache identity and error redaction.
-- **Loop:** pirc-agent-loop is an executable state-machine core with
-  correlated effects, generation fences, partial/error records, cancellation and
-  local/Send proofs. Since 2026-10-25 the production `Agent::run` is driven
-  through it by a thin adapter (`crates/pirc-agent/src/run_loop.rs`) that emits
-  and writes nothing, so event traces and persistence are unchanged; see
-  [Reusable LLM foundations](../docs/architecture/reusable-llm.md#loop-host-driven-core-and-the-production-adapter).
-  Retries, persistence, tools, approvals, queues and completion waits stay
-  host-owned; the remaining adapter follow-ups are listed there.
-  The 2026-10-25 follow-up adds overlapping wait tokens and explicit snapshot-bound
-  history rewrites, without embedding OM or another memory backend.
-- **Tool contracts:** `pirc-tool-schema` separately provides compatibility-subset
-  schema validation and metadata-based TypeScript documentation. PTC routing,
-  tool policy and default prompt budgets remain in agent wrappers.
-- **pots:** Gateway schema 1010 persists owner-scoped responsibilities, generic
-  session-progress suggestions and canonical tracking tasks. Explicit activation,
-  finite lifetime budgets, durable controls, source/expiry checks, capped lists and
-  atomic deduplication are implemented. Track creates no execution session;
-  Start returns **503 not_ready**. There is no model-driven observation or dispatch.
-- **Clients:** Web and native Android tracking-only pots views are implemented
-  and locally tested. Android has 31 focused/regression test passes, including 11
-  new pots cases; changed-file analysis is clean. APK, physical-device/push and
-  complete execution/notification parity remain unverified.
-
-Recorded local gates: 26 leaf/protocol tests in an isolated workspace; existing
-260-scenario transport parity, 5 cancel/drop and 3 TLS regressions; 17 synthetic
-OAuth tests before final feature isolation (14 OAuth-only tests in the final matrix);
-16 loop tests plus local/Send examples; 22 pots tests within 178 Gateway
-tests; 399 production-agent library tests; integrated strict workspace clippy;
-and Web 61 files / 436 tests, Svelte check and build. Final workspace fmt/clippy
-passed, but the full workspace test run exited 1 with 39 failures across seven
-Node/browser/sandbox targets. Five Node library failures were known; other newly
-seen environment-looking failures lack baseline proof. The copied isolated
-transport/OAuth matrix passed default, each wire, OAuth-only and all-feature
-check/test/strict clippy. Full executable conformance is not clean:
-an initial memory WebSocket failure passed 13 isolated retries (suspected race,
-not proven pre-existing). The full debug-executable run completed with six failures
-in two targets: memory and five node-browser cases. A final fresh-binary focused
-rerun of ten suites passed 20 tests; it does not replace the failed full gate. No
-assertions/snapshots were weakened. The architecture reference
-details scope and matrix gaps. These are **not** full workspace/conformance,
-real-provider, pots dispatch, device, deployment or publication acceptance. The
-later production loop adapter has its own recorded gates in the architecture
-reference. Do not mark P7 or the delivery sequence complete from
-these focused proofs.
-
-All seven accepted follow-up areas are detailed in [Conversation execution contracts](conversation-execution-contracts.md):
-capability composition, foreground/parallel task routing, overlapping grants,
-Node switching, lifecycle/deletion, historical/live content and pots coordination.
-The [main plan](unified-conversations.md#accepted-follow-up-behavior-and-detailed-contracts-2026-10-24)
-indexes those contracts. Their state, authorization and data ownership remain pirc
-host responsibilities. A generic loop must expose cancel/resume and correlated
-results so the host can reject obsolete work; it must not decide user-message
-targets, create grants, own deletion/cache storage or silently restart stopped tasks.
-Cross-Node context handoff and pots dispatch use trusted host adapters rather than
-copying private session stores or giving the loop provider/account credentials.
+All seven accepted follow-up areas are detailed in
+[Conversation execution contracts](conversation-execution-contracts.md) and
+[pots design](pots/design.md#coordination-contract): capability composition,
+foreground/parallel task routing, overlapping grants, Node switching,
+lifecycle/deletion, historical/live content and pots coordination. Their state,
+authorization and data ownership remain pirc host responsibilities. A generic loop
+must expose cancel/resume and correlated results so the host can reject obsolete
+work. It must not decide user-message targets, create grants, own deletion/cache
+storage or silently restart stopped tasks. Cross-Node context handoff and pots
+dispatch use trusted host adapters rather than copying private session stores or
+giving the loop provider/account credentials.
 
 ## Combined direction
 
@@ -143,9 +91,7 @@ only the explicitly described subset; it is not blanket approval for every item:
   concurrent work, especially another agent holding a conflicting write lease.
 - Recommend tasks for most complex work; long/background and multi-agent work
   should normally require tracked tasks and visible progress.
-- pots can observe allowed information and conversation progress, offer opinions,
-  and dispatch instructions after user authorization. Its messages must be marked
-  as originating from pots, with permissions configurable in settings.
+- pots requirements and references (OpenAI dots, Grok Bot) are in [pots design](pots/design.md).
 - App connection security is deferred for a separate design discussion. Flutter
   Web remains an evaluation option.
 
@@ -159,36 +105,6 @@ whether it needs to ask a follow-up question. These product behaviors are decide
 OS revocation/rebuild and offline-host acknowledgement remain technical design.
 Unmounting does not erase retained information or undo completed writes, and a
 communication board does not itself prevent concurrent filesystem writes.
-
-## Reference capabilities: dots and Grok Bot
-
-Official sources checked 2026-10-24 at the user's request. These describe external
-product behavior; the pirc choices below are our proposals, not their internals.
-
-- [OpenAI dots](https://learn.chatgpt.com/docs/dots): ongoing responsibility across
-  conversations, background work, remembered context, delegated tasks and results
-  or decisions brought back to the user. This supports a persistent pots identity
-  with separate task contexts rather than one unlimited mixed transcript.
-- [Dots controls](https://learn.chatgpt.com/docs/dots/controls): proactive research
-  is read-only; later actions follow instructions, permissions and approval rules.
-  Use this distinction when defining pots observation and dispatch grants.
-- [Grok Bot](https://docs.x.ai/grok-bot/overview): persistent execution resources,
-  parallel agents, direct handoffs and work continuing when clients are closed.
-  Its documented shared computer/browser model is not a requirement for pirc;
-  project mounts, private state and browser access retain explicit boundaries.
-
-Proposed pots first scope: one personal assistant identity, task-specific threads,
-scoped observation, event/scheduled wake-ups, durable suggestions, quiet digests,
-explicitly attributed dispatch and user takeover. Voice, external messaging
-channels, multiple named assistants and full computer-use capability are possible
-later scope decisions, not implied by these references.
-
-A persistent responsibility is distinct from a task: for example, "watch this
-project for blocked work" can have bounded ongoing observation, while each
-accepted repair becomes a task with a finish condition. Both need pause/revoke
-controls, budgets and durable wake-up state. An always-on service need not keep
-an LLM generating continuously. Required Gateway and execution Nodes still need
-to be online; closing Web/App must not own their lifetime.
 
 ## Library handoff: findings checked against this checkout
 
@@ -210,7 +126,11 @@ Confirmed in the current sources:
   compaction, retries, feature hooks and event ordering. Generic extraction is a
   more substantial change than relocating provider modules.
 
-### Corrections to resolve before implementing the handoff
+### Handoff corrections — still binding constraints
+
+Raised before the first implementation; the delivered checkpoint was built against
+them. They remain constraints on further changes. Which of them have proof is
+recorded in the architecture reference, not here.
 
 1. **Keep a lightweight dependency graph.** `pirc-protocol` currently needs only
    data/serialization dependencies (plus its existing Linux socket support).
@@ -333,9 +253,17 @@ separates those choices from numerical settings and engineering decisions still 
 | B1. Provider extraction        | Pure types, compatible adapters, then transport and optional OAuth separation                                 | Implement adopted packaging with API/compatibility proof; isolate from product behavior changes |
 | B2. Product foundations        | Versioned workspace bindings, mount enforcement, durable tasks/decisions, independent-client state            | Stage A; can use the existing agent loop and provider adapter                                   |
 | C. Unified workflow            | Same-conversation work, project resources, meaningful waiting/progress, Web/App contract parity               | Mount transitions, replay prevention and concurrent-writer acceptance                           |
-| D. pots                        | Overview and attributed dispatch, then scoped proactive observation/digests                                   | Tasks, provenance, grants, durable wake-ups and notification reconciliation                     |
+| D. pots                        | Overview and attributed dispatch, then scoped proactive observation/digests ([pots](pots/README.md))          | Tasks, provenance, grants, durable wake-ups and notification reconciliation                     |
 | E. Loop extraction             | Fake-adapter core, pirc integration and event-order/conformance checks (adapter in place since 2026-10-25)    | Stable provider boundary plus understood tool-wait/approval/cancel semantics                    |
 | F. Optional frontend migration | Flutter Web comparison against current Web on difficult interactions                                          | Separate decision after measurement; not a dependency of App independence                       |
+
+Status at `d4f1efbd`:
+
+- **B1:** checkpoint delivered (see [Delivered](#delivered)). API stabilization and the feature-matrix rerun remain open.
+- **D:** tracking and explicit dispatch are delivered; proactive observation and digests are not. See [pots](pots/README.md#delivered).
+- **E:** the production adapter is in place; its follow-ups remain open.
+- **A:** contracts are partly specified ([Unified conversations](unified-conversations.md)).
+- **B2, C, F:** no implementation checkpoint recorded.
 
 B1/B2 are independent work streams. The later phased implementation authorization
 permits the checkpoint above, not automatic execution of every future stage. Keep
@@ -369,8 +297,8 @@ state flows can be specified now, but no new listener or public port is implied.
 - **pots and clients:** actor provenance cannot be forged by prompt text; narrowed
   grants remain narrowed through delegation; user takeover fences queued dispatch;
   duplicate approvals, missed push and closed Web do not replay work.
-- **Lifecycle/content/pots:** the N4/L5/C6/P7 cases in the conversation contracts
-  cover interrupted Node transitions, owned deletion versus retained recovery
+- **Lifecycle/content/pots:** the N4/L5/C6 cases in the conversation contracts and
+  the [P7 cases](pots/acceptance.md) cover interrupted Node transitions, owned deletion versus retained recovery
   evidence, live-file reauthorization/account caches, suggestion deduplication and
   user takeover. Extraction must preserve these host boundaries; generic-loop
   tests alone do not establish backend/client or OS enforcement.
@@ -380,7 +308,7 @@ state flows can be specified now, but no new listener or public port is implied.
   Clean disposable test/build outputs after actual runs.
 
 The original design-only update performed no runtime verification. The subsequent
-implementation checkpoint and its actually run local gates are recorded at the
-top and in the current architecture reference. No real OAuth login, deployment or
+implementation checkpoint and its actually run local gates are recorded in the
+current architecture reference. No real OAuth login, deployment or
 crate publication was performed. Existing memory/checkpoint authority and the
 remaining device, execution-adapter and full-conformance gates are not waived.

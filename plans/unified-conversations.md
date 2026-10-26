@@ -1,6 +1,6 @@
 # Unified conversations, projects and an independent App
 
-[Plans](README.md) · [Workspace modes](modes.md) · [Mobile](mobile.md) · [Assistant contracts](../docs/architecture/assistant-memory.md) · [Checkpoints](checkpoints.md) · [pots and Rust foundations](pots-and-library-extraction.md) · [Conversation execution contracts](conversation-execution-contracts.md)
+[Plans](README.md) · [Workspace modes](modes.md) · [Mobile](mobile.md) · [Assistant contracts](../docs/architecture/assistant-memory.md) · [Checkpoints](checkpoints.md) · [pots](pots/README.md) · [Rust foundations](library-extraction.md) · [Conversation execution contracts](conversation-execution-contracts.md)
 
 Status: architecture planning baseline, updated 2026-10-24. The user accepted the
 recommendations from the specification review for inclusion in this plan. Only
@@ -80,7 +80,7 @@ that does not authorize implementing this architecture or publishing a release.
 | 4. Switching Nodes                   | Switch execution binding without automatic migration of files, processes or browser state; no automatic offline failover                                              | [Switch flow and failure cases](conversation-execution-contracts.md#4-switch-nodes-without-implicit-migration); separate file transfer remains outside switching |
 | 5. Archive/delete/leave              | Archive organizes; deletion reconciles affected running work first; leaving changes grants; original folders and memory provenance are protected                      | [Lifecycle ownership, deletion flow and cases](conversation-execution-contracts.md#5-archive-leave-and-delete-with-explicit-ownership)                           |
 | 6. Historical content and file links | Preserve saved dialogue under decision A; distinguish conversation-owned attachments from live project file references                                                | [Content kinds, access flow and cases](conversation-execution-contracts.md#6-separate-saved-content-from-live-file-references)                                   |
-| 7. pots entry and takeover           | An accepted suggestion links to one canonical task; subsequent discussion stays task-linked; takeover suspends coordination only for the affected task                | [pots workflow, controls and cases](conversation-execution-contracts.md#7-make-pots-a-bounded-coordinator-with-one-task-record)                                  |
+| 7. pots entry and takeover           | An accepted suggestion links to one canonical task; subsequent discussion stays task-linked; takeover suspends coordination only for the affected task                | [pots workflow, controls and cases](pots/design.md#coordination-contract)                                                                                        |
 
 ### 4. Switching Nodes without implicit data transfer
 
@@ -460,55 +460,12 @@ retrieval through the departed project's authority is denied.
 
 ## pirc pots: proactive but bounded
 
-Product name supplied by the user: **pirc pots** (personal assistant).
-Planned presentation: one stable assistant entry point with an overview,
-pending decisions and task-specific discussion threads. It is not a second
-unstructured collection of interchangeable Chat sessions. A continuous persona
-must not require an infinite transcript containing every agent's raw output.
-
-Separate these authorities:
-
-- **Observe:** which projects, tasks, calendar/source data and history may be read.
-- **Suggest:** create a sourced recommendation without starting its proposed work.
-- **Execute:** dispatch, modify, schedule, contact external systems or publish only
-  within explicitly granted scope and the existing operation approval policy.
-
-Observation itself has limits: no scanning arbitrary files, accounts or new
-sources merely to find something useful. Retrieved content and other agents'
-messages remain data, not user permission. Unapproved suggestions expire or stay
-pending; silence, dismissal and notification delivery never authorize execution.
-
-pots messages must carry backend-issued actor identity, source responsibility/task,
-initiating user request or standing grant, target and scope. Display "From pots"
-in the receiving conversation. A text prefix is insufficient: agents must not
-be able to impersonate the user or manufacture delegated authority.
-
-Configure observation, conversation reading, suggestions, dispatch/follow-ups,
-stop/reprioritize, and notifications separately. User commands or explicit
-standing grants authorize dispatch; the ability to watch progress does not.
-Revalidate grants at delivery and execution, deduplicate retries, and fence queued
-pots instructions after user takeover or project departure. Include loop/depth
-and budget limits so bots cannot trigger an endless dispatch cycle.
-
-The backend stores the suggestion, supporting evidence, revision, related tasks
-and disposition. Event/rule filters should trigger bounded analysis, with budgets
-and backoff, rather than a model continuously rereading every conversation.
-Assistant inference runs on an available authorized execution service; a Gateway
-alone is not an agent runtime. Show unavailable/stale status when it cannot run.
-
-Notification categories (adopted treatment; exact timing settings remain open):
-
-| Category                                               | Default treatment                                            |
-| ------------------------------------------------------ | ------------------------------------------------------------ |
-| Decision required, blocker or user-marked urgent event | Prompt notification subject to the user's preferences        |
-| Ordinary completion or useful nonurgent suggestion     | Group in a digest/inbox                                      |
-| Tool progress or unchanged state                       | Update the task silently                                     |
-| Dismissed or snoozed suggestion                        | Stay quiet until the chosen time or a material new condition |
-
-Include per-category controls, quiet hours, deduplication and a visible reason
-for each suggestion. Proactive monitoring/analysis has a configurable budget and
-can be stopped independently of ordinary chat. Exact numeric limits, quiet-hour
-windows and digest cadence remain to configure; the policy itself is adopted.
+Product name supplied by the user: **pirc pots** (personal assistant): one stable
+assistant entry point that observes, suggests and, only within explicitly granted
+authority, dispatches attributed work. The full adopted design (separate
+observe/suggest/execute authorities, “From pots” attribution, notification
+categories and quiet operation) has moved to [pots design](pots/design.md). The
+delivered subset and remaining work are in [pots](pots/README.md).
 
 ## Independent App and shared backend contract
 
@@ -563,8 +520,9 @@ Web session is not.
 
 ## Relation to reusable crates and App connection design
 
-See [pots and Rust foundations](pots-and-library-extraction.md) for checked handoff
-findings, official dots/Grok Bot references and the combined delivery sequence.
+See [Library extraction](library-extraction.md) for checked handoff findings and
+the combined delivery sequence, and [pots design](pots/design.md) for the dots/Grok
+Bot references.
 The reusable loop does not own product tasks, mounts, memory or pots authority.
 Provider extraction can be behavior-preserving and independent; loop integration
 must respect tool-wait, cancellation, event ordering and context transitions.
@@ -673,9 +631,11 @@ its review scope is this architecture family, not every historical repository pl
 - [ ] Propose App setup/synchronization independence as a parallel contract concern,
       with mobile-only acceptance for every delivered flow.
 - [ ] Add pots overview, authenticated dispatch attribution and durable decisions
-      before expanding proactive discovery; use the combined sequence in the
-      [library integration plan](pots-and-library-extraction.md).
-- [ ] Add scoped observation, quiet suggestions and authorized coordination.
+      before expanding proactive discovery. Partly delivered: the overview, durable
+      suggestions/tasks and explicit attributed dispatch exist
+      ([pots](pots/README.md#delivered)); durable decisions remain.
+- [ ] Add scoped observation, quiet suggestions and authorized coordination. Only
+      progress-event observation exists; see the [pots queue](pots/README.md#remaining-work-queue).
 - [ ] Evaluate Flutter Web separately; retain the current Web until acceptance
       supports an explicit migration decision.
 
@@ -954,7 +914,7 @@ Use small independently verifiable deliveries: resource/transition contract,
 then unified conversation workflow and task tracking, then pots coordination and
 bounded proactivity. Provider extraction can proceed as a separately approved
 behavior-preserving change; reusable-loop integration has its own API and event
-ordering gate in [pots and Rust foundations](pots-and-library-extraction.md).
+ordering gate in [Library extraction](library-extraction.md).
 
 **Next delivery decision:** first implementation slice. Crate names and packaging
 direction are adopted; public API/type details still need engineering review. Flutter Web remains separate evaluation; no framework replacement or
