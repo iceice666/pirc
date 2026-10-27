@@ -28,6 +28,21 @@ class PircApiTest {
     fun stop() = server.close()
 
     @Test
+    fun commandPostsCapturedEnvironmentWithoutRefreshingOrRetrying() = runTest {
+        val binding = ConversationBinding(1, ConversationMembership(2, "node:repo"), ConversationExecution(7, "node:repo", "node", "directory"))
+        server.enqueue(MockResponse.Builder().code(409).body("""{"error":{"code":"stale_environment","message":"Environment changed"}}""").build())
+        try {
+            api.command("s", "phone", 3, "cmd", Commands.simple("stop"), binding)
+            fail("expected the original server rejection")
+        } catch (error: ApiException) {
+            assertEquals("stale_environment", error.code)
+        }
+        val body = PircJson.parseToJsonElement(server.takeRequest().body!!.utf8())
+        assertEquals(PircJson.encodeToJsonElement(ConversationBinding.serializer(), binding), (body as kotlinx.serialization.json.JsonObject)["expectedBinding"])
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
     fun temporaryManagementGrantIsScopedAndExpiresByMonotonicTime() {
         var clock = 100L
         api.managementClock = { clock }

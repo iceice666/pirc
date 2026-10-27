@@ -86,14 +86,14 @@ Release. The most recent pull/rebase had no upstream conflicts.
 | Area                                           | Current state                                                                                                                                                                                                | Remaining delivery                                                                                                  |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
 | U1 — reliable first Send                       | Gateway/Node durable intents, original files, admission/Stop/delete fences, explicit rejected-message retries and Gateway nonce retirement; Web/private Android drafts and recovery controls are implemented | Live-client failure/local-write matrix, Android process/device and rollout/rollback gates                           |
-| U2 — conversation/project/environment bindings | Durable bindings/membership, configured policy histories and frozen global-memory origins with source-aware project cleanup receipts                                                                         | Resource provenance, version-fenced commands and Node-acknowledged transitions                                      |
+| U2 — conversation/project/environment bindings | Durable bindings/membership, configured policy histories and frozen global-memory origins with source-aware project cleanup receipts                                                                         | Resource provenance, Node/effect-boundary fencing and acknowledged transitions                                      |
 | U3 — unified navigation/UI                     | Deferred by the user                                                                                                                                                                                         | Revisit after core contracts; current clients receive necessary functional controls only                            |
 | U4 — mount/workspace transitions               | Design accepted; actual unified transitions not implemented                                                                                                                                                  | Idle then running-worker revocation, Node acknowledgement, offline/interrupted reconciliation and project resources |
 | U5 — canonical tasks and collaboration         | Existing pots/task/team/goal/todo foundations remain                                                                                                                                                         | Map common task/attempt identities, shared notes and structured waits; preserve other writers and memory provenance |
 | U6 — bounded proactive pots                    | Progress-only observation and explicit dispatch exist                                                                                                                                                        | Scoped content observation, finite budgets, quiet suggestions and synchronized notification/decision lifecycle      |
 
 **The new U1 flow is still gated by `canSubmit: false`.** Pushing its code does
-not enable it. Current formats are Gateway schema **1024**, Node schema **2009**,
+not enable it. Current formats are Gateway schema **1025**, Node schema **2009**,
 protocol **15**, client recovery contract **2**, and Web IndexedDB/native private
 envelope **3**. Existing ordinary session APIs remain available. Unaccepted
 Gateway attachment staging expires after **seven days**; accepted attachments and
@@ -109,6 +109,9 @@ owner-scoped environment state directly while Node is offline. The response mark
 Node enforcement as not tracked. Schema 1023 adds frozen global-memory version/proposal origins, preserved through
 approval/restore and erased with the existing deletion flows. Schema 1024 adds
 source-aware project deletion, explicit legacy review and durable cleanup receipts.
+Schema 1025 adds frozen Web/Android command intent and transactional Gateway
+admission checks; duplicate receipts do not redispatch and changed environments
+require version-aware clients. Node enforcement and transitions remain pending.
 Resource grants, project moves and full effect fences remain open. U1 still needs device/deployment acceptance
 before activation. Detailed validation and the previously reproduced macOS snapshot
 limitation are recorded in the checkpoints; no full Linux/device acceptance is claimed.

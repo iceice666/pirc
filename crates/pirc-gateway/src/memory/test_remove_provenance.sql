@@ -1,3 +1,6 @@
+-- Test-only reconstruction before 1025.
+DROP TRIGGER command_environment_immutable;
+DROP TABLE command_environments;
 -- Test-only reconstruction before 1024.
 DROP TABLE project_memory_cleanup_sessions;
 DROP TABLE project_memory_cleanup;

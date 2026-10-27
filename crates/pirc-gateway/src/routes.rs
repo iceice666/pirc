@@ -21,7 +21,7 @@ use crate::db::{CapabilitiesPatch, DeletionStatus, Lease, Store, atomic};
 use crate::error::{ApiError, json_response};
 use crate::http::{Body, no_content, ok};
 use crate::node_events::run_name;
-use crate::util::{payload_hash, present};
+use crate::util::present;
 
 /// A route's failure: an error, or a node's reply passed through as it is.
 pub enum Fail {
@@ -1145,6 +1145,8 @@ pub async fn snapshot(
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CommandBody {
+    #[serde(default)]
+    expected_binding: Option<crate::conversation_bindings::Binding>,
     command_id: String,
     client_id: String,
     generation: u64,
@@ -1223,14 +1225,16 @@ pub async fn command(
     }
     let (command, duplicate) = {
         let conn = app.db.lock();
-        conn.validate_lease(session_id, &input.client_id, input.generation as i64)?;
-        conn.validate_lease_user(session_id, &identity.user)?;
         atomic(&conn, |tx| {
-            let received = tx.receive_command(
+            tx.validate_lease(session_id, &input.client_id, input.generation as i64)?;
+            tx.validate_lease_user(session_id, &identity.user)?;
+            let received = crate::conversation_bindings::commands::receive(
+                tx,
+                &claimed.session,
+                &identity.user,
                 &input.command_id,
-                session_id,
-                &payload_hash(&payload),
                 &payload,
+                input.expected_binding.as_ref(),
             )?;
             if !received.1 && payload["type"] == "stop" {
                 crate::conversation_submissions::note_stop(tx, session_id, &identity.user)?;

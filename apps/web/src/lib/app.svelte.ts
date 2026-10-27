@@ -35,6 +35,7 @@ import {
   type PushTarget,
 } from './push';
 import { syncControl } from './control';
+import { conversationBinding } from './conversation-binding';
 import { errorMessage } from './errors';
 import { GOAL_WIDGET, parseGoalWidget } from './goal';
 import { PanelStateResource } from './panel-state.svelte';
@@ -1518,6 +1519,7 @@ class AppState {
     const sessionId = this.activeSessionId;
     if (!state || !sessionId || !state.control.generation || this.connection !== 'connected')
       return;
+    const expectedBinding = conversationBinding(state.session.binding, state.session.workspaceId);
     this.commandBusy = true;
     this.pageError = '';
     try {
@@ -1536,6 +1538,7 @@ class AppState {
           commandId: uuid(),
           kind,
           controlGeneration: state.control.generation,
+          expectedBinding,
           content: content || undefined,
           modelId: this.selectedModelOption?.id,
           provider: this.selectedModelOption?.provider,
@@ -1605,6 +1608,7 @@ class AppState {
         entryId,
         content,
         controlGeneration: state.control.generation,
+        expectedBinding: state.session.binding,
         ...(kind === 'edit_message'
           ? {
               modelId: this.selectedModelOption?.id,
@@ -1672,6 +1676,7 @@ class AppState {
         commandId: uuid(),
         kind: 'steer',
         controlGeneration: state.control.generation,
+        expectedBinding: state.session.binding,
         content: `/goal ${action}`,
       });
     } catch (error) {
@@ -1725,6 +1730,7 @@ class AppState {
         commandId: uuid(),
         kind: 'send_now',
         controlGeneration: state.control.generation,
+        expectedBinding: state.session.binding,
         content: item.content,
         queued: { kind: item.kind, index: item.index },
       });
@@ -2001,6 +2007,7 @@ class AppState {
           commandId: uuid(),
           kind: 'set_model',
           controlGeneration: state.control.generation,
+          expectedBinding: state.session.binding,
           provider: model.provider,
           modelId: model.id,
         });
@@ -2029,6 +2036,7 @@ class AppState {
           commandId: uuid(),
           kind: 'set_thinking',
           controlGeneration: state.control.generation,
+          expectedBinding: state.session.binding,
           thinkingLevel: level,
         });
       } catch (error) {
@@ -2059,6 +2067,7 @@ class AppState {
         commandId: uuid(),
         kind: 'set_approval_mode',
         controlGeneration: state.control.generation,
+        expectedBinding: state.session.binding,
         approvalMode: mode,
       });
       if (receipt.status !== 'accepted')

@@ -2553,5 +2553,7 @@
   "The retry receipt did not identify a successor attempt.": "The retry receipt did not identify a successor attempt.",
   "The first-message attempt changed; check its result.": "The first-message attempt changed; check its result.",
   "node_connection_changed": "The Node reconnected. Check the saved result before continuing.",
-  "first_send_unsupported": "This Node does not support reliable first Send. Upgrade it before continuing."
+  "first_send_unsupported": "This Node does not support reliable first Send. Upgrade it before continuing.",
+  "The conversation environment changed; refresh it before starting this action": "The conversation environment changed; refresh it before starting this action",
+  "Refresh or update this client before starting work in a changed conversation environment": "Refresh or update this client before starting work in a changed conversation environment"
 }

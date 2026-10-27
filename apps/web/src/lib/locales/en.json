@@ -1415,5 +1415,7 @@
   "These entries have mixed or unknown project origins. Keep preserves their history. Edit replaces project and unknown-origin history with your text; other known origins stay. Forget removes the entire entry.": "These entries have mixed or unknown project origins. Keep preserves their history. Edit replaces project and unknown-origin history with your text; other known origins stay. Forget removes the entire entry.",
   "Memory proposals": "Memory proposals",
   "Proposals recorded in this project are deleted. For unknown origins, choose whether to keep or delete each proposal; keeping does not approve it.": "Proposals recorded in this project are deleted. For unknown origins, choose whether to keep or delete each proposal; keeping does not approve it.",
-  "What to do with this proposal": "What to do with this proposal"
+  "What to do with this proposal": "What to do with this proposal",
+  "The conversation environment changed; refresh it before starting this action": "The conversation environment changed; refresh it before starting this action",
+  "Refresh or update this client before starting work in a changed conversation environment": "Refresh or update this client before starting work in a changed conversation environment"
 }

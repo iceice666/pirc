@@ -3390,6 +3390,8 @@ const englishMessages = <String, String>{
       "The first-message attempt changed; check its result.",
   "node_connection_changed": "The Node reconnected. Check the saved result before continuing.",
   "first_send_unsupported": "This Node does not support reliable first Send. Upgrade it before continuing.",
+  "The conversation environment changed; refresh it before starting this action": "The conversation environment changed; refresh it before starting this action",
+  "Refresh or update this client before starting work in a changed conversation environment": "Refresh or update this client before starting work in a changed conversation environment",
 };
 const traditionalChineseMessages = <String, String>{
   "無法確認最新狀態，請重試": "無法確認最新狀態，請重試",
@@ -6263,4 +6265,6 @@ const traditionalChineseMessages = <String, String>{
   "The first-message attempt changed; check its result.": "首則訊息的嘗試狀態已變更，請檢查結果。",
   "node_connection_changed": "Node 已重新連線。請先檢查已儲存的結果，再決定是否繼續。",
   "first_send_unsupported": "此 Node 不支援可靠的首次送出流程。請先更新 Node 再繼續。",
+  "The conversation environment changed; refresh it before starting this action": "對話的執行環境已變更，請重新載入後再執行此操作。",
+  "Refresh or update this client before starting work in a changed conversation environment": "對話的執行環境已變更，請重新載入或更新用戶端後再開始工作。",
 };

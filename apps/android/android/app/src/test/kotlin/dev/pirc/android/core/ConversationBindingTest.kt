@@ -8,6 +8,16 @@ import org.junit.Test
 class ConversationBindingTest {
     private val raw = """{"id":"same-id","workspaceId":"node:project","name":"Existing","runnerEpoch":50,"binding":{"version":1,"membership":{"revision":2,"legacyWorkspaceId":"node:project"},"execution":{"generation":7,"workspaceId":"node:project","nodeId":"node","modeId":"research"}}}"""
 
+    @Test fun capturedCommandBindingRejectsMalformedInputBeforeDelivery() {
+        val binding = PircJson.parseToJsonElement(raw).jsonObject["binding"]!!
+        assertEquals(7L, commandBinding(binding).execution.generation)
+        for (invalid in listOf(JsonNull, JsonArray(emptyList()), JsonObject(emptyMap()),
+            PircJson.parseToJsonElement(binding.toString().replace("\"generation\":7", "\"generation\":0")))) {
+            val error = runCatching { commandBinding(invalid) }.exceptionOrNull()
+            assertTrue(error is ApiException && error.status == 400)
+        }
+    }
+
     @Test fun snapshotAndEditsRetainIndependentRevisionsAndTheBridgePayload() {
         val state = snapshotState(PircJson.parseToJsonElement("""{"session":$raw,"watermark":{"epoch":50,"sequence":4}}""")) { 1L }
         assertEquals("same-id", state.session.id)

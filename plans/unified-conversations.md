@@ -19,16 +19,23 @@ their implementation stage begins; earlier library/pots work is reused.
 
 **U1 is implemented across Gateway, Node, Web and native Android, but is not
 accepted for activation. `canSubmit: false` remains in production.** Current
-formats: Gateway **1021**, Node **2009**, protocol **15**, client contract **2**,
+formats: Gateway **1025**, Node **2009**, protocol **15**, client contract **2**,
 Web IndexedDB **3**, Android private envelope **3**. Package/dependency versions
 and Nix hashes are unchanged. Existing session, memory-deletion and checkpoint
 ownership guarantees remain in effect.
 
 **U2 has started:** [the binding migration baseline](conversation-binding-migration.md)
-now persists separate legacy membership/execution revisions and carries them in
-Web/native Android session models. This preserves current associations; explicit
-project membership, policy provenance and authority-fenced transitions are still
-pending. U2 development does not enable U1 or clear its device/rollout gates.
+now persists legacy binding revisions, explicit project membership and configured
+policy history, frozen global-memory origins/project cleanup receipts, and ordinary
+Web/Android command admission environments (updated 2026-10-28). This preserves
+current associations. Resource provenance and authority-fenced transitions remain
+pending; Node enforcement is explicitly not tracked. U2 development does not enable U1 or clear its device/rollout gates.
+
+Latest U2 delivery: [captured command admission](#u2-implementation-checkpoint-captured-command-admission-2026-10-28)
+checks the caller's visible environment without upgrading queued intent. Accepted
+receipts retain their origin; repeated requests cannot dispatch again. Node effect
+fences and sandbox revocation remain open. The validation counts below this point
+in the U1 section describe that prior U1 slice, not all newer U2 changes.
 
 Delivered U1 behavior:
 
@@ -88,14 +95,14 @@ not the full permission/Stop/delete matrix or Android OS/device acceptance.
 Live-client tests are explicitly run and ignored by the default suite;
 the last verified published green CI remains tied to `303fa8f8`.
 
-| Stage                             | Current status                                                                  | Next deliverable                                                                                                    |
-| --------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| U1 — first Send                   | Implementation present; activation blocked on remaining acceptance              | Ambiguous journal recovery, actual client/backend failure matrix, Android process/device and rollout/rollback proof |
-| U2 — bindings                     | Legacy binding versions implemented; explicit membership/policy mapping pending | Explicit project membership, policy provenance and version-fenced commands                                          |
-| U3 — navigation/UI                | Explicitly deferred                                                             | Necessary functional controls only until the core model is stable                                                   |
-| U4 — resource transitions         | Planned                                                                         | Idle transitions, then active-worker revocation/acknowledgement and offline recovery                                |
-| U5 — canonical work/collaboration | Existing primitives available; unified mapping pending                          | Common task/attempt identities, shared notes and resource waits without overwrites                                  |
-| U6 — proactive pots               | Existing progress observation/explicit dispatch; content analysis pending       | Separate observation/execution grants, finite budgets and quiet synchronized suggestions                            |
+| Stage                             | Current status                                                               | Next deliverable                                                                                                    |
+| --------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| U1 — first Send                   | Implementation present; activation blocked on remaining acceptance           | Ambiguous journal recovery, actual client/backend failure matrix, Android process/device and rollout/rollback proof |
+| U2 — bindings                     | Bindings, policy/memory provenance and Gateway command admission implemented | Resource provenance and Node/effect-boundary version fencing                                                        |
+| U3 — navigation/UI                | Explicitly deferred                                                          | Necessary functional controls only until the core model is stable                                                   |
+| U4 — resource transitions         | Planned                                                                      | Idle transitions, then active-worker revocation/acknowledgement and offline recovery                                |
+| U5 — canonical work/collaboration | Existing primitives available; unified mapping pending                       | Common task/attempt identities, shared notes and resource waits without overwrites                                  |
+| U6 — proactive pots               | Existing progress observation/explicit dispatch; content analysis pending    | Separate observation/execution grants, finite budgets and quiet synchronized suggestions                            |
 
 Immediate U1 queue:
 
@@ -2857,6 +2864,38 @@ deployment or Release is part of this checkpoint.
 After all owned test processes exited, **2.06 GiB** of run-owned compiler, isolated
 Flutter and process-test outputs were removed. Shared caches, existing APKs and
 other agents' work were preserved.
+
+## U2 implementation checkpoint: captured command admission (2026-10-28)
+
+Gateway schema **1025** stores a frozen admission binding with each newly received
+ordinary command. Web captures the user's visible environment before uploads and
+settings; Android carries it through Flutter, the native command queue and direct
+Gateway API. Changed environments reject stale actions without reserving a command
+or discarding the draft. Legacy clients can act in unchanged generation-1 bindings;
+after a change, they must refresh/update instead of implicitly accepting new scope.
+
+Duplicate requests return the original receipt, never repeat the effect. Conflicting
+new intent under the same ID is refused. Stop still accepts a stale/absent expected
+binding under current ownership/control. Historical command origins are not
+backfilled. Command/environment persistence and lease validation share a transaction.
+
+See [admission details, limits and evidence](conversation-binding-migration.md#command-admission-checkpoint-2026-10-28).
+Validation: **382 Gateway tests**, **9 process cases**, **64 Web tests**, **25 Android
+JVM tests**, **6 focused Flutter tests**, Svelte/Flutter analysis and strict targeted
+Clippy. The actual Android native bridge compiles via Gradle; a prior local test's
+JDK-only HTTP server was replaced with the existing Android-compatible mock server.
+
+The process checks cover Web versus paired-device policy changes, duplicate and
+stale commands, Stop, memory/project deletion, checkpoints, legacy first-send
+contracts and Node link/session regression. They do not prove generation enforcement
+after Gateway admission, active-process revocation, Android OS/Keystore or live
+MethodChannel behavior. No full Flutter/workspace suite, emulator, APK, local Nix,
+deployment or Release. Production still advertises `canSubmit: false`.
+
+Next: extend the binding to Node dispatch, pending approvals/background work and
+actual effects; persist installed-policy acknowledgement and transition recovery.
+Do not expose workspace/project moves until the U4 revocation guarantees hold.
+U1 acceptance, resource provenance, U4–U6 and deferred settings remain open.
 
 ## Design stages and later implementation gates
 

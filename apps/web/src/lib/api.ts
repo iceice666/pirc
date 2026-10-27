@@ -435,6 +435,15 @@ export const api = {
       await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}/snapshot`),
     ),
   command: async (sessionId: string, input: SessionCommandInput): Promise<CommandReceipt> => {
+    // Freeze the caller's intention before the first asynchronous setting POST.
+    // Reading a newer environment here would authorize a change the user did not see.
+    input = {
+      ...input,
+      expectedBinding: conversationBinding(
+        input.expectedBinding,
+        input.expectedBinding?.execution.workspaceId ?? '',
+      ),
+    };
     // A selection can be made before this browser acquires control, while a new
     // session has no runner yet. Apply the visible settings before the prompt;
     // putting modelId on a message payload does not change the agent's model.
@@ -475,15 +484,32 @@ export const api = {
                   : input.kind === 'set_approval_mode'
                     ? { type: input.kind, mode: input.approvalMode ?? 'auto' }
                     : { type: input.kind };
-    const response = await request<any>(`/api/sessions/${encodeURIComponent(sessionId)}/commands`, {
-      method: 'POST',
-      body: JSON.stringify({
-        commandId: input.commandId,
-        clientId: getClientId(),
-        generation: input.controlGeneration,
-        payload,
-      }),
-    });
+    const response = await request<any>(
+      `/api/sessions/${encodeURIComponent(sessionId)}/commands`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          commandId: input.commandId,
+          clientId: getClientId(),
+          generation: input.controlGeneration,
+          expectedBinding: input.expectedBinding,
+          payload,
+        }),
+      },
+      {
+        errorMessage: (body, status) => {
+          if (body?.error?.code === 'stale_environment')
+            return tr(
+              'The conversation environment changed; refresh it before starting this action',
+            );
+          if (body?.error?.code === 'environment_required')
+            return tr(
+              'Refresh or update this client before starting work in a changed conversation environment',
+            );
+          return body?.error?.message ?? tr('Request failed ({0})', [status]);
+        },
+      },
+    );
     return {
       commandId: response.command.id,
       status: response.command.status,

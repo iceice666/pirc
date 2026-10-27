@@ -7,6 +7,8 @@ legacy adapter; schema 1022 adds explicit project membership, configured mode
 and workspace-capability histories, and an owner-scoped environment read model.
 Schema **1023** captures new global-memory version/proposal write-time origins.
 Schema **1024** consumes them in project deletion and records cleanup completion.
+Schema **1025** records immutable command admission environments and checks the
+Web/Android caller's captured binding before accepting new ordinary commands.
 Resource provenance, full effect fences and supported environment transitions
 remain to implement. No mount, move, grant, process restart or U1 activation is enabled.
 
@@ -169,14 +171,57 @@ is removed in this slice.
 The full-assistant/workspace, delegate/delegate-target, repository/project-files,
 workspace-memory/repository and schedule-any/delegation validations remain.
 
+## Command admission checkpoint (2026-10-28)
+
+Normal Web/Android command POSTs carry optional `expectedBinding` outside the
+Node payload. It is the complete binding visible when the user initiated the
+action, separate from runner epoch, device control and canonical project revision.
+Web captures it before pending uploads and before model/thinking/prompt posts;
+Flutter copies it before the sequence, and Android validates it before its native
+command queue. Neither delivery path fetches a newer environment to authorize an
+old action. Existing paired-device Gateway authentication remains sufficient.
+
+Gateway checks ownership, availability, control and the captured binding while
+reserving the command. Its immutable `command_environments` row commits with the
+receipt. A stale binding returns `409 stale_environment` without a command row;
+old clients without a binding may initiate work only while both legacy membership
+revision and execution generation are 1. After changes they receive
+`409 environment_required`. Both clients explain rejection in English/Traditional
+Chinese and retain unsent input. Refresh and a new user action are required.
+
+Duplicates return the old receipt, including uncertain results, without dispatch.
+Reusing an ID/payload with another recorded environment is a conflict. Old command
+rows retain unknown provenance; migration does not infer their prior environment.
+Stop deliberately does not require an up-to-date visible binding, still requires
+current control/ownership, and uses the current routing captured by Gateway.
+Stop duplicates remain read-only. A deleting conversation cannot admit new commands.
+
+**Boundary:** this is a Gateway admission precondition. Node payloads, protocol 15,
+runner queues, approvals, background tasks, tools, already-open descriptors and
+sandbox effects do not yet carry/enforce the binding generation. In particular,
+this does not fence a policy change after admission but before Node execution.
+`enforcement: not_tracked` stays accurate. No move/switch/mount API or U1 activation
+is enabled. U4 must install/revoke authority and obtain Node acknowledgement before
+exposing environment switches; this admission check alone is not that guarantee.
+
+Validation: 382 Gateway unit tests; nine process cases covering the real Web/device
+admission route, memory/project cleanup, checkpoints, legacy first-send contract,
+Node link and session lifecycle; strict Gateway/conformance Clippy. Web has 64
+focused cases plus Svelte checks; Android Gradle compiles the actual native bridge
+and passes 25 focused JVM cases; Flutter has six focused controller/localization
+cases plus changed-file analysis. Android environment API tests now use the
+existing MockWebServer dependency instead of JDK-only HttpServer, so they compile
+under Android Gradle as well as standalone JVM checks. OS/device/Keystore and live
+MethodChannel acceptance, full workspace tests and local Nix are not claimed.
+
 ## Remaining U2 implementation and gates
 
 1. Persist immutable resource provenance and add pending/acknowledged transitions,
    not just configuration. The global-memory deletion integration is complete locally;
    source provenance for uploads and other resources remains separate work.
-2. Carry expected membership/binding versions through affected client and Node
-   commands, approvals and effect boundaries. Old clients cannot bypass changed
-   authority. Runner epoch and device control remain independent inputs.
+2. Extend the delivered ordinary-command Gateway admission check to Node dispatch,
+   approvals, task queues and actual effect boundaries. Record acknowledged installed
+   policy, not just configured revisions. Runner epoch/control stay independent.
 3. Implement joining/moving/departure only with U4 revocation of actual project
    resources, retaining original conversation context and protecting other writers.
 4. Exercise the complete transition across Node disconnect/restart, project deletion,

@@ -3,18 +3,18 @@
 //! membership and effect-fenced environment transitions build on this baseline.
 
 use rusqlite::Row;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Binding {
     version: u8,
     pub membership: Membership,
     pub execution: Execution,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Membership {
     pub revision: i64,
     /// Existing project/workspace association. Directory workspaces and the
@@ -22,8 +22,8 @@ pub struct Membership {
     pub legacy_workspace_id: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Execution {
     pub generation: i64,
     pub workspace_id: String,
@@ -49,6 +49,7 @@ impl Binding {
     }
 }
 
+pub mod commands;
 pub mod policies;
 
 #[cfg(test)]

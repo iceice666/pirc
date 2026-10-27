@@ -1415,5 +1415,7 @@
   "These entries have mixed or unknown project origins. Keep preserves their history. Edit replaces project and unknown-origin history with your text; other known origins stay. Forget removes the entire entry.": "這些記憶的專案來源混合或不明。保留會保留歷史；編輯會以你的文字取代專案及來源不明的歷史，其他已知來源會保留；遺忘會刪除整筆記憶。",
   "Memory proposals": "記憶提案",
   "Proposals recorded in this project are deleted. For unknown origins, choose whether to keep or delete each proposal; keeping does not approve it.": "記錄為此專案來源的提案會被刪除。來源不明的提案請逐項選擇保留或刪除；保留不代表核准。",
-  "What to do with this proposal": "如何處理此提案"
+  "What to do with this proposal": "如何處理此提案",
+  "The conversation environment changed; refresh it before starting this action": "對話的執行環境已變更，請重新載入後再執行此操作。",
+  "Refresh or update this client before starting work in a changed conversation environment": "對話的執行環境已變更，請重新載入或更新用戶端後再開始工作。"
 }

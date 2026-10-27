@@ -1044,7 +1044,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                         "refresh" -> runtime.snapshot(str("sessionId")).wire()
                         "draft" -> { runtime.local.saveDraft(str("sessionId"), str("text")); null }
                         "control" -> runtime.lease(str("sessionId"), args["acquire"] == true, args["force"] == true)
-                        "command" -> runtime.command(str("sessionId"), args["payload"] as Map<*, *>, str("commandId"))
+                        "command" -> runtime.command(str("sessionId"), args["payload"] as Map<*, *>, str("commandId"), args["expectedBinding"]?.json())
                         "answer" -> runtime.answer(str("sessionId"), str("interactionId"), str("epoch"), str("pairingStamp"), args["answer"] as Map<*, *>)
                         "reconcileAnswer" -> runtime.reconcileAnswer(str("sessionId"), str("interactionId"), str("epoch"), str("pairingStamp"))
                         "socketOpen" -> { runtime.openSocket(str("tag"), str("path"), contextId); null }

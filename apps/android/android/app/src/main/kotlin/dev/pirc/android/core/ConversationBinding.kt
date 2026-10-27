@@ -1,6 +1,7 @@
 package dev.pirc.android.core
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 /** Legacy association adapter, not permission to switch folders or project grants. */
 @Serializable
@@ -18,7 +19,7 @@ data class ConversationBinding(
             (execution.nodeId == null || execution.nodeId.isNotEmpty()) &&
             execution.modeId.isNotEmpty()) { "Unsupported or inconsistent conversation binding" }
     }
-    private companion object { const val MAX_REVISION = 9_007_199_254_740_991L }
+    companion object { private const val MAX_REVISION = 9_007_199_254_740_991L }
 }
 
 @Serializable
@@ -31,3 +32,12 @@ data class ConversationExecution(
     val nodeId: String? = null,
     val modeId: String,
 )
+
+/** Validate captured client intent before queueing; malformed input never becomes legacy mode. */
+fun commandBinding(value: JsonElement): ConversationBinding = try {
+    PircJson.decodeFromJsonElement(ConversationBinding.serializer(), value).also {
+        it.validate(it.execution.workspaceId)
+    }
+} catch (error: IllegalArgumentException) {
+    throw ApiException(400, "invalid_input", "Invalid conversation environment; reload before sending.", error)
+}

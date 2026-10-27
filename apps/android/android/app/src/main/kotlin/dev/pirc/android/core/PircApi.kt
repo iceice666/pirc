@@ -217,12 +217,13 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
      * Send one command. A command the node did not accept still comes back as a
      * receipt (with its reason), so only transport and lease errors throw.
      */
-    open suspend fun command(sessionId: String, clientId: String, generation: Long, commandId: String, payload: JsonObject): CommandReceipt {
+    open suspend fun command(sessionId: String, clientId: String, generation: Long, commandId: String, payload: JsonObject, expectedBinding: ConversationBinding? = null): CommandReceipt {
         val body = buildJsonObject {
             put("commandId", commandId)
             put("clientId", clientId)
             put("generation", generation)
             put("payload", payload)
+            expectedBinding?.let { put("expectedBinding", PircJson.encodeToJsonElement(ConversationBinding.serializer(), it)) }
         }
         val reply = send("POST", "${session(sessionId)}/commands", body, acceptBody = { it["command"] != null })
         val command = reply["command"]

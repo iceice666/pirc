@@ -1018,7 +1018,7 @@ fn migration_from_1023_does_not_invent_cleanup_receipts() {
         .unwrap()
         .0;
     conn.begin_workspace_deletion("node:a", USER).unwrap();
-    conn.execute_batch("DROP TABLE project_memory_cleanup_sessions; DROP TABLE project_memory_cleanup; PRAGMA user_version=1023;").unwrap();
+    conn.execute_batch("DROP TRIGGER command_environment_immutable; DROP TABLE command_environments; DROP TABLE project_memory_cleanup_sessions; DROP TABLE project_memory_cleanup; PRAGMA user_version=1023;").unwrap();
     drop(conn);
     drop(db);
     let db = Db::open(&path).unwrap();
@@ -1027,7 +1027,7 @@ fn migration_from_1023_does_not_invent_cleanup_receipts() {
     assert_eq!(
         conn.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        1024
+        crate::db::SCHEMA_VERSION
     );
     assert!(conn.workspace_deletion("node:a").unwrap().is_some());
     assert_eq!(store(&conn).entry(USER, &entry.id).unwrap().content, "kept");

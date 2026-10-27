@@ -1107,7 +1107,8 @@ class GatewayRuntime private constructor(val context: Context) {
             }
         }
     }
-    suspend fun command(id: String, payload: Map<*, *>, commandId: String): Map<String, Any?> {
+    suspend fun command(id: String, payload: Map<*, *>, commandId: String, expectedBinding: JsonElement? = null): Map<String, Any?> {
+        val capturedBinding = expectedBinding?.let(::commandBinding)
         // Stop must reach the server even while a different command POST is
         // waiting for its response. Independent durable markers prevent either
         // completion from clearing the other's unresolved delivery state.
@@ -1115,9 +1116,9 @@ class GatewayRuntime private constructor(val context: Context) {
         val commandApi = api()
         val stopping = payload["type"] == "stop"
         val lock = if (stopping) stopCommandLock else commandLock
-        return lock.withLock { deliverCommand(id, payload, commandId, stopping, commandApi, expectedStamp) }
+        return lock.withLock { deliverCommand(id, payload, commandId, stopping, commandApi, expectedStamp, capturedBinding) }
     }
-    private suspend fun deliverCommand(id: String, payload: Map<*, *>, commandId: String, stopping: Boolean, api: PircApi, expectedStamp: String): Map<String, Any?> {
+    private suspend fun deliverCommand(id: String, payload: Map<*, *>, commandId: String, stopping: Boolean, api: PircApi, expectedStamp: String, expectedBinding: ConversationBinding?): Map<String, Any?> {
         fun currentPairing() = expectedStamp == pairingIdentity.getString("stamp", null)
         requirePairingStamp(expectedStamp, pairingIdentity.getString("stamp", null))
         if (unknownCommand(id) && payload["type"] != "stop") throw ApiException(409, "outcome_unknown", NativeI18n.text("先前送出結果不明，請先檢查對話並確認繼續"))
@@ -1129,7 +1130,7 @@ class GatewayRuntime private constructor(val context: Context) {
         val settingsOwner = sessionWatches[id]
         val observedApprovalRevision = settingsOwner?.composerSettings?.approvalObservationRevision
         try {
-            val receipt = api.command(id, local.clientId, generation, commandId, payload.json() as JsonObject)
+            val receipt = api.command(id, local.clientId, generation, commandId, payload.json() as JsonObject, expectedBinding)
             if (currentPairing() && receipt.status == "accepted") {
                 sessionWatches[id]?.takeIf { payload["type"] != "set_approval_mode" || it === settingsOwner }?.let { entry ->
                     val revision = entry.composerSettings.revision

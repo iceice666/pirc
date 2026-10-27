@@ -502,6 +502,8 @@ export interface SessionUpdateInput {
 }
 
 export interface SessionCommandInput {
+  /** Environment visible when the user initiated the action; never refreshed during delivery. */
+  expectedBinding?: ConversationBinding;
   commandId: string;
   kind: CommandKind;
   controlGeneration: number;

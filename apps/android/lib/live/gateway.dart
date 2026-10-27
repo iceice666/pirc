@@ -1,5 +1,6 @@
 import '../l10n/app_i18n.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -43,10 +44,15 @@ class Gateway {
       'pairingStamp': ?pairingStamp,
     }),
   );
-  Future<Json> command(String id, Json payload) async => obj(
+  Future<Json> command(
+    String id,
+    Json payload, {
+    Json? expectedBinding,
+  }) async => obj(
     await call('command', {
       'sessionId': id,
       'payload': payload,
+      'expectedBinding': ?expectedBinding,
       'commandId': List.generate(
         16,
         (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
@@ -1575,6 +1581,12 @@ class LiveController extends ChangeNotifier {
         selection == _selection &&
         account == _accountRevision;
     if (unknownCommand && payload['type'] != 'stop') return false;
+    // Freeze the visible environment across settings, queued delivery and prompt.
+    // A later snapshot must not silently authorize a new workspace/policy.
+    final visibleBinding = obj(state['session'])['binding'];
+    final Json? expectedBinding = visibleBinding == null
+        ? null
+        : jsonDecode(jsonEncode(visibleBinding)) as Json;
     final commandToken = Object();
     final preference = const {
       'set_model',
@@ -1590,7 +1602,11 @@ class LiveController extends ChangeNotifier {
     try {
       for (final command in [...before, payload]) {
         if (!current()) return false;
-        final receipt = await gateway.command(id, command);
+        final receipt = await gateway.command(
+          id,
+          command,
+          expectedBinding: expectedBinding,
+        );
         if (!current()) return false;
         if (receipt['status'] != 'accepted') {
           unknownCommand = receipt['status'] == 'outcome_unknown';
@@ -1958,6 +1974,17 @@ class LiveController extends ChangeNotifier {
         case 'HTTP_404':
           return '找不到這個項目，請重新載入。';
         case 'HTTP_409':
+          final code = obj(e.details)['code'];
+          if (code == 'stale_environment') {
+            return tr(
+              'The conversation environment changed; refresh it before starting this action',
+            );
+          }
+          if (code == 'environment_required') {
+            return tr(
+              'Refresh or update this client before starting work in a changed conversation environment',
+            );
+          }
           return '狀態已改變，請重新載入後再操作。';
         case 'NETWORK':
           return '連線或裝置操作失敗，請確認連線後重試。';

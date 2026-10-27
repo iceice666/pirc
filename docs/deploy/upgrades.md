@@ -1,5 +1,31 @@
 # Upgrades
 
+## Unreleased local checkpoint: captured command environments
+
+Gateway schema **1025** stores an immutable environment binding with newly admitted
+ordinary commands. Migration leaves historical origins unknown. Web and Android
+now send the binding visible when an action began, retaining it across settings,
+uploads and native queueing. Results are queried/read without redispatch.
+
+An unchanged legacy binding (membership revision 1, execution generation 1) still
+accepts old clients. After a configured mode/capability/association change, clients
+must include the current expected binding: stale values receive `stale_environment`,
+missing values `environment_required` (HTTP 409). This is a deliberate compatibility
+boundary: deploy matching Web/Android clients before changing such environments.
+An updated client must refresh then initiate the action again; no automatic intent
+upgrade or resend. Stop remains available under current ownership and control.
+
+This is **Gateway admission only**: Node queues/approvals/tools and running sandbox
+resources are not yet fenced by these versions, including a change between admission
+and Node execution. Environment reads still report `enforcement: not_tracked`.
+No workspace switching, new grants or first-send activation is exposed.
+
+Older binaries refuse schema 1025. For an eventual deployment, back up consistent
+state and retain a matching binary/state rollback pair; do not edit schema versions
+or drop metadata to downgrade. Node schema 2009, protocol 15 and client contract 2
+are unchanged. This checkpoint is local only; Android OS/device and deployment
+acceptance remain outstanding.
+
 ## Unreleased local checkpoint: project memory cleanup receipts
 
 Gateway schema **1024** adds content-free project memory completion receipts and

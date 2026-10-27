@@ -15,7 +15,10 @@ Web/native Android recovery are now implemented but remain gated. See the
 for delivered code, evidence and open acceptance. The
 [U2 compatibility binding baseline](conversation-binding-migration.md) now persists
 relationship versions, explicit project membership and configured policy snapshots.
-Its environment read model explicitly reports enforcement as not tracked; it does
+Ordinary Web/Android commands also carry captured versions checked at Gateway
+admission (schema 1025). This does not fence changes after admission or enforce
+Node queues, approvals or tool effects. Its environment read model explicitly
+reports enforcement as not tracked; it does
 not implement authority-changing transitions.
 The seven sections below remain target contracts; their cases are not automatically
 verified by first-send or binding-baseline work. App authentication/topology and Flutter Web remain separate decisions.

@@ -779,3 +779,34 @@ it('ignores an older directory refresh after a newer response removes the worksp
   await pending;
   expect(app.workspaces).toEqual([]);
 });
+
+it('passes the visible environment and keeps the draft after a known stale rejection', async () => {
+  app.demo = undefined;
+  app.draftWorkspaceId = undefined;
+  app.connection = 'connected';
+  app.activeSessionId = demoSnapshot.session.id;
+  const binding = {
+    version: 1 as const,
+    membership: { revision: 2, legacyWorkspaceId: demoSnapshot.session.workspaceId },
+    execution: {
+      generation: 7,
+      workspaceId: demoSnapshot.session.workspaceId,
+      nodeId: 'node',
+      modeId: 'directory',
+    },
+  };
+  app.sessionState = fromSnapshot({
+    ...demoSnapshot,
+    session: { ...demoSnapshot.session, binding },
+    control: { heldByCurrentClient: true, generation: 3 },
+  });
+  app.setDraft('keep my message');
+  const command = vi
+    .spyOn(api, 'command')
+    .mockRejectedValue(new ApiError('Environment changed', 409, 'stale_environment'));
+  await app.sendCommand('prompt');
+  expect(command).toHaveBeenCalledTimes(1);
+  expect(command.mock.calls[0][1].expectedBinding).toEqual(binding);
+  expect(app.draft).toBe('keep my message');
+  expect(app.pageError).toBe('Environment changed');
+});

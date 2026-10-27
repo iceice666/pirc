@@ -366,3 +366,45 @@ it('removes a workspace with an encoded id and DELETE, without a destructive bod
   );
   expect(fetch.mock.calls[0]?.[1]?.body).toBeUndefined();
 });
+
+it('keeps the visible environment across model, thinking and prompt posts', async () => {
+  const expectedBinding: NonNullable<SessionCommandInput['expectedBinding']> = {
+    version: 1,
+    membership: { revision: 2, legacyWorkspaceId: 'node:repo' },
+    execution: { generation: 7, workspaceId: 'node:repo', nodeId: 'node', modeId: 'directory' },
+  };
+  const original = structuredClone(expectedBinding);
+  const { bodies, fetch } = mockCommands();
+  let accept!: (response: Response) => void;
+  fetch.mockImplementationOnce((_url, init) => {
+    bodies.push(JSON.parse(init.body as string));
+    return new Promise((resolve) => (accept = resolve));
+  });
+  const pending = api.command('session', {
+    ...input,
+    expectedBinding: new Proxy(expectedBinding, {}),
+  });
+  expectedBinding.execution.generation = 8;
+  accept(new Response(JSON.stringify({ command: { id: 'model', status: 'accepted' } })));
+  await pending;
+  expect(bodies).toHaveLength(3);
+  expect(bodies.map((body) => body.expectedBinding)).toEqual([original, original, original]);
+});
+
+it('stops the settings sequence on a stale environment without retrying the prompt', async () => {
+  const fetch = vi.fn(
+    async () =>
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'stale_environment',
+            message: 'The conversation environment changed; refresh it before starting this action',
+          },
+        }),
+        { status: 409 },
+      ),
+  );
+  vi.stubGlobal('fetch', fetch);
+  await expect(api.command('session', input)).rejects.toThrow('environment changed');
+  expect(fetch).toHaveBeenCalledTimes(1);
+});
