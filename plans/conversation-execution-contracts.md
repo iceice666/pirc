@@ -328,6 +328,11 @@ remain open; process counts do not grant access.
 now retain the original controller/connection/binding through queued and partial PTY
 writes, rejecting after takeover or an accepted fence. This does not recall bytes
 already delivered or prove termination of terminal descendants.
+Node schema 2015 adds [approved host-command supervision](unified-conversations.md#u4-implementation-checkpoint-supervised-host-commands-2026-10-28):
+spawn authority is rechecked at the effect boundary, Stop/drain joins the
+independent observer, and interruption/storage failure preserves unresolved
+journal evidence. Settled direct-child/pipes do not establish detached-descendant
+termination; historical host execution is not inventoried.
 
 - Resolve and validate path components, containment and aliases at the trusted
   boundary. String-prefix checks or one-time symlink canonicalization are not

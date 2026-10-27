@@ -19,7 +19,7 @@ their implementation stage begins; earlier library/pots work is reused.
 
 **U1 is implemented across Gateway, Node, Web and native Android, but is not
 accepted for activation. `canSubmit: false` remains in production.** Current
-formats: Gateway **1025**, Node **2014**, protocol **15**, client contract **2**,
+formats: Gateway **1025**, Node **2015**, protocol **15**, client contract **2**,
 Web IndexedDB **3**, Android private envelope **3**. Package/dependency versions
 and Nix hashes are unchanged. Existing session, memory-deletion and checkpoint
 ownership guarantees remain in effect.
@@ -41,7 +41,7 @@ counts below this point in the U1 section describe that prior U1 slice, not all
 newer U2 changes.
 
 U4 has begun with an [internal Node admission fence](#u4-implementation-checkpoint-node-transition-admission-fence-2026-10-28)
-and tracked supervisor drain, followed by [runner-scoped inference retirement](#u4-implementation-checkpoint-runner-scoped-inference-retirement-2026-10-28). Linux process scopes now have a [durable launch journal and bounded restart reconciliation](#u4-implementation-checkpoint-durable-sandbox-launch-journal-2026-10-28), followed by [guarded startup](#u4-implementation-checkpoint-guarded-native-linux-launch-2026-10-28) and [terminal effect-boundary checks](#u4-implementation-checkpoint-fenced-terminal-input-2026-10-28). Its receipts explicitly deny revocation/installation
+and tracked supervisor drain, followed by [runner-scoped inference retirement](#u4-implementation-checkpoint-runner-scoped-inference-retirement-2026-10-28). Linux process scopes now have a [durable launch journal and bounded restart reconciliation](#u4-implementation-checkpoint-durable-sandbox-launch-journal-2026-10-28), followed by [guarded startup](#u4-implementation-checkpoint-guarded-native-linux-launch-2026-10-28) and [terminal effect-boundary checks](#u4-implementation-checkpoint-fenced-terminal-input-2026-10-28). [Approved host-command supervision](#u4-implementation-checkpoint-supervised-host-commands-2026-10-28) now joins Stop/drain with durable launch evidence. Its receipts explicitly deny revocation/installation
 completion. No public workspace switch or new resource grant is enabled; Gateway
 coordination, OS enforcement, replacement binding and Web/App controls remain.
 
@@ -3721,3 +3721,77 @@ user browser, emulator/device, live provider or local Nix verification was neede
 Work stays local. The isolated build and test fixtures are removed after
 validation, including the two fixtures from an initial test-only lock-order
 mistake; APKs, shared SDKs/caches and other agents' work are preserved.
+
+## U4 implementation checkpoint: supervised host commands (2026-10-28)
+
+After `cc23621e`, Node schema **2015** records approved host-command admission
+before spawn, with immutable session/workspace/runner epoch, Node incarnation and
+request identity. The journal contains no command body, output, cwd, credential or
+reusable numeric PID. Duplicate requests in the same incarnation/epoch cannot
+spawn twice. Records remain after session deletion, as minimal effect evidence;
+conversation contents and existing source-memory deletion rules are unchanged.
+
+Human approval is followed by a final session/epoch/workspace/mode and cwd check,
+then spawn under the same DB lock as transition acceptance and the runner lock
+used for withdrawal. A replaced side request cannot borrow the new request's
+approval. Closing/deleting/fenced sessions and a changed execution environment
+refuse the effect. This recheck is not descriptor-based root/symlink race closure.
+
+Node owns cancellation and reaping independently of the caller waiting for output.
+Ordinary Stop prevents new host admission during its wait; runner exit cancels
+all matching epoch jobs, including jobs whose side-map entry has been replaced.
+Session deletion, mode replacement and transition drain join this supervision
+before reporting that their tracked work drained. Shutdown also requests and
+waits for cancellation. A dropped requester or bounded caller wait does not
+abort the supervisor task. Stops of another session do not cancel these jobs.
+
+The direct child stays unreaped while output pipes or a final group signal are
+pending, pinning the numeric group identity until the last signal. Cancellation
+uses a one-second TERM grace, then KILL and a bounded two-second pipe/reap wait.
+An escaped pipe holder, lost task, failed outcome write or previous Node's
+unsettled journal entry stays unresolved. No PID guessing, re-execution or
+in-memory empty-map inference clears it. A normal Stop with such evidence reports
+`host_stop_unconfirmed` and keeps its command outcome unknown, rather than
+recording a successful/rejected stop. Transition status exposes the same reason.
+
+Internal receipts add `hostCommands` counts. `observersSettled` means the direct
+child and output observation finished; it is **not** proof that all detached
+children stopped. `historyComplete` stays false because pre-2015 execution has no
+inventory and host commands have no complete kernel containment. The main
+`revocationConfirmed` and `targetInstalled` flags remain false. Full host/terminal
+containment, browser/other effects, aliases and descriptors, macOS enforcement,
+native Linux runtime acceptance and the Gateway replacement coordinator remain
+open. The public switch and U1 activation stay disabled. U2 resource provenance,
+U5 shared task/collaboration state and U6 proactive pots remain incomplete.
+
+The next host-effect requirement is write-lease lifetime: the existing broker
+still releases leases on Agent settlement/runner exit, which may precede the
+independent host observer. Add supervisor-owned lease retention and restart-aware
+blocking before treating that workspace as available to another writer. This
+checkpoint's peer test proves independent inference continues; it does not prove
+shared-file write exclusion while an old host command is stopping. Historical
+unconfirmed host effects also need stable containment/reconciliation evidence;
+they currently cannot be manually cleared through the App.
+
+Final local validation: **519 Node library tests passed**, with four subprocess
+helpers marked ignored by the top-level harness and invoked by their parent
+acceptance cases. New coverage includes lost waiters, composed Stop guards,
+duplicate requests, peer isolation, withdrawal/epoch/mode/cwd changes, runner Stop
+before Agent acknowledgement, replaced side IDs, reservation/outcome-write
+failures, 2014 migration, restart uncertainty, session deletion, an escaped output
+pipe holder, and both successful and unconfirmed no-runner initial Stop paths.
+
+The rebuilt final Node passed **21 required real-process cases**: host commands
+(1), checkpoints (3), conversation admission (2), creation (2), execution fences
+(2), inference retirement (1), memory (1), node-link side channels (5), panel
+terminals (2), project deletion (1) and streams (1). The new case exercises real
+Node/Agent/PTC approval, ordinary and repeated Stop, independent peer inference,
+a second approval, transition drain, direct-child exit before acknowledgement,
+and consistent evidence after restart. The fixture sandbox is not native Linux
+containment evidence.
+
+Strict Node/conformance all-target Clippy, Rust formatting, changed-document
+Prettier, local document links and diff checks passed. No Flutter changes, Android
+device/emulator, live provider, user browser or local Nix verification were used.
+Work remains local. The isolated build/log directory (about **2.5 GiB**) is removed
+after validation; existing APKs, shared caches and user/other-agent files remain.

@@ -69,6 +69,7 @@ pub struct Services {
     pub runners: RunnerManager,
     pub(crate) pots: crate::pots::Pots,
     pub(crate) incarnation: String,
+    pub(crate) host_commands: Arc<crate::host_commands::Commands>,
     pub(crate) execution_drains: Arc<crate::execution_fences::Drains>,
     // panels
     pub terminals: Terminals,
@@ -297,6 +298,7 @@ impl Services {
             runners: RunnerManager::new(weak.clone()),
             pots: crate::pots::Pots::default(),
             execution_drains: Arc::default(),
+            host_commands: Arc::default(),
             incarnation: crate::util::uuid(),
             terminals: Terminals::new(weak.clone()),
             streams: Streams::new(weak.clone()),
@@ -357,6 +359,7 @@ impl Services {
         // Fastify's `onClose`.
         self.terminals.shutdown();
         self.runners.shutdown().await;
+        self.host_commands.shutdown().await;
         self.browser.shutdown().await;
     }
 }

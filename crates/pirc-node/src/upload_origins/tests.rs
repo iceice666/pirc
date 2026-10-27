@@ -130,6 +130,7 @@ fn migration_preserves_legacy_scope_without_inventing_a_creation_origin() {
         let db = db.lock();
         let ids = setup(&db);
         db.execute_batch(concat!(
+            include_str!("../host_commands/remove_schema.sql"),
             include_str!("../process_journal/remove_schema.sql"),
             include_str!("../execution_fences/remove_schema.sql"),
             include_str!("remove_schema.sql")

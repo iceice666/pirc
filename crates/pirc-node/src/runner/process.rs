@@ -390,6 +390,7 @@ impl Runner {
     /// the child's `exit` event, after the runner's own teardown), so the
     /// caller never races the exit's bookkeeping.
     pub(super) async fn stop(&self, grace: Duration) {
+        self.cancel_sandbox_requests();
         let mut exited = self.exited.subscribe();
         if !self.lock().closed {
             let mut abort = Map::new();
@@ -446,6 +447,17 @@ impl Runner {
         request.abort.send_replace(true);
     }
 
+    pub(super) fn cancel_sandbox_requests(&self) {
+        let requests = std::mem::take(&mut self.lock().sandbox_requests);
+        for (_, request) in requests {
+            self.abort_side(request);
+        }
+        if let Some(node) = self.node() {
+            node.host_commands
+                .cancel_epoch(&self.session_id, self.epoch);
+        }
+    }
+
     /// `exit(code, signal)`, once.
     fn exit(&self, code: Option<i32>, signal: Option<String>) {
         let (pending, browser, sandbox, dialogs, run) = {
@@ -487,6 +499,10 @@ impl Runner {
                 task.abort();
             }
             request.abort.send_replace(true);
+        }
+        if let Some(node) = self.node() {
+            node.host_commands
+                .cancel_epoch(&self.session_id, self.epoch);
         }
         for (_, request) in sandbox {
             self.abort_side(request);
@@ -1338,7 +1354,7 @@ mod memory_concurrency_tests {
     use super::*;
     use crate::workspace_memory::{self as memory, tests::Fixture};
 
-    fn register(f: &Fixture, row: SessionRow) -> Arc<Runner> {
+    pub(super) fn register(f: &Fixture, row: SessionRow) -> Arc<Runner> {
         let runner = Arc::new(Runner {
             node: Arc::downgrade(&f.node),
             session_id: row.id.clone(),
@@ -1471,3 +1487,7 @@ mod admission_tests;
 #[cfg(test)]
 #[path = "launch_tests.rs"]
 mod launch_tests;
+
+#[cfg(test)]
+#[path = "host_admission_tests.rs"]
+mod host_admission_tests;

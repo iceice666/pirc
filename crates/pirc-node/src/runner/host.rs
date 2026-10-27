@@ -63,16 +63,7 @@ fn signal_group(pid: Option<u32>, signal: Signal) {
     }
 }
 
-/// Run `command` in `cwd`; `abort` turning true stops it. The result
-/// object the agent gets: `{output, exitCode, timedOut, aborted, truncated}`.
-pub async fn run_on_host(
-    env: &Env,
-    command: &str,
-    cwd: &Path,
-    timeout: Duration,
-    mut abort: watch::Receiver<bool>,
-) -> Value {
-    let mut collector = Collector::default();
+pub(crate) fn command(env: &Env, command: &str, cwd: &Path) -> CommandWrap {
     let mut spawned = tokio::process::Command::new(pirc_agent::tools::bash::default_shell());
     spawned
         .arg("-c")
@@ -82,76 +73,13 @@ pub async fn run_on_host(
         .envs(without_secrets(env, &[]))
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
     let mut spawned = CommandWrap::from(spawned);
     spawned.wrap(ProcessSession);
-    let (mut timed_out, mut aborted) = (false, false);
-    // Withdrawn before it started (between the human's yes and here): never
-    // spawned. TS could not get here aborted (one thread).
-    let withdrawn = *abort.borrow_and_update() || abort.has_changed().is_err();
-    let started = if withdrawn {
-        aborted = true;
-        None
-    } else {
-        // `ProcessSession` would wait for the whole group: wait on bash
-        // itself, as the pipes' end already covers what it left running.
-        Some(spawned.spawn().map(|child| child.into_inner()))
-    };
-    let exit_code = match started {
-        None => None,
-        Some(Err(error)) => {
-            collector.head.push_str(&format!("{error}\n"));
-            None
-        }
-        Some(Ok(mut child)) => {
-            let pid = child.id();
-            let mut stdout = child.stdout().take();
-            let mut stderr = child.stderr().take();
-            let deadline = tokio::time::sleep(timeout);
-            tokio::pin!(deadline);
-            let mut stopping: Option<std::pin::Pin<Box<tokio::time::Sleep>>> = None;
-            let (mut out_buf, mut err_buf) = (vec![0; 64 * 1024], vec![0; 64 * 1024]);
-            let mut status = None;
-            // As Node's `close`: the process has exited and both pipes ended.
-            while status.is_none() || stdout.is_some() || stderr.is_some() {
-                let mut stop = false;
-                tokio::select! {
-                    read = async { stdout.as_mut().unwrap().read(&mut out_buf).await },
-                        if stdout.is_some() => match read {
-                        Ok(0) | Err(_) => stdout = None,
-                        Ok(read) => collector.collect(&out_buf[..read]),
-                    },
-                    read = async { stderr.as_mut().unwrap().read(&mut err_buf).await },
-                        if stderr.is_some() => match read {
-                        Ok(0) | Err(_) => stderr = None,
-                        Ok(read) => collector.collect(&err_buf[..read]),
-                    },
-                    waited = child.wait(), if status.is_none() => {
-                        status = Some(waited.ok().and_then(|status| status.code()));
-                    }
-                    () = &mut deadline, if !timed_out && !aborted => {
-                        timed_out = true;
-                        stop = true;
-                    }
-                    changed = abort.changed(), if !timed_out && !aborted => {
-                        if changed.is_err() || *abort.borrow() {
-                            aborted = true;
-                            stop = true;
-                        }
-                    }
-                    () = async { stopping.as_mut().unwrap().await }, if stopping.is_some() => {
-                        stopping = None;
-                        signal_group(pid, Signal::SIGKILL);
-                    }
-                }
-                if stop {
-                    signal_group(pid, Signal::SIGTERM);
-                    stopping = Some(Box::pin(tokio::time::sleep(Duration::from_secs(1))));
-                }
-            }
-            status.flatten()
-        }
-    };
+    spawned
+}
+fn result(collector: Collector, exit_code: Option<i32>, timed_out: bool, aborted: bool) -> Value {
     let Collector { head, tail, total } = collector;
     let truncated = total > head.len() + tail.len();
     let output = if truncated {
@@ -159,13 +87,126 @@ pub async fn run_on_host(
     } else {
         format!("{head}{tail}")
     };
-    json!({
-        "output": output,
-        "exitCode": if timed_out || aborted { None } else { exit_code },
-        "timedOut": timed_out,
-        "aborted": aborted,
-        "truncated": truncated,
-    })
+    json!({"output":output,"exitCode":if timed_out||aborted{None}else{exit_code},
+        "timedOut":timed_out,"aborted":aborted,"truncated":truncated})
+}
+pub(crate) fn spawn_error(error: &std::io::Error) -> Value {
+    result(
+        Collector {
+            head: format!("{error}\n"),
+            ..Default::default()
+        },
+        None,
+        false,
+        false,
+    )
+}
+pub(crate) struct Observed {
+    pub result: Value,
+    pub complete: bool,
+}
+
+/// This task owns the child through cancellation. Do not reap the session leader
+/// while its pipes remain open or a group signal is pending: its unreaped PID
+/// pins the numeric group identity. After the last signal, bound pipe/reap waits
+/// and report uncertainty instead of hanging on an escaped pipe holder forever.
+pub(crate) async fn observe(
+    mut child: Box<dyn process_wrap::tokio::ChildWrapper>,
+    timeout: Duration,
+    mut source: watch::Receiver<bool>,
+    mut cancel: watch::Receiver<bool>,
+) -> Observed {
+    let mut collector = Collector::default();
+    let pid = child.id();
+    let mut stdout = child.stdout().take();
+    let mut stderr = child.stderr().take();
+    let deadline = tokio::time::sleep(timeout);
+    tokio::pin!(deadline);
+    let mut stopping: Option<std::pin::Pin<Box<tokio::time::Sleep>>> = None;
+    let mut drain: Option<std::pin::Pin<Box<tokio::time::Sleep>>> = None;
+    let (mut timed_out, mut aborted, mut wait_ok, mut io_ok) = (false, false, false, true);
+    let mut status = None;
+    let (mut out_buf, mut err_buf) = (vec![0; 64 * 1024], vec![0; 64 * 1024]);
+    if *source.borrow_and_update()
+        || source.has_changed().is_err()
+        || *cancel.borrow_and_update()
+        || cancel.has_changed().is_err()
+    {
+        aborted = true;
+        signal_group(pid, Signal::SIGTERM);
+        stopping = Some(Box::pin(tokio::time::sleep(Duration::from_secs(1))));
+    }
+    while status.is_none() || stdout.is_some() || stderr.is_some() {
+        let mut stop = false;
+        tokio::select! {
+            biased;
+            changed = cancel.changed(), if !timed_out && !aborted => {
+                if changed.is_err() || *cancel.borrow() { aborted = true; stop = true; }
+            }
+            changed = source.changed(), if !timed_out && !aborted => {
+                if changed.is_err() || *source.borrow() { aborted = true; stop = true; }
+            }
+            () = &mut deadline, if !timed_out && !aborted => { timed_out = true; stop = true; }
+            () = async { stopping.as_mut().unwrap().await }, if stopping.is_some() => {
+                // No child.wait was polled during the grace interval.
+                signal_group(pid, Signal::SIGKILL);
+                stopping = None;
+                drain = Some(Box::pin(tokio::time::sleep(Duration::from_secs(2))));
+            }
+            () = async { drain.as_mut().unwrap().await }, if drain.is_some() => {
+                io_ok = false;
+                break;
+            }
+            read = async { stdout.as_mut().unwrap().read(&mut out_buf).await },
+                if stdout.is_some() => match read {
+                Ok(0) => stdout = None,
+                Ok(n) => collector.collect(&out_buf[..n]),
+                Err(_) => { io_ok = false; stdout = None; }
+            },
+            read = async { stderr.as_mut().unwrap().read(&mut err_buf).await },
+                if stderr.is_some() => match read {
+                Ok(0) => stderr = None,
+                Ok(n) => collector.collect(&err_buf[..n]),
+                Err(_) => { io_ok = false; stderr = None; }
+            },
+            waited = child.wait(),
+                if status.is_none() && stopping.is_none()
+                    && (drain.is_some() || (stdout.is_none() && stderr.is_none())) => {
+                wait_ok = waited.is_ok();
+                status = Some(waited.ok().and_then(|s| s.code()));
+            }
+        }
+        if stop {
+            signal_group(pid, Signal::SIGTERM);
+            stopping = Some(Box::pin(tokio::time::sleep(Duration::from_secs(1))));
+        }
+    }
+    Observed {
+        result: result(collector, status.flatten(), timed_out, aborted),
+        complete: wait_ok && io_ok && stdout.is_none() && stderr.is_none(),
+    }
+}
+
+/// Low-level fixture entry point. Production must use the Node's durable,
+/// authority-checked supervisor rather than creating untracked host commands.
+#[cfg(test)]
+async fn run_on_host(
+    env: &Env,
+    command_text: &str,
+    cwd: &Path,
+    timeout: Duration,
+    mut abort: watch::Receiver<bool>,
+) -> Value {
+    if *abort.borrow_and_update() || abort.has_changed().is_err() {
+        return result(Collector::default(), None, false, true);
+    }
+    let mut command = command(env, command_text, cwd);
+    let child = match command.spawn() {
+        Ok(child) => child.into_inner(),
+        Err(error) => return spawn_error(&error),
+    };
+    let (_cancel, wait) = watch::channel(false);
+    observe(child, timeout, abort, wait).await.result
 }
 
 #[cfg(test)]
@@ -296,6 +337,64 @@ mod tests {
         .await;
         assert_eq!(result["aborted"], true);
         assert!(!marker.exists());
+    }
+
+    #[tokio::test]
+    async fn escaped_pipe_holder_is_unconfirmed_and_wait_is_bounded() {
+        let dir = tempfile::tempdir().unwrap();
+        let done = dir.path().join("done");
+        let exe = std::env::current_exe().unwrap();
+        let mut command = command(
+            &env(),
+            &format!(
+                "exec '{}' --exact runner::host::tests::escaped_pipe_probe --ignored --nocapture",
+                exe.display()
+            ),
+            Path::new("/"),
+        );
+        command.command_mut().env("PIRC_HOST_PIPE_DONE", &done);
+        let child = command.spawn().unwrap().into_inner();
+        let (_source, source) = watch::channel(false);
+        let (_cancel, cancel) = watch::channel(false);
+        let result = tokio::time::timeout(
+            Duration::from_secs(5),
+            observe(child, Duration::from_millis(500), source, cancel),
+        )
+        .await
+        .unwrap();
+        assert!(!result.complete);
+        assert_eq!(result.result["timedOut"], true);
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while !done.exists() {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+        })
+        .await
+        .expect("the owned escaped helper must finish");
+    }
+    #[test]
+    #[ignore = "owned subprocess for escaped_pipe_holder_is_unconfirmed_and_wait_is_bounded"]
+    fn escaped_pipe_probe() {
+        use std::os::unix::process::CommandExt;
+        let done = std::env::var("PIRC_HOST_PIPE_DONE").unwrap();
+        if std::env::var_os("PIRC_HOST_PIPE_CHILD").is_some() {
+            std::thread::sleep(Duration::from_secs(6));
+            std::fs::write(done, "done").unwrap();
+            return;
+        }
+        // Deliberately leave this command's process group while inheriting its
+        // output. No PID-based cleanup: this one-shot helper exits on its own.
+        let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+        child
+            .args([
+                "--exact",
+                "runner::host::tests::escaped_pipe_probe",
+                "--ignored",
+                "--nocapture",
+            ])
+            .env("PIRC_HOST_PIPE_CHILD", "1")
+            .process_group(0);
+        let _ = child.spawn().unwrap().wait();
     }
 
     /// Whether `pid` still exists (a zombie counts until it is reaped).

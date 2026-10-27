@@ -914,24 +914,10 @@ impl Runner {
                         );
                         return Ok(());
                     }
-                    // Already true when the agent withdrew the request after
-                    // the yes: `run_on_host` then spawns nothing.
-                    let node = runner.node().ok_or("The node is closing")?;
-                    crate::execution_fences::require_open(&node.db.lock(), &runner.session_id)
-                        .map_err(|e| e.message)?;
-                    let abort = side.abort.subscribe();
-                    let env = runner
-                        .node()
-                        .map(|node| node.env.clone())
-                        .unwrap_or_default();
-                    let result = super::host::run_on_host(
-                        &env,
-                        &command,
-                        Path::new(&cwd),
-                        Duration::from_millis(timeout as u64),
-                        abort,
-                    )
-                    .await;
+                    let ticket = runner
+                        .start_host(&side, &command, &cwd, Duration::from_millis(timeout as u64))
+                        .map_err(|error| error.message)?;
+                    let result = ticket.result().await.map_err(|error| error.message)?;
                     runner.sandbox_ok(&side.id, result);
                     Ok(())
                 });
@@ -939,6 +925,80 @@ impl Runner {
             _ => self.sandbox_fail(&id, "invalid_input", "Unknown sandbox operation"),
         }
         Ok(())
+    }
+
+    /// Revalidate the approved origin at the effect boundary. The same DB lock
+    /// serializes transition acceptance; the runner lock serializes withdrawal.
+    pub(super) fn start_host(
+        &self,
+        side: &Side,
+        text: &str,
+        cwd: &str,
+        timeout: Duration,
+    ) -> crate::error::ApiResult<crate::host_commands::Ticket> {
+        use crate::error::ApiError;
+        let node = self
+            .node()
+            .ok_or_else(|| ApiError::runner_unavailable("The node is closing"))?;
+        let mut command = super::host::command(&node.env, text, Path::new(cwd));
+        let db = node.db.lock();
+        db.require_session_available(&self.session_id)?;
+        crate::execution_fences::require_open(&db, &self.session_id)?;
+        let row = db.get_session(&self.session_id)?;
+        let workspace = db.get_workspace(&row.workspace_id)?;
+        if row.runner_epoch != self.epoch
+            || row.workspace_id != self.workspace.id
+            || workspace.canonical_path != self.workspace.canonical_path
+            || node.workspace_mode(&workspace)? != self.mode
+        {
+            return Err(ApiError::conflict(
+                "The approved execution environment changed",
+            ));
+        }
+        let root = session_root(&workspace, &self.session_id, &self.mode)?;
+        let root = pirc_policy::real_resolve(&root.to_string_lossy());
+        if pirc_policy::real_resolve(cwd) != cwd
+            || !pirc_policy::is_inside(cwd, &root)
+            || !Path::new(cwd).is_dir()
+        {
+            return Err(ApiError::conflict("The approved command directory changed"));
+        }
+        // A mode update uses a separate lock from the persisted binding. Hold
+        // its read guard through spawn as well; recheck after acquiring it so a
+        // concurrent mode replacement cannot land between validation and exec.
+        let modes = node.modes.read().unwrap_or_else(|error| error.into_inner());
+        let mut installed = modes
+            .get(&workspace.mode)
+            .cloned()
+            .ok_or_else(|| ApiError::conflict("The approved mode is unavailable"))?;
+        if node
+            .recovery_roots
+            .read()
+            .unwrap_or_else(|error| error.into_inner())
+            .contains_key(&workspace.id)
+        {
+            installed.workspace_memory = false;
+        }
+        if installed != self.mode {
+            return Err(ApiError::conflict("The approved execution mode changed"));
+        }
+        let inner = self.lock();
+        if !self.side_live(&inner, side) {
+            return Err(ApiError::conflict("The host command was withdrawn"));
+        }
+        node.host_commands.start(
+            &node,
+            &db,
+            crate::host_commands::Origin {
+                session: self.session_id.clone(),
+                workspace: workspace.id,
+                epoch: self.epoch,
+                request: side.id.clone(),
+                timeout,
+            },
+            &mut command,
+            side.abort.subscribe(),
+        )
     }
 
     /// `start(work)`: the request is in flight until `work` ends; a thrown

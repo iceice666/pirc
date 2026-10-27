@@ -75,7 +75,7 @@
 
 mod command_gate;
 pub mod framing;
-mod host;
+pub(crate) mod host;
 mod process;
 pub mod reducer;
 mod side;
@@ -617,6 +617,8 @@ impl RunnerManager {
         let mut admission_wait = None;
         let outcome: Result<Map<String, Value>, Failure> = async {
             if matches!(payload, CommandPayload::Stop) {
+                let _host_stop = node.host_commands.stop(session_id);
+                runner.cancel_sandbox_requests();
                 let mut clear = Map::new();
                 clear.insert("type".into(), json!("clear_queue"));
                 let cleared = runner.request(clear).await?;
@@ -626,6 +628,7 @@ impl RunnerManager {
                 let mut abort = Map::new();
                 abort.insert("type".into(), json!("abort"));
                 let mut response = runner.request(abort).await?;
+                node.host_commands.wait_session(&node, session_id).await?;
                 let mut data = Map::new();
                 if let Some(cleared) = cleared.get("data") {
                     data.insert("cleared".into(), cleared.clone());
@@ -701,7 +704,9 @@ impl RunnerManager {
                 let alive = runner.alive();
                 {
                     let db = node.db.lock();
-                    let status = if alive && admission_wait.is_none() {
+                    let uncertain_stop = matches!(payload, CommandPayload::Stop)
+                        && matches!(&failure, Failure::Api(error) if error.code == "host_stop_unconfirmed");
+                    let status = if alive && admission_wait.is_none() && !uncertain_stop {
                         CommandStatus::Rejected
                     } else {
                         CommandStatus::OutcomeUnknown
@@ -960,6 +965,7 @@ impl RunnerManager {
             let _ = starting.wait_for(Option::is_some).await;
         }
         check()?;
+        let _host_stop = node.host_commands.stop(session_id);
         if let Some(runner) = self.get(session_id) {
             runner
                 .stop(Duration::from_millis(node.config.shutdown_grace_ms))
@@ -970,6 +976,7 @@ impl RunnerManager {
                 ));
             }
         }
+        node.host_commands.wait_session(&node, session_id).await?;
         node.writes.release(session_id);
         Ok(())
     }

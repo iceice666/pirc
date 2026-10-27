@@ -1459,6 +1459,17 @@ async fn command(node: Node, request: Request) -> ApiResult<Response> {
         return Ok(Response::json(json!({ "command": row, "duplicate": true })));
     }
     if initial_stop && node.runners.get(&session.id).is_none_or(|r| !r.alive()) {
+        // A missing runner does not prove its approved host work settled. Join
+        // the independent supervisor before confirming the initial Stop receipt.
+        if let Err(error) = node.runners.stop_session(&session.id).await {
+            node.db.lock().update_command(
+                &command_id,
+                crate::store::CommandStatus::OutcomeUnknown,
+                None,
+                Some(&error.message),
+            )?;
+            return Err(error);
+        }
         let db = node.db.lock();
         db.update_command(
             &command_id,

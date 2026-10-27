@@ -1,5 +1,33 @@
 # Upgrades
 
+## Unreleased local checkpoint: supervised approved host commands
+
+Node schema **2015** adds a minimal durable host-command journal. Older binaries
+refuse this schema; preserve a consistent matching binary/state backup for any
+eventual deployment or rollback. Do not delete records or rewrite the schema
+version to force a downgrade. No Gateway, protocol/client contract, package,
+dependency or Nix hash changes accompany it.
+
+After approval, Node rechecks the runner's original environment before spawning
+under the admission locks. Stop, deletion, mode replacement, transition drain and
+shutdown request cancellation and join the Node-owned observer. Losing the caller
+does not discard that observer; a repeated admitted request does not execute again.
+
+A command interrupted across Node restart may leave `launching`, `running` or
+`unconfirmed` evidence. Those entries do not authorize replay or numeric-PID
+signals. Affected Stop/drain attempts return `host_stop_unconfirmed`; manually
+confirming cleanup is not yet an exposed reconciliation workflow. Do not remove
+the record to claim a completed environment switch. Already-settled observations
+remain settled, and peers with no unresolved command keep their ordinary behavior.
+Records retain only origin/state/time identifiers, not command bodies, outputs or
+credentials, including after session deletion.
+
+`hostCommands.observersSettled` does not certify all detached descendants exited.
+Pre-2015 commands lack an inventory, so `historyComplete` remains false even when
+all new records settled. Full revocation/target-installation flags remain false
+and public environment switching stays disabled. This local work does not deploy
+or enable the new first-Send flow. See the [implementation checkpoint](../../plans/unified-conversations.md#u4-implementation-checkpoint-supervised-host-commands-2026-10-28).
+
 ## Unreleased local checkpoint: guarded native Linux runner startup
 
 Node schema **2014** adds a one-way launch gate record: `waiting` can become

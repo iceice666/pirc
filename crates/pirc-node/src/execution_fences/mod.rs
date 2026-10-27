@@ -64,6 +64,7 @@ pub(crate) struct Receipt {
     pub revocation_confirmed: bool,
     pub target_installed: bool,
     pub sandbox_processes: crate::process_journal::Summary,
+    pub host_commands: crate::host_commands::Summary,
 }
 fn valid_id(s: &str) -> bool {
     !s.is_empty()
@@ -121,6 +122,7 @@ fn receipt(db: &Connection, owner: &str, session: &str, op: &str) -> ApiResult<O
             revocation_confirmed: false,
             target_installed: false,
             sandbox_processes: crate::process_journal::summary(db, session)?,
+            host_commands: crate::host_commands::summary(db, session)?,
         })
     })
     .transpose()
@@ -223,10 +225,16 @@ pub(crate) async fn drain(node: &Node, owner: &str, session: &str, op: &str) -> 
                     Ok::<(), ApiError>(())
                 }
                 .await;
-                let (state, error) = if stopped.is_ok() {
-                    ("supervisor_drained", None)
-                } else {
-                    ("blocked", Some("supervisor_stop_unconfirmed"))
+                let (state, error) = match stopped {
+                    Ok(()) => ("supervisor_drained", None),
+                    Err(error) => (
+                        "blocked",
+                        Some(if error.code == "host_stop_unconfirmed" {
+                            "host_stop_unconfirmed"
+                        } else {
+                            "supervisor_stop_unconfirmed"
+                        }),
+                    ),
                 };
                 stage(&node.db.lock(), &owner, &session, &op, state, error)
             });

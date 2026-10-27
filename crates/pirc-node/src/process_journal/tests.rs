@@ -136,6 +136,7 @@ fn migration_retains_legacy_uncertainty_without_fencing_ordinary_sessions() {
         let db = db.lock();
         let (a, b) = setup(&db);
         db.execute_batch(concat!(
+            include_str!("../host_commands/remove_schema.sql"),
             include_str!("remove_schema.sql"),
             "PRAGMA user_version=2012;"
         ))
@@ -415,6 +416,8 @@ fn migration_never_infers_a_guard_for_prior_launches() {
         let db = db.lock();
         let (a, _) = setup(&db);
         let launch = reserve(&db, &a, "repo", 1, "legacy").unwrap();
+        db.execute_batch(include_str!("../host_commands/remove_schema.sql"))
+            .unwrap();
         db.execute_batch("DROP TRIGGER sandbox_guard_monotonic; DROP INDEX sandbox_guard_pending; ALTER TABLE sandbox_launches DROP COLUMN guard_state; PRAGMA user_version=2013;").unwrap();
         launch
     };

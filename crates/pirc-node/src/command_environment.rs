@@ -229,7 +229,7 @@ mod tests {
             let conn = db.lock();
             let session = setup(&conn);
             command(&conn, &session, "old");
-            conn.execute_batch("DROP TRIGGER sandbox_launch_identity; DROP TRIGGER sandbox_kernel_identity; DROP TRIGGER sandbox_launch_terminal; DROP TRIGGER sandbox_launch_retained; DROP TABLE sandbox_launches; DROP TRIGGER execution_fence_identity; DROP TRIGGER execution_fence_retained; DROP TRIGGER execution_fence_session_deleted; DROP INDEX execution_fence_active; DROP TABLE execution_fences; DROP TRIGGER upload_origin_capture; DROP TRIGGER upload_origin_immutable; DROP TRIGGER upload_origin_remove; DROP TRIGGER upload_record_immutable; DROP TABLE upload_origins; DROP TRIGGER command_environment_immutable; DROP TABLE command_environments; PRAGMA user_version=2009;").unwrap();
+            conn.execute_batch("DROP TRIGGER host_command_identity; DROP TRIGGER host_command_terminal; DROP TRIGGER host_command_retained; DROP TABLE host_command_runs; DROP TRIGGER sandbox_launch_identity; DROP TRIGGER sandbox_kernel_identity; DROP TRIGGER sandbox_launch_terminal; DROP TRIGGER sandbox_launch_retained; DROP TABLE sandbox_launches; DROP TRIGGER execution_fence_identity; DROP TRIGGER execution_fence_retained; DROP TRIGGER execution_fence_session_deleted; DROP INDEX execution_fence_active; DROP TABLE execution_fences; DROP TRIGGER upload_origin_capture; DROP TRIGGER upload_origin_immutable; DROP TRIGGER upload_origin_remove; DROP TRIGGER upload_record_immutable; DROP TABLE upload_origins; DROP TRIGGER command_environment_immutable; DROP TABLE command_environments; PRAGMA user_version=2009;").unwrap();
         }
         let db = Db::open(&path).unwrap();
         let conn = db.lock();
