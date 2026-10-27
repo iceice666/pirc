@@ -30,14 +30,26 @@ pub(crate) struct Summary {
     pub not_started: u64,
     pub unresolved: u64,
     pub legacy_untracked: u64,
+    pub guarded_not_released: u64,
 }
 
+#[cfg(test)]
 pub(crate) fn reserve(
     db: &Connection,
     session: &str,
     workspace: &str,
     epoch: i64,
     incarnation: &str,
+) -> ApiResult<Launch> {
+    reserve_with_guard(db, session, workspace, epoch, incarnation, false)
+}
+pub(crate) fn reserve_with_guard(
+    db: &Connection,
+    session: &str,
+    workspace: &str,
+    epoch: i64,
+    incarnation: &str,
+    guarded: bool,
 ) -> ApiResult<Launch> {
     db.require_session_available(session)?;
     crate::execution_fences::require_open(db, session)?;
@@ -53,8 +65,8 @@ pub(crate) fn reserve(
     };
     let now = now_ms();
     db.execute(
-        "INSERT INTO sandbox_launches VALUES(?1,?2,?3,?4,?5,'launching',NULL,?6,?6)",
-        params![launch.id, session, workspace, epoch, incarnation, now],
+        "INSERT INTO sandbox_launches(launch_id,session_id,workspace_id,runner_epoch,incarnation,state,identity_json,created_at,updated_at,guard_state) VALUES(?1,?2,?3,?4,?5,'launching',NULL,?6,?6,?7)",
+        params![launch.id, session, workspace, epoch, incarnation, now, if guarded {"waiting"} else {"untracked"}],
     )?;
     Ok(launch)
 }
@@ -108,9 +120,49 @@ pub(crate) fn observe(db: &Connection, launch: &Launch, snapshot: &Snapshot) -> 
     )?;
     Ok(())
 }
+
+/// Commit evidence before any release byte. The caller holds Node's admission
+/// mutex through the subsequent nonblocking write on this launch's stdin pipe.
+pub(crate) fn authorize(
+    db: &Connection,
+    launch: &Launch,
+    workspace: &str,
+    snapshot: &Snapshot,
+) -> ApiResult<()> {
+    if !db.is_autocommit() {
+        return Err(ApiError::internal());
+    }
+    crate::store::atomic(db, |tx| {
+        tx.require_session_available(&launch.session)?;
+        crate::execution_fences::require_open(tx, &launch.session)?;
+        let current = tx.get_session(&launch.session)?;
+        if current.runner_epoch != launch.epoch || current.workspace_id != workspace {
+            return Err(ApiError::conflict("Sandbox launch environment changed"));
+        }
+        if snapshot.state != State::Running || snapshot.identity.is_none() {
+            return Err(ApiError::runner_unavailable(
+                "Sandbox process identity was not confirmed",
+            ));
+        }
+        observe(tx, launch, snapshot)?;
+        let count=tx.execute("UPDATE sandbox_launches SET guard_state='released' WHERE launch_id=?1 AND guard_state='waiting' AND state='running'",[&launch.id])?;
+        if count != 1 {
+            return Err(ApiError::conflict(
+                "Sandbox launch was already released or denied",
+            ));
+        }
+        Ok(())
+    })
+}
+pub(crate) fn deny(db: &Connection, launch: &Launch) -> ApiResult<()> {
+    saved(db, launch)?;
+    db.execute("UPDATE sandbox_launches SET guard_state='denied' WHERE launch_id=?1 AND guard_state='waiting'",[&launch.id])?;
+    Ok(())
+}
+
 pub(crate) fn summary(db: &Connection, session: &str) -> ApiResult<Summary> {
-    Ok(db.query_row("SELECT count(*),coalesce(sum(state='terminated'),0),coalesce(sum(state='not_started'),0),coalesce(sum(state NOT IN ('terminated','not_started')),0),coalesce(sum(state='legacy_untracked'),0) FROM sandbox_launches WHERE session_id=?1",[session], |r| Ok(Summary {
-        launches:r.get(0)?,terminated:r.get(1)?,not_started:r.get(2)?,unresolved:r.get(3)?,legacy_untracked:r.get(4)?,
+    Ok(db.query_row("SELECT count(*),coalesce(sum(state='terminated'),0),coalesce(sum(state='not_started'),0),coalesce(sum(state NOT IN ('terminated','not_started')),0),coalesce(sum(state='legacy_untracked'),0),coalesce(sum(guard_state='denied'),0) FROM sandbox_launches WHERE session_id=?1",[session], |r| Ok(Summary {
+        launches:r.get(0)?,terminated:r.get(1)?,not_started:r.get(2)?,unresolved:r.get(3)?,legacy_untracked:r.get(4)?,guarded_not_released:r.get(5)?,
     }))?)
 }
 
@@ -128,6 +180,9 @@ fn pending(db: &Connection, session: &str) -> ApiResult<Vec<(Launch, Identity)>>
             "Sandbox reconciliation requires a transition fence",
         ));
     }
+    // This transition prevents any future release. Missing identity still does
+    // not prove kernel exit; expose the separate pre-execution denial evidence.
+    db.execute("UPDATE sandbox_launches SET guard_state='denied' WHERE launch_id IN (SELECT launch_id FROM sandbox_launches WHERE session_id=?1 AND guard_state='waiting' ORDER BY created_at,rowid LIMIT 64)",[session])?;
     let mut statement = db.prepare("SELECT launch_id,runner_epoch,incarnation,identity_json FROM sandbox_launches WHERE session_id=?1 AND state IN ('running','unconfirmed','launching') AND identity_json IS NOT NULL ORDER BY updated_at,rowid LIMIT 64")?;
     let rows = statement.query_map([session], |r| {
         Ok((

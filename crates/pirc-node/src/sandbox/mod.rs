@@ -61,6 +61,7 @@
 pub mod bridge;
 mod common;
 pub mod fds;
+pub(crate) mod launch_guard;
 pub mod linux;
 pub mod macos;
 pub mod processes;
@@ -260,6 +261,10 @@ impl Prepared {
     ) -> Self {
         self.processes = Some(processes);
         self
+    }
+
+    pub(crate) fn requires_launch_guard(&self) -> bool {
+        self.processes.is_some()
     }
 
     /// Call immediately after spawn, before anything can reap the wrapper PID.

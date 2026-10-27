@@ -1,5 +1,43 @@
 # Upgrades
 
+## Unreleased local checkpoint: guarded native Linux runner startup
+
+Node schema **2014** adds a one-way launch gate record: `waiting` can become
+`released` or `denied`, never be reset. Existing launches migrate as `untracked`;
+no historical execution gains a guard retroactively. Gateway stays 1025 and no
+protocol, client contract, package version, dependency lock or Nix hash changes.
+
+Native Linux runner starts now wait for a captured, live kernel identity. Node
+persists that identity and release decision, rechecks the session/epoch/workspace
+and transition fence, then sends one small nonblocking permission record on the
+private stdin pipe while holding the admission lock. The trusted bridge consumes
+only that record before starting its proxy threads or Agent. EOF, a partial or
+invalid record, timeout, missing identity or storage failure does not start Agent
+work; no RPC is sent before release. Failed starts close the pipe and stop the
+captured scope/wrapper. The guard flag is removed from the Agent's environment.
+Pre-launch loader/shell hooks (such as forwarded `LD_PRELOAD`, `LD_LIBRARY_PATH`,
+`BASH_ENV` or `ENV`) are refused rather than executed before the gate. If needed,
+configure the tools' environment in Agent config, loaded after guarded startup.
+
+This deliberately fails native Linux runner startup if the host cannot supply
+pidfd/namespace identity evidence; it does not silently fall back to an untracked
+launch. Native Linux runtime acceptance remains required before deployment.
+Existing macOS/srt session paths and read-only panel commands retain their current
+behavior and are not covered by this gate.
+
+After interruption, a transition drain permanently denies still-waiting gates in
+batches of 64. `guardedNotReleased` is separate evidence that no permission was
+sent; it does not establish kernel exit and does not subtract from `unresolved`.
+A release decision may have committed just before the Node died without delivering
+its byte; keep it conservative and reconcile the already-saved kernel identity.
+Never replay that permission into a replacement process. All full-transition
+completion flags remain false; terminals, approved host commands, browser effects,
+macOS containment and replacement-policy installation are still open.
+
+Older Nodes refuse schema 2014. Preserve consistent matching binary/state backups
+for an eventual deployment; do not edit the version or erase launch records to
+force a downgrade. This work remains local and exposes no public workspace switch.
+
 ## Unreleased local checkpoint: durable sandbox launch evidence
 
 Node schema **2013** records each runner launch before spawning it, keyed by

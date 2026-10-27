@@ -19,7 +19,7 @@ their implementation stage begins; earlier library/pots work is reused.
 
 **U1 is implemented across Gateway, Node, Web and native Android, but is not
 accepted for activation. `canSubmit: false` remains in production.** Current
-formats: Gateway **1025**, Node **2013**, protocol **15**, client contract **2**,
+formats: Gateway **1025**, Node **2014**, protocol **15**, client contract **2**,
 Web IndexedDB **3**, Android private envelope **3**. Package/dependency versions
 and Nix hashes are unchanged. Existing session, memory-deletion and checkpoint
 ownership guarantees remain in effect.
@@ -3605,3 +3605,65 @@ isolation and preserved later user edits; it remains unexecuted on this macOS
 host. No Flutter changes, emulator/device, live provider, user browser or local Nix
 verification were needed. Work remains local; the isolated build, compiler copy
 and test artifacts are removed after validation, preserving APKs and shared caches.
+
+## U4 implementation checkpoint: guarded native Linux launch (2026-10-28)
+
+After `955d7b1a`, Node schema **2014** adds immutable one-way guard decisions to
+launch evidence. Existing rows remain untracked. New native Linux runner launches
+reserve a waiting guard before spawn, then wait up to six seconds for trusted
+live namespace identity. Before release, Node checks current session availability,
+epoch/workspace and the execution fence under its admission lock. Identity and
+release decision must commit independently (an outer transaction is refused), then
+one nonblocking pipe write grants the trusted bridge permission. A crash before
+that commit cannot have authorized Agent execution; a crash just afterwards leaves
+captured identity for conservative reconciliation, whether the byte arrived or not.
+
+The bridge waits before creating proxy threads or spawning the Agent. It reads an
+exact bounded record without consuming following RPC bytes; EOF, partial/malformed
+input and its ten-second timeout refuse. Node forces the gate setting after
+repository environment values; the bridge removes it from the child environment.
+Pre-launch loader/shell hooks (such as forwarded `LD_PRELOAD`, `LD_LIBRARY_PATH`,
+`BASH_ENV` or `ENV`) are refused rather than executed before the gate. If needed,
+configure the tools' environment in Agent config, loaded after guarded startup.
+Cancellation closes the pipe and triggers scope/wrapper teardown; handled startup
+failure also attempts bounded reaping. No ready event or Agent RPC is emitted first.
+A storage failure cannot authorize execution, and permission is never replayed.
+
+Transition reconciliation denies at most 64 pending guards per attempt using a
+partial index. Denial is permanent and session-scoped. `guardedNotReleased` is
+reported separately from process termination, and unresolved kernel evidence is
+still unresolved. This closes the _Agent execution_ part of the new native
+runner's spawn-to-capture gap; it does not invent proof that an unobserved trusted
+wrapper exited or repair older untracked launches. Linux hosts unable to provide
+pidfd/namespace evidence now refuse a native runner start. No fallback is inferred.
+
+Other admitted effects, host commands, panel terminals, macOS containment and
+actual native Linux runtime acceptance remain open. Target policy installation,
+Gateway coordination and functional Web/Android transition controls still follow.
+U1 activation, U2 resource provenance, U5 collaboration and U6 bounded proactive
+pots remain incomplete; UI redesign remains deferred. No public switch is enabled
+and revocation/installation completion flags remain false.
+
+Local validation: **499 Node library tests passed, 3 existing tests ignored**.
+After the final workspace/mode and shutdown rechecks, all **four focused runner
+launch cases** also passed. Coverage includes a transition during observation,
+changed workspace/shutdown refusal, commit failure without any permission bytes,
+and refusal to release the same launch twice. Journal tests cover outer-transaction
+refusal, restart, irreversible decisions, peer isolation, 2013 migration and
+bounded multi-batch denial. Gate tests cover malformed/partial input, timeout,
+fragmented permission, preserved RPC bytes and pre-launch environment hooks.
+
+A real bridge process test passed for EOF, partial permission and an unexpected
+configure message: each refused before creating the Agent's marker file. The
+**16 required process cases** passed again: checkpoints (3), conversation admission
+(2), creation (2), execution-fence restart (1), inference retirement (1), memory
+(1), node-link side channels (5) and project deletion (1).
+
+Strict Node/conformance all-target Clippy, Rust formatting, changed-document
+Prettier and diff checks passed. The actual launch-gate source/tests also passed
+isolated Linux-target Clippy; this is not a full Linux Node build or native runtime
+pass. A new Linux acceptance case checks pre-release inactivity, refusal on EOF
+and preserved RPC bytes after release; it remains unexecuted on this macOS host.
+No Flutter changes, device/emulator, live provider, user browser or local Nix
+verification were needed. Work stays local. The isolated build, compiler copy and
+test artifacts are removed after validation; APKs and shared caches are preserved.

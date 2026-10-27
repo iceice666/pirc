@@ -174,11 +174,11 @@ for its handle to report exit, including descendants that changed process groups
 Missing or late identity remains unconfirmed. A durable launch journal now survives
 Node restart. Inside an accepted transition fence, a drain can revalidate saved
 Linux identities with fresh kernel handles in bounded batches; unknown launches
-and historical epochs remain explicit unresolved evidence. This does not yet
-close the spawn-to-capture crash gap or cover macOS, approved host commands, panel
-terminals or every admitted effect. The transition receipt exposes
+and historical epochs remain explicit unresolved evidence. This now prevents new native Linux Agent work before process identity and launch
+permission commit. Unknown trusted-wrapper exit is still unknown, and it does not
+cover macOS, approved host commands, panel terminals or every admitted effect. The transition receipt exposes
 `sandboxProcesses` counts but still never claims `revocationConfirmed`. See the
-[current U4 evidence and remaining gates](../../plans/unified-conversations.md#u4-implementation-checkpoint-durable-sandbox-launch-journal-2026-10-28).
+[current U4 evidence and remaining gates](../../plans/unified-conversations.md#u4-implementation-checkpoint-guarded-native-linux-launch-2026-10-28).
 
 ## Data
 

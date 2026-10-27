@@ -167,3 +167,72 @@ async fn wrapper_exit_is_observed_through_the_separately_pinned_namespace() {
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert_eq!(std::fs::read(root.join("crashed.data")).unwrap(), before);
 }
+
+#[tokio::test]
+async fn native_bridge_waits_for_permission_before_agent_execution_and_preserves_rpc() {
+    use tokio::io::AsyncWriteExt;
+    let Some(f) = fixture("guarded-namespace") else {
+        assert_ne!(
+            std::env::var("PIRC_PROCESS_SCOPE_REQUIRED").as_deref(),
+            Ok("1"),
+            "bubblewrap is required"
+        );
+        return;
+    };
+    let root = f.root.join("workspace");
+    for (name, release) in [("refused", false), ("released", true)] {
+        let prepared = f.sandbox.prepare(f.input(name, None)).await.unwrap();
+        let mut command = prepared.command().unwrap();
+        let mut child = command
+            .args([
+                "-c",
+                "printf started > \"$1\"; IFS= read -r line; printf '%s' \"$line\"",
+                "agent",
+                name,
+            ])
+            .env("PIRC_NATIVE_LAUNCH_GUARD", "1")
+            .current_dir(&root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .kill_on_drop(true)
+            .spawn()
+            .unwrap();
+        prepared.process_spawned(child.id().unwrap());
+        state(&prepared, State::Running).await;
+        assert!(prepared.process_snapshot().identity.is_some());
+        tokio::time::sleep(Duration::from_millis(40)).await;
+        assert!(!root.join(name).exists(), "agent executed before release");
+        if release {
+            child
+                .stdin
+                .as_mut()
+                .unwrap()
+                .write_all(b"PIRC-LAUNCH-1\nconfigure\n")
+                .await
+                .unwrap();
+        }
+        child.stdin.take();
+        let result = tokio::time::timeout(Duration::from_secs(8), child.wait_with_output())
+            .await
+            .unwrap()
+            .unwrap();
+        if release {
+            assert!(
+                result.status.success(),
+                "{}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            assert_eq!(result.stdout, b"configure");
+            assert_eq!(std::fs::read(root.join(name)).unwrap(), b"started");
+        } else {
+            assert_eq!(result.status.code(), Some(125));
+            assert!(!root.join(name).exists());
+        }
+        assert_eq!(
+            prepared.wait_processes(Duration::from_secs(2)).await,
+            State::Terminated
+        );
+        prepared.cleanup();
+    }
+}

@@ -1084,6 +1084,7 @@ async fn start(node: &Node, session_id: &str) -> ApiResult<Arc<Runner>> {
                 ledger,
             },
         )
+        .await
     }
     .await;
     if started.is_err() {

@@ -940,6 +940,14 @@ fn spawn_child(
         "PIRC_MODE",
         serde_json::to_string(mode).map_err(|_| ApiError::internal())?,
     );
+    // Only native process-tracked launchers understand this trusted bridge gate.
+    // Forced after all repository/prepared environment values.
+    env.remove(crate::sandbox::launch_guard::ENV);
+    if prepared.requires_launch_guard() {
+        crate::sandbox::launch_guard::validate_bootstrap(&env)
+            .map_err(|error| ApiError::runner_unavailable(error.to_string()))?;
+        env.insert(crate::sandbox::launch_guard::ENV.into(), "1".into());
+    }
     command
         .current_dir(&root)
         .env_clear()
@@ -949,14 +957,20 @@ fn spawn_child(
         .stderr(Stdio::piped())
         // Its own process group, so stopping srt also stops what it sandboxes.
         .process_group(0)
-        .kill_on_drop(false);
+        .kill_on_drop(prepared.requires_launch_guard());
     // Serialize the final spawn with transition acceptance. A start that waited
     // for sandbox preparation cannot spawn behind a durable admission fence.
     let db = node.db.lock();
     db.require_session_available(&session.id)?;
     crate::execution_fences::require_open(&db, &session.id)?;
-    let launch =
-        crate::process_journal::reserve(&db, &session.id, &workspace.id, epoch, &node.incarnation)?;
+    let launch = crate::process_journal::reserve_with_guard(
+        &db,
+        &session.id,
+        &workspace.id,
+        epoch,
+        &node.incarnation,
+        prepared.requires_launch_guard(),
+    )?;
     let child = match command.spawn() {
         Ok(child) => child,
         Err(error) => {
@@ -975,7 +989,7 @@ fn spawn_child(
     Ok((child, epoch, launch))
 }
 
-pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
+pub(super) async fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
     let Spawn {
         session,
         workspace,
@@ -1014,6 +1028,22 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
             return Err(error);
         }
     };
+    if prepared.requires_launch_guard()
+        && let Err(error) =
+            release_guarded_launch(node, &prepared, &launch, &workspace, &mode, &mut child).await
+    {
+        // Closing stdin refuses the bridge even if PID observation failed. Kill
+        // the trusted wrapper too; no agent RPC/configuration has been sent.
+        let _ = crate::process_journal::deny(&node.db.lock(), &launch);
+        child.stdin.take();
+        prepared.terminate_processes();
+        let _ = child.start_kill();
+        let _ = tokio::time::timeout(Duration::from_secs(2), child.wait()).await;
+        let _ =
+            crate::process_journal::observe(&node.db.lock(), &launch, &prepared.process_snapshot());
+        prepared.cleanup();
+        return Err(error);
+    }
     let pid = child.id();
     let (stdin_tx, stdin_rx) = mpsc::unbounded_channel();
     let (exited, _) = watch::channel(false);
@@ -1117,6 +1147,63 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
     let errors = stderr.map(|stderr| tokio::spawn(read_stderr(runner.clone(), stderr)));
     tokio::spawn(wait_exit(runner.clone(), child, reading, errors));
     Ok(runner)
+}
+
+async fn release_guarded_launch(
+    node: &Node,
+    prepared: &Prepared,
+    launch: &crate::process_journal::Launch,
+    workspace: &Workspace,
+    mode: &pirc_protocol::Mode,
+    child: &mut tokio::process::Child,
+) -> ApiResult<()> {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(6);
+    loop {
+        if node.closing() {
+            return Err(ApiError::runner_unavailable("Node is shutting down"));
+        }
+        {
+            let db = node.db.lock();
+            db.require_session_available(&launch.session)?;
+            crate::execution_fences::require_open(&db, &launch.session)?;
+        }
+        let snapshot = prepared.process_snapshot();
+        match snapshot.state {
+            crate::sandbox::processes::State::Observing
+                if tokio::time::Instant::now() < deadline =>
+            {
+                if child
+                    .try_wait()
+                    .map_err(|_| ApiError::runner_unavailable("Sandbox startup wait failed"))?
+                    .is_some()
+                {
+                    return Err(ApiError::runner_unavailable(
+                        "Sandbox exited before launch permission",
+                    ));
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            _ => {
+                let db = node.db.lock();
+                let current = db.get_workspace(&workspace.id)?;
+                if current.canonical_path != workspace.canonical_path
+                    || node.workspace_mode(&current)? != *mode
+                {
+                    return Err(ApiError::runner_unavailable(
+                        "Workspace or mode changed while waiting for launch permission",
+                    ));
+                }
+                crate::process_journal::authorize(&db, launch, &workspace.id, &snapshot)?;
+                let stdin = child.stdin.as_ref().ok_or_else(|| {
+                    ApiError::runner_unavailable("Sandbox launch pipe is unavailable")
+                })?;
+                crate::sandbox::launch_guard::release(stdin).map_err(|_| {
+                    ApiError::runner_unavailable("Sandbox launch permission was not delivered")
+                })?;
+                return Ok(());
+            }
+        }
+    }
 }
 
 async fn observe_process_scope(runner: Arc<Runner>) {
@@ -1380,3 +1467,7 @@ mod memory_concurrency_tests {
 #[cfg(test)]
 #[path = "admission_tests.rs"]
 mod admission_tests;
+
+#[cfg(test)]
+#[path = "launch_tests.rs"]
+mod launch_tests;

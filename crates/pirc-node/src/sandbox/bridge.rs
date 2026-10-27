@@ -46,6 +46,14 @@ pub fn run(args: Vec<String>) -> ExitCode {
     // Only stdio is meant to reach the agent: the node closed what it
     // inherited at start-up; this is the second line (`super::fds`).
     super::fds::close_inherited();
+    if std::env::var_os(super::launch_guard::ENV).is_some()
+        && (std::env::var(super::launch_guard::ENV).as_deref() != Ok("1")
+            || super::launch_guard::wait(&io::stdin(), std::time::Duration::from_secs(10)).is_err())
+    {
+        eprintln!("pirc-node sandbox-bridge: launch was not authorized");
+        return ExitCode::from(125);
+    }
+
     for port in [BRIDGE_PORT, BRIDGE_SOCKS_PORT] {
         // srt's socat listened on IPv4 only.
         let listener = match TcpListener::bind(("127.0.0.1", port)) {
@@ -70,7 +78,11 @@ pub fn run(args: Vec<String>) -> ExitCode {
             });
         }
     }
-    match Command::new(&command[0]).args(&command[1..]).status() {
+    match Command::new(&command[0])
+        .args(&command[1..])
+        .env_remove(super::launch_guard::ENV)
+        .status()
+    {
         Ok(status) => {
             let code = status
                 .code()
