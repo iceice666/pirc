@@ -2535,5 +2535,11 @@
   "This draft is no longer available.": "此草稿已無法使用。",
   "The first message uses the workspace's default approval mode. Change it after admission.": "第一則訊息會使用工作區的預設核准模式，接收後即可變更。",
   "This conversation and its chat files will be permanently deleted. This also deletes USER memories and MEMORY notes created by this chat, and its pending memory proposals. Memories created by other chats are kept. Copies already present in other chats are not erased. Any running reply will stop. This cannot be undone.": "此對話與對話檔案將永久刪除，也會連帶刪除此對話建立的 USER 記憶、MEMORY 筆記及待核准的記憶提議。其他對話建立的記憶會保留，已存在於其他對話中的副本不會一併清除。執行中的回覆會停止，此操作無法復原。",
-  "Connect to the Gateway to confirm first-send support before creating a conversation.": "請先連線至 Gateway 確認首次送出支援，再建立對話。"
+  "Connect to the Gateway to confirm first-send support before creating a conversation.": "請先連線至 Gateway 確認首次送出支援，再建立對話。",
+  "First message stopped": "首次訊息已停止",
+  "Stopping first message": "正在停止首次訊息",
+  "This Gateway cannot stop a first message before the Node is ready.": "此 Gateway 不支援在 Node 準備完成前停止首次訊息。",
+  "Stop was requested. Check the result before continuing.": "已要求停止。繼續前請先檢查結果。",
+  "Conversation preparation is not yet confirmed. Check the result.": "尚未確認對話準備完成，請檢查結果。",
+  "The first message admission is still unknown; Stop does not undo completed work.": "首次訊息是否已接收仍未知；停止不會復原已完成的工作。"
 }

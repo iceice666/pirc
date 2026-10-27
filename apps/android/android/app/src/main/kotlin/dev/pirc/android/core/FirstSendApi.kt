@@ -13,7 +13,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 internal class FirstSendApi(private val api: PircApi) {
     private val client = api.client.newBuilder().retryOnConnectionFailure(false)
         .followRedirects(false).followSslRedirects(false).build()
-    private val submission = Regex("^/api/conversation-submissions/[A-Za-z0-9_%.-]+(?:/(?:receipt|accept|materialize|dispatch|attachments/[A-Za-z0-9_%.-]+))?$")
+    private val submission = Regex("^/api/conversation-submissions/[A-Za-z0-9_%.-]+(?:/(?:receipt|accept|materialize|dispatch|stop|stop-control(?:/(?:acquire|release))?|attachments/[A-Za-z0-9_%.-]+))?$")
     private val pending = Regex("^/api/conversation-submissions/session/[A-Za-z0-9_%.-]+$")
     private val session = Regex("^/api/sessions/[A-Za-z0-9_%.-]+(?:/(?:control/acquire|commands(?:/[A-Za-z0-9_%.-]+)?))?$")
     suspend fun request(method: String, path: String, owner: String? = null, body: JsonElement? = null, bytes: ByteArray? = null): JsonElement? = withContext(Dispatchers.IO) {

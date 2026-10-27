@@ -45,4 +45,17 @@ class FirstSendApiTest {
         catch (_: IllegalArgumentException) {}
         assertEquals(0, server.requestCount)
     } }
+
+    @Test fun pendingControlAndStopPinTheOwnerAndDoNotReplayRetryAfter() = fixture {server,api->runTest {
+        server.enqueue(MockResponse.Builder().body("{}").build())
+        api.request("POST","/api/conversation-submissions/op/stop-control/acquire","alice",buildJsonObject {put("clientId","phone");put("force",true)})
+        val take=server.takeRequest();assertEquals("alice",take.headers["x-pirc-account"])
+        assertEquals("/api/conversation-submissions/op/stop-control/acquire",take.url.encodedPath)
+        server.enqueue(MockResponse.Builder().code(503).addHeader("Retry-After","0").body("{}").build())
+        server.enqueue(MockResponse.Builder().body("{}").build())
+        try {api.request("POST","/api/conversation-submissions/op/stop","alice",buildJsonObject {put("clientId","phone");put("generation",11)});fail("unknown Stop must surface")}catch(e:ApiException){assertEquals(503,e.status)}
+        assertEquals(2,server.requestCount)
+        val stop=server.takeRequest();assertEquals("alice",stop.headers["x-pirc-account"])
+        assertEquals(11,PircJson.parseToJsonElement(stop.body!!.utf8()).jsonObject["generation"]?.jsonPrimitive?.int)
+    }}
 }

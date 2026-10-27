@@ -176,5 +176,11 @@
   "排程": "排程",
   "{0}，已選取": "{0}，已選取",
   "已開啟": "已開啟",
-  "尚未開啟": "尚未開啟"
+  "尚未開啟": "尚未開啟",
+  "First message stopped": "首次訊息已停止",
+  "Stopping first message": "正在停止首次訊息",
+  "This Gateway cannot stop a first message before the Node is ready.": "此 Gateway 不支援在 Node 準備完成前停止首次訊息。",
+  "Stop was requested. Check the result before continuing.": "已要求停止。繼續前請先檢查結果。",
+  "Conversation preparation is not yet confirmed. Check the result.": "尚未確認對話準備完成，請檢查結果。",
+  "The first message admission is still unknown; Stop does not undo completed work.": "首次訊息是否已接收仍未知；停止不會復原已完成的工作。"
 }

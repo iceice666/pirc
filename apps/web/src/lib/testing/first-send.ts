@@ -34,7 +34,13 @@ export class FirstLedger implements FirstTransport {
     return JSON.stringify([owner, id]);
   }
   async capabilities() {
-    return { version: 1, ownerUser: 'alice', canFenceAccount: true, canSubmit: true };
+    return {
+      version: 1,
+      ownerUser: 'alice',
+      canFenceAccount: true,
+      canStopBeforeAllocation: true,
+      canSubmit: true,
+    };
   }
   async find(owner: string, session: string) {
     const row = [...this.entries.entries()].find(
@@ -70,13 +76,24 @@ export class FirstLedger implements FirstTransport {
   async upload() {
     this.calls.push('upload');
   }
-  async action(owner: string, id: string, action: 'accept' | 'materialize' | 'dispatch') {
+  async action(
+    owner: string,
+    id: string,
+    action: 'accept' | 'materialize' | 'dispatch',
+  ): Promise<Preparation> {
     this.calls.push(action);
     const prior = this.entries.get(this.key(owner, id))!;
     const row = {
       ...prior,
       accepted: true,
-      state: action === 'accept' ? 'accepted' : action === 'materialize' ? 'ready' : 'admitted',
+      nodeMapped: action !== 'accept',
+      state: prior.messageAdmission?.stopConfirmed
+        ? 'stopped'
+        : action === 'accept'
+          ? 'accepted'
+          : action === 'materialize'
+            ? 'ready'
+            : 'admitted',
     };
     this.entries.set(this.key(owner, id), row);
     if (action === 'dispatch' && this.failDispatch) {
@@ -88,6 +105,23 @@ export class FirstLedger implements FirstTransport {
   async acquire() {
     this.calls.push('acquire');
     return 7;
+  }
+  async acquirePending() {
+    this.calls.push('acquirePending');
+    return { clientId: 'pending-client', generation: 8 };
+  }
+  async stopPending(owner: string, op: string) {
+    this.calls.push('stopPending');
+    const key = this.key(owner, op),
+      prior = this.entries.get(key)!;
+    const row = {
+      ...prior,
+      state: 'stopping',
+      nodeMapped: false,
+      messageAdmission: { outcome: 'outcome_unknown', stopRequested: true, stopConfirmed: false },
+    };
+    this.entries.set(key, row);
+    return row;
   }
   async stop(owner: string, session: string) {
     this.calls.push('stop');

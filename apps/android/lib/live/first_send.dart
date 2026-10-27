@@ -25,11 +25,26 @@ class FirstSendState {
   String? get phase => obj(current?['preparation'])['state'] as String?;
   bool get admitted => phase == 'admitted';
   bool get stopped =>
+      phase != 'cancelled' &&
       obj(obj(current?['preparation'])['messageAdmission'])['stopConfirmed'] ==
-      true;
-  bool get hasMapping =>
+          true;
+  bool get hasMapping {
+    final p = obj(current?['preparation']);
+    return p['accepted'] == true &&
+        phase != 'cancelled' &&
+        (p.containsKey('nodeMapped')
+            ? p['nodeMapped'] == true
+            : phase != 'accepted');
+  }
+
+  bool get canStop =>
       obj(current?['preparation'])['accepted'] == true &&
-      !['accepted', 'cancelled'].contains(phase);
+      phase != 'cancelled' &&
+      current?['cancelRequested'] != true &&
+      (hasMapping || capabilities['canStopBeforeAllocation'] == true);
+  bool get stopRequested =>
+      obj(obj(current?['preparation'])['messageAdmission'])['stopRequested'] ==
+      true;
   static String identity() => List.generate(
     16,
     (_) => Random.secure().nextInt(256).toRadixString(16).padLeft(2, '0'),
@@ -435,23 +450,32 @@ class FirstSendState {
   Future<void> takeControl() => _control('firstSendTakeControl');
   Future<void> openKnown() async {
     final row = current, epoch = _epoch, selection = c._selection;
-    if (row == null) return;
+    if (row == null || controlBusy) return;
     if (admitted) {
       await _finish(row, selection, epoch);
       return;
     }
     if (!stopped) return;
-    final result = _bound(
-      obj(await c.gateway.call('firstSendRelease', _args(row))),
-      row['pairingStamp'] as String,
-    );
-    _remember(result, epoch);
-    if (!_visible(row, epoch) || selection != c._selection) return;
-    c.discardDraftSession();
-    await c.open(
-      obj(result['preparation'])['sessionId'] as String,
-      skipFirst: true,
-    );
+    controlBusy = true;
+    c.changed();
+    try {
+      final result = _bound(
+        obj(await c.gateway.call('firstSendRelease', _args(row))),
+        row['pairingStamp'] as String,
+      );
+      _remember(result, epoch);
+      if (!_visible(row, epoch) || selection != c._selection) return;
+      c.discardDraftSession();
+      await c.open(
+        obj(result['preparation'])['sessionId'] as String,
+        skipFirst: true,
+      );
+    } finally {
+      if (epoch == _epoch) {
+        controlBusy = false;
+        c.changed();
+      }
+    }
   }
 
   Future<void> resume(Json row) async {

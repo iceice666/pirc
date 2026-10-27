@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { firstMapped } from '../first-send';
   import { app } from '../app.svelte';
   import { tr } from '../i18n.svelte';
   import { modeOf } from '../modes';
@@ -7,25 +8,28 @@
   let deleting = $state<SessionSummary>();
   const record = $derived(app.firstDraft);
   const phase = $derived(record?.preparation?.state);
-  const title = $derived(
-    phase === 'cancelled' && !record?.preparation?.cleanupPending
-      ? tr('Deleted')
-      : record?.cancelRequested && phase !== 'cancelled'
-        ? tr('Deletion not yet confirmed')
-        : phase === 'cancelled'
-          ? tr('Deletion pending')
-          : phase === 'admitted'
-            ? tr('First message admitted')
-            : record?.uncertain || phase === 'outcome_unknown'
-              ? tr('First message outcome is unknown')
-              : phase === 'admission_failed'
-                ? tr('First message was not admitted')
-                : phase === 'stopped' || phase === 'stopping'
-                  ? tr('First message stopped or stopping')
-                  : record?.preparation?.accepted
-                    ? tr('First message accepted — delivery pending')
-                    : tr('First message saved on this device'),
+  const canStop = $derived(
+    record?.preparation?.accepted &&
+      phase !== 'cancelled' &&
+      !record.cancelRequested &&
+      (firstMapped(record.preparation) || app.firstCapabilities?.canStopBeforeAllocation),
   );
+  const title = $derived.by(() => {
+    if (phase === 'cancelled')
+      return tr(record?.preparation?.cleanupPending ? 'Deletion pending' : 'Deleted');
+    if (record?.cancelRequested) return tr('Deletion not yet confirmed');
+    if (phase === 'admitted') return tr('First message admitted');
+    if (phase === 'stopped') return tr('First message stopped');
+    if (phase === 'stopping') return tr('Stopping first message');
+    if (record?.uncertain || phase === 'outcome_unknown')
+      return tr('First message outcome is unknown');
+    if (phase === 'admission_failed') return tr('First message was not admitted');
+    return tr(
+      record?.preparation?.accepted
+        ? 'First message accepted — delivery pending'
+        : 'First message saved on this device',
+    );
+  });
 </script>
 
 {#if app.firstRecoveries.length}
@@ -36,9 +40,17 @@
           <summary>{record.message.slice(0, 120)}</summary>
           <p class="original">{record.message}</p>
         </details>{/if}
+      {#if record.preparation?.messageAdmission?.stopConfirmed && record.preparation.messageAdmission.outcome === 'outcome_unknown'}<p
+        >
+          {tr('The first message admission is still unknown; Stop does not undo completed work.')}
+        </p>{/if}
       <p>{tr('Check result never resends the message or takes control.')}</p>
-      {#if record.error || record.preparation?.cleanupError}<p role="alert">
-          {tr(record.error ?? record.preparation!.cleanupError!)}
+      {#if record.error || record.preparation?.cleanupError || record.preparation?.deliveryError}<p
+          role="alert"
+        >
+          {tr(
+            record.error ?? record.preparation!.cleanupError ?? record.preparation!.deliveryError!,
+          )}
         </p>{/if}
       <div class="actions">
         <button
@@ -55,7 +67,7 @@
             onclick={() => app.continueFirst()}>{tr('Continue sending')}</button
           >
         {/if}
-        {#if record.preparation?.accepted && !['accepted', 'cancelled'].includes(phase ?? '')}
+        {#if canStop && !record.preparation?.messageAdmission?.stopRequested}
           <button
             class="button ghost"
             type="button"
@@ -63,11 +75,14 @@
             onclick={() => app.takeFirstControl()}>{tr('Take control')}</button
           >
         {/if}
-        {#if phase === 'admitted' || record.preparation?.messageAdmission?.stopConfirmed}
-          <button class="button ghost" type="button" onclick={() => app.openStoppedFirst()}
-            >{tr('Open conversation')}</button
+        {#if phase !== 'cancelled' && (phase === 'admitted' || record.preparation?.messageAdmission?.stopConfirmed)}
+          <button
+            class="button ghost"
+            type="button"
+            disabled={app.firstControlBusy}
+            onclick={() => app.openStoppedFirst()}>{tr('Open conversation')}</button
           >
-        {:else if record.preparation?.accepted && phase !== 'accepted' && phase !== 'cancelled'}
+        {:else if canStop && !record.preparation?.messageAdmission?.stopRequested}
           <button
             class="button ghost"
             type="button"

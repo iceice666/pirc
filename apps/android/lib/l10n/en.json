@@ -2535,5 +2535,11 @@
   "This draft is no longer available.": "This draft is no longer available.",
   "The first message uses the workspace's default approval mode. Change it after admission.": "The first message uses the workspace's default approval mode. Change it after admission.",
   "This conversation and its chat files will be permanently deleted. This also deletes USER memories and MEMORY notes created by this chat, and its pending memory proposals. Memories created by other chats are kept. Copies already present in other chats are not erased. Any running reply will stop. This cannot be undone.": "This conversation and its chat files will be permanently deleted. This also deletes USER memories and MEMORY notes created by this chat, and its pending memory proposals. Memories created by other chats are kept. Copies already present in other chats are not erased. Any running reply will stop. This cannot be undone.",
-  "Connect to the Gateway to confirm first-send support before creating a conversation.": "Connect to the Gateway to confirm first-send support before creating a conversation."
+  "Connect to the Gateway to confirm first-send support before creating a conversation.": "Connect to the Gateway to confirm first-send support before creating a conversation.",
+  "First message stopped": "First message stopped",
+  "Stopping first message": "Stopping first message",
+  "This Gateway cannot stop a first message before the Node is ready.": "This Gateway cannot stop a first message before the Node is ready.",
+  "Stop was requested. Check the result before continuing.": "Stop was requested. Check the result before continuing.",
+  "Conversation preparation is not yet confirmed. Check the result.": "Conversation preparation is not yet confirmed. Check the result.",
+  "The first message admission is still unknown; Stop does not undo completed work.": "The first message admission is still unknown; Stop does not undo completed work."
 }

@@ -142,4 +142,59 @@ void main() {
       await g.stream.close();
     },
   );
+
+  testWidgets(
+    'unmapped pending input offers scoped Stop and confirmed Stop opens only by explicit release',
+    (tester) async {
+      final (c, g, p) = await setup();
+      final row = p.records.values.single;
+      row['frozen'] = true;
+      row['prepareAttempted'] = true;
+      row['revision']++;
+      row['preparation'] = {
+        'operationId': row['operationId'],
+        'sessionId': 's',
+        'workspaceId': 'w',
+        'state': 'accepted',
+        'accepted': true,
+        'nodeMapped': false,
+        'cleanupPending': false,
+      };
+      await c.firstSend.check();
+      expect(c.firstSend.hasMapping, false);
+      expect(c.firstSend.canStop, true);
+      await tester.pumpWidget(page(c, () => FirstSendRecovery(controller: c)));
+      expect(find.text('Stop pending message'), findsOneWidget);
+      g.calls.clear();
+      await tester.tap(find.text('Stop pending message'));
+      await tester.pumpAndSettle();
+      expect(g.calls.map((call) => call.$1), ['firstSendStop']);
+      expect(find.text('Stopping first message'), findsOneWidget);
+      expect(find.text('Take control'), findsNothing);
+      expect(find.text('Stop pending message'), findsNothing);
+      row['revision']++;
+      row['preparation'] = {
+        ...obj(row['preparation']),
+        'state': 'stopped',
+        'messageAdmission': {
+          'outcome': 'not_admitted',
+          'stopRequested': true,
+          'stopConfirmed': true,
+        },
+      };
+      await c.firstSend.check();
+      await tester.pumpAndSettle();
+      expect(find.text('First message stopped'), findsOneWidget);
+      expect(c.firstSend.hasMapping, false);
+      g.calls.clear();
+      await tester.tap(find.text('Open conversation'));
+      await tester.pumpAndSettle();
+      expect(g.calls.first.$1, 'firstSendRelease');
+      expect(g.calls.where((call) => call.$1 == 'firstSendSubmit'), isEmpty);
+      expect(row['message'], 'One line\nOriginal details stay folded');
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+      await g.stream.close();
+    },
+  );
 }

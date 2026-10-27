@@ -10,6 +10,7 @@ export interface FirstCapabilities {
   canSubmit: boolean;
   canFenceAccount?: boolean;
   canFindPendingSession?: boolean;
+  canStopBeforeAllocation?: boolean;
 }
 export interface FirstFile {
   id: string;
@@ -33,6 +34,7 @@ export interface Preparation {
   state: string;
   accepted: boolean;
   cleanupPending: boolean;
+  nodeMapped?: boolean;
   cleanupError?: string;
   deliveryError?: string;
   submission?: FirstSpec;
@@ -56,8 +58,17 @@ export interface FirstDraft {
   uncertain?: boolean;
   cancelRequested?: boolean;
   stopCommandId?: string;
+  pendingStopControl?: StopControl;
   updatedAt: number;
 }
+export interface StopControl {
+  clientId: string;
+  generation: number;
+}
+export const firstMapped = (p?: Preparation) =>
+  !!p?.accepted &&
+  p.state !== 'cancelled' &&
+  (p.nodeMapped === undefined ? p.state !== 'accepted' : p.nodeMapped === true);
 export interface FirstTransport {
   capabilities(): Promise<FirstCapabilities>;
   find(owner: string, session: string): Promise<Preparation>;
@@ -71,6 +82,8 @@ export interface FirstTransport {
     body?: unknown,
   ): Promise<Preparation>;
   acquire(owner: string, session: string, force?: boolean): Promise<number>;
+  acquirePending(owner: string, op: string, force?: boolean): Promise<StopControl>;
+  stopPending(owner: string, op: string, held: StopControl): Promise<Preparation>;
   stop(owner: string, session: string, command: string, generation: number): Promise<void>;
   remove(owner: string, draft: FirstDraft): Promise<void>;
 }
@@ -121,6 +134,32 @@ export const firstTransport: FirstTransport = {
       throw new Error('Another device has control. Take control before continuing.');
     return lease.generation;
   },
+  async acquirePending(owner, op, force = false) {
+    const value = await request<{ scope: string; lease: StopControl }>(
+      `${path(op)}/stop-control/acquire`,
+      {
+        method: 'POST',
+        headers: headers(owner),
+        body: JSON.stringify({ clientId: getClientId(), force }),
+      },
+    );
+    if (
+      value.scope !== 'pending_first_send_stop' ||
+      value.lease?.clientId !== getClientId() ||
+      !Number.isSafeInteger(value.lease.generation) ||
+      value.lease.generation <= 0
+    )
+      throw new Error('Another device has control. Take control before continuing.');
+    return { clientId: value.lease.clientId, generation: value.lease.generation };
+  },
+  stopPending: (owner, op, held) =>
+    prep(
+      request(`${path(op)}/stop`, {
+        method: 'POST',
+        headers: headers(owner),
+        body: JSON.stringify(held),
+      }),
+    ),
   async stop(owner, session, command, generation) {
     try {
       const existing = await request<{ command: { status: string } }>(
@@ -232,7 +271,38 @@ export class FirstSend {
         (previous?.messageAdmission?.stopConfirmed === true &&
           value.state !== 'cancelled' &&
           value.messageAdmission?.stopConfirmed !== true);
-      const current = keep ? previous! : value;
+      const chosen = keep ? previous! : value;
+      let current =
+        previous?.nodeMapped === true || value.nodeMapped === true
+          ? { ...chosen, nodeMapped: true }
+          : chosen;
+      if (current.state !== 'cancelled') {
+        const before = previous?.messageAdmission,
+          incoming = value.messageAdmission;
+        const confirmed = !!(before?.stopConfirmed || incoming?.stopConfirmed);
+        const requested = !!(confirmed || before?.stopRequested || incoming?.stopRequested);
+        const admitted = previous?.state === 'admitted' || value.state === 'admitted';
+        if (before || incoming)
+          current = {
+            ...current,
+            state: admitted
+              ? 'admitted'
+              : confirmed
+                ? 'stopped'
+                : requested
+                  ? 'stopping'
+                  : current.state,
+            messageAdmission: {
+              stopRequested: requested,
+              stopConfirmed: confirmed,
+              outcome: admitted
+                ? 'admitted'
+                : before?.stopConfirmed && before.outcome === 'not_admitted'
+                  ? 'not_admitted'
+                  : (incoming?.outcome ?? before?.outcome ?? 'pending'),
+            },
+          };
+      }
       return {
         ...row,
         preparation: current,
@@ -262,8 +332,16 @@ export class FirstSend {
         throw new Error('An attachment has an unsupported name, type or empty content.');
     }
   }
+  async #sending(scope: string, id: string) {
+    const row = await this.#read(scope, id);
+    if (row.stopCommandId)
+      throw new Error('Stop was requested. Check the result before continuing.');
+    return row;
+  }
   async #prepare(row: FirstDraft, cancelling = false) {
     row = await this.#change(row.scope, row.operationId, (old) => {
+      if (old.stopCommandId && !cancelling)
+        throw new Error('Stop was requested. Check the result before continuing.');
       if (old.cancelRequested && !cancelling)
         throw new Error('This draft was cancelled. Check its saved outcome.');
       return { ...old, prepareAttempted: true };
@@ -333,21 +411,22 @@ export class FirstSend {
   }
   async run(scope: string, id: string, revision?: number) {
     let row = await this.#read(scope, id);
+    if (row.stopCommandId) return this.check(scope, id);
     if (!row.frozen && revision !== undefined && revision !== row.revision)
       throw new Error('This draft changed in another tab. Reopen the saved version.');
     try {
       row = await this.#hashed(row);
       row = await this.check(scope, id);
       if (!row.preparation) {
-        await this.#read(scope, id);
+        await this.#sending(scope, id);
         row = await this.#prepare(row);
       }
       if (row.preparation?.state === 'preparing') {
         for (const file of row.files) {
-          await this.#read(scope, id);
+          await this.#sending(scope, id);
           await this.transport.upload(row.ownerUser, id, file);
         }
-        await this.#read(scope, id);
+        await this.#sending(scope, id);
         row = await this.#receipt(
           scope,
           id,
@@ -355,7 +434,7 @@ export class FirstSend {
         );
       }
       if (row.preparation?.state === 'accepted') {
-        await this.#read(scope, id);
+        await this.#sending(scope, id);
         row = await this.#receipt(
           scope,
           id,
@@ -363,9 +442,9 @@ export class FirstSend {
         );
       }
       if (row.preparation?.state === 'ready') {
-        await this.#read(scope, id);
+        await this.#sending(scope, id);
         const generation = await this.transport.acquire(row.ownerUser, row.preparation.sessionId);
-        await this.#read(scope, id);
+        await this.#sending(scope, id);
         row = await this.#receipt(
           scope,
           id,
@@ -411,25 +490,60 @@ export class FirstSend {
         },
     ))!;
   }
-  async takeControl(scope: string, id: string) {
-    const row = await this.#read(scope, id);
-    if (!row.preparation?.accepted || row.preparation.state === 'accepted')
+  async #pendingSupported(row: FirstDraft) {
+    const caps = await this.transport.capabilities();
+    if (caps.ownerUser !== row.ownerUser)
       throw new Error(
-        'The Node is still preparing this conversation. Check again before stopping it.',
+        'The signed-in account changed. Reopen this operation in its original account.',
       );
-    return this.transport.acquire(row.ownerUser, row.preparation.sessionId, true);
+    if (caps.version !== 1 || !caps.canFenceAccount || !caps.canStopBeforeAllocation)
+      throw new Error('This Gateway cannot stop a first message before the Node is ready.');
+  }
+  async takeControl(scope: string, id: string) {
+    const row = await this.check(scope, id);
+    if (!row.preparation?.accepted || row.preparation.state === 'cancelled' || row.cancelRequested)
+      throw new Error('The accepted first message is unavailable.');
+    if (row.preparation.messageAdmission?.stopRequested) return;
+    if (firstMapped(row.preparation))
+      return this.transport.acquire(row.ownerUser, row.preparation.sessionId, true);
+    await this.#pendingSupported(row);
+    const held = await this.transport.acquirePending(row.ownerUser, id, true);
+    await this.#change(scope, id, (old) => ({ ...old, pendingStopControl: held }));
   }
   async stop(scope: string, id: string) {
-    let row = await this.check(scope, id);
-    if (!row.preparation?.accepted || row.preparation.state === 'accepted')
-      throw new Error(
-        'The Node is still preparing this conversation. Check again before stopping it.',
-      );
-    row = await this.#change(scope, id, (old) => ({
+    const before = await this.#read(scope, id);
+    if (!before.preparation?.accepted || before.preparation.state === 'cancelled')
+      throw new Error('The accepted first message is unavailable.');
+    await this.#change(scope, id, (old) => ({
       ...old,
       stopCommandId: old.stopCommandId ?? uuid(),
     }));
+    let row = await this.check(scope, id);
+    if (row.preparation?.state === 'cancelled' || row.preparation?.messageAdmission?.stopRequested)
+      return row;
+    if (!firstMapped(row.preparation)) {
+      await this.#pendingSupported(row);
+      const held =
+        row.pendingStopControl ?? (await this.transport.acquirePending(row.ownerUser, id));
+      row = await this.#change(scope, id, (old) => ({ ...old, pendingStopControl: held }));
+      await this.#read(scope, id);
+      try {
+        return await this.#receipt(
+          scope,
+          id,
+          await this.transport.stopPending(row.ownerUser, id, held),
+        );
+      } catch (error) {
+        try {
+          await this.check(scope, id);
+        } catch {
+          /* Retain the durable original and intent. */
+        }
+        throw error;
+      }
+    }
     const generation = await this.transport.acquire(row.ownerUser, row.preparation!.sessionId);
+    await this.#read(scope, id);
     await this.transport.stop(
       row.ownerUser,
       row.preparation!.sessionId,
@@ -455,12 +569,22 @@ export class FirstSend {
     return this.check(scope, id);
   }
 
-  release(scope: string, id: string) {
-    return this.#change(scope, id, (row) => {
-      if (!row.preparation?.messageAdmission?.stopConfirmed)
-        throw new Error('Stop is still unconfirmed. Check the result before retrying.');
-      return { ...row, released: true };
-    });
+  async release(scope: string, id: string) {
+    let row = await this.check(scope, id);
+    if (row.preparation?.state === 'cancelled')
+      throw new Error('The accepted first message is unavailable.');
+    if (!row.preparation?.messageAdmission?.stopConfirmed)
+      throw new Error('Stop is still unconfirmed. Check the result before retrying.');
+    if (!firstMapped(row.preparation)) {
+      row = await this.#receipt(
+        scope,
+        id,
+        await this.transport.action(row.ownerUser, id, 'materialize'),
+      );
+      if (!firstMapped(row.preparation))
+        throw new Error('Conversation preparation is not yet confirmed. Check the result.');
+    }
+    return this.#change(scope, id, (old) => ({ ...old, released: true }));
   }
   pruneEmpty(scope: string, id: string) {
     return this.#write(scope, id, (row) =>

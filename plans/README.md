@@ -154,6 +154,12 @@ continuation with original input/files retained. Node mapping readiness is
 reported separately from Stop. New acceptance requires Node 2008's Stop support.
 Web/Android adoption and the remaining U1 failure gates stay open; activation
 remains closed and all work stays local.
+The [client pending-Stop checkpoint](unified-conversations.md#u1-implementation-checkpoint-web-and-android-pending-stop-adoption-2026-10-27)
+connects Web/native Android/Flutter to scoped pending Stop and explicit blank
+continuation, retaining original text/files. Durable local Stop identities fence
+late send steps, receipt merges preserve independent known facts, and saved Web
+recovery remains available with activation off. Full client/process/device,
+unsaved-edit and mixed-version activation gates stay open; new sends remain gated.
 The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
 records local fixture/transcript repairs and 50 Agent plus five Node process
 passes; the remote Check is still failed, and full Chromium/Linux verification

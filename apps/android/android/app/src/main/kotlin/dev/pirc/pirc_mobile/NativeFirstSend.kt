@@ -13,7 +13,7 @@ internal class NativeFirstSend(
     private val capture: suspend (String) -> PircApi,
     private val validate: (String) -> Unit,
 ) {
-    private data class Account(val stamp: String, val owner: String, val scope: String, val api: FirstSendApi, val enabled: Boolean, val connection: PircApi)
+    private data class Account(val stamp: String, val owner: String, val scope: String, val api: FirstSendApi, val enabled: Boolean, val pendingStop: Boolean, val connection: PircApi)
     private var account: Account? = null
     private var revision = 0L
     private val store = FirstSendDraftStore(directory)
@@ -27,9 +27,10 @@ internal class NativeFirstSend(
         if (ticket != revision) throw ApiException(409, "account_changed", "First-send account changed")
         val owner = value["ownerUser"]?.jsonPrimitive?.contentOrNull
         val enabled = value["version"]?.jsonPrimitive?.intOrNull == 1 && value["canSubmit"]?.jsonPrimitive?.booleanOrNull == true
+        val pendingStop = value["version"]?.jsonPrimitive?.intOrNull == 1 && value["canStopBeforeAllocation"]?.jsonPrimitive?.booleanOrNull == true
         account = if (!owner.isNullOrBlank() && value["canFenceAccount"]?.jsonPrimitive?.booleanOrNull == true)
-            account?.takeIf { it.stamp == stamp && it.owner == owner && it.connection === api && it.enabled == enabled }
-                ?: Account(stamp, owner, FirstSendDraftStore.scope(api.pairing.baseUrl, owner), FirstSendApi(api), enabled, api)
+            account?.takeIf { it.stamp == stamp && it.owner == owner && it.connection === api && it.enabled == enabled && it.pendingStop == pendingStop }
+                ?: Account(stamp, owner, FirstSendDraftStore.scope(api.pairing.baseUrl, owner), FirstSendApi(api), enabled, pendingStop, api)
             else null
         return JsonObject(value + (account?.let { mapOf("draftScope" to JsonPrimitive(it.scope)) } ?: emptyMap())).wire()
     }
@@ -97,6 +98,11 @@ internal class NativeFirstSend(
     private fun JsonObject.preparation() = get("preparation") as? JsonObject
     private fun JsonObject.phase() = preparation()?.string("state")
     private fun JsonObject.admission() = preparation()?.get("messageAdmission") as? JsonObject
+    private fun JsonObject.mapped(): Boolean {
+        val p = preparation() ?: return false
+        return p.flag("accepted") && phase() != "cancelled" &&
+            if ("nodeMapped" in p) p.flag("nodeMapped") else phase() != "accepted"
+    }
     private suspend fun local(captured: Account, id: String): JsonObject {
         recheck(captured)
         return withContext(Dispatchers.IO) { store.get(captured.scope, id) }
@@ -132,7 +138,21 @@ internal class NativeFirstSend(
                 (previous?.flag("accepted") == true && !value.flag("accepted")) ||
                 (row.admission()?.flag("stopConfirmed") == true && value.string("state") != "cancelled" &&
                     (value["messageAdmission"] as? JsonObject)?.flag("stopConfirmed") != true)
-            val result = if (keep) previous!! else value
+            val chosen = if (keep) previous!! else value
+            var result = if (previous?.flag("nodeMapped") == true || value.flag("nodeMapped")) JsonObject(chosen + ("nodeMapped" to JsonPrimitive(true))) else chosen
+            if (result.string("state") != "cancelled") {
+                val before = row.admission(); val incoming = value["messageAdmission"] as? JsonObject
+                val confirmed = before?.flag("stopConfirmed") == true || incoming?.flag("stopConfirmed") == true
+                val requested = confirmed || before?.flag("stopRequested") == true || incoming?.flag("stopRequested") == true
+                val admitted = previous?.string("state") == "admitted" || value.string("state") == "admitted"
+                if (before != null || incoming != null) result = JsonObject(result + mapOf(
+                    "state" to JsonPrimitive(if (admitted) "admitted" else if (confirmed) "stopped" else if (requested) "stopping" else result.string("state")),
+                    "messageAdmission" to buildJsonObject {
+                        put("stopRequested",requested);put("stopConfirmed",confirmed)
+                        put("outcome",if(admitted) "admitted" else if(before?.flag("stopConfirmed") == true && before.string("outcome") == "not_admitted") "not_admitted" else incoming?.string("outcome") ?: before?.string("outcome") ?: "pending")
+                    },
+                ))
+            }
             JsonObject((row - "error") + mapOf("preparation" to result, "uncertain" to JsonPrimitive(result.string("state") == "outcome_unknown")) +
                 if (result.string("state") == "cancelled") mapOf("message" to JsonPrimitive(""), "files" to JsonArray(emptyList())) else emptyMap())
         }
@@ -153,6 +173,7 @@ internal class NativeFirstSend(
     suspend fun check(stamp: String, owner: String, id: String): Any? = check(current(stamp, owner), id).wire()
     private suspend fun prepare(captured: Account, id: String, cancelling: Boolean = false): JsonObject {
         val row = change(captured, id) { before ->
+            check(cancelling || before.string("stopCommandId") == null) { "Stop was requested. Check the result before continuing." }
             check(cancelling || !before.flag("cancelRequested")) { "This draft is being cancelled" }
             JsonObject(before + ("prepareAttempted" to JsonPrimitive(true)))
         }
@@ -161,11 +182,13 @@ internal class NativeFirstSend(
         })?.jsonObject?.get("preparation")?.jsonObject ?: throw ApiException(502, "bad_reply", "Missing preparation receipt")
         return receipt(captured, id, result)
     }
-    private suspend fun active(captured: Account, id: String) {
-        check(!local(captured, id).flag("cancelRequested")) { "This draft is being cancelled" }
+    private suspend fun active(captured: Account, id: String, allowStopped: Boolean = false) {
+        val row = local(captured, id)
+        check(!row.flag("cancelRequested")) { "This draft is being cancelled" }
+        check(allowStopped || row.string("stopCommandId") == null) { "Stop was requested. Check the result before continuing." }
     }
-    private suspend fun action(captured: Account, id: String, kind: String, body: JsonElement? = null): JsonObject {
-        active(captured, id)
+    private suspend fun action(captured: Account, id: String, kind: String, body: JsonElement? = null, allowStopped: Boolean = false): JsonObject {
+        active(captured, id, allowStopped)
         val value = api(captured, "POST", path(id) + "/$kind", body)?.jsonObject?.get("preparation")?.jsonObject
             ?: throw ApiException(502, "bad_reply", "Missing first-message action receipt")
         return receipt(captured, id, value)
@@ -181,6 +204,7 @@ internal class NativeFirstSend(
     /** Only an explicit user Send/Continue invokes this; checking never calls it. */
     suspend fun submit(stamp: String, owner: String, id: String, expectedRevision: Long?, clientId: String): Any? {
         val captured = current(stamp, owner)
+        if (local(captured, id).string("stopCommandId") != null) return check(captured, id).wire()
         check(captured.enabled) { "Durable first Send is not enabled by this Gateway" }
         change(captured, id) { before ->
             check(!before.flag("cancelRequested")) { "This draft is being cancelled" }
@@ -236,17 +260,50 @@ internal class NativeFirstSend(
         api(captured, "DELETE", target)
         return check(captured, id).wire()
     }
+    private suspend fun pendingControl(captured: Account, id: String, clientId: String, force: Boolean = false): JsonObject {
+        check(captured.pendingStop) { "This Gateway cannot stop a first message before the Node is ready." }
+        active(captured, id, allowStopped = true)
+        val value = api(captured, "POST", path(id) + "/stop-control/acquire", buildJsonObject {
+            put("clientId", clientId); put("force", force)
+        })?.jsonObject ?: error("Missing pending-input control")
+        val lease = value["lease"]?.jsonObject
+        val generation = lease?.get("generation")?.jsonPrimitive?.longOrNull
+        check(value.string("scope") == "pending_first_send_stop" && lease?.string("clientId") == clientId && generation != null && generation > 0) {
+            "Another device has control; take control explicitly before continuing"
+        }
+        return buildJsonObject { put("clientId", clientId); put("generation", generation) }
+    }
     suspend fun takeControl(stamp: String, owner: String, id: String, clientId: String): Long {
         val captured = current(stamp, owner)
-        val row = local(captured, id)
-        check(row.preparation()?.flag("accepted") == true && row.phase() !in setOf("accepted", "cancelled")) { "The Node session is not ready for control" }
-        return acquire(captured, row.preparation()!!.getValue("sessionId").jsonPrimitive.content, clientId, force = true)
+        val row = check(captured, id)
+        check(row.preparation()?.flag("accepted") == true && row.phase() != "cancelled") { "The accepted first message is unavailable." }
+        if (row.admission()?.flag("stopRequested") == true) return 0
+        if (row.mapped()) return acquire(captured, row.preparation()!!.getValue("sessionId").jsonPrimitive.content, clientId, force = true)
+        val held = pendingControl(captured, id, clientId, force = true)
+        change(captured, id) { JsonObject(it + ("pendingStopControl" to held)) }
+        return held.getValue("generation").jsonPrimitive.long
     }
     suspend fun stop(stamp: String, owner: String, id: String, clientId: String): Any? {
         val captured = current(stamp, owner)
-        val before = check(captured, id)
-        check(before.preparation()?.flag("accepted") == true && before.phase() !in setOf("accepted", "cancelled")) { "The Node session is not ready for Stop; check again" }
-        val row = change(captured, id) { JsonObject(it + ("stopCommandId" to (it["stopCommandId"] ?: JsonPrimitive(UUID.randomUUID().toString())))) }
+        val before = local(captured, id)
+        check(before.preparation()?.flag("accepted") == true && before.phase() != "cancelled") { "The accepted first message is unavailable." }
+        change(captured, id) { JsonObject(it + ("stopCommandId" to (it["stopCommandId"] ?: JsonPrimitive(UUID.randomUUID().toString())))) }
+        var row = check(captured, id)
+        if (row.phase() == "cancelled" || row.admission()?.flag("stopRequested") == true) return row.wire()
+        if (!row.mapped()) {
+            check(captured.pendingStop) { "This Gateway cannot stop a first message before the Node is ready." }
+            val held = row["pendingStopControl"] as? JsonObject ?: pendingControl(captured, id, clientId)
+            change(captured, id) { JsonObject(it + ("pendingStopControl" to held)) }
+            active(captured, id, allowStopped = true)
+            try {
+                val result = api(captured, "POST", path(id) + "/stop", held)?.jsonObject?.get("preparation")?.jsonObject
+                    ?: error("Missing Stop receipt")
+                return receipt(captured, id, result).wire()
+            } catch (error: Exception) {
+                try { check(captured, id) } catch (_: Exception) { /* Keep durable input and intent. */ }
+                throw error
+            }
+        }
         val session = row.preparation()!!.getValue("sessionId").jsonPrimitive.content
         val generation = acquire(captured, session, clientId)
         val command = row.getValue("stopCommandId").jsonPrimitive.content
@@ -256,6 +313,7 @@ internal class NativeFirstSend(
             check(receipt?.string("status") == "accepted") { "Stop is still unconfirmed; check before retrying" }
         } catch (error: ApiException) { if (error.status == 404) missing = true else throw error }
         if (missing) {
+            active(captured, id, allowStopped = true)
             val result = api(captured, "POST", "/api/sessions/${session.urlSegment()}/commands", buildJsonObject {
                 put("commandId", command); put("clientId", clientId); put("generation", generation)
                 put("payload", buildJsonObject { put("type", "stop") })
@@ -264,10 +322,17 @@ internal class NativeFirstSend(
         }
         return check(captured, id).wire()
     }
-    suspend fun release(stamp: String, owner: String, id: String): Any? = change(current(stamp, owner), id) {
-        check(it.admission()?.flag("stopConfirmed") == true) { "Stop is still unconfirmed" }
-        JsonObject(it + ("released" to JsonPrimitive(true)))
-    }.wire()
+    suspend fun release(stamp: String, owner: String, id: String): Any? {
+        val captured = current(stamp, owner)
+        var row = check(captured, id)
+        check(row.phase() != "cancelled") { "The accepted first message is unavailable." }
+        check(row.admission()?.flag("stopConfirmed") == true) { "Stop is still unconfirmed" }
+        if (!row.mapped()) {
+            row = action(captured, id, "materialize", allowStopped = true)
+            check(row.mapped()) { "Conversation preparation is not yet confirmed. Check the result." }
+        }
+        return change(captured, id) { JsonObject(it + ("released" to JsonPrimitive(true))) }.wire()
+    }
     suspend fun adopt(stamp: String, owner: String, session: String): Any? {
         val captured = current(stamp, owner)
         val pending = api(captured, "GET", "/api/conversation-submissions/session/${session.urlSegment()}")?.jsonObject?.get("preparation")?.jsonObject

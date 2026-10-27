@@ -1694,6 +1694,72 @@ Later binding, revocation, canonical collaboration and bounded pots stages stay
 open. This checkpoint stays local; no frontend redesign, Flutter test, APK build,
 emulator/device, Nix check, push, deployment or Release is included.
 
+## U1 implementation checkpoint: Web and Android pending Stop adoption (2026-10-27)
+
+Implemented locally over Gateway 1017 / Node 2008, with protocol 15 and dependency
+versions unchanged. **`canSubmit: false` remains in effect; U1 is not complete.**
+Both clients now use `nodeMapped` independently of the Stop phase, with the
+existing mapped-session path retained for older compatible responses.
+
+- Web and native Android acquire the separate `pending_first_send_stop` lease
+  before unmapped Stop, validate its scope/client/generation and persist that
+  exact control identity before POST. An explicit retry can reuse the saved
+  identity; Check/reconnect only reads receipts. Expiry/takeover requires the
+  corresponding explicit control action. Mapping races refresh state and use
+  fresh Node control rather than treating a pending lease as a Node lease.
+- A local durable Stop command identity fences any still-running original send
+  before later prepare/materialize/dispatch steps. It survives a lost Stop
+  response or restart. Already-requested Stop reconciles without another Stop
+  POST or lease acquisition. Account/pairing guards and fixed API paths apply
+  to the added native endpoints; no browser page or management grant is needed.
+- Acceptance, known admission, requested/confirmed Stop and positive Node mapping
+  are merged independently. A late older response cannot erase Stop or mapping,
+  and stronger later admission evidence is still accepted. Stop confirmation is
+  not a claim that earlier work was undone; uncertain admission has a visible
+  explanation. Delete remains dominant and never offers a stale Open action.
+- Explicit Open after confirmed unmapped Stop first materializes the same blank
+  conversation and verifies mapping. It retains frozen original text/files and
+  never dispatches that old input. Selection/account guards prevent late Open
+  replies from navigating over a newer user choice. Failure retains recovery
+  input instead of releasing it. New functional labels are in English/Traditional
+  Chinese; existing collapsed details, renderer and styling remain in place.
+- Authenticated Web startup also restores saved drafts/pending operations when
+  new sends are disabled, preserving cold recovery without activating sends.
+
+Validation: **491 Web tests across 64 files pass**, Svelte typecheck has zero
+errors/warnings, and the production Web build passes into an isolated output
+folder (the existing bundle-size advisory remains). **33 focused native JVM tests
+pass without skips** across the HTTP API, durable store, account binding and
+submission/recovery engine. The actual App Kotlin/MethodChannel callers compile
+against the Android SDK; Flutter build/copy-asset tasks are excluded, and only
+those four JVM classes execute. **17 focused Flutter tests pass** from the
+controller/boundary and recovery-widget files, including the actual App shell;
+targeted analysis reports no issues. No full Flutter suite is run.
+
+New coverage includes pending-scope validation, fixed-owner/no-replay HTTP,
+lost/unreceived Stop restoration with the same saved control identity, mapping
+races, explicit blank continuation without uploads/dispatch, late receipt merges,
+retained Blob/private files and cold Web recovery with activation disabled.
+Flutter uses a fake native port; native filesystem/HTTP tests use temporary
+host files and a synthetic loopback server. These are separate proofs, not an
+Android process-death/device or real UI-to-Gateway/Node/Agent acceptance pass.
+All 2,543 Flutter entries per locale match their JSON sources; the six new labels
+also match Web/native asset dictionaries, whose existing platform-specific
+contents are retained. No browser, emulator, device, Nix or APK build is used.
+Run-owned isolated native/Web output and logs are removed; pre-existing APKs,
+SDKs, shared build output and other agents' artifacts stay intact.
+
+Remaining U1: real Web/native-client-to-Gateway/Node/Agent failure acceptance,
+Android process-death/private-filesystem/device proof, remaining multi-device and
+permission cases, useful known-admission-failure retry with files and preservation
+of unsaved edits when another window freezes/accepts the operation. Before
+activation, explicitly fence mixed/older client and rollback behavior: a globally
+true version-1 `canSubmit` must not enable clients that lack the required recovery
+contract, or let a downgrade ignore a locally saved Stop intent. Backend command
+fences and the currently false activation flag do not close that client-version
+gate. Later architecture stages stay open. No UI redesign, Flutter Web/iOS work,
+push, deployment, release or APK build is included in this checkpoint.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

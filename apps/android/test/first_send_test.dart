@@ -32,6 +32,7 @@ class FirstPort {
         'canSubmit': supportsSubmit,
         'canFenceAccount': true,
         'canFindPendingSession': true,
+        'canStopBeforeAllocation': true,
         'ownerUser': owner,
         'draftScope': jsonEncode(['https://gateway.example', owner]),
       };
@@ -127,6 +128,30 @@ class FirstPort {
       return clone(row);
     }
     if (method == 'firstSendCheck') return row == null ? null : clone(row);
+    if (method == 'firstSendTakeControl') return 11;
+    if (method == 'firstSendStop') {
+      if (row == null) throw StateError('missing');
+      row['revision']++;
+      row['stopCommandId'] = 'fixed-stop';
+      row['preparation'] = {
+        ...obj(row['preparation']),
+        'state': 'stopping',
+        'nodeMapped': false,
+        'messageAdmission': {
+          'outcome': 'outcome_unknown',
+          'stopRequested': true,
+          'stopConfirmed': false,
+        },
+      };
+      return clone(row);
+    }
+    if (method == 'firstSendRelease') {
+      if (row == null) throw StateError('missing');
+      row['revision']++;
+      row['released'] = true;
+      row['preparation'] = {...obj(row['preparation']), 'nodeMapped': true};
+      return clone(row);
+    }
     if (method == 'firstSendCancel') {
       if (row == null) return null;
       if (obj(row['preparation'])['accepted'] == true &&

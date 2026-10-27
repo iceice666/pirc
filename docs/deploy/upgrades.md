@@ -1,5 +1,30 @@
 # Upgrades
 
+## Unreleased local checkpoint: client pending Stop adoption
+
+Web/native Android/Flutter now support the Gateway's pre-allocation Stop scope
+and explicit blank continuation. Gateway 1017 / Node 2008, protocol 15, dependency
+and package versions are unchanged. **`canSubmit: false` remains in effect.**
+
+The local Stop identity prevents a late original send from continuing. Native
+private metadata/IndexedDB retain the pending control identity and original
+input/files. Checking results never acquires control or replays a mutation;
+explicit retry uses its saved identity, and takeover stays explicit. `nodeMapped`
+separates mapping from stopped/stopping status. Open after confirmed unmapped
+Stop prepares blank storage under current grants before navigation, retaining
+frozen input. Deleted operations cannot be reopened through stale Stop flags.
+
+Known admission, Stop and mapping facts merge independently across late replies.
+Stop does not undo completed effects or resolve unknown earlier admission. The
+recovery labels make that distinction visible in English/Traditional Chinese.
+This preserves the existing separate accepted-delete and memory warning flow.
+
+Mixed/older-client activation and rollback remain required gates before enabling
+new sends; the global version-1 flag must not activate clients that cannot honor
+local Stop/recovery metadata. Local tests are separate from a real native
+client-to-Gateway/Node/device acceptance pass. No emulator, APK, deployment,
+release asset or new login/connection scheme is included.
+
 ## Unreleased local checkpoint: Gateway queued pre-allocation Stop
 
 Gateway schema **1017** adds pending-input Stop control and durable Stop jobs;

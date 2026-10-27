@@ -259,3 +259,127 @@ it('cancelled cleanup can finish and a late pending receipt cannot undo completi
   remote.entries.set(remote.key('alice', 'operation-1'), pending);
   expect((await flow.check(scope, 'operation-1')).preparation?.cleanupPending).toBe(false);
 });
+
+async function pendingSetup() {
+  const test = await setup();
+  await test.remote.prepare('alice', 'operation-1', { ...value, attachments: [] });
+  await test.remote.action('alice', 'operation-1', 'accept');
+  await test.flow.adopt(scope, 'alice', await test.remote.lookup('alice', 'operation-1'));
+  // Adopt an existing editable draft only after its input has been frozen, as
+  // happens when acceptance was observed by the original sending window.
+  await test.store.update(scope, 'operation-1', (r) => ({
+    ...r!,
+    frozen: true,
+    prepareAttempted: true,
+    preparation: test.remote.entries.get(test.remote.key('alice', 'operation-1')),
+  }));
+  test.remote.calls = [];
+  return test;
+}
+it('stops before mapping under its own scope; checking never advances or acquires control', async () => {
+  const { flow, remote, store } = await pendingSetup();
+  const row = await flow.stop(scope, 'operation-1');
+  expect(row.preparation?.state).toBe('stopping');
+  expect(remote.calls).toEqual(['receipt', 'acquirePending', 'stopPending']);
+  expect(row.pendingStopControl).toEqual({ clientId: 'pending-client', generation: 8 });
+  expect(row.stopCommandId).toBeTruthy();
+  remote.calls = [];
+  await flow.check(scope, 'operation-1');
+  await flow.run(scope, 'operation-1');
+  expect(remote.calls).toEqual(['receipt', 'receipt']);
+  expect((await store.get(scope, 'operation-1'))?.files[0]?.blob).toBeDefined();
+  await expect(flow.release(scope, 'operation-1')).rejects.toThrow('Stop is still unconfirmed');
+});
+it('an explicit retry after a lost unreceived Stop uses its saved scope and control identity', async () => {
+  const { flow, remote, store } = await pendingSetup();
+  vi.spyOn(remote, 'stopPending').mockRejectedValueOnce(new ApiError('lost', 503));
+  await expect(flow.stop(scope, 'operation-1')).rejects.toThrow('lost');
+  const held = (await store.get(scope, 'operation-1'))!.pendingStopControl;
+  remote.calls = [];
+  const restored = new FirstSend(store, remote);
+  await restored.stop(scope, 'operation-1');
+  expect(remote.calls).toEqual(['receipt', 'stopPending']);
+  expect((await store.get(scope, 'operation-1'))?.pendingStopControl).toEqual(held);
+});
+it('known stopped continuation prepares only the blank conversation and preserves original files', async () => {
+  const { flow, remote, store } = await pendingSetup();
+  await flow.stop(scope, 'operation-1');
+  const key = remote.key('alice', 'operation-1'),
+    old = remote.entries.get(key)!;
+  remote.entries.set(key, {
+    ...old,
+    state: 'stopped',
+    messageAdmission: { outcome: 'not_admitted', stopRequested: true, stopConfirmed: true },
+  });
+  remote.calls = [];
+  const row = await flow.release(scope, 'operation-1');
+  expect(remote.calls).toEqual(['receipt', 'materialize']);
+  expect(row.preparation?.nodeMapped).toBe(true);
+  expect(row.released).toBe(true);
+  expect(row.message).toBe(value.message);
+  expect(row.files[0]?.blob).toBeDefined();
+  const fresh = remote.entries.get(key)!;
+  remote.entries.set(key, { ...fresh, nodeMapped: false });
+  await flow.check(scope, 'operation-1');
+  expect((await store.get(scope, 'operation-1'))?.preparation?.nodeMapped).toBe(true);
+});
+it('a mapping race requests fresh Node control and never reuses the pending scope', async () => {
+  const { flow, remote } = await pendingSetup();
+  vi.spyOn(remote, 'acquirePending').mockImplementationOnce(async () => {
+    const key = remote.key('alice', 'operation-1');
+    remote.entries.set(key, { ...remote.entries.get(key)!, nodeMapped: true, state: 'ready' });
+    throw new ApiError('Use Node control', 409, 'session_control_required');
+  });
+  await expect(flow.stop(scope, 'operation-1')).rejects.toThrow('Use Node control');
+  remote.calls = [];
+  await flow.takeControl(scope, 'operation-1');
+  expect(remote.calls).toEqual(['receipt', 'acquire']);
+});
+it('a local Stop overtakes a held materialization reply and fences its late dispatch', async () => {
+  const { flow, remote } = await pendingSetup();
+  const action = remote.action.bind(remote);
+  let release!: () => void, entered!: () => void;
+  const held = new Promise<void>((r) => (release = r)),
+    ready = new Promise<void>((r) => (entered = r));
+  vi.spyOn(remote, 'action').mockImplementation(async (owner, id, kind) => {
+    const value = await action(owner, id, kind);
+    if (kind === 'materialize') {
+      entered();
+      await held;
+    }
+    return value;
+  });
+  const running = flow.run(scope, 'operation-1');
+  await ready;
+  await flow.stop(scope, 'operation-1');
+  release();
+  expect((await running).preparation?.state).toBe('stopped');
+  expect(remote.calls).not.toContain('dispatch');
+});
+it('a disabled pending-Stop capability never falls back to a Node command', async () => {
+  const { flow, remote } = await pendingSetup();
+  vi.spyOn(remote, 'capabilities').mockResolvedValue({
+    version: 1,
+    ownerUser: 'alice',
+    canSubmit: false,
+    canFenceAccount: true,
+    canStopBeforeAllocation: false,
+  });
+  await expect(flow.stop(scope, 'operation-1')).rejects.toThrow('This Gateway cannot stop');
+  expect(remote.calls).toEqual(['receipt']);
+});
+
+it('late weaker receipts preserve requested Stop while later known admission still advances', async () => {
+  const { flow, remote } = await pendingSetup();
+  const key = remote.key('alice', 'operation-1'),
+    weak = remote.entries.get(key)!;
+  await flow.stop(scope, 'operation-1');
+  remote.entries.set(key, weak);
+  const pending = await flow.check(scope, 'operation-1');
+  expect(pending.preparation?.state).toBe('stopping');
+  expect(pending.preparation?.messageAdmission?.stopRequested).toBe(true);
+  remote.entries.set(key, { ...weak, state: 'admitted', nodeMapped: true });
+  const known = await flow.check(scope, 'operation-1');
+  expect(known.preparation?.state).toBe('admitted');
+  expect(known.preparation?.messageAdmission?.stopRequested).toBe(true);
+});

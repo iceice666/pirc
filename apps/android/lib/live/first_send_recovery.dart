@@ -17,13 +17,12 @@ String firstSendLabel(Json row) {
   }
   if (row['cancelRequested'] == true) return tr('Deletion not yet confirmed');
   if (phase == 'admitted') return tr('First message admitted');
+  if (phase == 'stopped') return tr('First message stopped');
+  if (phase == 'stopping') return tr('Stopping first message');
   if (row['uncertain'] == true || phase == 'outcome_unknown') {
     return tr('First message outcome is unknown');
   }
   if (phase == 'admission_failed') return tr('First message was not admitted');
-  if (phase == 'stopped' || phase == 'stopping') {
-    return tr('First message stopped or stopping');
-  }
   if (prep['accepted'] == true) {
     return tr('First message accepted — delivery pending');
   }
@@ -176,16 +175,25 @@ class FirstSendRecovery extends StatelessWidget {
                     ),
                   ],
                 ),
+              if (first.stopped &&
+                  obj(prep['messageAdmission'])['outcome'] == 'outcome_unknown')
+                Text(
+                  tr(
+                    'The first message admission is still unknown; Stop does not undo completed work.',
+                  ),
+                  style: webText(context, size: 12, color: 'text.muted'),
+                ),
               Text(
                 tr('Check result never resends the message or takes control.'),
                 style: webText(context, size: 12, color: 'text.muted'),
               ),
               if (controller.actionError != null ||
                   row['error'] != null ||
-                  prep['cleanupError'] != null)
+                  prep['cleanupError'] != null ||
+                  prep['deliveryError'] != null)
                 Text(
                   tr(
-                    '${controller.actionError ?? row['error'] ?? prep['cleanupError']}',
+                    '${controller.actionError ?? row['error'] ?? prep['cleanupError'] ?? prep['deliveryError']}',
                   ),
                   style: webText(context, size: 12, color: 'status.danger'),
                 ),
@@ -213,7 +221,7 @@ class FirstSendRecovery extends StatelessWidget {
                       first.submit,
                       enabled: first.enabled && !controller.busy,
                     ),
-                  if (first.hasMapping)
+                  if (first.canStop && !first.stopRequested)
                     action(
                       'Take control',
                       first.takeControl,
@@ -225,7 +233,7 @@ class FirstSendRecovery extends StatelessWidget {
                       first.openKnown,
                       enabled: !first.controlBusy,
                     )
-                  else if (first.hasMapping)
+                  else if (first.canStop && !first.stopRequested)
                     action(
                       'Stop pending message',
                       first.stop,

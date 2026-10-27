@@ -32,6 +32,8 @@ beforeEach(async () => {
     'upload',
     'action',
     'acquire',
+    'acquirePending',
+    'stopPending',
     'stop',
     'remove',
   ] as const)
@@ -245,4 +247,24 @@ it('a delayed initial local commit cannot replace a newer draft after navigation
     'Earlier draft text',
   );
   expect(remote.calls).toEqual([]);
+});
+
+it('restores authenticated saved input even when new first sends are disabled', async () => {
+  await app.createSession('node:repo');
+  app.setDraft('Keep when disabled');
+  const original = app.firstDraft!;
+  await app.firstFlow.store.get(original.scope, original.operationId);
+  await Promise.resolve();
+  app.firstRecoveries = [];
+  vi.mocked(app.firstFlow.transport.capabilities).mockResolvedValue({
+    version: 1,
+    ownerUser: 'alice',
+    canFenceAccount: true,
+    canSubmit: false,
+    canStopBeforeAllocation: true,
+  });
+  await app.initializeFirstSend();
+  expect(app.firstEnabled).toBe(false);
+  expect(app.firstRecoveries.some((r) => r.message === 'Keep when disabled')).toBe(true);
+  expect(remote.calls).not.toContain('dispatch');
 });

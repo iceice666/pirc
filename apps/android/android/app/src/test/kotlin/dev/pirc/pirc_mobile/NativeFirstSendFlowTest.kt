@@ -21,6 +21,11 @@ class NativeFirstSendFlowTest {
     private class Ledger : Dispatcher() {
         var preparation: JsonObject? = null
         var enabled = true
+        var failMaterialize = false
+        var losePendingStop = false
+        var dropPendingStop = false
+        var raceMapping = false
+        var pendingScope = "pending_first_send_stop"
         var loseDispatch = false
         var loseStop = false
         var cleanupPending = false
@@ -41,7 +46,7 @@ class NativeFirstSendFlowTest {
         private fun respond(request: RecordedRequest): MockResponse {
             val path = request.url.encodedPath
             calls += "${request.method} $path"
-            if (path.endsWith("/capabilities")) return objectReply("""{"version":1,"ownerUser":"alice","canFenceAccount":true,"canSubmit":$enabled}""")
+            if (path.endsWith("/capabilities")) return objectReply("""{"version":1,"ownerUser":"alice","canFenceAccount":true,"canStopBeforeAllocation":true,"canSubmit":$enabled}""")
             assertEquals("alice", request.headers["x-pirc-account"])
             if (path.endsWith("/prepare")) {
                 val input = PircJson.parseToJsonElement(request.body!!.utf8()).jsonObject
@@ -50,14 +55,29 @@ class NativeFirstSendFlowTest {
                     put("operationId", input.getValue("operationId")); put("sessionId", "public-session")
                     put("workspaceId", input.getValue("submission").jsonObject.getValue("workspaceId"))
                     put("submission", input.getValue("submission")); put("state", "preparing")
-                    put("accepted", false); put("cleanupPending", false)
+                    put("accepted", false); put("cleanupPending", false); put("nodeMapped", false)
                 }
             } else if (path.contains("/attachments/")) {
                 assertEquals("application/octet-stream", request.headers["Content-Type"])
                 assertEquals("hello", request.body!!.utf8())
                 return objectReply("{}")
             } else if (path.endsWith("/accept")) { update("accepted"); onAccept?.invoke() }
-            else if (path.endsWith("/materialize")) update("ready")
+            else if (path.endsWith("/materialize")) {
+                if (failMaterialize) return objectReply("{}", 503)
+                update(if (preparation!!["messageAdmission"]?.jsonObject?.get("stopConfirmed")?.jsonPrimitive?.booleanOrNull == true) "stopped" else "ready")
+                preparation = JsonObject(preparation!! + ("nodeMapped" to JsonPrimitive(true)))
+            }
+            else if (path.endsWith("/stop-control/acquire")) return objectReply("""{"scope":"$pendingScope","lease":{"clientId":"android-fixture","generation":11}}""")
+            else if (path.endsWith("/stop") && request.method == "POST") {
+                val held = PircJson.parseToJsonElement(request.body!!.utf8()).jsonObject
+                assertEquals("android-fixture", held["clientId"]?.jsonPrimitive?.content)
+                assertEquals(11, held["generation"]?.jsonPrimitive?.int)
+                if (dropPendingStop) { dropPendingStop = false; return objectReply("{}", 503) }
+                if (raceMapping) { raceMapping = false; update("ready");preparation=JsonObject(preparation!!+("nodeMapped" to JsonPrimitive(true)));return objectReply("""{"error":{"code":"session_control_required","message":"Use Node control"}}""",409) }
+                update("stopping")
+                preparation = JsonObject(preparation!! + ("messageAdmission" to buildJsonObject { put("stopRequested", true); put("stopConfirmed", false); put("outcome", "outcome_unknown") }))
+                if (losePendingStop) { losePendingStop = false; return objectReply("{}", 503) }
+            }
             else if (path.endsWith("/control/acquire")) return objectReply("""{"lease":{"clientId":"android-fixture","generation":7}}""")
             else if (path.endsWith("/dispatch")) {
                 update("admitted")
@@ -96,6 +116,11 @@ class NativeFirstSendFlowTest {
                 "workspaceId" to "node:repo", "message" to "Original", "model" to mapOf("provider" to "fake", "id" to "model"),
                 "thinking" to "low", "frozen" to false, "prepareAttempted" to false, "files" to files,
             ), "files" to if (withFile) listOf(mapOf("id" to "file1", "bytes" to "hello".toByteArray())) else emptyList<Any>())) as Map<*, *>
+        }
+        suspend fun pending(c: NativeFirstSend) {
+            saved(c);ledger.failMaterialize=true
+            try {c.submit(stamp,"alice","op",1,"android-fixture");fail("must remain accepted")}catch(e:ApiException){assertEquals(503,e.status)}
+            ledger.failMaterialize=false;ledger.calls.clear()
         }
         suspend fun row(connection: NativeFirstSend) = connection.drafts(stamp, "alice", mapOf("action" to "get", "operationId" to "op")) as Map<*, *>?
         override fun close() { server.close(); parent.deleteRecursively() }
@@ -240,4 +265,57 @@ class NativeFirstSendFlowTest {
         assertEquals("accepted", prep(connection.check(f.stamp, "alice", "op"))["state"])
         assertEquals("Original", f.row(connection)!!["message"])
     } }
+
+    @Test fun pendingStopUsesSeparateScopeAndChecksWithoutReplaying() = runTest {Fixture().use {f->
+        val c=f.connection();f.pending(c)
+        assertEquals("stopping",prep(c.stop(f.stamp,"alice","op","android-fixture"))["state"])
+        assertEquals(listOf("GET /api/conversation-submissions/op/receipt","POST /api/conversation-submissions/op/stop-control/acquire","POST /api/conversation-submissions/op/stop"),f.ledger.calls)
+        assertNotNull(f.row(c)!!["stopCommandId"]);assertNotNull(f.row(c)!!["pendingStopControl"])
+        f.ledger.calls.clear();c.check(f.stamp,"alice","op");c.submit(f.stamp,"alice","op",null,"android-fixture")
+        assertEquals(listOf("GET /api/conversation-submissions/op/receipt","GET /api/conversation-submissions/op/receipt"),f.ledger.calls)
+    }}
+    @Test fun stoppedContinuationPreparesOnlyBlankStorageWithOriginalFilesRetained() = runTest {Fixture().use {f->
+        val c=f.connection();f.pending(c);c.stop(f.stamp,"alice","op","android-fixture")
+        f.ledger.preparation=JsonObject(f.ledger.preparation!!+mapOf("state" to JsonPrimitive("stopped"),"messageAdmission" to buildJsonObject {put("stopRequested",true);put("stopConfirmed",true);put("outcome","not_admitted")}))
+        f.ledger.calls.clear();val row=c.release(f.stamp,"alice","op") as Map<*,*>
+        assertEquals(true,prep(row)["nodeMapped"]);assertEquals(true,row["released"]);assertEquals("Original",row["message"]);assertEquals(1,(row["files"] as List<*>).size)
+        assertEquals(listOf("GET /api/conversation-submissions/op/receipt","POST /api/conversation-submissions/op/materialize"),f.ledger.calls)
+        f.ledger.preparation=JsonObject(f.ledger.preparation!!+("nodeMapped" to JsonPrimitive(false)))
+        assertEquals(true,prep(c.check(f.stamp,"alice","op"))["nodeMapped"])
+    }}
+    @Test fun lostPendingReplyRestoresAndOnlyChecksAcceptedStop() = runTest {Fixture().use {f->
+        val c=f.connection();f.pending(c);f.ledger.losePendingStop=true
+        try {c.stop(f.stamp,"alice","op","android-fixture");fail("lost")}catch(e:ApiException){assertEquals(503,e.status)}
+        val identity=f.row(c)!!["stopCommandId"];val restored=f.connection();restored.capabilities(f.stamp);f.ledger.calls.clear()
+        restored.stop(f.stamp,"alice","op","android-fixture")
+        assertEquals(listOf("GET /api/conversation-submissions/op/receipt"),f.ledger.calls);assertEquals(identity,f.row(restored)!!["stopCommandId"])
+    }}
+    @Test fun unreceivedStopExplicitRetryUsesPersistedControl() = runTest {Fixture().use {f->
+        val c=f.connection();f.pending(c);f.ledger.dropPendingStop=true
+        try {c.stop(f.stamp,"alice","op","android-fixture");fail("lost")}catch(_:ApiException){}
+        val held=f.row(c)!!["pendingStopControl"];val restored=f.connection();restored.capabilities(f.stamp);f.ledger.calls.clear()
+        restored.stop(f.stamp,"alice","op","android-fixture")
+        assertEquals(listOf("GET /api/conversation-submissions/op/receipt","POST /api/conversation-submissions/op/stop"),f.ledger.calls);assertEquals(held,f.row(restored)!!["pendingStopControl"])
+    }}
+    @Test fun mappingRaceRequiresFreshNodeControl() = runTest {Fixture().use {f->
+        val c=f.connection();f.pending(c);f.ledger.raceMapping=true
+        try {c.stop(f.stamp,"alice","op","android-fixture");fail("race")}catch(e:ApiException){assertEquals("session_control_required",e.code)}
+        assertEquals(true,prep(f.row(c))["nodeMapped"]);f.ledger.calls.clear();c.takeControl(f.stamp,"alice","op","android-fixture")
+        assertEquals(listOf("GET /api/conversation-submissions/op/receipt","POST /api/sessions/public-session/control/acquire"),f.ledger.calls)
+    }}
+    @Test fun wrongScopeCannotAuthorizePendingStopOrNodeFallback() = runTest {Fixture().use {f->
+        val c=f.connection();f.pending(c);f.ledger.pendingScope="node"
+        try {c.stop(f.stamp,"alice","op","android-fixture");fail("scope")}catch(_:IllegalStateException){}
+        assertFalse(f.ledger.calls.any {it.endsWith("/stop") || it.endsWith("/commands")})
+    }}
+
+    @Test fun aLateWeakReceiptCannotEraseStopWhileLaterKnownAdmissionStillAdvances() = runTest {Fixture().use {f->
+        val c=f.connection();f.pending(c);val weak=f.ledger.preparation!!
+        c.stop(f.stamp,"alice","op","android-fixture");f.ledger.preparation=weak
+        val pending=prep(c.check(f.stamp,"alice","op"));assertEquals("stopping",pending["state"])
+        assertEquals(true,(pending["messageAdmission"] as Map<*,*>)["stopRequested"])
+        f.ledger.preparation=JsonObject(weak+mapOf("state" to JsonPrimitive("admitted"),"nodeMapped" to JsonPrimitive(true)))
+        val known=prep(c.check(f.stamp,"alice","op"));assertEquals("admitted",known["state"])
+        assertEquals(true,(known["messageAdmission"] as Map<*,*>)["stopRequested"])
+    }}
 }

@@ -208,7 +208,7 @@ class AppState {
       }
       this.#firstScope = scope;
       this.firstCapabilities = caps;
-      if (scope && caps.canSubmit) {
+      if (scope) {
         const records = await this.firstFlow.store.list(scope);
         if (scope === this.#firstScope)
           this.firstRecoveries = records.filter((r) => r.message || r.files.length || r.frozen);
@@ -376,16 +376,30 @@ class AppState {
     }
   }
   async openStoppedFirst() {
-    const row = this.firstDraft;
-    if (row?.preparation?.state === 'admitted') {
-      await this.#finishFirst(row, this.#openSeq);
+    const row = this.firstDraft,
+      selection = this.#openSeq;
+    if (!row || this.firstControlBusy) return;
+    if (row.preparation?.state === 'admitted') {
+      await this.#finishFirst(row, selection);
       return;
     }
-    if (!row || !row.preparation?.messageAdmission?.stopConfirmed) return;
-    await this.firstFlow.release(row.scope, row.operationId);
-    const id = row.preparation.sessionId;
-    this.discardDraftSession();
-    await this.openSession(id, { skipFirst: true });
+    if (!row.preparation?.messageAdmission?.stopConfirmed) return;
+    this.firstControlBusy = true;
+    try {
+      const result = await this.firstFlow.release(row.scope, row.operationId);
+      if (
+        row.scope !== this.#firstScope ||
+        selection !== this.#openSeq ||
+        this.firstDraft?.operationId !== row.operationId
+      )
+        return;
+      this.discardDraftSession();
+      await this.openSession(result.preparation!.sessionId, { skipFirst: true });
+    } catch (error) {
+      if (row.scope === this.#firstScope && selection === this.#openSeq) this.#firstError(error);
+    } finally {
+      this.firstControlBusy = false;
+    }
   }
   async dismissFirst(row: FirstDraft) {
     const current = this.firstDraft?.operationId === row.operationId,
