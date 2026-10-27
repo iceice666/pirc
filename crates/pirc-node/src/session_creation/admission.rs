@@ -177,6 +177,7 @@ pub(crate) async fn submit(node: crate::services::Node, request: Request) -> Api
             tx.commit()?;
             return Ok(response);
         }
+        super::pre_stop::mirror(&tx, &request.user, &parent)?;
         if let Some(prior) = read(&tx, &request.user, &op)? {
             if prior
                 .command

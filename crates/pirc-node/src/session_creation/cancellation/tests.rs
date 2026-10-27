@@ -236,7 +236,7 @@ fn migration_from_2006_preserves_existing_creation_and_receipts() {
     setup(&db.lock());
     let original = super::super::reserve(&mut db.lock(), "alice", &input()).unwrap();
     db.lock()
-        .execute_batch("DROP TABLE creation_cancellations; PRAGMA user_version=2006;")
+        .execute_batch("DROP TABLE creation_pre_stops; DROP TABLE creation_cancellations; PRAGMA user_version=2006;")
         .unwrap();
     drop(db);
     let db = Db::open(&path).unwrap();

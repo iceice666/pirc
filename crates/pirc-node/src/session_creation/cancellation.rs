@@ -16,7 +16,7 @@ pub(super) struct Cancellation {
 pub(super) fn read(db: &Connection, owner: &str, op: &str) -> ApiResult<Option<Cancellation>> {
     Ok(db.query_row("SELECT operation_id,workspace_id,submission_hash,session_id,complete,last_error_code FROM creation_cancellations WHERE owner_user=?1 AND operation_id=?2",params![owner,op],|r|Ok(Cancellation{operation_id:r.get(0)?,workspace_id:r.get(1)?,submission_hash:r.get(2)?,session_id:r.get(3)?,complete:r.get(4)?,last_error_code:r.get(5)?})).optional()?)
 }
-fn require_same(row: &Cancellation, input: &Input) -> ApiResult<()> {
+pub(super) fn require_same(row: &Cancellation, input: &Input) -> ApiResult<()> {
     if row.workspace_id != input.workspace_id || row.submission_hash != input.submission_hash {
         return Err(ApiError::conflict(
             "Cancellation identity belongs to another submission",
@@ -43,6 +43,8 @@ fn fence(db: &mut Connection, owner: &str, input: &Input) -> ApiResult<Cancellat
         tx.commit()?;
         return Ok(row);
     }
+    // Stop and Delete share the immutable creation identity in either order.
+    super::pre_stop::require_binding(&tx, owner, input)?;
     let creation = super::read(&tx, owner, &input.operation_id)?;
     if let Some(row) = &creation {
         matches(row, input)?;

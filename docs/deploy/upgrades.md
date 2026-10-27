@@ -1,5 +1,26 @@
 # Upgrades
 
+## Unreleased local checkpoint: Node pre-allocation Stop foundation
+
+Node schema **2008** adds a durable first-message Stop that may precede Node
+session allocation. Gateway schema 1016, protocol 15, dependency locks and
+package versions are unchanged. Back up Node state before a future upgrade;
+older Node binaries refuse schema 2008. Rollback requires the matching full
+backup rather than changing SQLite `user_version`.
+
+This Node-only API grants no new client control. Gateway durable Stop queuing,
+fresh control authorization and Web/Android integration are still required;
+**`canSubmit: false` remains in effect**. Existing client behavior is unchanged.
+Stop records no message text, creates no session/files and deletes no history,
+attachment or memory. A late allocation can prepare blank storage while the
+original first message stays fenced. Stop after initial command intake must
+use the existing leased session Stop; the pre-admission endpoint cannot claim
+that it terminated execution. Duplicate pre-admission Stops never abort later
+user work. Delete keeps its separate authorization and cleanup semantics.
+
+Local Node/loopback process checks cover this foundation; this is not complete
+App or production acceptance. No deployment or published asset is changed.
+
 ## Unreleased local checkpoint: Flutter durable first-send wiring
 
 Flutter includes controller and recovery UI wiring for the native first-send

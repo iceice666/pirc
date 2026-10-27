@@ -6,6 +6,7 @@
 
 pub(crate) mod admission;
 pub(crate) mod cancellation;
+pub(crate) mod pre_stop;
 pub(crate) mod uploads;
 
 use std::fs::DirBuilder;
@@ -146,6 +147,7 @@ fn reserve(db: &mut Connection, owner: &str, input: &Input) -> ApiResult<Creatio
     input.validate()?;
     let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
     cancellation::require_live(&tx, owner, input)?;
+    pre_stop::require_binding(&tx, owner, input)?;
     let row = if let Some(row) = read(&tx, owner, &input.operation_id)? {
         matches(&row, input)?;
         current(&tx, owner, row)?
@@ -165,6 +167,7 @@ fn reserve(db: &mut Connection, owner: &str, input: &Input) -> ApiResult<Creatio
         )?;
         row
     };
+    pre_stop::mirror(&tx, owner, &row)?;
     tx.commit()?;
     Ok(row)
 }
@@ -185,10 +188,12 @@ fn initialize(
 ) -> ApiResult<Creation> {
     let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
     cancellation::require_live(&tx, owner, input)?;
+    pre_stop::require_binding(&tx, owner, input)?;
     let row = read(&tx, owner, &input.operation_id)?
         .ok_or_else(|| ApiError::not_found("Conversation creation not found"))?;
     matches(&row, input)?;
     let mut row = current(&tx, owner, row)?;
+    pre_stop::mirror(&tx, owner, &row)?;
     if row.state == State::Reserved {
         let storage = sessions_dir.join(&row.session_id);
         match DirBuilder::new().mode(0o700).create(&storage) {
@@ -252,7 +257,7 @@ pub(crate) async fn prepare(node: Node, request: Request) -> ApiResult<Response>
 
 pub(crate) async fn capabilities(node: Node, _request: Request) -> ApiResult<Response> {
     Ok(Response::json(
-        json!({"version":1,"canAllocate":true,"canTransferAttachments":true,"attachmentMimeInQuery":true,"canAdmitFirstMessage":true,"canReadFirstMessageReceipt":true,"canReadCommandReceipts":true,"canCancelCreation":true,"maxUploadBytes":node.config.upload_max_bytes,"maxAttachments":16}),
+        json!({"version":1,"canAllocate":true,"canTransferAttachments":true,"attachmentMimeInQuery":true,"canAdmitFirstMessage":true,"canReadFirstMessageReceipt":true,"canReadCommandReceipts":true,"canCancelCreation":true,"canStopBeforeAllocation":true,"maxUploadBytes":node.config.upload_max_bytes,"maxAttachments":16}),
     ))
 }
 

@@ -141,6 +141,12 @@ without separate consent; unknown capability negotiation cannot enable legacy
 creation. Existing pending records remain readable with the send gate off.
 Full process/device failure acceptance is still open and `canSubmit` remains false;
 no UI redesign, version/dependency change or publication is included.
+The [Node pre-allocation Stop checkpoint](unified-conversations.md#u1-implementation-checkpoint-node-pre-allocation-stop-foundation-2026-10-27)
+adds a durable, owner-bound first-input fence before a Node session exists.
+Node schema 2008 serializes it with allocation and initial command intake; it
+neither deletes history nor aborts later work. Gateway pending Stop authorization,
+queuing and Web/Android adoption remain open, so `canSubmit` stays false. This
+is a local Node foundation, not completed client acceptance.
 The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
 records local fixture/transcript repairs and 50 Agent plus five Node process
 passes; the remote Check is still failed, and full Chromium/Linux verification

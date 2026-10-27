@@ -1565,6 +1565,63 @@ rollback recovery alongside Android. Keep activation closed until those gates
 pass. Later bindings, mount revocation, canonical collaboration and bounded pots
 stages remain open. This checkpoint stays local with no push/deployment/Release.
 
+## U1 implementation checkpoint: Node pre-allocation Stop foundation (2026-10-27)
+
+Implemented locally as the Node half of pending-creation Stop; **U1 and the
+public Stop integration remain incomplete**. Node schema **2008** adds an
+owner/operation/workspace/manifest-bound execution fence without reserving a
+session, creating files, publishing a conversation, starting an Agent or deleting
+history. Gateway schema 1016, protocol 15, dependency locks and package versions
+are unchanged. Gateway still advertises **`canSubmit: false`**.
+
+- Node-only `POST /api/session-creations/{operation}/stop` records a pre-admission
+  Stop from the immutable `workspaceId` and `submissionHash`. GET on the same
+  path reads its confirmation, with a nullable Node session ID. Node capabilities
+  advertise `canStopBeforeAllocation: true`; this is not a client-facing control
+  lease or permission to bypass Gateway authorization.
+- Allocation/initialization and initial command intake use the same SQLite write
+  transaction boundary as this fence. A delayed or explicitly requested blank
+  allocation can still initialize storage, but its original first message remains
+  permanently stopped. Stop by itself does not allocate that storage. Explicit
+  new commands still require the normal fresh lease and mode authorization.
+- If initial command intake already started without a confirmed ordinary Stop,
+  this endpoint returns `409 initial_admission_exists`: the caller must use the
+  established leased session Stop. It never claims to abort a command that may
+  be executing, and neither duplicate requests nor delayed retries abort later
+  work. A previously confirmed ordinary Stop can be adopted without re-aborting.
+- Owner, recovery-workspace privacy and immutable manifest binding apply. Stop
+  works even after the workspace mode is removed, because it grants no new
+  execution authority. Stop/Delete retain the same identity in either order;
+  cancellation remains the stronger fence and cannot be reversed into creation.
+  History, uploads, user files and memory sources are not erased by this API.
+- Schema 2007 upgrades to 2008 without changing existing sessions, commands or
+  admission records. Old Node binaries refuse schema 2008; back up Node state
+  before any future upgrade, and restore the complete matching backup on rollback.
+
+Validation: **440 Node library tests pass**, including **18 new pre-admission
+Stop cases**; three existing subprocess-only helpers remain ignored in the
+ordinary library invocation. Coverage includes independent SQLite-connection
+allocation/intake races, durable reopen, owner/private-checkpoint guards,
+Stop/Delete ordering, removed mode, immutable identity and 2007-to-2008 plus
+historical schema migrations. **Two required real Node process tests pass**
+with a synthetic loopback Gateway: the new case hard-kills/restarts the Node,
+reads the original pre-allocation Stop, permits blank allocation, rejects late
+initial execution and preserves the allocation/fence after another restart.
+The existing durable attachment/crash/delete process regression also passes.
+These are Node/link proofs, not a real Gateway/client or Android device pass.
+Strict Node/conformance Clippy (`--all-targets -- -D warnings`), targeted Rust
+format checks and `git diff --check` pass. Only this run's isolated Rust target
+and logs are cleaned; APKs/SDKs, browser caches, user data and other work stay.
+
+Remaining integration: Gateway must durably authorize/queue/reconcile this Stop
+before a Node mapping exists, serialize it against dispatch, preserve uncertain
+receipts and expose accurate mapping readiness. Web/Android then need explicit
+control/Stop and safe blank-conversation continuation without replaying original
+input. A real client-to-Gateway-to-Node failure matrix remains required. No
+frontend change, Flutter test, APK build, emulator, device, Nix validation,
+push, deployment or Release is part of this Node foundation. All later goal
+stages and the other U1 gates listed above remain open.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

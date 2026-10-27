@@ -97,6 +97,14 @@ pub fn routes(config: &NodeConfig) -> Vec<Route> {
             "/api/session-creations/:id/cancel",
             crate::session_creation::cancellation::status,
         ),
+        post(
+            "/api/session-creations/:id/stop",
+            crate::session_creation::pre_stop::stop,
+        ),
+        get(
+            "/api/session-creations/:id/stop",
+            crate::session_creation::pre_stop::status,
+        ),
         delete("/api/sessions/:id", move |node, request| {
             delete_session(node, request, deletions.clone())
         }),
