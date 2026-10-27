@@ -74,7 +74,7 @@ approval to implement every unchecked stage.
 The published baseline is `303fa8f8`, including the user-authorized CI repairs.
 Its remote Check and Android workflows both passed. Local work adds Gateway
 retry-nonce retirement (`9b5c776b`), Web/native retry recovery (`c41e4e8a`) and
-open-editor attachment protection and initial live Web interruption acceptance.
+open-editor attachment protection and initial live Web/native interruption acceptance.
 Full live-client acceptance and activation
 remain open.
 Subsequent work defaults to local commits, with no deployment, version change or
@@ -98,6 +98,15 @@ private drafts are not subject to that deadline. See [upgrade and rollback
 notes](../docs/deploy/upgrades.md).
 
 Latest completed U1 slices and their recorded evidence:
+
+- [Paired native process acceptance](unified-conversations.md#u1-implementation-checkpoint-paired-native-process-recovery-and-revocation-2026-10-27):
+  actual Kotlin engine/file journal and two real device tokens pass discarded
+  dispatch reply and read-only journal faults, complete JVM/host restart, GET-only
+  reconciliation and single-device revocation. Original input/files and one
+  session/command/model request per operation survive; the other device keeps
+  access. The Web three-case process test also passes after extracting shared
+  assertions. This is explicit opt-in JVM/backend proof, not Android OS/device or
+  default CI coverage.
 
 - [Live Web reconciliation](unified-conversations.md#u1-implementation-checkpoint-live-web-reconciliation-and-durable-uncertainty-2026-10-27):
   actual Web/IndexedDB plus Gateway/Node/Agent passes transport replay, truncated
@@ -143,13 +152,11 @@ Latest completed U1 slices and their recorded evidence:
 
 Next, close U1's remaining gates in this order:
 
-1. Verify the actual paired native client against Gateway/Node/Agent for lost
-   replies, local-write/reopening failures and revoked authority. Native mock-HTTP
-   proofs do not complete this gate.
-2. Extend Web/native process acceptance through device competition, Stop/delete,
-   interrupted allocation and mixed versions. Initial Web interruption/restart
-   cases pass. Verify Android MethodChannel/private files and process death;
-   request a physical device when that step is ready.
+1. Extend the now-passing initial Web/native process proofs through simultaneous
+   device mutations, broader permission changes, Stop/delete, interrupted
+   allocation and mixed versions. Initial native device revocation passes.
+2. Verify Android MethodChannel, OS private storage/Keystore, process death and
+   attachment memory pressure; request a physical device when that step is ready.
 3. Complete activation/rollback and the affected full CI/conformance gates before
    changing `canSubmit`. Then proceed with U2, U4, U5 and U6; U3 remains deferred.
 
@@ -159,7 +166,7 @@ Linux native sandbox/checkpoint and Nix jobs. Repairs cover the Android test
 controller signature, relative retry-fixture executable path, runner APT mirror
 lists, random-ID normalization and independent checkpoint fixture lifetimes.
 This is evidence for that exact published commit, not the subsequent local
-local client additions or a physical-device pass. Local Nix validation remains waived.
+client additions or a physical-device pass. Local Nix validation remains waived.
 
 Run only focused simple Flutter checks when changing Flutter. Clean run-owned
 outputs after verification while preserving shared caches, SDKs, existing APKs,

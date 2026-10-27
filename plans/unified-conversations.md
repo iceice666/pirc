@@ -4,7 +4,7 @@
 
 Status: adopted architecture baseline with an authorized staged implementation
 covering first Send, environment bindings, resource transitions, canonical tasks/
-collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-recovery, editor-snapshot and live Web acceptance
+collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-recovery, editor-snapshot and live Web/native acceptance
 checkpoints are summarized below (2026-10-27). UI redesign/navigation reorganization remains deferred;
 Web/Android changes are limited to necessary functional integration. Use only
 focused simple Flutter checks when Flutter changes.
@@ -47,20 +47,24 @@ Delivered U1 behavior:
   including version negotiation, independent Gateway access and minimal bilingual
   status/actions. New navigation and visual redesign are deferred.
 
-Latest slice: [live Web interruption acceptance](#u1-implementation-checkpoint-live-web-reconciliation-and-durable-uncertainty-2026-10-27)
-passes against actual Gateway/Node/Agent processes, including transparent POST
-replay, truncated dispatch response, aborted IndexedDB receipt, full browser and
-both-host restart, and two-page GET-only reconciliation. Each original keeps one
-user entry/model request, the same session/command IDs and exact file bytes.
-**79 Web tests**, clean Svelte checks, **63 native JVM cases** and strict Clippy
-also pass. See its [repeatable acceptance command](../docs/development/first-send-acceptance.md).
-Earlier [editor snapshots](#u1-implementation-checkpoint-editor-attachments-survive-source-cleanup-2026-10-27)
-retain 26 focused Flutter cases; no Flutter code changed in this slice. The
-backend [nonce retirement](#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27)
+Latest slice: [paired native process acceptance](#u1-implementation-checkpoint-paired-native-process-recovery-and-revocation-2026-10-27)
+passes with actual Kotlin journals/HTTP and two real device credentials against
+Gateway/Node/Agent. Discarded replies and refused local receipt writes survive a
+complete JVM and host restart; both clients query the same admitted commands.
+Revoking one device blocks its lookup/new Send without losing local input, while
+the other still has access. Each original keeps one session, user entry and model
+request and exact file bytes. The [Web three-case process acceptance](#u1-implementation-checkpoint-live-web-reconciliation-and-durable-uncertainty-2026-10-27)
+also passes after sharing process/journal assertions; strict targeted Clippy and
+Kotlin warnings-as-errors compilation pass. See [repeatable acceptance commands](../docs/development/first-send-acceptance.md).
+
+The earlier marker repair retains **79 Web tests**, clean Svelte checks and
+**63 native JVM cases**; [editor snapshots](#u1-implementation-checkpoint-editor-attachments-survive-source-cleanup-2026-10-27)
+retain 26 focused Flutter cases. No production/Flutter code changes in this slice.
+The backend [nonce retirement](#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27)
 slice retains 329 Gateway tests and five process cases. These are bounded proofs,
 not the full permission/Stop/delete matrix or Android OS/device acceptance.
-The new browser test is explicitly run and ignored by the default suite; published
-CI remains tied to `303fa8f8`.
+Both live client tests are explicitly run and ignored by the default suite;
+published CI remains tied to `303fa8f8` and was rechecked green this round.
 
 | Stage                             | Current status                                                            | Next deliverable                                                                                                    |
 | --------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -73,18 +77,17 @@ CI remains tied to `303fa8f8`.
 
 Immediate U1 queue:
 
-1. Connect the actual native paired client to Gateway/Node/Agent for lost replies,
-   local-journal failure/reopening and permission revocation. Its JVM/mock-HTTP
-   proof is not the real native-client/backend matrix or a live MethodChannel.
-2. Extend actual Web/native acceptance through permission/device competition,
-   Stop/delete, interrupted allocation and mixed versions. The three Web fault
-   cases above now have real backend/restart evidence. Verify Android process
-   death/private files and ask for a physical device when ready.
-3. Finish activation/rollback and affected full CI/conformance checks before
-   enabling the new path. Published `303fa8f8` passed remote Check (including
-   Linux native checkpoints and Nix) and Android; this does not certify the newer
-   local client checkpoints. Local Nix verification remains waived. Then
-   continue U2, U4, U5 and U6.
+1. Extend actual Web/native acceptance through simultaneous device mutations,
+   broader permission changes, Stop/delete, interrupted allocation and mixed
+   versions. Initial interruption/restart and native device-revocation proofs now
+   pass; they do not close the full matrix.
+2. Verify actual Android process death, OS private files/Keystore, MethodChannel
+   and attachment memory pressure; ask for a physical device when ready.
+3. Finish activation/rollback and affected full CI/conformance checks, including
+   an explicit live-client acceptance gate, before enabling the new path.
+   Published `303fa8f8` passed remote Check (including Linux native checkpoints and
+   Nix) and Android; this does not certify the newer local client checkpoints.
+   Local Nix verification remains waived. Then continue U2, U4, U5 and U6.
 
 The dated checkpoints later in this file preserve what was delivered and tested
 at that time. Historical “local only”, “next slice” and incomplete-adoption notes
@@ -2442,6 +2445,59 @@ activation including an explicit CI gate for this browser acceptance. U2/U4/U5/U
 remain open. Memory provenance and checkpoint isolation are unchanged. Commit
 locally only; clean this run's isolated build/JVM/browser outputs after their
 processes exit, preserving SDKs/caches/APKs/user state. No push, deployment or Release.
+
+## U1 implementation checkpoint: paired native process recovery and revocation (2026-10-27)
+
+Implemented locally after `923b9ef6`. This slice adds test infrastructure and
+acceptance documentation only; production code, package/storage/protocol versions,
+Nix hashes, memory provenance and checkpoint isolation remain unchanged.
+Production **`canSubmit: false`** remains in effect. Published `303fa8f8` Check and
+Android were rechecked green, so no additional CI repair or push was needed.
+
+Added the opt-in `conversation_native_client` test, `NativeFirstSendLive` JVM
+entrypoint and a pinned-cache compiler helper. It uses the actual Kotlin
+first-send engine, native atomic file journal, HTTP transport and unchanged bridge
+conversion helpers. The actual Gateway creates two device tokens; both clients
+use bearer authorization with no browser identity/Origin. The fixture interceptor
+only adapts Host routing and the returned capability and injects the specified
+faults; real Gateway authorization/Node admission remain in use. The existing model
+provider and sandbox launcher are fakes, not provider or sandbox-isolation proof.
+
+For each operation the second client adopts the pending conversation before
+admission, using a separate private journal without copying the first client's
+attachment bytes. After real dispatch, one case discards the successful reply;
+the other makes the actual operation directory read-only, refusing both receipt
+and catch-handler writes. Original frozen/uncertain journals and files survive.
+The first JVM terminates, Gateway/Node are crashed/restarted, and a fresh JVM
+reopens both clients. Continue/Check perform only GETs and recover the original
+admitted session/command. Before and after restart the backend verifies exactly
+one user history entry/model request per operation and exact native upload bytes;
+the original client verifies its unchanged private attachment bytes as well.
+
+The harness then revokes only the first token through the real device API. Its
+receipt lookup and new submission receive 401; its new local draft is unchanged
+and no remote preparation was created. The second device still checks both
+admitted results successfully. Every native request after reopening is GET-only.
+No live Web session or management grant is used by either native client.
+
+Validation: the explicit native integration test passes both fault scenarios plus
+restart/two-device reconciliation/revocation. The existing live Web test passes
+all three cases after extracting shared process/receipt/history/file assertions.
+Strict Clippy for both test targets, Kotlin compilation with warnings as errors,
+Rust formatting and documentation formatting pass. Initial harness failures were
+corrected to match existing contracts: exact Host routing, adoption only while a
+first message is pending, and a 204 device-deletion response. They did not require
+production changes. The [acceptance guide](../docs/development/first-send-acceptance.md)
+records commands, prerequisites and the bounded evidence.
+
+Remaining: simultaneous device mutations, broader permission changes, Stop/delete,
+interrupted allocation and old clients; actual Android OS/Keystore/private-file,
+MethodChannel/process-death/device and attachment-pressure evidence; explicit
+live-client CI activation plus migration/rollback. These tests are ignored by
+default and JVM execution is not an Android device pass. No Flutter/full Flutter
+suite, emulator, device, APK or local Nix verification. U2/U4/U5/U6 remain open.
+Keep this slice local and remove its isolated target/JVM/log outputs after the
+owned processes exit; preserve SDKs, caches, APKs and user state.
 
 ## Design stages and later implementation gates
 
