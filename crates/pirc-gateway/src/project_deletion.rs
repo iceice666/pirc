@@ -2,20 +2,11 @@
 //! project"): `GET /api/workspaces/:id/deletion` shows what goes and what
 //! stays, `POST` with the user's decisions on mixed memory entries deletes.
 //!
-//! Order, each step safe to repeat: (1) one transaction fences the project
-//! and its chats (`workspace_deletions`, `session_deletions`) and deletes
-//! the memory its chats wrote (`memory::delete_project`, strict: every
-//! entry needing review has a decision on its current revision); (2) the
-//! chat node deletes its chats, uploads, browser profile and directory;
-//! (3) one transaction sweeps memory again (what arrived in between) and
-//! deletes the gateway's rows. A failure after (1) leaves the project
-//! fenced and listed as `deleting`; Delete again redoes (1) for what is
-//! left (the entries the user kept come up again) and resumes. The memory
-//! of a project covers its chats deleted one by one before (recorded in
-//! `session_deletions.workspace_id` since schema 1004). The fence row stays, without
-//! content, so a node announcing the project again cannot recreate it.
-//!
-//! Requires the chat node online: there is no pending state.
+//! The fence, origin-based memory plan and durable completion receipt commit
+//! together before Node cleanup. Retrying completes Node/Gateway removal without
+//! reinterpreting memory decisions or touching later user edits. Only current
+//! member chats are destroyed; moved authors' old memory keeps its write-time origin.
+//! Legacy origins need explicit review. The node must be online.
 
 use axum::Router;
 use axum::extract::{Extension, Path, State};
@@ -30,7 +21,7 @@ use crate::auth::Identity;
 use crate::db::{DeletionStatus, Session, Store, Workspace, atomic};
 use crate::error::{ApiError, ApiResult};
 use crate::http::{no_content, ok};
-use crate::memory::{ProjectChoice, ProjectDecision};
+use crate::memory::{ProjectChoice, ProjectDecision, ProjectProposalDecision};
 use crate::routes::{Handled, urlencoding_component};
 
 /// Decisions one request may carry.
@@ -173,8 +164,10 @@ async fn preview(
             |row| row.get(0),
         )
         .map_err(ApiError::from)?;
-    let history = conn.workspace_history_session_ids(&workspace_id)?;
-    let memory = crate::memory::project_plan(&app, &conn, user, &history)?;
+    let memory = crate::memory::project_plan(&app, &conn, user, &workspace_id)?;
+    let memory_proposals = crate::memory::project_proposals(&app, &conn, user, &workspace_id)?;
+    let memory_cleanup_complete =
+        crate::memory::project_cleanup_complete(&conn, user, &workspace_id)?;
     let deleting = conn.workspace_deletion(&workspace_id)?.is_some();
     drop(conn);
     Ok(ok(json!({
@@ -187,14 +180,20 @@ async fn preview(
         "delegations": delegations,
         "links": links,
         "memory": memory,
+        "memoryProposals": memory_proposals,
+        "memoryCleanupComplete": memory_cleanup_complete,
     })))
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct DeleteBody {
     #[serde(default)]
     decisions: Vec<DecisionBody>,
+    #[serde(default)]
+    proposal_decisions: Vec<ProposalDecisionBody>,
+    #[serde(default)]
+    memory_review_version: Option<u8>,
 }
 
 #[derive(Deserialize)]
@@ -207,14 +206,61 @@ struct DecisionBody {
     content: Option<String>,
 }
 
-fn decisions(body: DeleteBody) -> ApiResult<Vec<(String, ProjectDecision)>> {
-    if body.decisions.len() > DECISIONS_MAX {
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct ProposalDecisionBody {
+    proposal_id: String,
+    status: String,
+    action: String,
+}
+fn proposal_decisions(
+    items: Vec<ProposalDecisionBody>,
+) -> ApiResult<Vec<(String, ProjectProposalDecision)>> {
+    if items.len() > DECISIONS_MAX {
         return Err(ApiError::invalid_input());
     }
-    body.decisions
+    let mut seen = std::collections::HashSet::new();
+    items
+        .into_iter()
+        .map(|d| {
+            if d.proposal_id.is_empty()
+                || d.proposal_id.len() > 100
+                || !seen.insert(d.proposal_id.clone())
+                || !matches!(
+                    d.status.as_str(),
+                    "pending" | "approved" | "rejected" | "superseded"
+                )
+            {
+                return Err(ApiError::invalid_input());
+            }
+            let forget = match d.action.as_str() {
+                "forget" => true,
+                "keep" => false,
+                _ => return Err(ApiError::invalid_input()),
+            };
+            Ok((
+                d.proposal_id,
+                ProjectProposalDecision {
+                    status: d.status,
+                    forget,
+                },
+            ))
+        })
+        .collect()
+}
+
+fn decisions(items: Vec<DecisionBody>) -> ApiResult<Vec<(String, ProjectDecision)>> {
+    if items.len() > DECISIONS_MAX {
+        return Err(ApiError::invalid_input());
+    }
+    let mut seen = std::collections::HashSet::new();
+    items
         .into_iter()
         .map(|decision| {
-            if decision.entry_id.is_empty() || decision.entry_id.len() > 100 {
+            if decision.entry_id.is_empty()
+                || decision.entry_id.len() > 100
+                || !seen.insert(decision.entry_id.clone())
+            {
                 return Err(ApiError::invalid_input());
             }
             let choice = match (decision.action.as_str(), decision.content) {
@@ -244,7 +290,13 @@ async fn delete(
     ReqBody(body): ReqBody,
 ) -> Handled {
     let user = identity.user.as_str();
-    let decisions = decisions(body.parse()?)?;
+    let body: DeleteBody = body.parse()?;
+    let memory_review_version = body.memory_review_version;
+    if memory_review_version.is_some_and(|v| v != 1) {
+        return Err(ApiError::invalid_input().into());
+    }
+    let decisions = decisions(body.decisions)?;
+    let proposal_decisions = proposal_decisions(body.proposal_decisions)?;
     let workspace = {
         let conn = app.db.lock();
         match project(&app, &conn, &workspace_id, user)? {
@@ -258,15 +310,33 @@ async fn delete(
     if app.nodes.get(&workspace.host_id).is_none() {
         return Err(offline().into());
     }
-    // (1) The fence and the memory, together. A retry does it again: what
-    // was done is not in the plan any more, and entries the user kept are
-    // decided again.
+    // (1) Fence, memory and cleanup receipt are one transaction.
     {
         let conn = app.db.lock();
         atomic(&conn, |conn| {
+            if memory_review_version != Some(1)
+                && (crate::memory::project_plan(&app, conn, user, &workspace_id)?
+                    .iter()
+                    .any(|e| e.unknown_origin)
+                    || crate::memory::project_proposals(&app, conn, user, &workspace_id)?
+                        .iter()
+                        .any(|p| p.action == crate::memory::ProjectAction::Review))
+            {
+                return Err(ApiError::new(
+                    409,
+                    "memory_review_required",
+                    "Update this client to review memory with unknown project origins before deleting this project",
+                ));
+            }
             conn.begin_workspace_deletion(&workspace_id, user)?;
-            let ids = conn.workspace_history_session_ids(&workspace_id)?;
-            crate::memory::delete_project(&app, conn, user, &ids, &workspace_id, &decisions, true)
+            crate::memory::delete_project(
+                &app,
+                conn,
+                user,
+                &workspace_id,
+                &decisions,
+                &proposal_decisions,
+            )
         })?;
     }
     app.memory_changed(user);
@@ -315,10 +385,16 @@ async fn delete(
 }
 
 /// Step (3): the sessions it deleted.
-fn finish(app: &App, conn: &Connection, user: &str, workspace_id: &str) -> ApiResult<Vec<Session>> {
+fn finish(
+    _app: &App,
+    conn: &Connection,
+    user: &str,
+    workspace_id: &str,
+) -> ApiResult<Vec<Session>> {
     let chats = sessions(conn, workspace_id)?;
-    let history = conn.workspace_history_session_ids(workspace_id)?;
-    crate::memory::delete_project(app, conn, user, &history, workspace_id, &[], false)?;
+    if !crate::memory::project_cleanup_complete(conn, user, workspace_id)? {
+        return Err(ApiError::internal());
+    }
     for id in chats.iter().map(|session| &session.id) {
         conn.finish_session_deletion(id)?;
     }
@@ -347,3 +423,6 @@ fn finish(app: &App, conn: &Connection, user: &str, workspace_id: &str) -> ApiRe
     )?;
     Ok(chats)
 }
+
+#[cfg(test)]
+mod tests;

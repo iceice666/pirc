@@ -155,3 +155,60 @@ it('cannot delete while the chat node is offline', async () => {
   expect(target.textContent).toContain('Connect the chat node');
   expect(button('Delete project').disabled).toBe(true);
 });
+
+it('requires an explicit decision for unknown proposals and resubmits only a fresh status', async () => {
+  const proposal = {
+    id: 'legacy',
+    action: 'add' as const,
+    content: 'Unknown source',
+    quote: 'Quoted',
+    targetId: null,
+    targetRevision: null,
+    sources: {},
+    sessionId: 'moved',
+    status: 'pending' as const,
+    createdAt: 0,
+    decidedAt: null,
+  };
+  const load = vi
+    .spyOn(projectDeletionApi, 'preview')
+    .mockResolvedValueOnce(
+      preview({ memory: [], memoryProposals: [{ proposal, action: 'review' }] }),
+    )
+    .mockResolvedValueOnce(
+      preview({
+        memory: [],
+        memoryProposals: [{ proposal: { ...proposal, status: 'rejected' }, action: 'review' }],
+      }),
+    );
+  const remove = vi
+    .spyOn(app, 'deleteProject')
+    .mockRejectedValueOnce(new ApiError('Memory changed', 409, 'conflict'));
+  await show();
+  expect(button('Delete project').disabled).toBe(true);
+  expect(target.textContent).toContain('keeping does not approve it');
+  radio('keep').click();
+  flushSync();
+  expect(button('Delete project').disabled).toBe(false);
+  button('Delete project').click();
+  await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+  await tick();
+  expect(remove).toHaveBeenCalledWith(
+    'chat:trip',
+    [],
+    [{ proposalId: 'legacy', status: 'pending', action: 'keep' }],
+  );
+  expect(button('Delete project').disabled).toBe(true);
+});
+
+it('resumes a completed memory phase without asking to decide kept entries again', async () => {
+  vi.spyOn(projectDeletionApi, 'preview').mockResolvedValue(
+    preview({ deleting: true, memory: [], memoryProposals: [], memoryCleanupComplete: true }),
+  );
+  const remove = vi.spyOn(app, 'deleteProject').mockResolvedValue();
+  await show();
+  expect(target.textContent).toContain('completed memory decisions are preserved');
+  expect(button('Delete project').disabled).toBe(false);
+  button('Delete project').click();
+  await vi.waitFor(() => expect(remove).toHaveBeenCalledWith('chat:trip', []));
+});

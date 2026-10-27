@@ -4,7 +4,7 @@
  * memory entries mixing the project's text with other chats'.
  */
 import { request } from './http';
-import type { MemoryEntry } from './memory';
+import type { MemoryEntry, MemoryProposal } from './memory';
 
 /**
  * What deleting the project does to an entry its chats wrote: `forget` (every
@@ -13,6 +13,7 @@ import type { MemoryEntry } from './memory';
  */
 export interface ProjectMemoryItem {
   entry: MemoryEntry;
+  unknownOrigin?: boolean;
   action: 'forget' | 'rollback' | 'review';
   restored: string | null;
   restoredRevision: number | null;
@@ -38,11 +39,22 @@ export interface ProjectDeletionPreview {
   /** Workspaces it is linked to. */
   links: number;
   memory: ProjectMemoryItem[];
+  memoryCleanupComplete?: boolean;
+  memoryProposals?: Array<{
+    proposal: Omit<MemoryProposal, 'target'>;
+    action: 'forget' | 'review';
+  }>;
 }
 
 export type ProjectMemoryDecision =
   | { entryId: string; revision: number; action: 'forget' | 'keep' }
   | { entryId: string; revision: number; action: 'edit'; content: string };
+
+export interface ProjectProposalDecision {
+  proposalId: string;
+  status: string;
+  action: 'keep' | 'forget';
+}
 
 const path = (workspaceId: string) => `/api/workspaces/${encodeURIComponent(workspaceId)}/deletion`;
 
@@ -50,9 +62,17 @@ export const projectDeletionApi = {
   preview: (workspaceId: string) =>
     request<ProjectDeletionPreview>(path(workspaceId), { cache: 'no-store' }),
   /** 409 `conflict` when memory changed since the preview: load it again. */
-  delete: (workspaceId: string, decisions: ProjectMemoryDecision[]) =>
+  delete: (
+    workspaceId: string,
+    decisions: ProjectMemoryDecision[],
+    proposalDecisions: ProjectProposalDecision[] = [],
+  ) =>
     request<void>(path(workspaceId), {
       method: 'POST',
-      body: JSON.stringify({ decisions }),
+      body: JSON.stringify({
+        memoryReviewVersion: 1,
+        decisions,
+        ...(proposalDecisions.length ? { proposalDecisions } : {}),
+      }),
     }),
 };

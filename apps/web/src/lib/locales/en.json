@@ -1410,5 +1410,10 @@
   "The retry receipt did not identify a successor attempt.": "The retry receipt did not identify a successor attempt.",
   "The first-message attempt changed; check its result.": "The first-message attempt changed; check its result.",
   "node_connection_changed": "The Node reconnected. Check the saved result before continuing.",
-  "first_send_unsupported": "This Node does not support reliable first Send. Upgrade it before continuing."
+  "first_send_unsupported": "This Node does not support reliable first Send. Upgrade it before continuing.",
+  "An earlier deletion of this project did not finish. Retry resumes cleanup; completed memory decisions are preserved.": "An earlier deletion of this project did not finish. Retry resumes cleanup; completed memory decisions are preserved.",
+  "These entries have mixed or unknown project origins. Keep preserves their history. Edit replaces project and unknown-origin history with your text; other known origins stay. Forget removes the entire entry.": "These entries have mixed or unknown project origins. Keep preserves their history. Edit replaces project and unknown-origin history with your text; other known origins stay. Forget removes the entire entry.",
+  "Memory proposals": "Memory proposals",
+  "Proposals recorded in this project are deleted. For unknown origins, choose whether to keep or delete each proposal; keeping does not approve it.": "Proposals recorded in this project are deleted. For unknown origins, choose whether to keep or delete each proposal; keeping does not approve it.",
+  "What to do with this proposal": "What to do with this proposal"
 }

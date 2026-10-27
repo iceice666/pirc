@@ -47,6 +47,38 @@ impl Snapshot {
     }
 }
 
+/// Three-valued classification: absent or unresolved origins never prove ownership.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Relation {
+    Project,
+    Other,
+    Unknown,
+}
+impl Snapshot {
+    pub fn relation(&self, project: &str) -> Relation {
+        match &self.source {
+            Source::User => Relation::Other,
+            Source::Session {
+                project_workspace_id: Some(id),
+                membership_resolution,
+                ..
+            } if membership_resolution == "member" => {
+                if id == project {
+                    Relation::Project
+                } else {
+                    Relation::Other
+                }
+            }
+            Source::Session {
+                project_workspace_id: None,
+                membership_resolution,
+                ..
+            } if membership_resolution == "none" => Relation::Other,
+            _ => Relation::Unknown,
+        }
+    }
+}
+
 pub fn from_session(conn: &Connection, user: &str, session_id: &str) -> ApiResult<Snapshot> {
     // Old imports/store fixtures may name a session that no longer exists. Do
     // not reassign it using sources_json, a project label or today's membership.
@@ -93,7 +125,7 @@ pub fn from_actor(conn: &Connection, user: &str, actor: &str) -> ApiResult<Snaps
     })
 }
 
-fn decode(value: Option<String>) -> ApiResult<Snapshot> {
+pub(super) fn decode(value: Option<String>) -> ApiResult<Snapshot> {
     value
         .map(|json| serde_json::from_str(&json).map_err(|_| ApiError::internal()))
         .transpose()

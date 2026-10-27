@@ -269,6 +269,60 @@ Future<void> _dispose(
 
 void main() {
   testWidgets(
+    'unknown proposal choices are explicit and reset on a status conflict',
+    (tester) async {
+      final gateway = FakeGateway();
+      var previews = 0;
+      final posts = <Json>[];
+      gateway.handler = (method, args) async {
+        if (method == 'request' && args['path'] == deletionPath) {
+          if (args['method'] == 'POST') {
+            posts.add(args);
+            throw PlatformException(
+              code: 'HTTP_409',
+              message: 'Memory changed',
+              details: {'code': 'conflict'},
+            );
+          }
+          previews++;
+          return {
+            ..._preview(memory: []),
+            'memoryProposals': [
+              {
+                'action': 'review',
+                'proposal': {
+                  'id': 'legacy',
+                  'status': previews == 1 ? 'pending' : 'rejected',
+                  'content': 'Unknown source',
+                  'quote': 'Quoted',
+                },
+              },
+            ],
+          };
+        }
+        return _fallback(gateway, method, args);
+      };
+      final controller = _controller(gateway);
+      await _mountDialog(tester, controller, project);
+      await _openDialog(tester);
+      expect(_disabled(tester, 'project-deletion-confirm'), isTrue);
+      await _tap(
+        tester,
+        find.byKey(const ValueKey('project-proposal-legacy-keep')),
+      );
+      expect(_disabled(tester, 'project-deletion-confirm'), isFalse);
+      await _tap(tester, find.byKey(const Key('project-deletion-confirm')));
+      expect(posts, hasLength(1));
+      expect(obj(posts.single['body'])['proposalDecisions'], [
+        {'proposalId': 'legacy', 'status': 'pending', 'action': 'keep'},
+      ]);
+      expect(previews, 2);
+      expect(_disabled(tester, 'project-deletion-confirm'), isTrue);
+      await _dispose(tester, controller, gateway);
+    },
+  );
+
+  testWidgets(
     'shows deletion effects and submits only explicit, revision-bound memory choices',
     (tester) async {
       final gateway = FakeGateway();
@@ -333,6 +387,7 @@ void main() {
       expect(posts.single['path'], deletionPath);
       expect(posts.single['pairingStamp'], 'pair-one');
       expect(posts.single['body'], {
+        'memoryReviewVersion': 1,
         'decisions': [
           {'entryId': 'mixed-forget', 'revision': 4, 'action': 'forget'},
           {'entryId': 'mixed-keep', 'revision': 7, 'action': 'keep'},
@@ -837,6 +892,7 @@ void main() {
       decision['revision'] = 99;
       decisions.clear();
       expect(request['body'], {
+        'memoryReviewVersion': 1,
         'decisions': [
           {'entryId': 'mixed', 'revision': 4, 'action': 'keep'},
         ],

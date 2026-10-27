@@ -1077,7 +1077,11 @@ class LiveController extends ChangeNotifier {
   }
 
   /// Acknowledged project deletion is terminal, even if an older index arrives later.
-  Future<void> deleteProject(String id, List<Json> decisions) async {
+  Future<void> deleteProject(
+    String id,
+    List<Json> decisions, {
+    List<Json> proposalDecisions = const [],
+  }) async {
     final workspace = workspaces.where((w) => w['id'] == id).firstOrNull;
     if (workspace == null ||
         !catalog.of(workspace).projects ||
@@ -1103,6 +1107,11 @@ class LiveController extends ChangeNotifier {
         method: 'POST',
         pairingStamp: stamp,
         body: {
+          'memoryReviewVersion': 1,
+          if (proposalDecisions.isNotEmpty)
+            'proposalDecisions': [
+              for (final d in proposalDecisions) {...d},
+            ],
           'decisions': [
             for (final decision in decisions) {...decision},
           ],

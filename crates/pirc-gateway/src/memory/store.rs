@@ -11,7 +11,7 @@ use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 
-use super::provenance::{self, Snapshot};
+use super::provenance::{self, Relation, Snapshot};
 use super::text::{content_hash, grouped, squash};
 use crate::db::{atomic, sql_text_enum};
 use crate::dispatch::redact_secrets;
@@ -982,38 +982,43 @@ impl<'a> Store<'a> {
 
     // ---------- deleting a project ----------
 
-    /// What deleting a project does to the entries its chats (`sessions`)
-    /// wrote, by the session each logged version's text came from: every
-    /// version from the project is forgotten; versions from the project only
-    /// after every other one are rolled back to the last other one; any
-    /// other mix needs the user's decision. Entries without a version from
-    /// the project are untouched (a remove logs no text and no source).
-    pub fn project_plan(&self, user: &str, sessions: &[String]) -> ApiResult<Vec<ProjectEntry>> {
+    /// Classify by frozen write-time origins, never today's session membership.
+    /// Unknown history is explicitly reviewed even if its author has disappeared.
+    pub fn project_plan(&self, user: &str, scope: &str) -> ApiResult<Vec<ProjectEntry>> {
         let mut plan = Vec::new();
         for entry in self.entries(user, None, None)? {
             if entry.status == EntryStatus::Forgotten {
                 continue;
             }
             let versions = self.text_versions(user, &entry.id)?;
-            let from_project = |version: &TextVersion| {
-                version
-                    .sources
-                    .get("sessionId")
-                    .and_then(Value::as_str)
-                    .is_some_and(|id| sessions.iter().any(|session| session == id))
-            };
-            let Some(first) = versions.iter().position(&from_project) else {
+            let unknown = versions.is_empty()
+                || versions
+                    .iter()
+                    .any(|v| v.origin.relation(scope) == Relation::Unknown);
+            let first = versions
+                .iter()
+                .position(|v| v.origin.relation(scope) == Relation::Project);
+            if first.is_none() && !unknown {
                 continue;
-            };
-            let last_other = versions.iter().rposition(|version| !from_project(version));
-            let (action, keep) = match last_other {
-                None => (ProjectAction::Forget, None),
-                Some(last) if last < first => (ProjectAction::Rollback, Some(&versions[last])),
-                Some(_) => (ProjectAction::Review, None),
+            }
+            let last_other = versions
+                .iter()
+                .rposition(|v| v.origin.relation(scope) == Relation::Other);
+            let (action, keep) = if unknown {
+                (ProjectAction::Review, None)
+            } else {
+                match last_other {
+                    None => (ProjectAction::Forget, None),
+                    Some(last) if Some(last) < first => {
+                        (ProjectAction::Rollback, Some(&versions[last]))
+                    }
+                    Some(_) => (ProjectAction::Review, None),
+                }
             };
             plan.push(ProjectEntry {
-                restored: keep.map(|version| version.content.clone()),
-                restored_revision: keep.map(|version| version.revision),
+                restored: keep.map(|v| v.content.clone()),
+                restored_revision: keep.map(|v| v.revision),
+                unknown_origin: unknown,
                 entry,
                 action,
             });
@@ -1021,99 +1026,164 @@ impl<'a> Store<'a> {
         Ok(plan)
     }
 
-    /// Apply [`Self::project_plan`] for a project being deleted: forget,
-    /// roll back, and carry out the user's `decisions` on the entries
-    /// needing review. With `strict`, every such entry needs a decision made
-    /// on its current revision, else nothing changes (409 `conflict`, the
-    /// current plan in the details); without, entries left undecided are
-    /// kept (a final sweep after the nodes are done). The project's pending
-    /// and decided proposals are deleted. Tombstones are scoped to `scope`
-    /// (the project), so other chats may write the same text again.
+    pub fn project_proposals(&self, user: &str, scope: &str) -> ApiResult<Vec<ProjectProposal>> {
+        let mut statement = self.conn.prepare("SELECT p.*, c.origin_json FROM memory_proposals p LEFT JOIN memory_proposal_contexts c ON c.proposal_id=p.id WHERE p.owner_user=? ORDER BY p.created_at,p.id")?;
+        let rows = statement.query_map([user], |r| {
+            Ok((
+                Proposal::from_row(r)?,
+                r.get::<_, Option<String>>("origin_json")?,
+            ))
+        })?;
+        let mut plan = Vec::new();
+        for row in rows {
+            let (proposal, origin) = row?;
+            let relation = provenance::decode(origin)?.relation(scope);
+            // Fully redacted rows carry no private source content to classify.
+            if relation == Relation::Other
+                || (proposal.content.is_none()
+                    && proposal.quote.is_empty()
+                    && proposal.sources == json!({}))
+            {
+                continue;
+            }
+            plan.push(ProjectProposal {
+                proposal,
+                action: if relation == Relation::Project {
+                    ProjectAction::Forget
+                } else {
+                    ProjectAction::Review
+                },
+            });
+        }
+        Ok(plan)
+    }
+
+    /// Apply a reviewed memory plan atomically. The caller records its completion
+    /// with the project fence; retries must not run this again on later writes.
     pub fn delete_project(
         &self,
         user: &str,
-        sessions: &[String],
         scope: &str,
         decisions: &[(String, ProjectDecision)],
-        strict: bool,
+        proposal_decisions: &[(String, ProjectProposalDecision)],
     ) -> ApiResult<()> {
         self.tx(|| {
-            let plan = self.project_plan(user, sessions)?;
-            if strict {
-                let stale = plan.iter().any(|item| {
+            let plan = self.project_plan(user, scope)?;
+            let proposals = self.project_proposals(user, scope)?;
+            // A supplied review must not silently turn into an automatic action
+            // after another device changed or scrubbed the entry.
+            let stale_decision = decisions.iter().any(|(id, d)| {
+                !plan
+                    .iter()
+                    .any(|p| p.entry.id == *id && p.entry.revision == d.revision)
+            }) || proposal_decisions.iter().any(|(id, d)| {
+                !proposals
+                    .iter()
+                    .any(|p| p.proposal.id == *id && p.proposal.status.as_str() == d.status)
+            });
+            let stale = stale_decision
+                || plan.iter().any(|item| {
                     item.action == ProjectAction::Review
-                        && !decisions.iter().any(|(id, decision)| {
-                            *id == item.entry.id && decision.revision == item.entry.revision
+                        && !decisions.iter().any(|(id, d)| {
+                            *id == item.entry.id && d.revision == item.entry.revision
+                        })
+                })
+                || proposals.iter().any(|item| {
+                    item.action == ProjectAction::Review
+                        && !proposal_decisions.iter().any(|(id, d)| {
+                            *id == item.proposal.id && d.status == item.proposal.status.as_str()
                         })
                 });
-                if stale {
-                    return Err(ApiError::new(
-                        409,
-                        "conflict",
-                        "Memory changed since it was shown; review it again",
-                    )
-                    .with_details(json!({ "memory": plan })));
-                }
+            if stale {
+                return Err(ApiError::new(
+                    409,
+                    "conflict",
+                    "Memory changed since it was shown; review it again",
+                )
+                .with_details(json!({"memory":plan,"memoryProposals":proposals})));
             }
             for item in &plan {
                 let id = &item.entry.id;
                 match item.action {
                     ProjectAction::Forget => self.forget_in(user, id, scope)?,
                     ProjectAction::Rollback => {
-                        let restored = item.restored.as_deref().unwrap_or_default();
-                        if self.refuse_forgotten(user, restored).is_err() {
-                            // The earlier text was forgotten elsewhere since.
+                        if self
+                            .refuse_forgotten(user, item.restored.as_deref().unwrap_or_default())
+                            .is_err()
+                        {
                             self.forget_in(user, id, scope)?;
                             continue;
                         }
-                        let revision = item.restored_revision.unwrap_or_default();
-                        self.roll_back(user, &item.entry, revision)?;
-                        self.scrub(user, id, sessions, scope)?;
+                        self.roll_back(
+                            user,
+                            &item.entry,
+                            item.restored_revision.unwrap_or_default(),
+                        )?;
+                        self.scrub(user, id, scope, false)?;
                     }
                     ProjectAction::Review => {
-                        let decided = decisions.iter().find(|(decided, decision)| {
-                            decided == id && decision.revision == item.entry.revision
-                        });
-                        match decided.map(|(_, decision)| &decision.choice) {
-                            Some(ProjectChoice::Forget) => self.forget_in(user, id, scope)?,
-                            Some(ProjectChoice::Edit(content)) => {
+                        let decision = decisions
+                            .iter()
+                            .find(|(id, d)| {
+                                *id == item.entry.id && d.revision == item.entry.revision
+                            })
+                            .ok_or_else(ApiError::internal)?;
+                        match &decision.1.choice {
+                            ProjectChoice::Forget => self.forget_in(user, id, scope)?,
+                            ProjectChoice::Edit(content) => {
                                 self.edit(user, &item.entry, content)?;
-                                self.scrub(user, id, sessions, scope)?;
+                                self.scrub(user, id, scope, true)?;
                             }
-                            Some(ProjectChoice::Keep) | None => {}
+                            ProjectChoice::Keep => {}
                         }
                     }
                 }
             }
-            if !sessions.is_empty() {
-                let mut values = vec![Sql::Text(user.to_owned())];
-                values.extend(sessions.iter().cloned().map(Sql::Text));
-                self.conn.execute(
-                    &format!(
-                        "DELETE FROM memory_proposals WHERE owner_user=? AND session_id IN ({})",
-                        vec!["?"; sessions.len()].join(",")
-                    ),
-                    params_from_iter(values),
-                )?;
+            for item in proposals {
+                if item.action == ProjectAction::Forget
+                    || proposal_decisions.iter().any(|(id, d)| {
+                        *id == item.proposal.id
+                            && d.forget
+                            && d.status == item.proposal.status.as_str()
+                    })
+                {
+                    self.conn.execute(
+                        "DELETE FROM memory_proposals WHERE owner_user=? AND id=?",
+                        [user, &item.proposal.id],
+                    )?;
+                }
             }
             Ok(())
         })
     }
 
-    /// The logged versions that carry text, oldest first.
+    /// The logged versions that carry text, oldest first, with immutable origins.
     fn text_versions(&self, user: &str, entry_id: &str) -> ApiResult<Vec<TextVersion>> {
         let mut statement = self.conn.prepare(
-            "SELECT revision, content, origins_json, sources_json FROM memory_log WHERE entry_id=? AND owner_user=? AND content IS NOT NULL ORDER BY seq",
+            "SELECT l.seq,l.revision,l.content,l.origins_json,l.sources_json,c.origin_json FROM memory_log l LEFT JOIN memory_version_contexts c ON c.log_seq=l.seq WHERE l.entry_id=? AND l.owner_user=? AND l.content IS NOT NULL ORDER BY l.seq",
         )?;
         let rows = statement.query_map([entry_id, user], |row| {
-            Ok(TextVersion {
-                revision: row.get(0)?,
-                content: row.get(1)?,
-                origins: safe_json(&row.get::<_, String>(2)?, json!([])),
-                sources: safe_json(&row.get::<_, String>(3)?, json!({})),
-            })
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, Option<String>>(5)?,
+            ))
         })?;
-        Ok(rows.collect::<Result<_, _>>()?)
+        rows.map(|row| {
+            let (seq, revision, content, origins, sources, origin) = row?;
+            Ok(TextVersion {
+                seq,
+                revision,
+                content,
+                origins: safe_json(&origins, json!([])),
+                sources: safe_json(&sources, json!({})),
+                origin: provenance::decode(origin)?,
+            })
+        })
+        .collect()
     }
 
     /// Make version `revision`'s text current again, keeping the entry's
@@ -1126,9 +1196,6 @@ impl<'a> Store<'a> {
             .into_iter()
             .rfind(|version| version.revision == revision)
             .ok_or_else(ApiError::internal)?;
-        if version.content == entry.content {
-            return Ok(());
-        }
         let origin = provenance::version(self.conn, user, &entry.id, Some(revision))?;
         self.update(
             user,
@@ -1149,9 +1216,6 @@ impl<'a> Store<'a> {
     /// The user's own text for an entry (origin `user`).
     fn edit(&self, user: &str, entry: &Entry, content: &str) -> ApiResult<()> {
         let content = entry_text(Some(content))?;
-        if content_hash(&content) == content_hash(&entry.content) {
-            return Ok(());
-        }
         self.refuse_forgotten(user, &content)?;
         let kind = if entry.is(Kind::User) {
             Kind::User
@@ -1176,38 +1240,29 @@ impl<'a> Store<'a> {
         Ok(())
     }
 
-    /// Erase the text of the logged versions that came from `sessions`,
-    /// keeping their hashes as tombstones in `scope`.
-    fn scrub(&self, user: &str, entry_id: &str, sessions: &[String], scope: &str) -> ApiResult<()> {
-        let rows: Vec<(i64, String, String)> = {
-            let mut statement = self.conn.prepare(
-                "SELECT seq, content, sources_json FROM memory_log WHERE entry_id=? AND owner_user=? AND content IS NOT NULL",
-            )?;
-            let rows = statement.query_map([entry_id, user], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?))
-            })?;
-            rows.collect::<Result<_, _>>()?
-        };
+    /// Edit explicitly replaces unknown-origin history too. Rollback never
+    /// guesses: only definitely project-authored versions are scrubbed.
+    fn scrub(
+        &self,
+        user: &str,
+        entry_id: &str,
+        scope: &str,
+        include_unknown: bool,
+    ) -> ApiResult<()> {
         let at = now_ms();
-        for (seq, content, sources) in rows {
-            let sources = safe_json(&sources, json!({}));
-            let from_project = sources
-                .get("sessionId")
-                .and_then(Value::as_str)
-                .is_some_and(|id| sessions.iter().any(|session| session == id));
-            if !from_project {
+        for version in self.text_versions(user, entry_id)? {
+            let relation = version.origin.relation(scope);
+            if relation != Relation::Project && !(include_unknown && relation == Relation::Unknown)
+            {
                 continue;
             }
-            if !content.is_empty() {
+            if !version.content.is_empty() {
                 self.conn.execute(
                     "INSERT OR IGNORE INTO memory_tombstones (owner_user,scope_id,content_hash,forgotten_at) VALUES (?,?,?,?)",
-                    params![user, scope, content_hash(&content), at],
+                    params![user,scope,content_hash(&version.content),at],
                 )?;
             }
-            self.conn.execute(
-                "UPDATE memory_log SET content=NULL, origins_json='[]', sources_json='{}' WHERE seq=?",
-                [seq],
-            )?;
+            self.conn.execute("UPDATE memory_log SET content=NULL,origins_json='[]',sources_json='{}' WHERE seq=?",[version.seq])?;
         }
         Ok(())
     }
@@ -1393,6 +1448,8 @@ pub const GLOBAL_SCOPE: &str = "global";
 
 /// A logged version with text.
 struct TextVersion {
+    seq: i64,
+    origin: Snapshot,
     revision: i64,
     content: String,
     origins: Value,
@@ -1414,11 +1471,24 @@ pub enum ProjectAction {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectEntry {
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub unknown_origin: bool,
     pub entry: Entry,
     pub action: ProjectAction,
     /// Rollback: the text and revision the entry goes back to.
     pub restored: Option<String>,
     pub restored_revision: Option<i64>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct ProjectProposal {
+    pub proposal: Proposal,
+    pub action: ProjectAction,
+}
+#[derive(Clone, Debug)]
+pub struct ProjectProposalDecision {
+    pub status: String,
+    pub forget: bool,
 }
 
 /// The user's decision on an entry needing review.

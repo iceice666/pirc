@@ -156,6 +156,7 @@ fn migrates_the_first_rust_schema() {
             .replace(include_str!("../conversation_bindings/schema.sql"), "")
             .replace(include_str!("../conversation_bindings/policies.sql"), "")
             .replace(include_str!("../memory/provenance.sql"), "")
+            .replace(include_str!("../memory/project_cleanup.sql"), "")
             .replace(include_str!("../conversation_submissions/schema.sql"), "")
             .replace(include_str!("../conversation_submissions/pre_stop.sql"), "")
             .replace(include_str!("../conversation_submissions/retries.sql"), "")
@@ -286,6 +287,7 @@ fn reconciles_upstream_memory_and_local_calendar_checkpoint_schemas() {
             .replace(include_str!("../conversation_bindings/schema.sql"), "")
             .replace(include_str!("../conversation_bindings/policies.sql"), "")
             .replace(include_str!("../memory/provenance.sql"), "")
+            .replace(include_str!("../memory/project_cleanup.sql"), "")
             .replace(include_str!("../conversation_submissions/schema.sql"), "")
             .replace(include_str!("../conversation_submissions/pre_stop.sql"), "")
             .replace(include_str!("../conversation_submissions/retries.sql"), "")
@@ -529,11 +531,16 @@ fn a_project_being_deleted_is_fenced_and_stays_deleted() {
     assert_eq!(deleting, ["n1:w"]);
     // Once gone, the node announcing it again does not bring it back.
     conn.finish_session_deletion(&mine.id).unwrap();
-    // A chat deleted from the project still counts as the project's.
-    assert_eq!(
-        conn.workspace_history_session_ids("n1:w").unwrap(),
-        std::slice::from_ref(&mine.id)
-    );
+    // Preserve historical deletion metadata; memory ownership now uses each
+    // version's frozen origin rather than this session's last workspace.
+    let deleted_workspace: String = conn
+        .query_row(
+            "SELECT workspace_id FROM session_deletions WHERE session_id=?",
+            [&mine.id],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(deleted_workspace, "n1:w");
     conn.execute("DELETE FROM workspaces WHERE id='n1:w'", [])
         .unwrap();
     conn.sync_remote_workspaces(

@@ -41,7 +41,7 @@ pub(crate) use sql_text_enum;
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1023;
+pub const SCHEMA_VERSION: i64 = 1024;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = concat!(
@@ -58,7 +58,8 @@ const SCHEMA: &str = concat!(
     include_str!("conversation_submissions/retry_retirements.sql"),
     include_str!("conversation_bindings/schema.sql"),
     include_str!("conversation_bindings/policies.sql"),
-    include_str!("memory/provenance.sql")
+    include_str!("memory/provenance.sql"),
+    include_str!("memory/project_cleanup.sql")
 );
 /// Each migration takes a database from the version before it to its own;
 /// [`SCHEMA`] assembles the newest whole schema, including calendar tables.
@@ -142,6 +143,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (1021, include_str!("conversation_bindings/schema.sql")),
     (1022, include_str!("conversation_bindings/policies.sql")),
     (1023, include_str!("memory/provenance.sql")),
+    (1024, include_str!("memory/project_cleanup.sql")),
 ];
 
 /// Placeholder name of a new session until the agent's title replaces it.
@@ -768,9 +770,6 @@ pub trait Store {
     fn begin_workspace_deletion(&self, workspace_id: &str, user: &str) -> ApiResult<()>;
     /// Ids of the sessions in a workspace.
     fn workspace_session_ids(&self, workspace_id: &str) -> ApiResult<Vec<String>>;
-    /// Every session a workspace had: its sessions and those deleted from it
-    /// (recorded since schema 1004).
-    fn workspace_history_session_ids(&self, workspace_id: &str) -> ApiResult<Vec<String>>;
     /// Chat projects being deleted (`deleting`), for their owner to finish.
     fn deleting_workspaces(&self) -> ApiResult<Vec<Workspace>>;
     /// Workspaces visible to this user, including only their own private
@@ -1204,14 +1203,6 @@ impl Store for Connection {
     fn workspace_session_ids(&self, workspace_id: &str) -> ApiResult<Vec<String>> {
         let mut statement =
             self.prepare("SELECT id FROM sessions WHERE workspace_id=? ORDER BY created_at, id")?;
-        let rows = statement.query_map([workspace_id], |row| row.get(0))?;
-        Ok(rows.collect::<Result<_, _>>()?)
-    }
-
-    fn workspace_history_session_ids(&self, workspace_id: &str) -> ApiResult<Vec<String>> {
-        let mut statement = self.prepare(
-            "SELECT id FROM sessions WHERE workspace_id=?1 UNION SELECT session_id FROM session_deletions WHERE workspace_id=?1",
-        )?;
         let rows = statement.query_map([workspace_id], |row| row.get(0))?;
         Ok(rows.collect::<Result<_, _>>()?)
     }

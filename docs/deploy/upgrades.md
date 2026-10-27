@@ -1,5 +1,25 @@
 # Upgrades
 
+## Unreleased local checkpoint: project memory cleanup receipts
+
+Gateway schema **1024** adds content-free project memory completion receipts and
+member cleanup scopes. It does not backfill receipts for partially deleted projects.
+Such projects require review once before the new receipt commits. New deletions
+classify recorded version/proposal origins independently of current membership.
+Legacy/unknown origins require explicit review; there is no inferred reassignment.
+
+The Web/Android confirmation sends `memoryReviewVersion: 1` and supports unknown
+proposal Keep/Forget choices. Older clients remain compatible for fully known
+origins but cannot confirm unknown-origin cleanup. Once the memory phase commits,
+retry/restart resumes removal without reapplying it to later user edits. Standalone
+chat deletions overlapping this operation retain its project cleanup semantics.
+
+Older binaries refuse schema 1024. Back up a consistent complete state before an
+eventual deployment; rollback uses a matching binary/state pair. Node schema 2009,
+protocol 15, first-send client contract 2 and private envelope 3 are unchanged.
+`canSubmit: false` remains. No supported project move, mount transition, new grant,
+APK, deployment or Release is enabled by this local checkpoint.
+
 ## Unreleased local checkpoint: frozen memory origins
 
 Gateway schema **1023** adds private origin snapshots for new global-memory
@@ -10,8 +30,8 @@ redaction and version deletion remove snapshots with their corresponding data.
 
 A memory operation whose Gateway-validated environment changed before the write
 transaction is refused with `stale_environment`. This is not the complete Node
-generation fence and does not enable project moves. The future project-deletion
-planner must consume recorded membership origins before cross-project moves ship.
+generation fence and does not enable project moves. The schema 1024 checkpoint above integrates these origins into project deletion;
+actual mount transitions remain a separate gate.
 
 Older Gateway binaries refuse schema 1023. An eventual upgrade still requires a
 consistent state backup and a matching binary/state rollback pair. Node schema

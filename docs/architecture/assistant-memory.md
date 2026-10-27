@@ -2,6 +2,22 @@
 
 This reference describes the current Rust contracts. For session compaction and local repository handoffs, see [observational memory](observational-memory.md); for prompt composition, see [prompt context](prompt-context.md). Configuration and user workflows are in [Gateway and node](../development/gateway-and-node.md) and [Chat projects](../guides/chat-projects.md).
 
+## Local project-origin cleanup (schema 1024)
+
+Project deletion now consumes immutable write-time origins, independently of the
+conversation's present workspace. Known all-project histories are forgotten;
+project-only suffixes roll back; mixed or unknown histories require explicit
+Keep/Edit/Forget. Edit retains known outside history and removes project/unknown
+versions after recording the user's replacement, even when its text is unchanged.
+Unknown proposal origins require separate Keep/Forget; keeping is not approval.
+
+A durable receipt commits with the deletion fence and memory effects. Retries,
+restart and overlapping member-chat deletion cannot change that cleanup scope or
+purge later edits. No final automatic memory sweep follows Node cleanup. Legacy
+partial deletions without receipts need a fresh review. Only present member chats
+are removed; origin records outlive moved/deleted authors. This does not yet enable
+a workspace move or acknowledge installed sandbox policy.
+
 ## Memory scopes and authority
 
 | Layer                            | Storage                      | Readers and writers                                                       |
@@ -52,9 +68,9 @@ without keeping the deleted conversation alive. Memory operations also recheck t
 Gateway's captured binding in the write transaction; a changed environment returns
 `stale_environment` rather than relabelling a delayed write.
 
-The cross-project deletion planner and full Node effect fence are still pending.
-This capture mechanism does not expose project moves or prove Node-installed
-sandbox policy. Existing project deletion behavior and wire responses are unchanged.
+Schema 1024 integrates these snapshots into the project-deletion planner above.
+The full Node effect fence is still pending. Neither mechanism exposes project
+moves or proves Node-installed sandbox policy.
 
 ### Fetched-content provenance
 

@@ -2,10 +2,11 @@
 
 [Unified conversations](unified-conversations.md) · [Execution contracts](conversation-execution-contracts.md)
 
-Status: U2 in progress locally, 2026-10-27. Schema 1021 delivered the durable
+Status: U2 in progress locally, 2026-10-28. Schema 1021 delivered the durable
 legacy adapter; schema 1022 adds explicit project membership, configured mode
 and workspace-capability histories, and an owner-scoped environment read model.
 Schema **1023** captures new global-memory version/proposal write-time origins.
+Schema **1024** consumes them in project deletion and records cleanup completion.
 Resource provenance, full effect fences and supported environment transitions
 remain to implement. No mount, move, grant, process restart or U1 activation is enabled.
 
@@ -138,11 +139,13 @@ fence a Node's old-generation request arriving after a change: the Node protocol
 still needs expected binding generations at all effect boundaries. No switch API
 is exposed by this change.
 
-**Remaining integration:** the existing project-deletion planner still uses its
-legacy session set. Before exposing cross-project moves, it must classify by these
-frozen origins (including moved/deleted writers) and require explicit review when
-historical evidence is insufficient. Do not turn a stored snapshot into a grant or
-claim that provenance capture alone implements safe project moves.
+**Integrated locally (schema 1024):** project deletion selects by recorded origins,
+not session sets. Unknown versions and proposals require explicit client-aware
+review. Completion receipts commit with memory effects and the project fence;
+retry, restart and overlapping standalone member deletion preserve the selected
+semantics and later edits. Current member sessions alone are destroyed. Migration
+never invents historical receipts; old partial deletions need review. Resource
+provenance and actual mount revocation remain separate work.
 
 ## Mode-field inventory and preservation
 
@@ -168,9 +171,9 @@ workspace-memory/repository and schedule-any/delegation validations remain.
 
 ## Remaining U2 implementation and gates
 
-1. Persist immutable resource provenance and consume frozen memory origins in the
-   cross-project deletion planner with explicit legacy review. Historical unknown
-   provenance stays unknown. Add pending/acknowledged transitions, not just configuration.
+1. Persist immutable resource provenance and add pending/acknowledged transitions,
+   not just configuration. The global-memory deletion integration is complete locally;
+   source provenance for uploads and other resources remains separate work.
 2. Carry expected membership/binding versions through affected client and Node
    commands, approvals and effect boundaries. Old clients cannot bypass changed
    authority. Runner epoch and device control remain independent inputs.

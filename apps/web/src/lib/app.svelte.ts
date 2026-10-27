@@ -21,7 +21,11 @@ import { api, connectEvents, ApiError, type EventConnection } from './api';
 import type { NewWorkspace } from './chats';
 import { isReadOnly, modeOf, tabOf } from './modes';
 import { memoryApi, type MemoryProposal } from './memory';
-import { projectDeletionApi, type ProjectMemoryDecision } from './project-deletion';
+import {
+  projectDeletionApi,
+  type ProjectMemoryDecision,
+  type ProjectProposalDecision,
+} from './project-deletion';
 import { schedulesApi, type Schedule, type ScheduleRun } from './schedules';
 import {
   interactionFromUrl,
@@ -1384,8 +1388,12 @@ class AppState {
    * Delete a chat project with its chats (docs/guides/chat-projects.md). The
    * page it was on goes back to the open session, or the one behind it.
    */
-  async deleteProject(workspaceId: string, decisions: ProjectMemoryDecision[]) {
-    if (!this.demo) await projectDeletionApi.delete(workspaceId, decisions);
+  async deleteProject(
+    workspaceId: string,
+    decisions: ProjectMemoryDecision[],
+    proposalDecisions: ProjectProposalDecision[] = [],
+  ) {
+    if (!this.demo) await projectDeletionApi.delete(workspaceId, decisions, proposalDecisions);
     if (this.draftWorkspaceId === workspaceId) this.discardDraftSession();
     for (const session of this.sessions.filter((item) => item.workspaceId === workspaceId))
       this.removeSession(session.id);

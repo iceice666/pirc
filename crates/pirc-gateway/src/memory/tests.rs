@@ -858,13 +858,35 @@ fn write(store: &Store<'_>, input: &NoteInput, session: &str) -> Entry {
     store.write_note(ME, input, &in_chat(session)).unwrap().0
 }
 
+fn seed_project_authors(conn: &Connection) {
+    use pirc_protocol::ModeId;
+    conn.sync_remote_workspaces(
+        "w",
+        &[
+            ("p".into(), "P".into(), ModeId::new("chat").unwrap()),
+            ("other".into(), "Other".into(), ModeId::new("chat").unwrap()),
+        ],
+    )
+    .unwrap();
+    crate::conversation_bindings::policies::install_catalog(conn, &crate::app::test_modes())
+        .unwrap();
+    for (id, workspace) in [
+        ("p1", "w:p"),
+        ("p2", "w:p"),
+        ("s2", "w:other"),
+        ("s3", "w:other"),
+    ] {
+        conn.execute("INSERT INTO sessions(id,workspace_id,private_session_path,name,owner_user,created_at,updated_at) VALUES(?,?,?,?,?,0,0)",rusqlite::params![id,workspace,format!("node://w/{id}"),id,ME]).unwrap();
+    }
+}
+
 #[test]
 fn deleting_a_project_classifies_by_the_session_of_each_version() {
     use super::store::{ProjectAction, ProjectChoice, ProjectDecision};
     let db = Db::memory();
     let conn = db.lock();
     let store = store(&conn);
-    let project = vec!["p1".to_owned(), "p2".to_owned()];
+    seed_project_authors(&conn);
     // Only the project: forgotten.
     let own = write(&store, &add("Project only"), "p1");
     let own = write(
@@ -909,7 +931,7 @@ fn deleting_a_project_classifies_by_the_session_of_each_version() {
         .unwrap()
         .0;
 
-    let plan = store.project_plan(ME, &project).unwrap();
+    let plan = store.project_plan(ME, "w:p").unwrap();
     let action = |id: &str| {
         plan.iter()
             .find(|item| item.entry.id == id)
@@ -926,10 +948,7 @@ fn deleting_a_project_classifies_by_the_session_of_each_version() {
     );
 
     // Without a decision (or on another revision) nothing changes.
-    assert_eq!(
-        code(store.delete_project(ME, &project, "w:p", &[], true)),
-        "conflict"
-    );
+    assert_eq!(code(store.delete_project(ME, "w:p", &[], &[])), "conflict");
     let stale = vec![(
         mixed.id.clone(),
         ProjectDecision {
@@ -938,7 +957,7 @@ fn deleting_a_project_classifies_by_the_session_of_each_version() {
         },
     )];
     assert_eq!(
-        code(store.delete_project(ME, &project, "w:p", &stale, true)),
+        code(store.delete_project(ME, "w:p", &stale, &[])),
         "conflict"
     );
     assert_eq!(
@@ -957,9 +976,7 @@ fn deleting_a_project_classifies_by_the_session_of_each_version() {
             choice: ProjectChoice::Edit("A cleaned".into()),
         },
     )];
-    store
-        .delete_project(ME, &project, "w:p", &decisions, true)
-        .unwrap();
+    store.delete_project(ME, "w:p", &decisions, &[]).unwrap();
     let forgotten = store.entry(ME, &own.id).unwrap();
     assert_eq!(
         (forgotten.status.as_str(), forgotten.content.as_str()),
@@ -984,22 +1001,20 @@ fn deleting_a_project_classifies_by_the_session_of_each_version() {
     assert_eq!(store.entry(ME, &other.id).unwrap().content, "Other");
     assert_eq!(code(store.proposal(ME, &pending.id)), "not_found");
     // Project tombstones refuse nothing: another chat may write it again.
-    assert!(note(&store, "Tea for X", ME).is_ok());
-    assert!(note(&store, "Project only 2", ME).is_ok());
+    write(&store, &add("Tea for X"), "s2");
+    write(&store, &add("Project only 2"), "s2");
     // A user's Forget still does.
     store.forget(ME, &other.id).unwrap();
     assert_eq!(code(note(&store, "Other", ME)), "forgotten");
     // Nothing of the project is left to do; a repeated sweep is a no-op.
     let left: Vec<_> = store
-        .project_plan(ME, &project)
+        .project_plan(ME, "w:p")
         .unwrap()
         .into_iter()
         .map(|item| item.entry.id)
         .collect();
     assert!(left.is_empty(), "{left:?}");
-    store
-        .delete_project(ME, &project, "w:p", &[], false)
-        .unwrap();
+    store.delete_project(ME, "w:p", &[], &[]).unwrap();
 }
 
 #[test]
@@ -1008,7 +1023,7 @@ fn a_kept_entry_stays_as_it_is() {
     let db = Db::memory();
     let conn = db.lock();
     let store = store(&conn);
-    let project = vec!["p1".to_owned()];
+    seed_project_authors(&conn);
     // Created in the project, edited elsewhere: mixed too.
     let entry = write(&store, &add("From P"), "p1");
     let entry = write(
@@ -1016,7 +1031,7 @@ fn a_kept_entry_stays_as_it_is() {
         &edit(Action::Replace, &entry.id, Some("From P and S"), Some(1)),
         "s2",
     );
-    let plan = store.project_plan(ME, &project).unwrap();
+    let plan = store.project_plan(ME, "w:p").unwrap();
     assert_eq!(plan[0].action, ProjectAction::Review);
     let decisions = vec![(
         entry.id.clone(),
@@ -1025,19 +1040,16 @@ fn a_kept_entry_stays_as_it_is() {
             choice: ProjectChoice::Keep,
         },
     )];
-    store
-        .delete_project(ME, &project, "w:p", &decisions, true)
-        .unwrap();
+    store.delete_project(ME, "w:p", &decisions, &[]).unwrap();
     let kept = store.entry(ME, &entry.id).unwrap();
     assert_eq!(
         (kept.content.as_str(), kept.revision),
         ("From P and S", entry.revision)
     );
     assert_eq!(store.history(ME, &entry.id).unwrap().len(), 2);
-    // The final sweep leaves it too.
-    store
-        .delete_project(ME, &project, "w:p", &[], false)
-        .unwrap();
+    // The raw plan still sees mixed history. The orchestration receipt, tested
+    // separately, prevents retrying this low-level mutation.
+    assert_eq!(code(store.delete_project(ME, "w:p", &[], &[])), "conflict");
     assert_eq!(store.entry(ME, &entry.id).unwrap().content, "From P and S");
 }
 
@@ -1047,7 +1059,7 @@ fn a_rollback_to_text_forgotten_since_forgets_instead() {
     let db = Db::memory();
     let conn = db.lock();
     let store = store(&conn);
-    let project = vec!["p1".to_owned()];
+    seed_project_authors(&conn);
     let entry = write(&store, &add("Old text"), "s2");
     write(
         &store,
@@ -1067,12 +1079,10 @@ fn a_rollback_to_text_forgotten_since_forgets_instead() {
     )
     .unwrap();
     assert_eq!(
-        store.project_plan(ME, &project).unwrap()[0].action,
+        store.project_plan(ME, "w:p").unwrap()[0].action,
         ProjectAction::Rollback
     );
-    store
-        .delete_project(ME, &project, "w:p", &[], true)
-        .unwrap();
+    store.delete_project(ME, "w:p", &[], &[]).unwrap();
     assert_eq!(
         store.entry(ME, &entry.id).unwrap().status,
         EntryStatus::Forgotten

@@ -26,6 +26,7 @@
   let loading = $state(false);
   type Choice = 'forget' | 'keep' | 'edit';
   let choices = $state<Record<string, Choice>>({});
+  let proposalChoices = $state<Record<string, 'keep' | 'forget'>>({});
   let edits = $state<Record<string, string>>({});
   let generation = 0;
 
@@ -51,6 +52,7 @@
       if (current !== generation) return;
       preview = next;
       choices = {};
+      proposalChoices = {};
       edits = Object.fromEntries(next.memory.map((item) => [item.entry.id, item.entry.content]));
       error = notice;
     } catch (cause) {
@@ -66,12 +68,16 @@
   const forgotten = $derived(of('forget'));
   const rolledBack = $derived(of('rollback'));
   const review = $derived(of('review'));
+  const proposalReview = $derived(
+    preview?.memoryProposals?.filter((p) => p.action === 'review') ?? [],
+  );
   const decided = $derived(
-    review.every(
-      (item) =>
-        choices[item.entry.id] &&
-        (choices[item.entry.id] !== 'edit' || edits[item.entry.id]?.trim()),
-    ),
+    proposalReview.every((p) => proposalChoices[p.proposal.id]) &&
+      review.every(
+        (item) =>
+          choices[item.entry.id] &&
+          (choices[item.entry.id] !== 'edit' || edits[item.entry.id]?.trim()),
+      ),
   );
   const plural = (count: number, one: string, many = `${one}s`) =>
     `${count} ${count === 1 ? one : many}`;
@@ -92,7 +98,13 @@
     error = '';
     const id = workspace.id;
     try {
-      await app.deleteProject(id, decisions());
+      const proposalDecisions = proposalReview.map((p) => ({
+        proposalId: p.proposal.id,
+        status: p.proposal.status,
+        action: proposalChoices[p.proposal.id]!,
+      }));
+      if (proposalDecisions.length) await app.deleteProject(id, decisions(), proposalDecisions);
+      else await app.deleteProject(id, decisions());
       open = false;
       workspace = undefined;
     } catch (cause) {
@@ -127,7 +139,7 @@
       {#if preview.deleting}
         <p class="notice">
           {tr(
-            'An earlier deletion of this project did not finish. Deleting again completes it; entries you kept come up for a decision again.',
+            'An earlier deletion of this project did not finish. Retry resumes cleanup; completed memory decisions are preserved.',
           )}
         </p>
       {/if}
@@ -185,7 +197,7 @@
         <h3>{tr('Needs your decision')}</h3>
         <p>
           {tr(
-            'These entries mix text from this project with text from other chats, which cannot be separated automatically.',
+            'These entries have mixed or unknown project origins. Keep preserves their history. Edit replaces project and unknown-origin history with your text; other known origins stay. Forget removes the entire entry.',
           )}
         </p>
         <ul class="review">
@@ -219,6 +231,42 @@
                     })}
                 ></textarea>
               {/if}
+            </li>
+          {/each}
+        </ul>
+      {/if}
+
+      {#if preview.memoryProposals?.length}
+        <h3>{tr('Memory proposals')}</h3>
+        <p>
+          {tr(
+            'Proposals recorded in this project are deleted. For unknown origins, choose whether to keep or delete each proposal; keeping does not approve it.',
+          )}
+        </p>
+        <ul class="review">
+          {#each preview.memoryProposals as item (item.proposal.id)}
+            <li>
+              <p class="entry">{item.proposal.content ?? item.proposal.quote}</p>
+              {#if item.action === 'review'}
+                <div
+                  class="choices"
+                  role="radiogroup"
+                  aria-label={tr('What to do with this proposal')}
+                >
+                  {#each [{ value: 'forget', label: 'Forget' }, { value: 'keep', label: 'Keep as is' }] as option (option.value)}
+                    <label class="choice"
+                      ><input
+                        type="radio"
+                        name="proposal-{item.proposal.id}"
+                        value={option.value}
+                        checked={proposalChoices[item.proposal.id] === option.value}
+                        onchange={() =>
+                          (proposalChoices[item.proposal.id] = option.value as 'keep' | 'forget')}
+                      />{tr(option.label)}</label
+                    >
+                  {/each}
+                </div>
+              {:else}<p>{tr('Deleted')}</p>{/if}
             </li>
           {/each}
         </ul>

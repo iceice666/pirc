@@ -184,5 +184,10 @@
   "Conversation preparation is not yet confirmed. Check the result.": "Conversation preparation is not yet confirmed. Check the result.",
   "The first message admission is still unknown; Stop does not undo completed work.": "The first message admission is still unknown; Stop does not undo completed work.",
   "Unsent edits": "Unsent edits",
-  "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending."
+  "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.",
+  "An earlier deletion of this project did not finish. Retry resumes cleanup; completed memory decisions are preserved.": "An earlier deletion of this project did not finish. Retry resumes cleanup; completed memory decisions are preserved.",
+  "These entries have mixed or unknown project origins. Keep preserves their history. Edit replaces project and unknown-origin history with your text; other known origins stay. Forget removes the entire entry.": "These entries have mixed or unknown project origins. Keep preserves their history. Edit replaces project and unknown-origin history with your text; other known origins stay. Forget removes the entire entry.",
+  "Memory proposals": "Memory proposals",
+  "Proposals recorded in this project are deleted. For unknown origins, choose whether to keep or delete each proposal; keeping does not approve it.": "Proposals recorded in this project are deleted. For unknown origins, choose whether to keep or delete each proposal; keeping does not approve it.",
+  "What to do with this proposal": "What to do with this proposal"
 }

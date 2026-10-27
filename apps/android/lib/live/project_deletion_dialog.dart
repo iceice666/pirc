@@ -74,13 +74,21 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
   List<Json> items(String action) => rows(
     preview?['memory'],
   ).where((item) => item['action'] == action).toList();
-  bool get decided => items('review').every((item) {
-    final entryId = '${obj(item['entry'])['id']}';
-    final choice = choices[entryId];
-    final text = (edits[entryId] ?? '').trim();
-    return choice != null &&
-        (choice != 'edit' || (text.isNotEmpty && text.length <= 1000));
-  });
+  final Map<String, String> proposalChoices = {};
+  List<Json> get proposalReview => rows(
+    preview?['memoryProposals'],
+  ).where((p) => p['action'] == 'review').toList();
+  bool get decided =>
+      proposalReview.every(
+        (p) => proposalChoices.containsKey('${obj(p['proposal'])['id']}'),
+      ) &&
+      items('review').every((item) {
+        final entryId = '${obj(item['entry'])['id']}';
+        final choice = choices[entryId];
+        final text = (edits[entryId] ?? '').trim();
+        return choice != null &&
+            (choice != 'edit' || (text.isNotEmpty && text.length <= 1000));
+      });
 
   @override
   void initState() {
@@ -141,6 +149,7 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
       loading = true;
       preview = null;
       choices.clear();
+      proposalChoices.clear();
       edits.clear();
       error = null;
     });
@@ -152,6 +161,18 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
       if (!current(ticket)) return;
       if (obj(response['project'])['id'] != id ||
           response['memory'] is! List ||
+          (response.containsKey('memoryProposals') &&
+              (response['memoryProposals'] is! List ||
+                  rows(response['memoryProposals']).any(
+                    (p) =>
+                        !{'forget', 'review'}.contains(p['action']) ||
+                        obj(p['proposal'])['id'] is! String ||
+                        !{
+                          'pending',
+                          'approved',
+                          'rejected',
+                        }.contains(obj(p['proposal'])['status']),
+                  ))) ||
           response['chats'] is! List ||
           response['schedules'] is! List ||
           response['keptSchedules'] is! List ||
@@ -218,7 +239,18 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
       error = null;
     });
     try {
-      await widget.controller.deleteProject(id, decisions);
+      await widget.controller.deleteProject(
+        id,
+        decisions,
+        proposalDecisions: [
+          for (final p in proposalReview)
+            {
+              'proposalId': obj(p['proposal'])['id'],
+              'status': obj(p['proposal'])['status'],
+              'action': proposalChoices['${obj(p['proposal'])['id']}'],
+            },
+        ],
+      );
       if (!mounted || closing) return;
       if (!identityValid) {
         closeObsolete();
@@ -435,7 +467,7 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
       if (data['deleting'] == true)
         text(
           tr(
-            "An earlier deletion of this project did not finish. Deleting again completes it; entries you kept come up for a decision again.",
+            "An earlier deletion of this project did not finish. Retry resumes cleanup; completed memory decisions are preserved.",
           ),
           alert: true,
         ),
@@ -491,10 +523,51 @@ class _DeleteProjectDialogState extends State<_DeleteProjectDialog> {
         heading(tr("Needs your decision")),
         text(
           tr(
-            "These entries mix text from this project with text from other chats, which cannot be separated automatically.",
+            "These entries have mixed or unknown project origins. Keep preserves their history. Edit replaces project and unknown-origin history with your text; other known origins stay. Forget removes the entire entry.",
           ),
         ),
         for (final item in review) reviewEntry(item),
+      ],
+      if (rows(data['memoryProposals']).isNotEmpty) ...[
+        heading(tr("Memory proposals")),
+        text(
+          tr(
+            "Proposals recorded in this project are deleted. For unknown origins, choose whether to keep or delete each proposal; keeping does not approve it.",
+          ),
+        ),
+        for (final item in rows(data['memoryProposals'])) ...[
+          text(
+            '${obj(item['proposal'])['content'] ?? obj(item['proposal'])['quote'] ?? ''}',
+          ),
+          if (item['action'] == 'review')
+            Wrap(
+              spacing: 12,
+              children: [
+                for (final option in {
+                  'forget': tr("Forget"),
+                  'keep': tr("Keep as is"),
+                }.entries)
+                  ChoiceChip(
+                    key: ValueKey(
+                      'project-proposal-${obj(item['proposal'])['id']}-${option.key}',
+                    ),
+                    label: Text(option.value),
+                    selected:
+                        proposalChoices['${obj(item['proposal'])['id']}'] ==
+                        option.key,
+                    onSelected: busy || loading
+                        ? null
+                        : (_) => setState(
+                            () =>
+                                proposalChoices['${obj(item['proposal'])['id']}'] =
+                                    option.key,
+                          ),
+                  ),
+              ],
+            )
+          else
+            text(tr("Deleted")),
+        ],
       ],
       heading(tr("Not deleted")),
       if (kept.isNotEmpty)

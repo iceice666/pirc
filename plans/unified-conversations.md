@@ -2804,6 +2804,60 @@ rollback acceptance remain open. No Flutter UI change, release, deployment or pu
 Run-owned compiler, native helper and browser-test outputs were removed after all
 owned processes exited; existing APKs, shared caches and other work were preserved.
 
+## U2 implementation checkpoint: project-origin deletion and cleanup receipts (2026-10-28)
+
+Gateway schema **1024** applies project memory cleanup using recorded write-time
+origins rather than each author's current workspace. Moved and deleted authors
+retain the old project's versions; later versions/proposals in a new project stay
+outside the old project's automatic cleanup. Only present member conversations are
+destroyed. Known all-project/suffix/mixed histories retain Forget/Rollback/Review
+semantics. Legacy/missing/unresolved sources are never assigned a guessed project:
+they require explicit review, even if no present member can be identified.
+
+Web and Android reuse the existing confirmation. Unknown memory history offers
+Keep/Edit/Forget with its scope explained. Edit records user provenance even for
+identical replacement text, scrubs project/unknown versions, and preserves known
+outside versions. Proposal origins use the same classification: known project
+proposals are removed; unknown proposals need Keep/Forget at their displayed status.
+Keep does not approve a proposal. Both clients send `memoryReviewVersion: 1`; older
+clients cannot approve unknown-origin cleanup. Revision/status conflicts and duplicate
+choices are refused. A stale review cannot silently become an automatic deletion.
+
+The project fence, global-memory effects, completion receipt and member cleanup
+scope are atomic. Node removal follows. On failure/restart, retry resumes removal
+without running the memory plan again or sweeping later writes. An overlapping
+standalone deletion of a recorded member uses this project scope and cannot undo
+Keep/Edit with the standalone original-creator purge. Receipts contain only IDs,
+owner, version and completion time, no copied text or decision payload. A pre-1024
+partial deletion has no invented receipt and requires a fresh review. Original
+single-conversation semantics remain for unrelated deletions; project tombstones
+remain separate from global Forget.
+
+Validation: 373 Gateway unit tests pass, including two independent database
+connections deleting different projects with competing edits, 2,000 memory versions,
+moved/deleted authors, proposal status conflicts, identical-text Edit, schema 1023
+migration, receipt restart, stale retries, transaction rollback, current-member-only
+removal and overlapping standalone cleanup. Five Web dialog tests, two localization tests and Svelte
+checks (zero diagnostics) pass. Fourteen focused Flutter widget/controller tests
+pass in an isolated temporary copy; analysis of the three affected Dart files is
+clean. These are mocked platform/UI tests, not Android OS or physical-device tests.
+Eight actual Gateway/Node process cases pass: project deletion, memory (unchanged
+golden), three native checkpoints, old-client contract, Node link and session
+lifecycle. Strict Gateway Clippy passes. No broad Flutter suite or APK was built.
+
+Remaining U2 work: immutable resource provenance beyond global memory, expected
+binding versions at client/Node command and approval boundaries, and actual
+pending/acknowledged environment transitions. U4 mount revocation, U5 collaboration
+and U6 bounded proactive pots remain open. No supported workspace switch or new
+grant is enabled. `canSubmit: false`, Node schema 2009, protocol 15, first-send
+contract 2 and private envelope 3 are unchanged. Android OS/device and eventual
+deployment/rollback acceptance remain open; local Nix was waived. No push,
+deployment or Release is part of this checkpoint.
+
+After all owned test processes exited, **2.06 GiB** of run-owned compiler, isolated
+Flutter and process-test outputs were removed. Shared caches, existing APKs and
+other agents' work were preserved.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

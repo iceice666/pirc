@@ -184,5 +184,10 @@
   "Conversation preparation is not yet confirmed. Check the result.": "尚未確認對話準備完成，請檢查結果。",
   "The first message admission is still unknown; Stop does not undo completed work.": "首次訊息是否已接收仍未知；停止不會復原已完成的工作。",
   "Unsent edits": "尚未送出的修改",
-  "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "其他視窗已變更此草稿。你尚未送出的修改已另存為草稿，請開啟並檢視後再送出。"
+  "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "其他視窗已變更此草稿。你尚未送出的修改已另存為草稿，請開啟並檢視後再送出。",
+  "An earlier deletion of this project did not finish. Retry resumes cleanup; completed memory decisions are preserved.": "先前的專案刪除尚未完成。重試會續接清理，已完成的記憶處理決定會保留。",
+  "These entries have mixed or unknown project origins. Keep preserves their history. Edit replaces project and unknown-origin history with your text; other known origins stay. Forget removes the entire entry.": "這些記憶的專案來源混合或不明。保留會保留歷史；編輯會以你的文字取代專案及來源不明的歷史，其他已知來源會保留；遺忘會刪除整筆記憶。",
+  "Memory proposals": "記憶提案",
+  "Proposals recorded in this project are deleted. For unknown origins, choose whether to keep or delete each proposal; keeping does not approve it.": "記錄為此專案來源的提案會被刪除。來源不明的提案請逐項選擇保留或刪除；保留不代表核准。",
+  "What to do with this proposal": "如何處理此提案"
 }
