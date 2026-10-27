@@ -189,6 +189,20 @@ fn require_assistant(context: &OpContext) -> ApiResult<()> {
     Ok(())
 }
 
+/// Recheck under the same write transaction as memory and its provenance. The
+/// context captured before waiting for DB access cannot relabel a stale write.
+fn require_current_environment(conn: &rusqlite::Connection, context: &OpContext) -> ApiResult<()> {
+    let current = conn.claim_session(&context.session.id, &context.user, false)?;
+    if current.binding != context.session.binding {
+        return Err(ApiError::new(
+            409,
+            "stale_environment",
+            "Conversation environment changed; refresh before writing memory",
+        ));
+    }
+    Ok(())
+}
+
 pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Value> {
     let user = context.user.as_str();
     let session_id = context.session.id.as_str();
@@ -241,13 +255,13 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
             };
             let (entry, unchanged, usage) = {
                 let conn = app.db.lock();
-                // Checked under the lock that writes: a chat fenced for
-                // deletion since the operation arrived writes nothing.
-                conn.require_session_available(session_id)?;
-                super::interactions::ensure_known(app, &conn);
-                let store = super::store(app, &conn);
-                let (entry, unchanged) = store.write_note(user, &args.input, &change)?;
-                (entry, unchanged, store.usage(user)?)
+                crate::db::atomic(&conn, |tx| {
+                    require_current_environment(tx, context)?;
+                    super::interactions::ensure_known(app, tx);
+                    let store = super::store(app, tx);
+                    let (entry, unchanged) = store.write_note(user, &args.input, &change)?;
+                    Ok((entry, unchanged, store.usage(user)?))
+                })?
             };
             if !unchanged {
                 app.memory_changed(user);
@@ -265,9 +279,11 @@ pub async fn run_op(app: &AppState, context: &OpContext, op: Op) -> ApiResult<Va
             let sources = json!({ "sessionId": session_id, "entryIds": args.entry_ids });
             let (proposal, duplicate) = {
                 let conn = app.db.lock();
-                conn.require_session_available(session_id)?;
-                super::interactions::ensure_known(app, &conn);
-                super::store(app, &conn).propose(user, session_id, &args.input, &sources)?
+                crate::db::atomic(&conn, |tx| {
+                    require_current_environment(tx, context)?;
+                    super::interactions::ensure_known(app, tx);
+                    super::store(app, tx).propose(user, session_id, &args.input, &sources)
+                })?
             };
             if !duplicate {
                 app.memory_changed(user);

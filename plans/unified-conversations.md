@@ -2768,6 +2768,42 @@ open. No APK, local Nix run, remote push, deployment or Release in this slice.
 This run's isolated compiler/JVM/browser-test outputs were removed after all owned
 processes exited; shared caches, APKs and other agents' work were preserved.
 
+## U2 implementation checkpoint: memory write-time provenance (2026-10-28)
+
+Gateway schema **1023** records immutable origin snapshots beside each new global
+memory text version and USER proposal. A snapshot records server-verified session,
+canonical project membership and configured execution/policy versions in the same
+transaction. Proposal approval retains the original proposal origin across moves
+and restarts; restore/project rollback retains the restored version's origin. No-op
+writes keep existing versions. Legacy records stay unknown, never backfilled using
+today's membership. Current memory text/source wire shapes and creator rules remain.
+
+Origin-sidecar deletion follows history/proposal deletion and partial redaction.
+Single-conversation cleanup keeps entries created elsewhere, including retained
+editor origins; global Forget removes all relevant snapshots. Direct user edits
+in mixed-history project cleanup have user origins. Memory write/proposal operations
+recheck the Gateway's captured binding atomically and refuse `stale_environment` if
+it changed while waiting. This is not yet the Node-supplied expected-generation fence.
+
+Validation: 363 Gateway tests pass, including concurrent editors at one revision,
+source rollback on persistence failure, cross-owner source refusal, duplicate
+proposal/move/restart/approval, legacy proposal/restore, creator/editor deletion,
+mixed-history Edit and 2048 historical versions migrated by four concurrent opens.
+Seven process regressions pass: the memory API golden remains unchanged, three
+native checkpoint cases preserve isolation, and old-client/Node-link/session
+contracts pass. All five explicit Web/native live-client failure/restart cases
+also pass against the new binaries. Kotlin core/helper compilation uses warnings
+as errors; no Flutter or UI changes and no APK/device test were needed. Strict
+Gateway Clippy, Rustfmt, Prettier and diff checks pass.
+
+Remaining: source-aware project deletion with explicit legacy-unknown review,
+immutable resource provenance, full command/approval/effect fences, actual Node
+mount transitions, canonical collaboration and scoped proactive pots. No cross-project
+switch or new grant is enabled. U1 stays gated; Android OS/device and deployment/
+rollback acceptance remain open. No Flutter UI change, release, deployment or push.
+Run-owned compiler, native helper and browser-test outputs were removed after all
+owned processes exited; existing APKs, shared caches and other work were preserved.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

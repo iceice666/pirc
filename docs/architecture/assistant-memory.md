@@ -35,6 +35,27 @@ Main coding sessions, delegated ones included, wait at most 3 seconds and freeze
 - Budgets are characters: `PIRC_MEMORY_USER_CHARS` defaults to 2,000 and `PIRC_MEMORY_NOTE_CHARS` to 8,000; one entry holds at most 1,000. Over-budget writes fail with `memory_full`.
 - Remove is reversible. Explicit **Forget** erases entry text, logged versions and proposals carrying them, retaining normalized hashes of all versions to refuse the same text. It does not erase node transcripts, workspace memory or already-frozen snapshots, and cannot recognize paraphrases. Project deletion has different, project-scoped cleanup/tombstones; see [deleting a project](../guides/chat-projects.md#deleting-a-project).
 
+### Frozen project/environment origins (unreleased local schema 1023)
+
+New global-memory text versions and USER proposals have private server-authored
+origin snapshots, separate from caller-visible `sources`. They record the verified
+conversation, project-membership revision/resolution and configured execution/policy
+versions at write time. The original entry creator still governs single-conversation
+deletion. Approval copies the proposal's original snapshot; restore/rollback copies
+the restored version's snapshot. Direct user edits do not inherit a current project.
+Legacy records without a snapshot remain unknown, with no inferred backfill.
+
+Origin snapshots are written atomically with their version/proposal. Forget and
+redaction scrub them; deleting a version or proposal cascades them. A retained
+version from an editor whose conversation was deleted keeps its historical source,
+without keeping the deleted conversation alive. Memory operations also recheck the
+Gateway's captured binding in the write transaction; a changed environment returns
+`stale_environment` rather than relabelling a delayed write.
+
+The cross-project deletion planner and full Node effect fence are still pending.
+This capture mechanism does not expose project moves or prove Node-installed
+sandbox policy. Existing project deletion behavior and wire responses are unchanged.
+
 ### Fetched-content provenance
 
 A bash command naming a network fetcher or a URL is tagged `tool:bash:network`; PTC bash operations propagate that capability/taint. A MEMORY note with a network origin and no human origin is shown as “from fetched content,” with guidance to verify it as a claim, not follow it as an instruction. Mixed local/network sources are labelled too. This is a coarse heuristic: scripts or build commands may fetch without naming a fetcher, and names may appear without a fetch. It is not complete data-flow tracking.

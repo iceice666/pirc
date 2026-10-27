@@ -3,9 +3,10 @@
 [Unified conversations](unified-conversations.md) · [Execution contracts](conversation-execution-contracts.md)
 
 Status: U2 in progress locally, 2026-10-27. Schema 1021 delivered the durable
-legacy adapter; schema **1022** adds explicit project membership, configured mode
+legacy adapter; schema 1022 adds explicit project membership, configured mode
 and workspace-capability histories, and an owner-scoped environment read model.
-Effect fences, memory write-time provenance and supported environment transitions
+Schema **1023** captures new global-memory version/proposal write-time origins.
+Resource provenance, full effect fences and supported environment transitions
 remain to implement. No mount, move, grant, process restart or U1 activation is enabled.
 
 ## Identity mapping and current migration
@@ -100,10 +101,48 @@ are not turned into synthetic authority. Existing list/snapshot shapes are uncha
 from schema 1021. No new UI or Flutter bridge operation is claimed in this slice.
 
 **Boundary:** configured policy versions still are not installed/acknowledged
-sandbox versions. Project files, mutable external rules/mounts and memory write-time
-provenance are not yet snapshotted. No expected-version command precondition or
+sandbox versions. Project files and mutable external rules/mounts are not yet
+snapshotted. No general expected-version command precondition or
 old-client authority fence is installed. U4 must provide real Node revocation and
 acknowledgement before a project/environment transition can be exposed.
+
+## Memory write-time source snapshots (schema 1023)
+
+`memory_version_contexts` and `memory_proposal_contexts` are private, versioned
+sidecars to the original memory log and proposal rows. Migration creates them empty:
+no current workspace is used to backfill historical membership. New agent-authored
+text/proposals capture the verified session, canonical membership resolution and
+revision, execution generation/workspace/Node/mode, and configured policy revisions
+inside the same transaction as the write. User/model-supplied source labels cannot
+supply this snapshot. The existing `sources_json` and immutable creator attribution
+keep their original meanings and wire formats.
+
+USER approval copies the proposal's original snapshot; duplicate proposals retain
+that same snapshot. Restore and project rollback copy the restored content version's
+snapshot. They never recompute an origin from where its conversation lives today.
+Legacy/missing snapshots remain explicitly unknown. Direct user edits have a user
+origin rather than an invented project. A no-op note or restore creates no new
+version or origin. Contentless Remove/Forget audit rows carry no source snapshot.
+
+Sidecars reject UPDATE. Log/proposal deletion cascades their snapshots; project
+history scrubbing and proposal redaction delete them in the same transaction.
+Deleting an editing conversation preserves another creator's memory and the retained
+version origins needed by project deletion. Global Forget and creator deletion
+remove the relevant snapshots. Original entry ownership and mixed-history Keep/Edit/
+Forget semantics are unchanged.
+
+`memory.note` and `memory.proposeUser` compare the Gateway operation context's
+binding to current state under the memory write transaction. A change while waiting
+returns `stale_environment` without a memory/proposal row. This does **not** yet
+fence a Node's old-generation request arriving after a change: the Node protocol
+still needs expected binding generations at all effect boundaries. No switch API
+is exposed by this change.
+
+**Remaining integration:** the existing project-deletion planner still uses its
+legacy session set. Before exposing cross-project moves, it must classify by these
+frozen origins (including moved/deleted writers) and require explicit review when
+historical evidence is insufficient. Do not turn a stored snapshot into a grant or
+claim that provenance capture alone implements safe project moves.
 
 ## Mode-field inventory and preservation
 
@@ -129,9 +168,9 @@ workspace-memory/repository and schedule-any/delegation validations remain.
 
 ## Remaining U2 implementation and gates
 
-1. Persist immutable resource and new-memory write-time provenance. Historical
-   unknown provenance stays unknown; do not rewrite existing memory or its deletion
-   rules. Add current versus pending/acknowledged transitions, not just configuration.
+1. Persist immutable resource provenance and consume frozen memory origins in the
+   cross-project deletion planner with explicit legacy review. Historical unknown
+   provenance stays unknown. Add pending/acknowledged transitions, not just configuration.
 2. Carry expected membership/binding versions through affected client and Node
    commands, approvals and effect boundaries. Old clients cannot bypass changed
    authority. Runner epoch and device control remain independent inputs.

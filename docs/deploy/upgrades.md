@@ -1,5 +1,24 @@
 # Upgrades
 
+## Unreleased local checkpoint: frozen memory origins
+
+Gateway schema **1023** adds private origin snapshots for new global-memory
+versions and proposals. Existing text, creator attribution, history and public
+response formats stay unchanged; old rows are not backfilled from current project
+membership. Approval/restore retain the original source snapshot. Forget, proposal
+redaction and version deletion remove snapshots with their corresponding data.
+
+A memory operation whose Gateway-validated environment changed before the write
+transaction is refused with `stale_environment`. This is not the complete Node
+generation fence and does not enable project moves. The future project-deletion
+planner must consume recorded membership origins before cross-project moves ship.
+
+Older Gateway binaries refuse schema 1023. An eventual upgrade still requires a
+consistent state backup and a matching binary/state rollback pair. Node schema
+**2009**, protocol **15**, client contract **2**, private envelope **3** and the
+production `canSubmit: false` gate remain unchanged. No deployment, Release, APK
+or device acceptance is claimed by this local slice.
+
 ## Unreleased local checkpoint: configured environment policy
 
 Gateway schema **1022** adds explicit conversation project membership and immutable

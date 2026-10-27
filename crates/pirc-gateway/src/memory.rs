@@ -5,6 +5,7 @@
 
 mod interactions;
 mod ops;
+mod provenance;
 mod routes;
 pub(crate) mod schema;
 mod store;

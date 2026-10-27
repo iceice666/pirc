@@ -11,6 +11,7 @@ use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter};
 use serde::Serialize;
 use serde_json::{Map, Value, json};
 
+use super::provenance::{self, Snapshot};
 use super::text::{content_hash, grouped, squash};
 use crate::db::{atomic, sql_text_enum};
 use crate::dispatch::redact_secrets;
@@ -508,7 +509,10 @@ impl<'a> Store<'a> {
                     return Ok((same, true));
                 }
                 self.make_room(user, Kind::Note, len(&content))?;
-                return Ok((self.insert(user, Kind::Note, &content, change)?, false));
+                return Ok((
+                    self.insert(user, Kind::Note, &content, change, None)?,
+                    false,
+                ));
             }
             let entry = self.entry(user, input.id.as_deref().unwrap_or_default())?;
             if !entry.is(Kind::Note) {
@@ -698,6 +702,7 @@ impl<'a> Store<'a> {
                     now_ms(),
                 ],
             )?;
+            provenance::record_proposal(self.conn, &id, &provenance::from_session(self.conn, user, session_id)?)?;
             Ok((self.proposal(user, &id)?, false))
         })
     }
@@ -735,6 +740,7 @@ impl<'a> Store<'a> {
     ) -> ApiResult<(Proposal, Entry)> {
         self.tx(|| {
             let proposal = self.pending(user, proposal_id)?;
+            let origin = provenance::proposal(self.conn, user, proposal_id)?;
             let actor = format!("user:{user}");
             let mut sources = match &proposal.sources {
                 Value::Object(sources) => sources.clone(),
@@ -754,7 +760,7 @@ impl<'a> Store<'a> {
                     Some(same) => same,
                     None => {
                         self.make_room(user, Kind::User, len(&content))?;
-                        self.insert(user, Kind::User, &content, &change)?
+                        self.insert(user, Kind::User, &content, &change, Some(&origin))?
                     }
                 }
             } else {
@@ -799,6 +805,7 @@ impl<'a> Store<'a> {
                             content: Some(&content),
                             origins: Some(&change.origins),
                             sources: Some(&change.sources),
+                            provenance: Some(&origin),
                             ..Next::default()
                         },
                         "replace",
@@ -875,7 +882,7 @@ impl<'a> Store<'a> {
                 [entry_id, user],
             )?;
             let forgotten = self.entry(user, entry_id)?;
-            self.log(user, &forgotten, "forget", &format!("user:{user}"))?;
+            self.log(user, &forgotten, "forget", &format!("user:{user}"), None)?;
             let hashed = if hashes.is_empty() {
                 String::new()
             } else {
@@ -956,6 +963,7 @@ impl<'a> Store<'a> {
                 0
             };
             self.make_room(user, kind, len(&content) - before)?;
+            let origin = provenance::version(self.conn, user, entry_id, revision)?;
             self.update(
                 user,
                 &entry,
@@ -964,6 +972,7 @@ impl<'a> Store<'a> {
                     status: Some(EntryStatus::Active),
                     origins: Some(&origins),
                     sources: Some(&sources),
+                    provenance: Some(&origin),
                 },
                 "restore",
                 &format!("user:{user}"),
@@ -1120,6 +1129,7 @@ impl<'a> Store<'a> {
         if version.content == entry.content {
             return Ok(());
         }
+        let origin = provenance::version(self.conn, user, &entry.id, Some(revision))?;
         self.update(
             user,
             entry,
@@ -1127,6 +1137,7 @@ impl<'a> Store<'a> {
                 content: Some(&version.content),
                 origins: Some(&version.origins),
                 sources: Some(&version.sources),
+                provenance: Some(&origin),
                 ..Next::default()
             },
             "restore",
@@ -1286,7 +1297,14 @@ impl<'a> Store<'a> {
         }
     }
 
-    fn insert(&self, user: &str, kind: Kind, content: &str, change: &Change) -> ApiResult<Entry> {
+    fn insert(
+        &self,
+        user: &str,
+        kind: Kind,
+        content: &str,
+        change: &Change,
+        origin: Option<&Snapshot>,
+    ) -> ApiResult<Entry> {
         let prefix = if kind == Kind::User { "u" } else { "n" };
         let id = self.new_id("memory_entries", prefix)?;
         let at = now_ms();
@@ -1305,7 +1323,7 @@ impl<'a> Store<'a> {
             ],
         )?;
         let entry = self.entry(user, &id)?;
-        self.log(user, &entry, "add", &change.actor)?;
+        self.log(user, &entry, "add", &change.actor, origin)?;
         Ok(entry)
     }
 
@@ -1331,11 +1349,18 @@ impl<'a> Store<'a> {
             ],
         )?;
         let updated = self.entry(user, &entry.id)?;
-        self.log(user, &updated, op, actor)?;
+        self.log(user, &updated, op, actor, next.provenance)?;
         Ok(updated)
     }
 
-    fn log(&self, user: &str, entry: &Entry, op: &str, actor: &str) -> ApiResult<()> {
+    fn log(
+        &self,
+        user: &str,
+        entry: &Entry,
+        op: &str,
+        actor: &str,
+        origin: Option<&Snapshot>,
+    ) -> ApiResult<()> {
         let kept = op != "remove" && op != "forget";
         self.conn.execute(
             "INSERT INTO memory_log (owner_user,entry_id,revision,op,content,origins_json,sources_json,actor,at) VALUES (?,?,?,?,?,?,?,?,?)",
@@ -1351,6 +1376,14 @@ impl<'a> Store<'a> {
                 now_ms(),
             ],
         )?;
+        if kept {
+            let seq = self.conn.last_insert_rowid();
+            let origin = match origin {
+                Some(origin) => origin.clone(),
+                None => provenance::from_actor(self.conn, user, actor)?,
+            };
+            provenance::record_version(self.conn, seq, &origin)?;
+        }
         Ok(())
     }
 }
@@ -1406,6 +1439,7 @@ pub struct ProjectDecision {
 /// What an update changes.
 #[derive(Default)]
 struct Next<'a> {
+    provenance: Option<&'a Snapshot>,
     content: Option<&'a str>,
     status: Option<EntryStatus>,
     origins: Option<&'a Value>,
