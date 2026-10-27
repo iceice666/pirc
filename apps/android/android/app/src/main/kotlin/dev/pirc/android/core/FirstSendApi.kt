@@ -32,7 +32,7 @@ internal class FirstSendApi(private val api: PircApi) {
             override fun isOneShot() = true
             override fun writeTo(sink: BufferedSink) = original.writeTo(sink)
         } }
-        val builder = api.request(path).header("Accept", "application/json").method(method, once)
+        val builder = api.request(path).header("Accept", "application/json").header("x-pirc-first-send-contract", "2").method(method, once)
         require(builder.build().url.encodedPath == path) { "First-send API path was normalized" }
         if (owner != null) builder.header("x-pirc-account", owner.urlSegment().replace("%7E", "~").replace("%21", "!").replace("%27", "'").replace("%28", "(").replace("%29", ")"))
         client.newCall(builder.build()).execute().use { response ->

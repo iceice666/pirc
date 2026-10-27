@@ -2,7 +2,7 @@
 // @vitest-environment-options {"url":"http://localhost"}
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { app } from './app.svelte';
-import { api } from './api';
+import { api, ApiError } from './api';
 import { demoSnapshot } from './mock';
 import { MemoryDraftStore, FirstLedger } from './testing/first-send';
 import { File as NodeFile } from 'node:buffer';
@@ -162,6 +162,9 @@ it('account changes hide prior content but retain the old account draft in its o
   const original = app.firstDraft!;
   vi.mocked(app.firstFlow.transport.capabilities).mockResolvedValue({
     version: 1,
+    clientContract: 2,
+    requiredClientContract: 2,
+    canStopBeforeAllocation: true,
     ownerUser: 'bob',
     canFenceAccount: true,
     canSubmit: true,
@@ -183,6 +186,9 @@ it('a late old-account removal callback cannot hide a new account record with th
   const original = app.firstDraft!;
   vi.mocked(app.firstFlow.transport.capabilities).mockResolvedValue({
     version: 1,
+    clientContract: 2,
+    requiredClientContract: 2,
+    canStopBeforeAllocation: true,
     ownerUser: 'bob',
     canFenceAccount: true,
     canSubmit: true,
@@ -258,13 +264,110 @@ it('restores authenticated saved input even when new first sends are disabled', 
   app.firstRecoveries = [];
   vi.mocked(app.firstFlow.transport.capabilities).mockResolvedValue({
     version: 1,
+    clientContract: 2,
+    requiredClientContract: 2,
+    canStopBeforeAllocation: true,
     ownerUser: 'alice',
     canFenceAccount: true,
     canSubmit: false,
-    canStopBeforeAllocation: true,
   });
   await app.initializeFirstSend();
   expect(app.firstEnabled).toBe(false);
   expect(app.firstRecoveries.some((r) => r.message === 'Keep when disabled')).toBe(true);
   expect(remote.calls).not.toContain('dispatch');
 });
+
+it('unknown and incompatible capability replies cannot replace a private draft with legacy creation', async () => {
+  await app.createSession('node:repo');
+  app.setDraft('Keep original private text');
+  const original = app.firstDraft;
+  app.firstCapabilities = undefined;
+  expect(await app.createSession('node:repo')).toBe(false);
+  expect(app.firstDraft?.operationId).toBe(original?.operationId);
+  app.firstCapabilities = {
+    version: 1,
+    clientContract: 0,
+    requiredClientContract: 3,
+    ownerUser: 'alice',
+    canSubmit: false,
+    canFenceAccount: true,
+  };
+  expect(await app.createSession('node:repo')).toBe(false);
+  expect(app.draft).toBe('Keep original private text');
+});
+
+it('server rollback keeps bound private input and cannot replace it through the legacy route', async () => {
+  await app.createSession('node:repo');
+  app.setDraft('Keep across rollback');
+  const original = app.firstDraft!;
+  vi.mocked(app.firstFlow.transport.capabilities).mockRejectedValue(new ApiError('Not found', 404));
+  await app.initializeFirstSend();
+  expect(app.firstEnabled).toBe(false);
+  expect(await app.createSession('node:repo')).toBe(false);
+  expect(app.firstDraft?.operationId).toBe(original.operationId);
+  expect(app.draft).toBe('Keep across rollback');
+  expect((await store.get(original.scope, original.operationId))?.message).toBe(
+    'Keep across rollback',
+  );
+  expect(remote.calls).toEqual([]);
+});
+
+it('cold explicitly unsupported servers keep legacy creation without reading private recovery', async () => {
+  // An authentication refusal clears the prior test binding before a cold probe.
+  vi.mocked(app.firstFlow.transport.capabilities).mockRejectedValueOnce(
+    new ApiError('Sign in', 401),
+  );
+  await app.initializeFirstSend();
+  vi.mocked(app.firstFlow.store.list).mockClear();
+  vi.mocked(app.firstFlow.transport.capabilities).mockRejectedValueOnce(
+    new ApiError('Not found', 404),
+  );
+  await app.initializeFirstSend();
+  expect(app.firstEnabled).toBe(false);
+  vi.spyOn(app, 'workspaceOnline').mockReturnValue(true);
+  expect(await app.createSession('node:repo')).toBe(true);
+  expect(app.firstDraft).toBeUndefined();
+  expect(app.firstFlow.store.list).not.toHaveBeenCalled();
+  expect(remote.calls).toEqual([]);
+});
+
+it('successful old gated capabilities also fence a bound modern draft', async () => {
+  await app.createSession('node:repo');
+  app.setDraft('Keep on old server');
+  const original = app.firstDraft!;
+  vi.mocked(app.firstFlow.transport.capabilities).mockResolvedValue({
+    version: 1,
+    ownerUser: 'alice',
+    canFenceAccount: true,
+    canSubmit: false,
+  });
+  await app.initializeFirstSend();
+  await app.initializeFirstSend();
+  expect(await app.createSession('node:repo')).toBe(false);
+  expect(app.firstDraft?.operationId).toBe(original.operationId);
+  expect(app.draft).toBe('Keep on old server');
+  expect(remote.calls).toEqual([]);
+});
+
+it.each([401, 404])(
+  'a late old %s capability refusal cannot clear a newer account binding',
+  async (status) => {
+    let reject!: (error: unknown) => void;
+    vi.mocked(app.firstFlow.transport.capabilities).mockImplementationOnce(
+      () =>
+        new Promise((_resolve, no) => {
+          reject = no;
+        }),
+    );
+    const older = app.initializeFirstSend();
+    await app.initializeFirstSend();
+    await app.createSession('node:repo');
+    app.setDraft('Newer selection');
+    const original = app.firstDraft!;
+    reject(new ApiError('Old request', status));
+    await older;
+    expect(app.firstEnabled).toBe(true);
+    expect(app.firstDraft?.operationId).toBe(original.operationId);
+    expect(app.draft).toBe('Newer selection');
+  },
+);

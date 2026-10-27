@@ -13,7 +13,7 @@ internal class NativeFirstSend(
     private val capture: suspend (String) -> PircApi,
     private val validate: (String) -> Unit,
 ) {
-    private data class Account(val stamp: String, val owner: String, val scope: String, val api: FirstSendApi, val enabled: Boolean, val pendingStop: Boolean, val connection: PircApi)
+    private data class Account(val stamp: String, val owner: String, val scope: String, val api: FirstSendApi, val enabled: Boolean, val pendingStop: Boolean, val requireContract: Boolean, val connection: PircApi)
     private var account: Account? = null
     private var revision = 0L
     private val store = FirstSendDraftStore(directory)
@@ -26,13 +26,17 @@ internal class NativeFirstSend(
         validate(stamp)
         if (ticket != revision) throw ApiException(409, "account_changed", "First-send account changed")
         val owner = value["ownerUser"]?.jsonPrimitive?.contentOrNull
-        val enabled = value["version"]?.jsonPrimitive?.intOrNull == 1 && value["canSubmit"]?.jsonPrimitive?.booleanOrNull == true
+        val compatible = value["version"]?.jsonPrimitive?.intOrNull == 1 && value["clientContract"]?.jsonPrimitive?.intOrNull == 2 && value["requiredClientContract"]?.jsonPrimitive?.intOrNull == 2 && value.flag("canStopBeforeAllocation")
+        val alreadyRequired = account?.takeIf { it.stamp == stamp && it.connection === api }?.requireContract == true
+        val blocked = (alreadyRequired || "clientContract" in value || "requiredClientContract" in value || value.flag("canSubmit")) && !compatible
+        val requireContract = alreadyRequired || compatible || blocked
+        val enabled = compatible && value.flag("canSubmit")
         val pendingStop = value["version"]?.jsonPrimitive?.intOrNull == 1 && value["canStopBeforeAllocation"]?.jsonPrimitive?.booleanOrNull == true
         account = if (!owner.isNullOrBlank() && value["canFenceAccount"]?.jsonPrimitive?.booleanOrNull == true)
-            account?.takeIf { it.stamp == stamp && it.owner == owner && it.connection === api && it.enabled == enabled && it.pendingStop == pendingStop }
-                ?: Account(stamp, owner, FirstSendDraftStore.scope(api.pairing.baseUrl, owner), FirstSendApi(api), enabled, pendingStop, api)
+            account?.takeIf { it.stamp == stamp && it.owner == owner && it.connection === api && it.enabled == enabled && it.pendingStop == pendingStop && it.requireContract == requireContract }
+                ?: Account(stamp, owner, FirstSendDraftStore.scope(api.pairing.baseUrl, owner), FirstSendApi(api), enabled, pendingStop, requireContract, api)
             else null
-        return JsonObject(value + (account?.let { mapOf("draftScope" to JsonPrimitive(it.scope)) } ?: emptyMap())).wire()
+        return JsonObject(value + mapOf("canSubmit" to JsonPrimitive(enabled), "firstSendUpgradeRequired" to JsonPrimitive(blocked)) + (account?.let { mapOf("draftScope" to JsonPrimitive(it.scope)) } ?: emptyMap())).wire()
     }
     private fun current(stamp: String, owner: String): Account {
         validate(stamp)
@@ -203,8 +207,12 @@ internal class NativeFirstSend(
     }
     /** Only an explicit user Send/Continue invokes this; checking never calls it. */
     suspend fun submit(stamp: String, owner: String, id: String, expectedRevision: Long?, clientId: String): Any? {
+        val before = current(stamp, owner)
+        val saved = local(before, id)
+        if (saved.string("stopCommandId") != null || (saved.flag("frozen") && (saved.flag("uncertain") || saved.phase() in setOf("admitted","sending","outcome_unknown","stopping","stopped","admission_failed","cancelled")))) return check(before, id).wire()
+        check(before.enabled) { "Durable first Send is not enabled by this Gateway" }
+        capabilities(stamp)
         val captured = current(stamp, owner)
-        if (local(captured, id).string("stopCommandId") != null) return check(captured, id).wire()
         check(captured.enabled) { "Durable first Send is not enabled by this Gateway" }
         change(captured, id) { before ->
             check(!before.flag("cancelRequested")) { "This draft is being cancelled" }

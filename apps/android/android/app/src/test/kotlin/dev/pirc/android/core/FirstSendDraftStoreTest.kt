@@ -85,4 +85,24 @@ class FirstSendDraftStoreTest {
             assertTrue(outside.listFiles().orEmpty().isEmpty())
         } finally { outside.deleteRecursively() }
     }
+
+    @Test fun envelopeTwoFencesOldWritersAndLegacyEnvelopeOneIsImportedWithoutLosingBytes() = fixture {parent,store,scope->
+        val saved=store.put(scope,"alice","op",null,value(files=JsonArray(listOf(attachment()))),mapOf("f1" to "hello".toByteArray()))
+        val file=parent.walkTopDown().single {it.name=="record.json"}
+        val envelope=PircJson.parseToJsonElement(file.readText()).jsonObject
+        assertEquals(2,envelope["version"]?.jsonPrimitive?.int)
+        // Actual envelope-1 readers require equality to 1 before exposing data.
+        assertFalse(envelope["version"]?.jsonPrimitive?.int==1)
+        file.writeText(JsonObject(envelope+("version" to JsonPrimitive(1))).toString())
+        val restored=FirstSendDraftStore(File(parent,"drafts"))
+        assertEquals(saved,restored.get(scope,"op"))
+        assertEquals(2,PircJson.parseToJsonElement(file.readText()).jsonObject["version"]?.jsonPrimitive?.int)
+        assertArrayEquals("hello".toByteArray(),restored.attachment(scope,"op","f1").second)
+        restored.update(scope,"alice","op") {JsonObject(it+("stopCommandId" to JsonPrimitive("stop")))}
+        val migrated=PircJson.parseToJsonElement(file.readText()).jsonObject
+        assertEquals(2,migrated["version"]?.jsonPrimitive?.int)
+        assertEquals("stop",restored.get(scope,"op")!!["stopCommandId"]?.jsonPrimitive?.content)
+        file.writeText(JsonObject(migrated+("version" to JsonPrimitive(3))).toString())
+        val future=file.readBytes();refused {restored.get(scope,"op")};assertArrayEquals(future,file.readBytes())
+    }
 }

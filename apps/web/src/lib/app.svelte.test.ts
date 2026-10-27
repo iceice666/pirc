@@ -89,6 +89,9 @@ it('keeps a newer interaction when a legacy removal has no row epoch', () => {
 });
 
 beforeEach(() => {
+  // These cases exercise the explicitly negotiated legacy conversation flow.
+  // Unknown capability discovery is covered by the first-send App tests.
+  app.firstCapabilities = { version: 0, canSubmit: false };
   const values = new Map<string, string>();
   vi.stubGlobal('localStorage', {
     get length() {

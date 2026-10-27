@@ -1,5 +1,44 @@
 # Upgrades
 
+## Unreleased local checkpoint: first-send client compatibility
+
+Gateway schema **1018** adds a semantic downgrade fence; no tables change.
+Node schema **2008**, protocol **15**, package versions and dependencies stay
+unchanged. Back up the complete Gateway state before any future upgrade.
+Older Gateways refuse 1018; rollback requires matching binaries and the full
+matching backup, never an edited SQLite `user_version`.
+
+The first-send API remains wire version 1, with a separate client recovery
+contract: `x-pirc-first-send-contract: 2`. Capabilities return `clientContract`
+and `requiredClientContract: 2`. Missing, old, future or duplicate header values
+cannot activate new sends; Prepare/Accept/Materialize/Dispatch reject them with
+`409 first_send_client_upgrade_required`. This header grants no authority.
+Queries, Stop and deletion retain their account, control and consent checks;
+ordinary legacy session APIs keep their existing compatibility.
+
+Modern clients recheck support before executable Send work. A bound modern
+operation cannot fall back to legacy creation after successful old capabilities,
+missing endpoints or incompatible versions. Original input/files stay retained;
+query-only uncertain/terminal outcomes do not require sending again. Explicitly
+unsupported cold legacy connections keep the previous flow without exposing
+private recovery. Web ignores stale failed capability probes after newer binding.
+
+The same Web IndexedDB name upgrades from version 1 to **2**, retaining rows,
+Blobs and Stop identity. Close old pirc tabs if they block the upgrade; version-1
+code then refuses to open the newer store. Android private envelope **2** imports
+version-1 records after scope/path validation under the existing lock; logical
+revision and attachment bytes stay unchanged. Older native code refuses version 2;
+unknown future formats are refused without rewriting them. Use a compatible
+client for recovery. Do not clear App storage, IndexedDB or uncertain drafts to
+force a downgrade; that destroys the private recovery copy.
+
+**Production `canSubmit: false` remains in effect.** Local process, browser-storage,
+Web and focused native/Flutter checks are distinct from complete client-to-Agent
+and Android device/process-death acceptance, which remain open. No deployment,
+APK, release asset or new authentication/connection scheme is included. The
+seven-day cleanup rule still applies only to unaccepted Gateway staging, not
+accepted attachments or private drafts.
+
 ## Unreleased local checkpoint: client pending Stop adoption
 
 Web/native Android/Flutter now support the Gateway's pre-allocation Stop scope

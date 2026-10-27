@@ -21,6 +21,7 @@ class NativeFirstSendFlowTest {
     private class Ledger : Dispatcher() {
         var preparation: JsonObject? = null
         var enabled = true
+        var contract: Int? = 2
         var failMaterialize = false
         var losePendingStop = false
         var dropPendingStop = false
@@ -46,7 +47,10 @@ class NativeFirstSendFlowTest {
         private fun respond(request: RecordedRequest): MockResponse {
             val path = request.url.encodedPath
             calls += "${request.method} $path"
-            if (path.endsWith("/capabilities")) return objectReply("""{"version":1,"ownerUser":"alice","canFenceAccount":true,"canStopBeforeAllocation":true,"canSubmit":$enabled}""")
+            if (path.endsWith("/capabilities")) {
+                val fields = contract?.let { "\"clientContract\":$it,\"requiredClientContract\":2," } ?: ""
+                return objectReply("""{"version":1,${fields}"ownerUser":"alice","canFenceAccount":true,"canStopBeforeAllocation":true,"canSubmit":$enabled}""")
+            }
             assertEquals("alice", request.headers["x-pirc-account"])
             if (path.endsWith("/prepare")) {
                 val input = PircJson.parseToJsonElement(request.body!!.utf8()).jsonObject
@@ -318,4 +322,20 @@ class NativeFirstSendFlowTest {
         val known=prep(c.check(f.stamp,"alice","op"));assertEquals("admitted",known["state"])
         assertEquals(true,(known["messageAdmission"] as Map<*,*>)["stopRequested"])
     }}
+
+    @Test fun aCachedActivationCannotExecuteAfterTheServerDropsTheClientContract() = runTest {Fixture().use {f->
+        val c=f.connection();f.saved(c);f.ledger.contract=0;f.ledger.calls.clear()
+        try {c.submit(f.stamp,"alice","op",1,"android-fixture");fail("contract changed")}catch(_:IllegalStateException){}
+        assertEquals(listOf("GET /api/conversation-submissions/capabilities"),f.ledger.calls)
+        assertEquals(false,f.row(c)!!["frozen"]);assertEquals("Original",f.row(c)!!["message"])
+        assertEquals(true,(c.capabilities(f.stamp) as Map<*,*>)["firstSendUpgradeRequired"])
+    }}
+    @Test fun successfulOldGatedRepliesCannotRemoveTheBoundContractFence() = runTest {Fixture().use {f->
+        val c=f.connection();f.saved(c);f.ledger.contract=null;f.ledger.enabled=false;f.ledger.calls.clear()
+        repeat(2) { assertEquals(true,(c.capabilities(f.stamp) as Map<*,*>)["firstSendUpgradeRequired"]) }
+        assertEquals("Original",f.row(c)!!["message"])
+        assertEquals(false,f.row(c)!!["frozen"])
+        assertTrue(f.ledger.calls.all { it == "GET /api/conversation-submissions/capabilities" })
+    }}
+
 }

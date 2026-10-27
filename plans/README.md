@@ -160,6 +160,13 @@ continuation, retaining original text/files. Durable local Stop identities fence
 late send steps, receipt merges preserve independent known facts, and saved Web
 recovery remains available with activation off. Full client/process/device,
 unsaved-edit and mixed-version activation gates stay open; new sends remain gated.
+The [mixed-client/rollback checkpoint](unified-conversations.md#u1-implementation-checkpoint-mixed-client-and-rollback-fences-2026-10-27)
+adds recovery-contract 2 negotiation and Gateway schema 1018's semantic downgrade
+fence. Old/cached clients cannot start the new flow; ordinary legacy APIs remain
+available. Web IndexedDB 2 and native envelope 2 preserve originals and Stop
+metadata while refusing older writers. Fresh activation checks and bound-server
+rollback protection do not enable production sends. Full U1 client/process/device,
+unsaved-edit and activation acceptance remain open; later stages are unchanged.
 The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
 records local fixture/transcript repairs and 50 Agent plus five Node process
 passes; the remote Check is still failed, and full Chromium/Linux verification

@@ -1,6 +1,12 @@
 import { ApiError } from '../http';
 import type { DraftStore } from '../first-send-storage';
-import type { FirstDraft, FirstSpec, FirstTransport, Preparation } from '../first-send';
+import type {
+  FirstCapabilities,
+  FirstDraft,
+  FirstSpec,
+  FirstTransport,
+  Preparation,
+} from '../first-send';
 export class MemoryDraftStore implements DraftStore {
   values = new Map<string, FirstDraft>();
   fail = false;
@@ -33,9 +39,11 @@ export class FirstLedger implements FirstTransport {
   key(owner: string, id: string) {
     return JSON.stringify([owner, id]);
   }
-  async capabilities() {
+  async capabilities(): Promise<FirstCapabilities> {
     return {
       version: 1,
+      clientContract: 2,
+      requiredClientContract: 2,
       ownerUser: 'alice',
       canFenceAccount: true,
       canStopBeforeAllocation: true,

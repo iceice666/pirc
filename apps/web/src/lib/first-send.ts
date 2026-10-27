@@ -6,12 +6,27 @@ import type { ThinkingLevel } from './types';
 import type { DraftStore } from './first-send-storage';
 export interface FirstCapabilities {
   version: number;
+  clientContract?: number;
+  requiredClientContract?: number;
   ownerUser?: string;
   canSubmit: boolean;
   canFenceAccount?: boolean;
   canFindPendingSession?: boolean;
   canStopBeforeAllocation?: boolean;
 }
+export const FIRST_SEND_CLIENT_CONTRACT = 2;
+export const firstContractCompatible = (caps?: FirstCapabilities) =>
+  caps?.version === 1 &&
+  caps.clientContract === FIRST_SEND_CLIENT_CONTRACT &&
+  caps.requiredClientContract === FIRST_SEND_CLIENT_CONTRACT &&
+  caps.canFenceAccount === true &&
+  caps.canStopBeforeAllocation === true;
+export const firstContractBlocked = (caps?: FirstCapabilities) =>
+  !!caps &&
+  (caps.clientContract !== undefined ||
+    caps.requiredClientContract !== undefined ||
+    caps.canSubmit) &&
+  !firstContractCompatible(caps);
 export interface FirstFile {
   id: string;
   name: string;
@@ -88,11 +103,16 @@ export interface FirstTransport {
   remove(owner: string, draft: FirstDraft): Promise<void>;
 }
 const path = (id: string) => `/api/conversation-submissions/${encodeURIComponent(id)}`;
-const headers = (owner: string) => ({ 'x-pirc-account': encodeURIComponent(owner) });
+const contractHeaders = { 'x-pirc-first-send-contract': String(FIRST_SEND_CLIENT_CONTRACT) };
+const headers = (owner: string) => ({
+  ...contractHeaders,
+  'x-pirc-account': encodeURIComponent(owner),
+});
 const sessionPath = (id: string) => `/api/sessions/${encodeURIComponent(id)}`;
 const prep = async (promise: Promise<{ preparation: Preparation }>) => (await promise).preparation;
 export const firstTransport: FirstTransport = {
-  capabilities: () => request('/api/conversation-submissions/capabilities'),
+  capabilities: () =>
+    request('/api/conversation-submissions/capabilities', { headers: contractHeaders }),
   find: (owner, session) =>
     prep(request(`${path('session')}/${encodeURIComponent(session)}`, { headers: headers(owner) })),
   lookup: (owner, op, receipt) =>
@@ -414,9 +434,23 @@ export class FirstSend {
     if (row.stopCommandId) return this.check(scope, id);
     if (!row.frozen && revision !== undefined && revision !== row.revision)
       throw new Error('This draft changed in another tab. Reopen the saved version.');
+    const activation = async () => {
+      const caps = await this.transport.capabilities();
+      if (caps.ownerUser !== row.ownerUser || !firstContractCompatible(caps) || !caps.canSubmit)
+        throw new Error(
+          'Connect to the Gateway to confirm first-send support before creating a conversation.',
+        );
+    };
     try {
+      const frozen = row.frozen;
+      if (!frozen) await activation();
       row = await this.#hashed(row);
       row = await this.check(scope, id);
+      if (
+        frozen &&
+        (!row.preparation || ['preparing', 'accepted', 'ready'].includes(row.preparation.state))
+      )
+        await activation();
       if (!row.preparation) {
         await this.#sending(scope, id);
         row = await this.#prepare(row);

@@ -39,6 +39,82 @@ try {
   const page = await context.newPage();
   await page.goto(url);
   await page.waitForFunction(() => !!window.store);
+  // Keep an actual version-1 connection open: refusal must preserve legacy
+  // bytes, and closing it must allow a non-destructive version-2 upgrade.
+  await page.evaluate(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const r = indexedDB.open('pirc-first-send-v1', 1);
+      r.onupgradeneeded = () =>
+        r.result
+          .createObjectStore('drafts', { keyPath: ['scope', 'operationId'] })
+          .createIndex('scope', 'scope');
+      r.onerror = () => reject(r.error);
+      r.onsuccess = () => resolve(r.result);
+    });
+    const tx = db.transaction('drafts', 'readwrite');
+    tx.objectStore('drafts').put({
+      scope: 'account-a',
+      ownerUser: 'alice',
+      operationId: 'legacy',
+      revision: 3,
+      workspaceId: 'node:repo',
+      message: 'legacy input',
+      frozen: true,
+      stopCommandId: 'saved-stop',
+      pendingStopControl: { clientId: 'old', generation: 8 },
+      files: [{ id: 'old-file', blob: new Blob(['legacy bytes']) }],
+    });
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = resolve;
+      tx.onabort = () => reject(tx.error);
+    });
+    db.onversionchange = () => {};
+    window.legacyDb = db;
+  });
+  assert.match(
+    await page.evaluate(async () => {
+      try {
+        await window.store.update('account-a', 'must-not-exist', () => {
+          throw Error('must not write');
+        });
+        return 'unexpected success';
+      } catch (e) {
+        return e.message;
+      }
+    }),
+    /Close older pirc tabs/,
+  );
+  await page.evaluate(() => window.legacyDb.close());
+  assert.deepEqual(
+    await page.evaluate(async () => {
+      const row = await window.store.get('account-a', 'legacy');
+      return [
+        row.message,
+        await row.files[0].blob.text(),
+        row.stopCommandId,
+        row.pendingStopControl.generation,
+        (await window.store.get('account-a', 'must-not-exist')) ?? null,
+      ];
+    }),
+    ['legacy input', 'legacy bytes', 'saved-stop', 8, null],
+  );
+  assert.equal(
+    await page.evaluate(
+      () =>
+        new Promise((resolve) => {
+          const r = indexedDB.open('pirc-first-send-v1', 1);
+          r.onerror = (event) => {
+            event.preventDefault();
+            resolve(r.error.name);
+          };
+          r.onsuccess = () => {
+            r.result.close();
+            resolve('unexpected open');
+          };
+        }),
+    ),
+    'VersionError',
+  );
   await page.evaluate(async () => {
     await window.store.update('account-a', 'op', () => ({
       scope: 'account-a',
@@ -115,10 +191,10 @@ try {
   });
   assert.deepEqual(recovered, { revision: 2, bytes: '附件 bytes' });
   console.log(
-    'PASS: production IndexedDB preserves Blob bytes across reload/browser restart, isolates accounts, rolls back aborted writes, and serializes competing tabs.',
+    'PASS: production IndexedDB upgrades legacy rows/Blobs without loss, rejects old writers, preserves Blob bytes across reload/browser restart, isolates accounts, rolls back aborted writes, and serializes competing tabs.',
   );
 } finally {
   await context?.close();
   await server?.close();
-  await rm(temporary, { recursive: true, force: true });
+  await rm(temporary, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }

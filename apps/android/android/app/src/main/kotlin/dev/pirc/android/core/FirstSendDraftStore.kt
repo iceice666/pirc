@@ -60,14 +60,20 @@ internal class FirstSendDraftStore(private val root: File) {
             check(!Files.isSymbolicLink(it.toPath()) && it.isDirectory)
         }
     }
-    private fun read(directory: File): JsonObject? {
+    private fun read(directory: File, scope: String, id: String? = null): JsonObject? {
         val file = File(directory, "record.json")
         check(!Files.isSymbolicLink(file.toPath()))
         if (!file.exists()) return null
         check(file.length() in 1..MAX_METADATA.toLong()) { "Local draft metadata is corrupt" }
         val envelope = PircJson.parseToJsonElement(file.readText(Charsets.UTF_8)).jsonObject
-        check(envelope["version"]?.jsonPrimitive?.intOrNull == 1) { "Unsupported local draft format" }
-        return envelope["record"]?.jsonObject ?: error("Missing local draft record")
+        val version = envelope["version"]?.jsonPrimitive?.intOrNull
+        check(version in setOf(1, 2)) { "Unsupported local draft format" }
+        val row = checked(envelope["record"]?.jsonObject ?: error("Missing local draft record"), scope, id)
+        check(directory.name == digest(row.getValue("operationId").jsonPrimitive.content.toByteArray(Charsets.UTF_8))) { "Local draft identity changed" }
+        // Migrate only after binding validation, under the account/file lock.
+        // Logical revision and Blob contents stay unchanged; old readers refuse 2.
+        if (version == 1) persist(directory, row)
+        return row
     }
     private fun checked(row: JsonObject, scope: String, id: String? = null): JsonObject {
         check(row["scope"]?.jsonPrimitive?.content == scope) { "Local draft account changed" }
@@ -78,7 +84,7 @@ internal class FirstSendDraftStore(private val root: File) {
     fun list(scope: String): List<JsonObject> = locked(scope) { account ->
         account.listFiles().orEmpty().filter { digestName.matches(it.name) }.mapNotNull { dir ->
             check(!Files.isSymbolicLink(dir.toPath()) && dir.isDirectory)
-            visible(read(dir))?.let { row ->
+            visible(read(dir, scope))?.let { row ->
                 checked(row, scope)
                 check(dir.name == digest(row.getValue("operationId").jsonPrimitive.content.toByteArray(Charsets.UTF_8)))
                 row
@@ -86,7 +92,7 @@ internal class FirstSendDraftStore(private val root: File) {
         }
     }
     fun get(scope: String, id: String): JsonObject? = locked(scope) { account ->
-        operation(account, id, false)?.let { dir -> visible(read(dir))?.let { checked(it, scope, id) } }
+        operation(account, id, false)?.let { dir -> visible(read(dir, scope, id))?.let { checked(it, scope, id) } }
     }
     private fun atomicWrite(directory: File, name: String, bytes: ByteArray) {
         val target = File(directory, name)
@@ -99,7 +105,7 @@ internal class FirstSendDraftStore(private val root: File) {
         } finally { temporary.delete() }
     }
     private fun persist(directory: File, row: JsonObject) {
-        val bytes = buildJsonObject { put("version", 1); put("record", row) }.toString().toByteArray(Charsets.UTF_8)
+        val bytes = buildJsonObject { put("version", 2); put("record", row) }.toString().toByteArray(Charsets.UTF_8)
         require(bytes.size <= MAX_METADATA) { "Local draft metadata is too large" }
         atomicWrite(directory, "record.json", bytes)
     }
@@ -108,12 +114,12 @@ internal class FirstSendDraftStore(private val root: File) {
     }
     fun update(scope: String, owner: String, id: String, change: (JsonObject) -> JsonObject): JsonObject = locked(scope) { account ->
         val dir = operation(account, id, false) ?: error("This draft is no longer available")
-        val before = visible(read(dir))?.let { checked(it, scope, id) } ?: error("This draft is no longer available")
+        val before = visible(read(dir, scope, id))?.let { checked(it, scope, id) } ?: error("This draft is no longer available")
         putAt(account, scope, owner, id, before.getValue("revision").jsonPrimitive.long, change(before), emptyMap())
     }
     private fun putAt(account: File, scope: String, owner: String, id: String, expectedRevision: Long?, value: JsonObject, bytes: Map<String, ByteArray>): JsonObject {
         val dir = operation(account, id, true)!!
-        val before = read(dir)?.let { checked(it, scope, id) }
+        val before = read(dir, scope, id)?.let { checked(it, scope, id) }
         check(before?.get("deleted")?.jsonPrimitive?.booleanOrNull != true) { "This draft was discarded" }
         check(if (before == null) expectedRevision == null else before["revision"]?.jsonPrimitive?.longOrNull == expectedRevision) {
             "This draft changed in another window. Reopen the saved version."
@@ -174,7 +180,7 @@ internal class FirstSendDraftStore(private val root: File) {
     }
     fun attachment(scope: String, id: String, fileId: String): Pair<JsonObject, ByteArray> = locked(scope) { account ->
         val dir = operation(account, id, false) ?: error("Missing local draft")
-        val row = visible(read(dir))?.let { checked(it, scope, id) } ?: error("Missing local draft")
+        val row = visible(read(dir, scope, id))?.let { checked(it, scope, id) } ?: error("Missing local draft")
         val file = row["files"]?.jsonArray?.map { it.jsonObject }?.singleOrNull { it["id"]?.jsonPrimitive?.content == fileId }
             ?: error("Missing local attachment")
         val hash = file.getValue("sha256").jsonPrimitive.content
@@ -187,7 +193,7 @@ internal class FirstSendDraftStore(private val root: File) {
     }
     fun remove(scope: String, id: String, expectedRevision: Long) = locked(scope) { account ->
         val dir = operation(account, id, false) ?: return@locked
-        val row = read(dir)?.let { checked(it, scope, id) } ?: return@locked
+        val row = read(dir, scope, id)?.let { checked(it, scope, id) } ?: return@locked
         if (row["deleted"]?.jsonPrimitive?.booleanOrNull != true) {
             check(row["revision"]?.jsonPrimitive?.longOrNull == expectedRevision) { "This draft changed in another window" }
             persist(dir, buildJsonObject {

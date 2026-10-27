@@ -31,6 +31,7 @@ async fn setup(with_attachment: bool) -> Option<(Cluster, Vec<(&'static str, Str
     );
     let headers = vec![
         ("host", HOST.into()),
+        ("x-pirc-first-send-contract", "2".into()),
         (
             "authorization",
             format!("Bearer {}", paired["token"].as_str().unwrap()),

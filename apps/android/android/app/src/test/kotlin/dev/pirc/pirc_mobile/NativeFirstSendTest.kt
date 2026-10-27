@@ -18,7 +18,7 @@ class NativeFirstSendTest {
         try {
             val api = PircApi(Pairing(server.url("/").toString().trimEnd('/'), "fixture-token"))
             val access = NativeFirstSend(File(parent, "drafts"), { expected -> requirePairingStamp(expected, stamp); api }, { expected -> requirePairingStamp(expected, stamp) })
-            server.enqueue(MockResponse.Builder().body("""{"version":1,"ownerUser":"alice","canFenceAccount":true,"canSubmit":false}""").build())
+            server.enqueue(MockResponse.Builder().body("""{"version":1,"clientContract":2,"requiredClientContract":2,"ownerUser":"alice","canFenceAccount":true,"canSubmit":false}""").build())
             val caps = obj(access.capabilities(stamp))
             assertTrue(caps["draftScope"].toString().contains("alice"))
             val args = mapOf("action" to "put", "operationId" to "op", "record" to mapOf("workspaceId" to "node:repo", "message" to "Keep original", "frozen" to false, "files" to emptyList<Any>()))

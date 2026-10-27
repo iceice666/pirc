@@ -383,3 +383,18 @@ it('late weaker receipts preserve requested Stop while later known admission sti
   expect(known.preparation?.state).toBe('admitted');
   expect(known.preparation?.messageAdmission?.stopRequested).toBe(true);
 });
+
+it('cached activation cannot send through a server without negotiated recovery support', async () => {
+  const { flow, remote, store } = await setup();
+  vi.spyOn(remote, 'capabilities').mockResolvedValue({
+    version: 1,
+    ownerUser: 'alice',
+    canSubmit: true,
+    canFenceAccount: true,
+    canStopBeforeAllocation: true,
+  });
+  await expect(flow.run(scope, 'operation-1')).rejects.toThrow('confirm first-send support');
+  expect(remote.calls).toEqual([]);
+  expect((await store.get(scope, 'operation-1'))?.frozen).toBe(false);
+  expect((await store.get(scope, 'operation-1'))?.message).toBe(value.message);
+});

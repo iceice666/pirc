@@ -422,6 +422,7 @@ pub(super) async fn call(
         .method(method)
         .uri(path)
         .header("host", "a.example")
+        .header("x-pirc-first-send-contract", "2")
         .extension(axum::extract::ConnectInfo(
             "127.0.0.1:40000".parse::<std::net::SocketAddr>().unwrap(),
         ));

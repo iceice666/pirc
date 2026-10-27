@@ -606,7 +606,7 @@ async fn migration_from_1016_preserves_accepted_input_and_existing_commands() {
             .lock()
             .query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        1017
+        crate::db::SCHEMA_VERSION
     );
     let generation = lease(&fresh).await;
     let row = queue(&fresh, &alice(), OP, &held("phone", generation)).unwrap();

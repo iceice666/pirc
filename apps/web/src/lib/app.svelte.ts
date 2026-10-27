@@ -1,6 +1,8 @@
 import { tr } from './i18n.svelte';
 import {
   FirstSend,
+  firstContractCompatible,
+  firstContractBlocked,
   firstTransport,
   draftScope,
   type FirstDraft,
@@ -185,6 +187,7 @@ class AppState {
     return !!(
       !this.demo &&
       this.firstCapabilities?.canSubmit &&
+      firstContractCompatible(this.firstCapabilities) &&
       this.firstCapabilities.canFenceAccount &&
       this.firstCapabilities.ownerUser
     );
@@ -192,8 +195,24 @@ class AppState {
   async initializeFirstSend() {
     const revision = ++this.#firstAccountRevision;
     try {
-      const caps = await this.firstFlow.transport.capabilities();
+      let caps = await this.firstFlow.transport.capabilities();
       if (revision !== this.#firstAccountRevision) return;
+      if (
+        this.#firstScope &&
+        (firstContractCompatible(this.firstCapabilities) ||
+          firstContractBlocked(this.firstCapabilities) ||
+          this.firstDraft?.scope === this.#firstScope) &&
+        !firstContractCompatible(caps)
+      ) {
+        // A bound modern operation cannot downgrade to a legacy replacement,
+        // even when an older server successfully returns its gated capabilities.
+        caps = {
+          ...caps,
+          canSubmit: false,
+          clientContract: caps.clientContract ?? 0,
+          requiredClientContract: caps.requiredClientContract ?? 2,
+        };
+      }
       const scope =
         caps.ownerUser && caps.canFenceAccount ? draftScope(location.origin, caps.ownerUser) : '';
       if (this.#firstScope && scope !== this.#firstScope) {
@@ -214,6 +233,20 @@ class AppState {
           this.firstRecoveries = records.filter((r) => r.message || r.files.length || r.frozen);
       }
     } catch (error) {
+      if (revision !== this.#firstAccountRevision) return;
+      if (error instanceof ApiError && (error.status === 404 || error.status === 501)) {
+        // Cold legacy support never restores unauthenticated private drafts.
+        // An already-bound window keeps its input, but cannot switch that
+        // operation to legacy creation after a server rollback.
+        this.firstCapabilities = this.#firstScope
+          ? {
+              ...this.firstCapabilities!,
+              canSubmit: false,
+              clientContract: 0,
+              requiredClientContract: 2,
+            }
+          : { version: 0, canSubmit: false };
+      }
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
         this.discardDraftSession();
         this.#events?.close();
@@ -1947,6 +1980,16 @@ class AppState {
 
   /** Open immediately; negotiated durable drafts are local until first Send is accepted. */
   async createSession(workspaceId: string, recovered?: FirstDraft): Promise<boolean> {
+    if (
+      !recovered &&
+      !this.demo &&
+      (!this.firstCapabilities || firstContractBlocked(this.firstCapabilities))
+    ) {
+      this.pageError = tr(
+        'Connect to the Gateway to confirm first-send support before creating a conversation.',
+      );
+      return false;
+    }
     const workspace = this.workspaces.find((item) => item.id === workspaceId);
     if (
       !recovered &&

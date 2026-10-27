@@ -1357,7 +1357,7 @@
   "Interrupted": "已中斷",
   "Execution session not yet confirmed. Refresh to check current state; do not assume it is stopped.": "尚未確認執行工作階段。請重新整理以查看目前狀態，切勿假定工作已停止。",
   "Local draft storage is unavailable. Your message has not been sent.": "無法使用本機草稿儲存空間。你的訊息尚未送出。",
-  "Close older pirc tabs to open local draft storage.": "請關閉較舊的 pirc 分頁，以開啟本機草稿儲存空間。",
+  "Close older pirc tabs to open local draft storage.": "請先關閉舊版 pirc 分頁，再開啟本機草稿儲存空間。",
   "Local draft read failed.": "無法讀取本機草稿。",
   "Local draft save failed. Your message is kept.": "無法儲存本機草稿。你的訊息仍保留。",
   "The original attachment is missing from local storage.": "本機儲存空間中找不到原始附件。",
@@ -1397,5 +1397,6 @@
   "This Gateway cannot stop a first message before the Node is ready.": "此 Gateway 不支援在 Node 準備完成前停止首次訊息。",
   "Stop was requested. Check the result before continuing.": "已要求停止。繼續前請先檢查結果。",
   "Conversation preparation is not yet confirmed. Check the result.": "尚未確認對話準備完成，請檢查結果。",
-  "The first message admission is still unknown; Stop does not undo completed work.": "首次訊息是否已接收仍未知；停止不會復原已完成的工作。"
+  "The first message admission is still unknown; Stop does not undo completed work.": "首次訊息是否已接收仍未知；停止不會復原已完成的工作。",
+  "Connect to the Gateway to confirm first-send support before creating a conversation.": "請先連線至 Gateway 確認首次送出支援，再建立對話。"
 }

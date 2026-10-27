@@ -4,6 +4,7 @@
 mod acceptance;
 mod attachments;
 mod cancellation;
+mod client;
 mod dispatch;
 mod pre_stop;
 pub(crate) use acceptance::require_initial_submission_complete;
@@ -296,12 +297,12 @@ pub fn router() -> Router<AppState> {
             get(status).delete(discard),
         )
 }
-async fn capabilities(Extension(identity): Extension<Identity>) -> axum::Json<Value> {
-    // Existing clients stay on their current flow until durable client recovery
-    // and the multi-client failure table are verified.
-    axum::Json(
-        json!({"version":1,"ownerUser":identity.user,"canFenceAccount":true,"canFindPendingSession":true,"canPrepare":true,"canStageAttachments":true,"canAcceptIntent":true,"canMaterialize":true,"canDispatchFirstMessage":true,"canCancelCreation":true,"canStopBeforeAllocation":true,"attachmentRetentionDays":7,"canSubmit":false}),
-    )
+async fn capabilities(
+    Extension(identity): Extension<Identity>,
+    headers: axum::http::HeaderMap,
+) -> axum::Json<Value> {
+    // Keep rollout closed until the complete client/process failure matrix passes.
+    axum::Json(client::capabilities(&identity, &headers, false))
 }
 async fn pending_for_session(
     State(app): State<AppState>,
@@ -319,8 +320,10 @@ async fn pending_for_session(
 async fn prepare(
     State(app): State<AppState>,
     Extension(identity): Extension<Identity>,
+    headers: axum::http::HeaderMap,
     ReqBody(body): ReqBody,
 ) -> ApiResult<axum::Json<Value>> {
+    client::require(&headers)?;
     let input: Input = body.parse()?;
     if input
         .expected_owner

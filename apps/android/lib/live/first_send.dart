@@ -14,7 +14,18 @@ class FirstSendState {
   int _epoch = 0, _capRevision = 0;
   Future<void> _writes = Future<void>.value();
   final _revisions = <String, int>{};
-  bool get enabled => available && capabilities['canSubmit'] == true;
+  bool get _compatible =>
+      available &&
+      capabilities['clientContract'] == 2 &&
+      capabilities['requiredClientContract'] == 2 &&
+      capabilities['canStopBeforeAllocation'] == true;
+  bool get _contractBlocked =>
+      capabilities['firstSendUpgradeRequired'] == true ||
+      ((capabilities.containsKey('clientContract') ||
+              capabilities.containsKey('requiredClientContract') ||
+              capabilities['canSubmit'] == true) &&
+          !_compatible);
+  bool get enabled => _compatible && capabilities['canSubmit'] == true;
   bool get available =>
       capabilities['version'] == 1 &&
       capabilities['canFenceAccount'] == true &&
@@ -138,11 +149,17 @@ class FirstSendState {
     var account = c._accountRevision;
     if (stamp == null || c.origin == null) return;
     final ticket = ++_capRevision;
+    final requireContract =
+        available &&
+        (_compatible ||
+            _contractBlocked ||
+            current != null ||
+            saved.isNotEmpty);
     try {
       final raw = await c.gateway.call('firstSendCapabilities', {
         'pairingStamp': stamp,
       });
-      final caps = obj(raw);
+      var caps = obj(raw);
       if (c._disposed ||
           ticket != _capRevision ||
           stamp != c.pairingStamp ||
@@ -171,9 +188,17 @@ class FirstSendState {
         unawaited(c.gateway.call('unwatch').catchError((Object _) => null));
       }
       capabilities = caps;
+      if (requireContract && !_compatible) {
+        capabilities = caps = {
+          ...caps,
+          'canSubmit': false,
+          'firstSendUpgradeRequired': true,
+        };
+      }
       // Null means an older bridge; explicit canSubmit:false is the gated legacy
       // contract. A failed/unknown negotiation never enables legacy creation.
       unavailable =
+          _contractBlocked ||
           !(raw == null ||
               (caps['version'] == 1 && caps['canSubmit'] == false) ||
               enabled);
@@ -217,7 +242,14 @@ class FirstSendState {
       }
       unavailable = !enabled;
       if (error is MissingPluginException || details['status'] == 404) {
-        if (!enabled) {
+        if (requireContract || available) {
+          capabilities = {
+            ...capabilities,
+            'canSubmit': false,
+            'firstSendUpgradeRequired': true,
+          };
+          unavailable = true;
+        } else {
           capabilities = {};
           unavailable = false;
         }

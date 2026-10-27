@@ -12,6 +12,8 @@ class FirstPort {
   }
   final FakeGateway gateway;
   String owner = 'alice';
+  int? contract = 2;
+  int capabilityFailure = 503;
   bool full = false,
       loseSubmit = false,
       failCapabilities = false,
@@ -25,10 +27,15 @@ class FirstPort {
   Future<dynamic> call(String method, Json args) async {
     if (method == 'firstSendCapabilities') {
       if (failCapabilities) {
-        throw PlatformException(code: 'HTTP_503', details: {'status': 503});
+        throw PlatformException(
+          code: 'HTTP_$capabilityFailure',
+          details: {'status': capabilityFailure},
+        );
       }
       return {
         'version': 1,
+        if (contract != null) 'clientContract': contract,
+        if (contract != null) 'requiredClientContract': 2,
         'canSubmit': supportsSubmit,
         'canFenceAccount': true,
         'canFindPendingSession': true,
@@ -521,6 +528,62 @@ void main() {
         hasLength(1),
       );
       expect(c.firstSend.current, isNull);
+      await dispose(c, g);
+    },
+  );
+
+  test(
+    'an incompatible client contract cannot create a legacy replacement',
+    () async {
+      final (c, g, p) = await setup();
+      p.contract = 3;
+      await c.firstSend.initialize();
+      g.calls.clear();
+      expect(c.firstSend.enabled, false);
+      expect(c.firstSend.unavailable, true);
+      await expectLater(c.create('w'), throwsStateError);
+      expect(
+        g.calls.where(
+          (call) => call.$1 == 'request' && call.$2['method'] == 'POST',
+        ),
+        isEmpty,
+      );
+      c.dispose();
+      await g.stream.close();
+    },
+  );
+  test(
+    'bound modern drafts survive old gated and missing capability responses without legacy replacement',
+    () async {
+      final (c, g, p) = await setup();
+      await c.create('w');
+      c.editDraft('Keep original');
+      await c.attach();
+      await c.flushDraft();
+      final id = c.firstSend.current!['operationId'];
+      p.contract = null;
+      p.supportsSubmit = false;
+      await c.firstSend.initialize();
+      await c.firstSend.initialize();
+      expect(c.firstSend.unavailable, true);
+      await expectLater(c.create('w'), throwsStateError);
+      p.failCapabilities = true;
+      p.capabilityFailure = 404;
+      await c.firstSend.initialize();
+      expect(c.firstSend.unavailable, true);
+      await expectLater(c.create('w'), throwsStateError);
+      expect(c.firstSend.current!['operationId'], id);
+      expect(c.draft, 'Keep original');
+      expect(c.attachments, hasLength(1));
+      expect(p.bytes.values.single, [65, 66]);
+      expect(
+        g.calls.where(
+          (call) =>
+              call.$1 == 'firstSendSubmit' ||
+              (call.$1 == 'request' && call.$2['method'] == 'POST'),
+        ),
+        isEmpty,
+      );
       await dispose(c, g);
     },
   );

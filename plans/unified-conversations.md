@@ -1760,6 +1760,71 @@ fences and the currently false activation flag do not close that client-version
 gate. Later architecture stages stay open. No UI redesign, Flutter Web/iOS work,
 push, deployment, release or APK build is included in this checkpoint.
 
+## U1 implementation checkpoint: mixed-client and rollback fences (2026-10-27)
+
+Implemented locally over Node 2008 / protocol 15. Gateway advances to **1018**
+with a semantic version fence, without changing table shapes, dependency locks,
+Nix hashes or package versions. **Production `canSubmit: false` remains unchanged;
+U1 and the later architecture stages are still open.**
+
+- First-send wire version 1 is separate from the new client recovery contract.
+  Modern Web/native clients send exactly one `x-pirc-first-send-contract: 2`;
+  capabilities report `clientContract` and `requiredClientContract: 2`. A future
+  rollout flag can enable only the matching contract. Missing, old, unknown or
+  duplicate versions cannot enable it. This is compatibility negotiation, not
+  authentication or a new grant.
+- Prepare, Accept, Materialize and Dispatch refuse incompatible clients before
+  mutation, including clients holding an old cached `canSubmit: true`. Result
+  lookup, Stop and deletion retain their existing account/control/confirmation
+  checks. Ordinary legacy session APIs retain their existing behavior; no global
+  ban on old clients is introduced.
+- Clients refresh capabilities before executable Send work. Incompatible support
+  cannot freeze a new draft or switch an already-bound modern operation to legacy
+  creation. Both successful old gated replies and missing endpoints preserve the
+  recovery fence; repeated checks cannot remove it. A genuinely cold, explicitly
+  unsupported legacy connection keeps its previous flow without restoring private
+  recovery. Unknown outcomes and saved Stop intent remain query-only. Late Web
+  capability failures cannot clear a newer account binding or selection.
+- Web upgrades the same `pirc-first-send-v1` IndexedDB to version **2** without
+  recreating its store or rewriting rows/Blobs. Older version-1 connections must
+  close before upgrade; later old-code opens fail rather than writing over Stop
+  metadata. Android writes private metadata envelope **2**; authenticated bound
+  reads import envelope 1 atomically under its account/file lock after validating
+  scope and operation path. Logical revision, original text, attachment bytes and
+  Stop identity remain intact. Unknown future formats are refused unchanged.
+- Gateway 1018 makes older Gateways refuse the live database, preventing a binary
+  downgrade from bypassing this contract. Rollback needs the entire matching
+  state backup and binaries; editing `user_version`, clearing private client data
+  or deleting uncertain drafts is not a recovery procedure. Upgrade back to a
+  compatible client to inspect its retained private records. Unaccepted Gateway
+  staging alone retains the user-selected seven-day expiry; accepted files and
+  private drafts do not gain an age limit.
+
+Validation: 307 Gateway tests and nine real Gateway/Node process cases pass,
+including an old browser/paired-client refusal and unchanged ordinary session
+creation. Strict Gateway/conformance Clippy passes. A guarded dedicated Headless
+Shell/profile verifies the production IndexedDB adapter against an actual v1
+connection, blocked upgrade, lossless Blob/Stop import, old-writer refusal,
+transaction aborts, competing tabs and browser restart. This is a separate storage
+proof, not complete UI-to-Agent acceptance. **498 Web tests across 64 files pass**;
+Svelte typecheck has zero errors/warnings, and an isolated production build passes
+with the existing chunk-size advisory. **36 focused native JVM tests pass without
+skips** across the HTTP API, store, account binding and flow engine; actual App
+Kotlin/MethodChannel callers compile against the SDK with Flutter build/assets
+excluded. **19 focused Flutter tests pass** in the controller/boundary and recovery
+widget files; targeted Dart analysis is clean. Native tests use temporary host
+files and synthetic HTTP; Flutter uses a fake native port. English/Traditional
+Chinese Web labels cover unknown support and blocked old tabs.
+
+Remaining U1: real Web/native-client-to-Gateway/Node/Agent failure acceptance;
+Android process-death/private-filesystem/device proof; remaining multi-device and
+permission cases; useful known-admission-failure retry with files; preservation
+of unsaved edits when another window freezes/accepts the operation; and final
+activation/rollback acceptance across these pieces. No emulator, device, full
+Flutter suite, Nix check, APK, deployment, push or release is included. Run-owned
+isolated test output is removed after verification; APKs, SDKs, shared output and
+other agents' files are preserved.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.
