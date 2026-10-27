@@ -1,5 +1,37 @@
 # Upgrades
 
+## Unreleased local checkpoint: Flutter durable first-send wiring
+
+Flutter includes controller and recovery UI wiring for the native first-send
+engine. **Gateway still returns `canSubmit: false`** until the remaining
+integration/permission/restart gates pass. This is not production activation or
+a release. Database, node-link, dependency and version identifiers are unchanged.
+
+With support negotiated, private drafts/files survive navigation and reopen
+under the same origin/owner. Storage refusal blocks sending/leaving instead of
+falling back to legacy creation. Check result queries only; Continue, Take
+control and Stop require their own user actions. The original message remains
+frozen until known admission or confirmed Stop. Sidebar recovery and original
+input are collapsed by default; ordinary messages keep their existing renderer.
+
+Discard and accepted conversation deletion stay distinct. Native cancel requires
+explicit accepted-delete consent, including if acceptance raced a stale Discard
+button; that deletion uses the ordinary Gateway owner/mode checks and existing
+memory warning. There is no new deletion permission. Before admission, approval
+mode uses the workspace default; this slice adds no per-message permission mode.
+
+Unknown cold capability support blocks new creation until it can be checked.
+Explicitly unsupported/gated legacy servers keep their documented behavior;
+reserved durable operations never use that fallback. Authenticated pending
+recovery is still queryable when new sends are disabled. A bound offline draft
+remains editable; cold recovery waits for authenticated capabilities and does
+not erase private bytes. Unaccepted Gateway staging alone expires after seven
+days; private drafts and accepted files are not covered by that deadline.
+
+Focused Flutter/native JVM checks pass locally; a real Android process-death and
+client-to-Gateway/Node/Agent pass remain required. No emulator, device or Nix
+verification was performed, and no APK or release asset was replaced.
+
 ## Unreleased local checkpoint: native first-send engine
 
 Android includes a native durable submission engine behind new methods on its

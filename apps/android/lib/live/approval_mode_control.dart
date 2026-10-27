@@ -62,7 +62,8 @@ class ApprovalModeControl extends StatelessWidget {
         return ComposerSelect(
           label: tr("Approval mode"),
           value: mode,
-          disabled: !controller.canControl,
+          disabled:
+              !controller.canControl || controller.firstSend.current != null,
           foregroundColorKey: mode == 'full-access'
               ? 'status.danger'
               : 'text.secondary',

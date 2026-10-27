@@ -24,6 +24,7 @@ import 'workspace_page.dart';
 import 'conversation_header.dart';
 import 'conversation_empty.dart';
 import 'conversation_composer.dart';
+import 'first_send_recovery.dart';
 import 'conversation_timeline.dart';
 import 'delegations_strip.dart';
 import 'conversation_jump_latest.dart';
@@ -358,7 +359,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
       });
       _update();
       if (selection.showMemory && current()) {
-        _page('memory', documentRoute: true);
+        await _page('memory', documentRoute: true);
       }
     } finally {
       if (ticket == _documentRouteTicket) {
@@ -701,12 +702,29 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  void _page(
+  Future<bool> _beforeFirstDraftNavigation() async {
+    try {
+      return await c.prepareDraftNavigation() && mounted;
+    } catch (error) {
+      if (mounted) showNotice(context, LiveController.describe(error));
+      return false;
+    }
+  }
+
+  Future<void> _page(
     String name, {
     bool documentRoute = false,
     bool deferred = false,
     bool preserveCalendarFocus = false,
-  }) {
+  }) async {
+    if (name != 'settings' &&
+        c.firstSend.current != null &&
+        !await _beforeFirstDraftNavigation()) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
     if (name != 'settings') c.discardDraftSession();
     final surface = _appSurface.currentState;
     final context = surface?.widget.activeIdentity == _appSurfaceIdentity
@@ -729,6 +747,9 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
           }
         });
       }
+      return;
+    }
+    if (!context.mounted) {
       return;
     }
     if (!documentRoute && name != 'settings' && name != 'memory') {
@@ -1307,7 +1328,13 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     ),
   );
 
-  void _showList() {
+  Future<void> _showList() async {
+    if (c.firstSend.current != null && !await _beforeFirstDraftNavigation()) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
     c.discardDraftSession();
     _documentRouteTicket++;
     _documentRouting = false;
@@ -1546,7 +1573,13 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     unawaited(guarded(context, () => c.open(id)));
   }
 
-  void _openWorkspace(String id) {
+  Future<void> _openWorkspace(String id) async {
+    if (c.firstSend.current != null && !await _beforeFirstDraftNavigation()) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
     c.discardDraftSession();
     _documentRouteTicket++;
     _documentRouting = false;
@@ -1743,7 +1776,7 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
                                   ),
                                 ),
                           ),
-                          if (c.messages.isEmpty)
+                          if (c.messages.isEmpty && !c.firstSend.frozen)
                             SliverFillRemaining(
                               hasScrollBody: false,
                               // Include the trailing inset in the fill extent:
@@ -1820,7 +1853,9 @@ class _LiveShellState extends State<LiveShell> with WidgetsBindingObserver {
     );
   }
 
-  Widget _composer() => ConversationComposer(controller: c, text: composer);
+  Widget _composer() => c.firstSend.frozen
+      ? FirstSendRecovery(controller: c)
+      : ConversationComposer(controller: c, text: composer);
 }
 
 class _IndependentAppWindow extends StatefulWidget {

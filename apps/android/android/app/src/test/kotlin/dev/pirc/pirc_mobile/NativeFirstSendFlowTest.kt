@@ -2,6 +2,8 @@ package dev.pirc.pirc_mobile
 
 import dev.pirc.android.core.*
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.async
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.serialization.json.*
 import mockwebserver3.Dispatcher
 import mockwebserver3.MockResponse
@@ -12,6 +14,8 @@ import org.junit.Test
 import java.io.File
 import java.nio.file.Files
 import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 class NativeFirstSendFlowTest {
     private class Ledger : Dispatcher() {
@@ -22,13 +26,19 @@ class NativeFirstSendFlowTest {
         var cleanupPending = false
         var stopCommand: String? = null
         var onAccept: (() -> Unit)? = null
+        @Volatile var holdAccept: CountDownLatch? = null
         val calls = Collections.synchronizedList(mutableListOf<String>())
         private fun reply(body: JsonElement, code: Int = 200) = MockResponse.Builder().code(code).body(body.toString()).build()
         private fun objectReply(body: String, code: Int = 200) = MockResponse.Builder().code(code).body(body).build()
         private fun update(phase: String, accepted: Boolean = true) {
             preparation = JsonObject(preparation!! + mapOf("state" to JsonPrimitive(phase), "accepted" to JsonPrimitive(accepted)))
         }
-        @Synchronized override fun dispatch(request: RecordedRequest): MockResponse {
+        override fun dispatch(request: RecordedRequest): MockResponse {
+            val response = synchronized(this) { respond(request) }
+            if (request.url.encodedPath.endsWith("/accept")) check(holdAccept?.await(10, TimeUnit.SECONDS) != false)
+            return response
+        }
+        private fun respond(request: RecordedRequest): MockResponse {
             val path = request.url.encodedPath
             calls += "${request.method} $path"
             if (path.endsWith("/capabilities")) return objectReply("""{"version":1,"ownerUser":"alice","canFenceAccount":true,"canSubmit":$enabled}""")
@@ -78,7 +88,7 @@ class NativeFirstSendFlowTest {
         val server = MockWebServer().apply { dispatcher = ledger; start() }
         val api = PircApi(Pairing(server.url("/").toString().trimEnd('/'), "fixture-token"))
         var stamp = "pair-a"
-        fun connection() = NativeFirstSend(File(parent, "drafts"), { requested -> requirePairingStamp(requested, stamp); api }, { requested -> requirePairingStamp(requested, stamp) })
+        fun connection(directory: String = "drafts") = NativeFirstSend(File(parent, directory), { requested -> requirePairingStamp(requested, stamp); api }, { requested -> requirePairingStamp(requested, stamp) })
         suspend fun saved(connection: NativeFirstSend, withFile: Boolean = true): Map<*, *> {
             connection.capabilities(stamp)
             val files = if (withFile) listOf(mapOf("id" to "file1", "name" to "note.txt", "mimeType" to "text/plain", "byteSize" to 5)) else emptyList()
@@ -127,6 +137,41 @@ class NativeFirstSendFlowTest {
         try { connection.submit(f.stamp, "alice", "op", 1, "android-fixture"); fail("discarded draft must be fenced") } catch (_: IllegalStateException) {}
         assertTrue(f.ledger.calls.isEmpty())
     } }
+    @Test fun anotherDeviceAdoptsAcceptedFilesAndContinuesWithoutUploadingItsOwnCopy() = runTest { Fixture().use { f ->
+        val remote = FirstSendApi(f.api)
+        val file = buildJsonObject {
+            put("id", "file1"); put("name", "note.txt"); put("mimeType", "text/plain"); put("byteSize", 5)
+            put("sha256", FirstSendDraftStore.digest("hello".toByteArray()))
+        }
+        remote.request("POST", "/api/conversation-submissions/prepare", "alice", buildJsonObject {
+            put("expectedOwner", "alice"); put("operationId", "other-op")
+            put("submission", buildJsonObject { put("workspaceId", "node:repo"); put("message", "From another device"); put("attachments", JsonArray(listOf(file))) })
+        })
+        remote.request("PUT", "/api/conversation-submissions/other-op/attachments/file1", "alice", bytes = "hello".toByteArray())
+        remote.request("POST", "/api/conversation-submissions/other-op/accept", "alice")
+        val connection = f.connection("second-device")
+        connection.capabilities(f.stamp)
+        f.ledger.calls.clear()
+        val adopted = connection.adopt(f.stamp, "alice", "public-session") as Map<*, *>
+        assertEquals("From another device", adopted["message"])
+        assertFalse(File(f.parent, "second-device").walkTopDown().any { it.name.startsWith("blob-") })
+        val result = connection.submit(f.stamp, "alice", "other-op", null, "android-fixture")
+        assertEquals("admitted", prep(result)["state"])
+        assertFalse(f.ledger.calls.any { it.contains("/attachments/") })
+        assertEquals(1, f.ledger.calls.count { it.endsWith("/dispatch") })
+    } }
+    @Test fun refreshingTheSameAuthenticatedCapabilitiesDoesNotInterruptAnInFlightSend() = runTest { Fixture().use { f ->
+        val connection = f.connection(); f.saved(connection)
+        val accepted = CompletableDeferred<Unit>()
+        f.ledger.onAccept = { accepted.complete(Unit) }
+        val gate = CountDownLatch(1)
+        f.ledger.holdAccept = gate
+        val sending = async { connection.submit(f.stamp, "alice", "op", 1, "android-fixture") }
+        accepted.await()
+        try { connection.capabilities(f.stamp) } finally { gate.countDown() }
+        assertEquals("admitted", prep(sending.await())["state"])
+        assertEquals(1, f.ledger.calls.count { it.endsWith("/dispatch") })
+    } }
     @Test fun activationGateRefusesANewSendBeforeAnyNetworkMutation() = runTest { Fixture().use { f ->
         f.ledger.enabled = false
         val connection = f.connection(); f.saved(connection); f.ledger.calls.clear()
@@ -149,7 +194,7 @@ class NativeFirstSendFlowTest {
         val connection = f.connection(); f.saved(connection)
         connection.submit(f.stamp, "alice", "op", 1, "android-fixture")
         f.ledger.cleanupPending = true
-        assertEquals(true, prep(connection.cancel(f.stamp, "alice", "op"))["cleanupPending"])
+        assertEquals(true, prep(connection.cancel(f.stamp, "alice", "op", deleteAccepted = true))["cleanupPending"])
         val pending = f.ledger.preparation!!
         f.ledger.preparation = JsonObject(pending + ("cleanupPending" to JsonPrimitive(false)))
         assertEquals(false, prep(connection.check(f.stamp, "alice", "op"))["cleanupPending"])
@@ -157,6 +202,17 @@ class NativeFirstSendFlowTest {
         assertTrue((f.row(connection)!!["files"] as List<*>).isEmpty())
         f.ledger.preparation = pending
         assertEquals(false, prep(connection.check(f.stamp, "alice", "op"))["cleanupPending"])
+    } }
+    @Test fun discardingAStaleUnacceptedViewCannotDeleteAnAcceptedConversationWithoutConfirmation() = runTest { Fixture().use { f ->
+        val connection = f.connection(); f.saved(connection)
+        connection.submit(f.stamp, "alice", "op", 1, "android-fixture")
+        f.ledger.calls.clear()
+        try { connection.cancel(f.stamp, "alice", "op"); fail("Accepted deletion needs explicit confirmation") }
+        catch (error: ApiException) { assertEquals("confirmation_required", error.code) }
+        assertFalse(f.ledger.calls.any { it.startsWith("DELETE ") })
+        assertEquals("Original", f.row(connection)!!["message"])
+        connection.cancel(f.stamp, "alice", "op", deleteAccepted = true)
+        assertTrue(f.ledger.calls.contains("DELETE /api/sessions/public-session"))
     } }
     @Test fun platformDraftEditsCannotForgeAdmissionOrForgetAnUncertainSend() = runTest { Fixture().use { f ->
         val connection = f.connection(); val saved = f.saved(connection)

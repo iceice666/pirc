@@ -13,6 +13,7 @@ import 'session_row.dart';
 import 'workspace_dialogs.dart';
 import 'attention.dart';
 import 'attention_card.dart';
+import 'first_send_recovery.dart';
 
 class SessionSidebar extends StatefulWidget {
   const SessionSidebar({
@@ -917,6 +918,7 @@ class _SessionSidebarState extends State<SessionSidebar> {
                             padding: const EdgeInsets.only(left: 8),
                             physics: const AlwaysScrollableScrollPhysics(),
                             children: [
+                              SavedFirstSends(controller: c),
                               if (search.text.isNotEmpty) ...[
                                 fixedListItem(
                                   heading(

@@ -129,10 +129,18 @@ false. No schema/dependency change or Flutter modification is included.
 The [native durable-engine checkpoint](unified-conversations.md#u1-implementation-checkpoint-native-durable-submission-engine-2026-10-27)
 adds private native draft/attachment storage, revision/tombstone guards, paired
 account fencing and a persistent submit/check/Stop/cancel engine. Focused native
-filesystem/HTTP tests and Web receipt regressions pass; Flutter controller/UI
-adoption and real end-to-end acceptance remain open. Existing App behavior and
+filesystem/HTTP tests and Web receipt regressions pass; controller/UI adoption
+was the next slice, while real end-to-end acceptance remains open. Existing App behavior and
 `canSubmit: false` are unchanged. No schema/dependency or Flutter code change is
 included; run-owned build output is kept separate from existing APKs/artifacts.
+The [Flutter recovery-wiring checkpoint](unified-conversations.md#u1-implementation-checkpoint-flutter-controller-and-recovery-wiring-2026-10-27)
+connects real create/edit/send/navigation and necessary recovery controls to that
+native engine. Twenty focused Flutter tests, clean targeted analysis and 28 native
+JVM tests pass locally. A stale Discard cannot delete an accepted conversation
+without separate consent; unknown capability negotiation cannot enable legacy
+creation. Existing pending records remain readable with the send gate off.
+Full process/device failure acceptance is still open and `canSubmit` remains false;
+no UI redesign, version/dependency change or publication is included.
 The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
 records local fixture/transcript repairs and 50 Agent plus five Node process
 passes; the remote Check is still failed, and full Chromium/Linux verification

@@ -13,7 +13,7 @@ internal class NativeFirstSend(
     private val capture: suspend (String) -> PircApi,
     private val validate: (String) -> Unit,
 ) {
-    private data class Account(val stamp: String, val owner: String, val scope: String, val api: FirstSendApi, val enabled: Boolean)
+    private data class Account(val stamp: String, val owner: String, val scope: String, val api: FirstSendApi, val enabled: Boolean, val connection: PircApi)
     private var account: Account? = null
     private var revision = 0L
     private val store = FirstSendDraftStore(directory)
@@ -26,8 +26,11 @@ internal class NativeFirstSend(
         validate(stamp)
         if (ticket != revision) throw ApiException(409, "account_changed", "First-send account changed")
         val owner = value["ownerUser"]?.jsonPrimitive?.contentOrNull
+        val enabled = value["version"]?.jsonPrimitive?.intOrNull == 1 && value["canSubmit"]?.jsonPrimitive?.booleanOrNull == true
         account = if (!owner.isNullOrBlank() && value["canFenceAccount"]?.jsonPrimitive?.booleanOrNull == true)
-            Account(stamp, owner, FirstSendDraftStore.scope(api.pairing.baseUrl, owner), FirstSendApi(api), value["canSubmit"]?.jsonPrimitive?.booleanOrNull == true) else null
+            account?.takeIf { it.stamp == stamp && it.owner == owner && it.connection === api && it.enabled == enabled }
+                ?: Account(stamp, owner, FirstSendDraftStore.scope(api.pairing.baseUrl, owner), FirstSendApi(api), enabled, api)
+            else null
         return JsonObject(value + (account?.let { mapOf("draftScope" to JsonPrimitive(it.scope)) } ?: emptyMap())).wire()
     }
     private fun current(stamp: String, owner: String): Account {
@@ -214,9 +217,10 @@ internal class NativeFirstSend(
             throw error
         }
     }
-    suspend fun cancel(stamp: String, owner: String, id: String): Any? {
+    suspend fun cancel(stamp: String, owner: String, id: String, deleteAccepted: Boolean = false): Any? {
         val captured = current(stamp, owner)
-        val row = change(captured, id) { JsonObject(it + ("cancelRequested" to JsonPrimitive(true))) }
+        val row = change(captured, id) { JsonObject(it + mapOf("cancelRequested" to JsonPrimitive(true)) +
+            if (deleteAccepted) mapOf("deleteAcceptedRequested" to JsonPrimitive(true)) else emptyMap()) }
         if ((!row.flag("frozen") || !row.flag("prepareAttempted")) && row.preparation() == null) {
             withContext(Dispatchers.IO) { store.remove(captured.scope, id, row.getValue("revision").jsonPrimitive.long) }
             recheck(captured)
@@ -225,6 +229,8 @@ internal class NativeFirstSend(
         if (row.phase() == "cancelled") return check(captured, id).wire()
         var checked = check(captured, id)
         if (checked.preparation() == null) checked = prepare(captured, id, cancelling = true)
+        if (checked.preparation()?.flag("accepted") == true && !checked.flag("deleteAcceptedRequested"))
+            throw ApiException(409, "confirmation_required", "This first message was already accepted. Confirm conversation and memory deletion, or keep it and use Stop.")
         val target = if (checked.preparation()?.flag("accepted") == true)
             "/api/sessions/${checked.preparation()!!.getValue("sessionId").jsonPrimitive.content.urlSegment()}" else path(id)
         api(captured, "DELETE", target)

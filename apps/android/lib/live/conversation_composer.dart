@@ -87,7 +87,8 @@ class _ConversationComposerState extends State<ConversationComposer> {
     }
     final c = widget.controller;
     if (c.canWrite &&
-        widget.text.text.trim().isNotEmpty &&
+        (widget.text.text.trim().isNotEmpty ||
+            (c.firstSend.current != null && c.attachments.isNotEmpty)) &&
         !c.uploading &&
         !c.unknownCommand) {
       unawaited(c.send(c.running ? 'steer' : 'prompt'));
@@ -341,8 +342,7 @@ class _ConversationComposerState extends State<ConversationComposer> {
                         ComposerAttachmentStrip(
                           attachments: c.attachments,
                           onRemove: (attachment) {
-                            c.attachments.remove(attachment);
-                            c.changed();
+                            c.removeAttachment(attachment);
                           },
                         ),
                       ExternalImageDropTarget(
@@ -580,7 +580,12 @@ class _ConversationComposerState extends State<ConversationComposer> {
                                     c.canWrite &&
                                             (stopPrimary
                                                 ? !stopping
-                                                : !empty &&
+                                                : (!empty ||
+                                                          (c.firstSend.current !=
+                                                                  null &&
+                                                              c
+                                                                  .attachments
+                                                                  .isNotEmpty)) &&
                                                       !c.uploading &&
                                                       !c.unknownCommand)
                                         ? () => stopPrimary

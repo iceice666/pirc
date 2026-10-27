@@ -1486,6 +1486,85 @@ and UI redesign deferrals are unchanged. Only this run's temporary build/log
 artifacts are removed; APKs, SDKs, existing build output and other agents' work
 are preserved. No push, deployment or Release is included.
 
+## U1 implementation checkpoint: Flutter controller and recovery wiring (2026-10-27)
+
+Implemented locally. Flutter now adopts the native durable engine for negotiated
+first Send; **Gateway still advertises `canSubmit: false`** pending the remaining
+failure/integration gates. This supersedes the earlier native checkpoint's
+controller/UI adoption limitation, but does not complete U1. Gateway 1016, Node
+2007, protocol 15, package versions and dependency/Nix hashes are unchanged.
+
+- `FirstSendState` owns the client wiring within the existing LiveController.
+  Create reserves its local operation before awaiting storage; edits, selected
+  model/thinking and attachment removal are persisted through native revisions.
+  Files are stored locally before submission, with only new bytes crossing the
+  channel; subsequent edits carry metadata. Cold-restored accepted intents can
+  continue from Gateway-owned files without pretending to have local copies.
+  Attachment-only first Send works through the normal button/desktop Enter.
+- Actual Send uses native submit rather than legacy session creation, settings
+  commands, upload and prompt calls. A storage failure retains the current text
+  and cannot expose that old path. The composer clears only after known admission
+  and opening the real session; there is no invented local transcript. Frozen or
+  in-flight input cannot be edited or retargeted. Before admission, approval-mode
+  overrides remain unavailable: this U1 slice uses the workspace's existing
+  default rather than implying an unsupported per-message permission change.
+- Navigation, account changes and late replies are fenced by owner/pairing,
+  selection and operation identity. Local revision watermarks reject stale
+  callbacks, including after a dismissal. Page/project/back navigation drains
+  writes before leaving; storage failure keeps the newest visible input. Leaving
+  during a send does not jump back on admission. Empty mutable drafts are pruned
+  only after their queued writes; nonempty input remains recoverable. Explicit
+  pair/unpair drains local writes before retiring the binding.
+- Existing sidebar styling now contains a collapsed saved-draft/pending-send
+  entry. A pending first message replaces the composer with a compact recovery
+  card: original text is collapsed and previews are bounded before layout. Check
+  is query-only, Open conversation is explicit after a checked outcome, and
+  Take control/Stop use their separate native actions. Resume/background handling
+  does not watch local draft IDs or send them automatically. Deletion events
+  reconcile the original private record without reviving the view.
+- Discarding an apparently unaccepted draft cannot silently become accepted
+  conversation/memory deletion. The UI refreshes local state before confirmation;
+  native cancel additionally requires explicit `deleteAccepted` consent before
+  using the accepted-session Delete route. It persists that consent separately
+  from `cancelRequested` for a retry, and returns `confirmation_required` if
+  acceptance won a race. Declining retains the input; ordinary owner/mode
+  permission checks and source-aware memory deletion still happen at Gateway.
+- A failed cold capability negotiation blocks new creation instead of guessing
+  that the old split flow is safe. Older unsupported bridges and an explicit
+  `canSubmit: false` retain their documented legacy behavior. Previously reserved
+  operations never fall back. Authenticated native recovery/discovery remains
+  available with the new-send gate disabled; new execution remains disabled.
+  Already-bound drafts stay editable through a transient network failure. Cold
+  restoration still needs authenticated capabilities before exposing private
+  data; private bytes remain on disk while offline.
+- Refreshing identical native capabilities now reuses the same bound connection,
+  so a foreground refresh cannot interrupt an in-flight Send. Changed identity
+  or activation still retires that binding. New functional labels and deletion
+  warnings are present in English/Traditional Chinese; existing renderer,
+  navigation structure and visual design are retained.
+
+Validation: **20 focused Flutter tests** pass (13 controller/boundary cases,
+three widget cases including the actual App shell, and four legacy first-send
+regressions). Targeted Dart analysis reports **no issues**. **28 native JVM
+cases** pass without skips, including concurrent capability refresh during a
+held HTTP acceptance, another device adopting staged files without local blobs,
+explicit accepted-delete confirmation and the earlier storage/transport cases.
+Flutter boundary tests use a fake native port; native filesystem/HTTP tests use
+synthetic loopback fixtures. They are separate proofs, not an actual Android
+MethodChannel-to-Gateway/Node/Agent process or device pass. No full Flutter suite,
+emulator, APK build, Nix or remote CI was run. Only run-created test caches,
+isolated native output and logs are removed; APKs/SDKs/preexisting output stay.
+
+Remaining U1: the real client/Gateway/Node/Agent multi-device, restart and
+permission failure matrix; actual Android process-death/filesystem validation;
+Stop before a Node mapping is known; removed workspace/model cancellation and
+usable known-admission-failure recovery. Include preservation of unsaved edits
+when another window freezes/accepts the same operation, older-client command
+fencing through accepted/materializing states, and Web's cold-negotiation and
+rollback recovery alongside Android. Keep activation closed until those gates
+pass. Later bindings, mount revocation, canonical collaboration and bounded pots
+stages remain open. This checkpoint stays local with no push/deployment/Release.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

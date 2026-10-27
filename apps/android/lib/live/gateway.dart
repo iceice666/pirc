@@ -8,6 +8,8 @@ import 'modes.dart';
 import 'attention.dart';
 import 'panel_resource.dart';
 
+part 'first_send.dart';
+
 typedef Json = Map<String, dynamic>;
 Json obj(dynamic value) =>
     value is Map ? value.map((k, v) => MapEntry('$k', v)) : {};
@@ -67,6 +69,7 @@ class LiveController extends ChangeNotifier {
   late final AttentionState attention = AttentionState(gateway);
   int get attentionCount => sessions.where(isWaiting).length + attention.count;
   final Gateway gateway;
+  late final FirstSendState firstSend = FirstSendState(this);
   String? origin, clientId, sessionId, error, actionError, pairLink, routePage;
   Json state = {}, control = {}, preferences = {};
   String? _draftWorkspaceId;
@@ -76,6 +79,7 @@ class LiveController extends ChangeNotifier {
 
   void discardDraftSession() {
     if (!isDraftSession) return;
+    firstSend.leave();
     _draftWorkspaceId = null;
     ++_selection;
     ++_navigationIntent;
@@ -145,6 +149,13 @@ class LiveController extends ChangeNotifier {
       : null;
 
   Future<void> changeApprovalMode(String mode) async {
+    if (firstSend.current != null) {
+      actionError = tr(
+        "The first message uses the workspace's default approval mode. Change it after admission.",
+      );
+      changed();
+      return;
+    }
     if (!const ['read-only', 'auto', 'full-access'].contains(mode) ||
         approvalMode == mode) {
       return;
@@ -181,6 +192,7 @@ class LiveController extends ChangeNotifier {
   }
 
   Future<void> changeModel(Json model) async {
+    if (firstSend.frozen) return;
     final id = sessionId;
     if (id == null || running || model['available'] == false) return;
     state = {
@@ -188,6 +200,7 @@ class LiveController extends ChangeNotifier {
       'modelId': model['id'],
       'modelProvider': model['provider'],
     };
+    if (firstSend.current != null) await firstSend.save();
     changed();
     if (canControl && !isDraftSession) {
       await sendCommand({
@@ -199,12 +212,14 @@ class LiveController extends ChangeNotifier {
   }
 
   Future<void> changeThinking(String level) async {
+    if (firstSend.frozen) return;
     final id = sessionId;
     if (id == null ||
         !['off', 'minimal', 'low', 'medium', 'high', 'xhigh'].contains(level)) {
       return;
     }
     state = {...state, 'thinking': level};
+    if (firstSend.current != null) await firstSend.save();
     changed();
     if (canControl && !isDraftSession) {
       await sendCommand({'type': 'set_thinking', 'level': level});
@@ -276,6 +291,7 @@ class LiveController extends ChangeNotifier {
   ].contains(obj(state['run'])['status']);
   bool get canControl =>
       sessionId != null &&
+      !firstSend.frozen &&
       connection == 'live' &&
       control['held'] == true &&
       !_pairingMutation;
@@ -379,6 +395,7 @@ class LiveController extends ChangeNotifier {
       origin = data['origin'] as String?;
       clientId = data['clientId'] as String?;
       pairingStamp = data['pairingStamp'] as String?;
+      await firstSend.initialize();
       pairLink = data['pairLink'] as String?;
       routePage = data['route'] as String?;
       calendarFocusEventId = data['eventId'] as String?;
@@ -489,6 +506,8 @@ class LiveController extends ChangeNotifier {
 
   Future<void> pair(String link) async {
     if (busy) return;
+    await firstSend.flush();
+    firstSend.reset();
     _pairingMutation = true;
     _accountRevision++;
     _draftWorkspaceId = null;
@@ -509,6 +528,7 @@ class LiveController extends ChangeNotifier {
       origin = data['origin'];
       clientId = data['clientId'];
       pairingStamp = data['pairingStamp'] as String?;
+      await firstSend.initialize();
       pairLink = null;
       sessionId = null;
       state = {};
@@ -533,6 +553,8 @@ class LiveController extends ChangeNotifier {
   }
 
   Future<void> unpair() async {
+    await firstSend.flush();
+    firstSend.reset();
     _pairingMutation = true;
     try {
       _accountRevision++;
@@ -656,8 +678,34 @@ class LiveController extends ChangeNotifier {
     String id, {
     bool reveal = true,
     bool keepComposer = false,
+    bool skipFirst = false,
   }) async {
-    if (!keepComposer && id != sessionId) discardDraftSession();
+    final firstIntent = ++_navigationIntent,
+        firstSelection = _selection,
+        firstAccount = _accountRevision;
+    if (!skipFirst && firstSend.available) {
+      final pending = await firstSend.find(id);
+      if (firstIntent != _navigationIntent ||
+          firstSelection != _selection ||
+          firstAccount != _accountRevision) {
+        return;
+      }
+      if (pending != null &&
+          pending['released'] != true &&
+          obj(pending['preparation'])['state'] != 'admitted') {
+        await firstSend.resume(pending);
+        return;
+      }
+    }
+    if (!keepComposer && id != sessionId) {
+      await flushDraft();
+      if (firstIntent != _navigationIntent ||
+          firstSelection != _selection ||
+          firstAccount != _accountRevision) {
+        return;
+      }
+      discardDraftSession();
+    }
     _selectFirstSessionOnRefresh = false;
     final navigation = ++_navigationIntent;
     if (routePage?.startsWith('workspace:') == true) routePage = null;
@@ -740,7 +788,21 @@ class LiveController extends ChangeNotifier {
     changed();
   }
 
+  /// A page/back/project switch must drain this draft before abandoning its view.
+  Future<bool> prepareDraftNavigation() async {
+    final navigation = ++_navigationIntent, account = _accountRevision;
+    final selection = ++_selection;
+    await flushDraft();
+    return !_disposed &&
+        navigation == _navigationIntent &&
+        account == _accountRevision &&
+        selection == _selection;
+  }
+
   Future<void> home() async {
+    final intent = ++_navigationIntent, account = _accountRevision;
+    await flushDraft();
+    if (intent != _navigationIntent || account != _accountRevision) return;
     discardDraftSession();
     _selectFirstSessionOnRefresh = false;
     final navigation = ++_navigationIntent;
@@ -769,34 +831,52 @@ class LiveController extends ChangeNotifier {
     changed();
   }
 
-  Future<void> create(String workspaceId) async {
+  Future<void> create(String workspaceId, {Json? recovered}) async {
+    if (recovered == null && firstSend.unavailable) {
+      await firstSend.initialize();
+      if (firstSend.unavailable) {
+        throw StateError(
+          tr(
+            'Connect to the Gateway to confirm first-send support before creating a conversation.',
+          ),
+        );
+      }
+    }
     final workspace = workspaces
         .where((w) => w['id'] == workspaceId)
         .firstOrNull;
-    if (workspace?['deleting'] == true) {
+    if (recovered == null && workspace?['deleting'] == true) {
       throw StateError(tr(workspaceDeletionNotice));
     }
-    if (_deletedWorkspaces.contains(workspaceId)) {
+    if (recovered == null && _deletedWorkspaces.contains(workspaceId)) {
       throw StateError(tr("This project is no longer available."));
     }
-    if (isReadOnly(workspace)) {
+    if (recovered == null && isReadOnly(workspace)) {
       throw StateError(tr(workspaceUnavailableNotice));
     }
+    final creationIntent = ++_navigationIntent,
+        creationAccount = _accountRevision;
     await flushDraft();
+    if (creationIntent != _navigationIntent ||
+        creationAccount != _accountRevision) {
+      return;
+    }
     discardDraftSession();
     final navigation = ++_navigationIntent, account = _accountRevision;
     await gateway.call('unwatch');
     if (_disposed ||
         navigation != _navigationIntent ||
         account != _accountRevision ||
-        _deletedWorkspaces.contains(workspaceId)) {
+        (recovered == null && _deletedWorkspaces.contains(workspaceId))) {
       return;
     }
     ++_selection;
     _selectFirstSessionOnRefresh = false;
     _draftWorkspaceId = workspaceId;
     sessionId =
-        'draft-${DateTime.now().microsecondsSinceEpoch}-${Random.secure().nextInt(1 << 32)}';
+        recovered?['preparation']?['sessionId'] as String? ??
+        recovered?['operationId'] as String? ??
+        'draft-${FirstSendState.identity()}';
     state = {
       'session': {
         'id': sessionId,
@@ -822,6 +902,15 @@ class LiveController extends ChangeNotifier {
     revealSelectedSession = true;
     sessionNavigationRevision++;
     sessionVisible = true;
+    if (recovered != null) {
+      firstSend.restore(recovered);
+    } else if (firstSend.enabled) {
+      // Reserve before awaiting I/O: failed persistence must not expose legacy Send.
+      await firstSend.reserve();
+      if (account != _accountRevision || navigation != _navigationIntent) {
+        return;
+      }
+    }
     changed();
     await refreshModels();
   }
@@ -1062,7 +1151,14 @@ class LiveController extends ChangeNotifier {
     }
     final revision = _accountRevision;
     try {
-      await gateway.request(sessionPath(id), method: 'DELETE');
+      final pending = firstSend.saved
+          .where((row) => obj(row['preparation'])['sessionId'] == id)
+          .firstOrNull;
+      if (pending != null) {
+        await firstSend.discard(pending, deleteAccepted: true);
+      } else {
+        await gateway.request(sessionPath(id), method: 'DELETE');
+      }
       if (revision != _accountRevision) return;
       await _removeSession(id);
     } finally {
@@ -1073,11 +1169,14 @@ class LiveController extends ChangeNotifier {
   /// A server deletion is terminal, even when it arrives before our DELETE ack.
   Future<void> _removeSession(String id) {
     if (!_deleted.add(id)) return Future<void>.value();
+    firstSend.sessionDeleted(id);
     final deleted =
         sessions.where((s) => s['id'] == id).firstOrNull ??
         (sessionId == id ? obj(state['session']) : null);
     sessions.removeWhere((s) => s['id'] == id);
     if (sessionId == id) {
+      firstSend.leave();
+      _draftWorkspaceId = null;
       ++_selection;
       ++_navigationIntent;
       ++sessionNavigationRevision;
@@ -1130,6 +1229,7 @@ class LiveController extends ChangeNotifier {
 
   void _event(Json event) {
     if (event['type'] == 'networkAvailable') {
+      unawaited(firstSend.initialize());
       if (active && origin != null) {
         if (loading) {
           _retryListOnNetwork = true;
@@ -1153,6 +1253,7 @@ class LiveController extends ChangeNotifier {
         return;
       }
       _accountRevision++;
+      firstSend.reset();
       _draftWorkspaceId = null;
       _selection++;
       _navigationIntent++;
@@ -1164,6 +1265,7 @@ class LiveController extends ChangeNotifier {
       origin = next['origin'] as String?;
       clientId = next['clientId'] as String?;
       pairingStamp = next['pairingStamp'] as String?;
+      unawaited(firstSend.initialize());
       calendarFocusEventId = null;
       calendarFocusOccurrenceStart = null;
       calendarFocusDate = null;
@@ -1271,9 +1373,14 @@ class LiveController extends ChangeNotifier {
   }
 
   void editDraft(String value) {
+    if (firstSend.frozen) return;
     _draftRevision++;
     draft = value;
     _save?.cancel();
+    if (firstSend.current != null) {
+      unawaited(firstSend.save().catchError((Object _) {}));
+      return;
+    }
     final id = sessionId;
     final account = _accountRevision;
     if (id == null || isDraftSession) return;
@@ -1302,6 +1409,10 @@ class LiveController extends ChangeNotifier {
   }
 
   Future<void> flushDraft() async {
+    if (firstSend.current != null) {
+      await firstSend.flush();
+      return;
+    }
     if (isDraftSession) return;
     final id = sessionId;
     final account = _accountRevision;
@@ -1341,11 +1452,20 @@ class LiveController extends ChangeNotifier {
       // visible polling through `active == false`.
       if (_documentDepth > 0) await gateway.call('unwatch');
     } else {
+      await firstSend.initialize();
+      if (!current()) return;
+      if (firstSend.current != null && firstSend.frozen) {
+        try {
+          await firstSend.check();
+        } catch (e) {
+          actionError = describe(e);
+        }
+      }
       await Future.wait([
         refreshList(),
         attention.refresh(preserveUnchangedMemory: preserveUnchangedMemory),
       ]);
-      if (current() && sessionId != null) {
+      if (current() && sessionId != null && !isDraftSession) {
         await gateway.call('watch', {'sessionId': sessionId});
       }
     }
@@ -1546,6 +1666,10 @@ class LiveController extends ChangeNotifier {
   }
 
   Future<void> send(String kind) async {
+    if (firstSend.current != null) {
+      if (kind == 'prompt') await firstSend.submit();
+      return;
+    }
     if (draft.trim().isEmpty ||
         unknownCommand ||
         uploading ||
@@ -1613,6 +1737,15 @@ class LiveController extends ChangeNotifier {
         changed();
       }
     }
+  }
+
+  void removeAttachment(Json attachment) {
+    if (firstSend.frozen) return;
+    attachments.remove(attachment);
+    if (firstSend.current != null) {
+      unawaited(firstSend.save().catchError((Object _) {}));
+    }
+    changed();
   }
 
   int _nextLocalAttachment = 0;
@@ -1698,6 +1831,7 @@ class LiveController extends ChangeNotifier {
   }
 
   Future<void> _attachFiles(Future<List<Json>> Function() read) async {
+    if (firstSend.frozen) return;
     final id = sessionId;
     if (id == null || _disposed) return;
     final account = _accountRevision, selection = _selection;
@@ -1730,7 +1864,9 @@ class LiveController extends ChangeNotifier {
         final mime = file['mimeType'] as String? ?? 'application/octet-stream';
         final isImage = mime.startsWith('image/');
         final pending = <String, dynamic>{
-          'id': 'local-${++_nextLocalAttachment}',
+          'id': firstSend.current != null
+              ? 'file-${FirstSendState.identity()}'
+              : 'local-${++_nextLocalAttachment}',
           'name': name,
           'mimeType': mime,
           'kind': isImage ? 'image' : 'file',
@@ -1741,7 +1877,10 @@ class LiveController extends ChangeNotifier {
         };
         attachments.add(pending);
         changed();
-        if (isDraftSession) continue;
+        if (isDraftSession) {
+          if (firstSend.current != null) await firstSend.save();
+          continue;
+        }
         try {
           final uploaded = obj(
             await gateway.call('uploadAttachment', {
