@@ -18,6 +18,18 @@ create a release. The preceding publication included App fixes with the recorded
 verification below. This follow-up changes planning documents only; those earlier
 runtime results must not be presented as new tests of the architecture.
 
+## Implementation follow-up (2026-10-27)
+
+The paragraphs above describe the original October 24 review/publication scope.
+The user later authorized the staged architecture implementation and has now
+requested a pull/rebase and push of accumulated code plus updated plan progress.
+First-send persistence, original attachments, Stop/delete/retry recovery and
+Web/native Android adoption are implemented through `578f759a`; activation stays
+off until the remaining client/process/device and rollout gates pass. Follow the
+[current snapshot](unified-conversations.md#current-progress-and-next-delivery-2026-10-27)
+for evidence and the open U1–U6 queue. This does not mark the broader contracts
+below implemented, or authorize deployment, a Release, Flutter Web or a UI reset.
+
 ## Review outcome and corrected contradictions
 
 The product direction is coherent after the corrections below. It can be published

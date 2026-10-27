@@ -69,151 +69,74 @@ presets remain configuration work; App sign-in and Flutter Web stay deferred.
 The architecture documents can be published as a planning baseline; this is not
 approval to implement every unchecked stage.
 
-## Recommended next implementation slice (2026-10-26)
+## Current implementation status (2026-10-27)
 
-After rebasing to `6d87f97f`, the user requested a plan, then activated a local
-implementation goal. The
-[next implementation sequence](unified-conversations.md#next-implementation-sequence-2026-10-26)
-recommends **reliable first Send** across Gateway, Node, Web and Android: a durable,
-queryable creation/admission identity, preserving local drafts and existing
-command deduplication. Current creation and first-message admission are separate,
-so the whole flow still needs failure/restart proof. The
-[Node allocation checkpoint](unified-conversations.md#u1-implementation-checkpoint-node-allocation-2026-10-26)
-is implemented locally; later acceptance/attachment/admission slices are tracked
-below, while client adoption remains open.
-The [message-admission checkpoint](unified-conversations.md#g0-implementation-checkpoint-message-admission-2026-10-26)
-also fixes false success after a refused initial append, stops failed starts before
-inference, preserves uncertain outcomes and keeps Stop available during admission.
-It does not yet provide durable Gateway/client recovery.
-The [Gateway preparation checkpoint](unified-conversations.md#u1-implementation-checkpoint-gateway-preparation-2026-10-26)
-introduced owner-scoped immutable intents, stable identity reservation,
-restart lookup and transactional cancellation/deletion fences. Preparation alone
-neither accepted a message nor created a public conversation.
-The [attachment staging checkpoint](unified-conversations.md#u1-implementation-checkpoint-durable-attachment-staging-2026-10-27)
-adds verified private files, durable cleanup and the user-selected seven-day
-unaccepted staging policy introduced with Gateway schema 1013. The
-[Node attachment-transfer checkpoint](unified-conversations.md#u1-implementation-checkpoint-node-attachment-transfer-2026-10-27)
-adds schema 2005 with stable upload identities, crash reconciliation and deletion
-fences, verified through a real Node restart. These file checkpoints alone do
-not constitute message acceptance or execution.
-The [Gateway intent-acceptance checkpoint](unified-conversations.md#u1-implementation-checkpoint-accepted-intent-and-node-materialization-2026-10-27)
-adds schema 1014: atomic pending-session publication, validated attachment
-acceptance and reconciliation through the Node allocation/transfer identities.
-`ready` means files prepared, not Agent admission; `canSubmit` remains false.
-262 Gateway tests, 32 Node creation/transfer tests and the paired-token two-host
-restart/deletion proof passed. The JSON parser/transport mismatch found by the
-process test is fixed through raw octets plus negotiated manifest MIME. First
-command/lease recovery was the next slice, with Web/Android adoption still open.
-The [first-message dispatch checkpoint](unified-conversations.md#u1-implementation-checkpoint-first-message-dispatch-and-stop-fence-2026-10-27)
-adds Gateway 1015 / Node 2006, one immutable first command, held-lease admission,
-read-only receipt reconciliation and a durable Stop fence. Uncertain outcomes
-are never replayed automatically; accepted staging sources clean after admission.
-`canSubmit` stays false pending uncertain-allocation cancellation and client recovery.
-275 Gateway tests, 416 Node library tests (three existing ignores), strict Clippy
-and paired-token first-admission/restart/Stop process cases passed locally.
-The [uncertain-allocation deletion checkpoint](unified-conversations.md#u1-implementation-checkpoint-uncertain-allocation-deletion-2026-10-27)
-adds Gateway 1016 / Node 2007: owner-authorized durable deletion before the Node
-mapping is known, honest pending status while offline, and operation-scoped
-cancellation/cleanup on reconnect. 282 Gateway tests, 422 Node library tests,
-strict Clippy and five process cases passed locally. Client adoption and the full
-failure table remain open; `canSubmit` stays false.
-The [Web durable-draft checkpoint](unified-conversations.md#u1-implementation-checkpoint-web-durable-drafts-and-recovery-2026-10-27)
-adds account-scoped IndexedDB text/Blob persistence, revision guards, immutable
-first-send integration and explicit pending recovery controls. Gateway pins the
-expected account and exposes owner-scoped pending discovery by public session ID.
-Storage refusal and delayed initial writes cannot fall back to legacy sending or
-replace a newer selection. Web tests/typecheck/build, 284 Gateway tests, strict
-Gateway Clippy and an isolated real IndexedDB browser proof pass. Android
-adoption and the full client/process failure table remain open; `canSubmit` stays
-false. No schema/dependency change or Flutter modification is included.
-The [native durable-engine checkpoint](unified-conversations.md#u1-implementation-checkpoint-native-durable-submission-engine-2026-10-27)
-adds private native draft/attachment storage, revision/tombstone guards, paired
-account fencing and a persistent submit/check/Stop/cancel engine. Focused native
-filesystem/HTTP tests and Web receipt regressions pass; controller/UI adoption
-was the next slice, while real end-to-end acceptance remains open. Existing App behavior and
-`canSubmit: false` are unchanged. No schema/dependency or Flutter code change is
-included; run-owned build output is kept separate from existing APKs/artifacts.
-The [Flutter recovery-wiring checkpoint](unified-conversations.md#u1-implementation-checkpoint-flutter-controller-and-recovery-wiring-2026-10-27)
-connects real create/edit/send/navigation and necessary recovery controls to that
-native engine. Twenty focused Flutter tests, clean targeted analysis and 28 native
-JVM tests pass locally. A stale Discard cannot delete an accepted conversation
-without separate consent; unknown capability negotiation cannot enable legacy
-creation. Existing pending records remain readable with the send gate off.
-Full process/device failure acceptance is still open and `canSubmit` remains false;
-no UI redesign, version/dependency change or publication is included.
-The [Node pre-allocation Stop checkpoint](unified-conversations.md#u1-implementation-checkpoint-node-pre-allocation-stop-foundation-2026-10-27)
-adds a durable, owner-bound first-input fence before a Node session exists.
-Node schema 2008 serializes it with allocation and initial command intake; it
-neither deletes history nor aborts later work. Gateway pending Stop authorization,
-queuing and Web/Android adoption remain open, so `canSubmit` stays false. This
-is a local Node foundation, not completed client acceptance.
-The [Gateway queued-Stop checkpoint](unified-conversations.md#u1-implementation-checkpoint-gateway-queued-pre-allocation-stop-2026-10-27)
-adds Gateway schema 1017: a separate Stop-only pending-input control lease,
-durable offline/restart recovery, read-only receipts and explicit blank
-continuation with original input/files retained. Node mapping readiness is
-reported separately from Stop. New acceptance requires Node 2008's Stop support.
-Web/Android adoption and the remaining U1 failure gates stay open; activation
-remains closed and all work stays local.
-The [client pending-Stop checkpoint](unified-conversations.md#u1-implementation-checkpoint-web-and-android-pending-stop-adoption-2026-10-27)
-connects Web/native Android/Flutter to scoped pending Stop and explicit blank
-continuation, retaining original text/files. Durable local Stop identities fence
-late send steps, receipt merges preserve independent known facts, and saved Web
-recovery remains available with activation off. Full client/process/device,
-unsaved-edit and mixed-version activation gates stay open; new sends remain gated.
-The [mixed-client/rollback checkpoint](unified-conversations.md#u1-implementation-checkpoint-mixed-client-and-rollback-fences-2026-10-27)
-adds recovery-contract 2 negotiation and Gateway schema 1018's semantic downgrade
-fence. Old/cached clients cannot start the new flow; ordinary legacy APIs remain
-available. Web IndexedDB 2 and native envelope 2 preserve originals and Stop
-metadata while refusing older writers. Fresh activation checks and bound-server
-rollback protection do not enable production sends. Full U1 client/process/device,
-unsaved-edit and activation acceptance remain open; later stages are unchanged.
-The [conflicted-editor checkpoint](unified-conversations.md#u1-implementation-checkpoint-preserving-conflicted-editor-input-2026-10-27)
-preserves unsent Web/Android edits and attachment bytes as explicit private drafts
-when a peer changes/freezes the original. Recovery never sends automatically or
-overwrites another editor's copy. Common navigation waits for persistence; native
-byte copying remains account-scoped and local. 508 Web, 40 native JVM and 21 focused
-Flutter tests pass, plus a real two-page/browser-restart storage proof. Full U1
-client/process/device, cleanup-race and activation gates remain open.
-The [Node rejected-admission retry foundation](unified-conversations.md#u1-implementation-checkpoint-node-rejected-admission-retry-foundation-2026-10-27)
-adds Node schema 2009's attempt/predecessor history and a held-lease retry only
-after a known rejection. It retains the same conversation/input/files, preserves
-old receipts and never replays unknown work. 447 Node tests (three existing helper
-ignores), strict Node/conformance Clippy and three Node-process cases pass; the
-new actual Agent journal proof contains one user message after failure/restart/
-retry. Gateway persistence and Web/Android retry adoption are the next required
-delivery; production activation and all later architecture stages remain open.
-The [Gateway retry checkpoint](unified-conversations.md#u1-implementation-checkpoint-gateway-durable-rejected-admission-retries-2026-10-27)
-adds schema 1019's durable retry/predecessor/attempt-number identity, owner-scoped
-GET and late-reply fencing over Node 2009. It retains the same conversation and
-files, never resends an unknown attempt, and reconciles global Stop even when a
-retry never reached Node. 320 Gateway tests, strict Clippy and five real backend
-process cases pass; two paired HTTP clients prove one history entry/model call
-through repair, retry and both hosts restarting. At that backend checkpoint, Web/native adoption and
-full client/device/activation acceptance remained open; new sends stay disabled.
-The [Web/native retry checkpoint](unified-conversations.md#u1-implementation-checkpoint-web-and-native-android-rejected-admission-retries-2026-10-27)
-now adopts that API: a fixed local nonce before POST, fresh capabilities/control,
-versioned outcome merging and query-only uncertain recovery in both recovery UIs.
-IndexedDB/native envelope 3 preserve old input/bytes while fencing older writers.
-68 Web, 50 native JVM and 22 focused Flutter tests pass, with clean type analysis
-and a real two-page/browser-restart nonce/Blob proof. Client-to-backend/device,
-pre-POST journal repair and activation gates remain open; new sends stay disabled.
-The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
-records local fixture/transcript repairs and 50 Agent plus five Node process
-passes; the remote Check is still failed, and full Chromium/Linux verification
-has not been rerun.
-The user explicitly requested a one-off push through `a926ea38` for the completed
-checkpoints, license packaging and protocol snapshot repair. Subsequent implementation
-checkpoints remain local under the active goal's default publication boundary.
+This snapshot covers the implementation through `578f759a`, on top of remote
+`a926ea38`. The user authorized a one-off pull/rebase and push of these commits
+and this progress update to `origin/main`. Subsequent work defaults to local
+commits; deployment, version changes and a Release are separate actions. The
+pull/rebase found no newer upstream commits or conflicts.
 
-Then establish environment bindings, implement actual resource transitions, map
-canonical tasks/collaboration, and extend bounded proactive pots. The user deferred
-UI redesign and navigation reorganization; retain only necessary functional changes.
-Existing library and pots work is reused. Storage-refusal acknowledgement is fixed
-locally; durable recovery and remaining verification debt stay open. App
-authentication and Flutter Web stay deferred.
-See the linked sequence for patch boundaries, failure cases and acceptance. This
-implementation goal stays local and does not authorize deployment or a release.
-Run only focused simple Flutter checks when changing Flutter, as requested.
+| Area                                           | Current state                                                                                                                                                                      | Remaining delivery                                                                                                                  |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| U1 — reliable first Send                       | Gateway/Node durable intents, original files, admission/Stop/delete fences and explicit rejected-message retries; Web/private Android drafts and recovery controls are implemented | Full live-client failure matrix, ambiguous local-journal repair, Android device/process-death acceptance and rollout/rollback gates |
+| U2 — conversation/project/environment bindings | Existing workspace, session and mode identities are retained                                                                                                                       | Inventory and implement separate membership/binding versions, migrate existing sessions and preserve links/authority                |
+| U3 — unified navigation/UI                     | Deferred by the user                                                                                                                                                               | Revisit after core contracts; current clients receive necessary functional controls only                                            |
+| U4 — mount/workspace transitions               | Design accepted; actual unified transitions not implemented                                                                                                                        | Idle then running-worker revocation, Node acknowledgement, offline/interrupted reconciliation and project resources                 |
+| U5 — canonical tasks and collaboration         | Existing pots/task/team/goal/todo foundations remain                                                                                                                               | Map common task/attempt identities, shared notes and structured waits; preserve other writers and memory provenance                 |
+| U6 — bounded proactive pots                    | Progress-only observation and explicit dispatch exist                                                                                                                              | Scoped content observation, finite budgets, quiet suggestions and synchronized notification/decision lifecycle                      |
+
+**The new U1 flow is still gated by `canSubmit: false`.** Pushing its code does
+not enable it. Current formats are Gateway schema **1019**, Node schema **2009**,
+protocol **15**, client recovery contract **2**, and Web IndexedDB/native private
+envelope **3**. Existing ordinary session APIs remain available. Unaccepted
+Gateway attachment staging expires after **seven days**; accepted attachments and
+private drafts are not subject to that deadline. See [upgrade and rollback
+notes](../docs/deploy/upgrades.md).
+
+Latest completed U1 slices and their recorded evidence:
+
+- [Gateway retries](unified-conversations.md#u1-implementation-checkpoint-gateway-durable-rejected-admission-retries-2026-10-27):
+  durable retry identity, per-attempt ordering and global Stop reconciliation;
+  320 Gateway tests, strict Clippy and five backend process cases passed.
+- [Node retries](unified-conversations.md#u1-implementation-checkpoint-node-rejected-admission-retry-foundation-2026-10-27):
+  exact rejected-predecessor checks and retained original input; 447 Node tests
+  (three existing helper ignores), strict Clippy and three Node process cases
+  passed. The real Agent journal proof retains one user message/model call.
+- [Web/native retries](unified-conversations.md#u1-implementation-checkpoint-web-and-native-android-rejected-admission-retries-2026-10-27):
+  nonce-before-POST, query-only uncertain recovery and old-writer fences; 68 Web,
+  50 native JVM and 22 focused Flutter tests passed with clean targeted analysis.
+  A dedicated two-page/browser-restart proof preserves one nonce and original
+  Blob bytes without another POST. Native JVM/synthetic browser proofs are
+  distinct from actual Android OS/device and live client-to-backend acceptance.
+- [Earlier draft, conflict and pending-Stop checkpoints](unified-conversations.md#u1-implementation-checkpoint-web-durable-drafts-and-recovery-2026-10-27)
+  retain detailed migration, concurrency, cleanup and permission evidence. Their
+  “next slice” statements describe that point in history, not today's queue.
+
+Next, close U1's remaining gates in this order:
+
+1. Repair/reopen ambiguous client journal entries, especially a nonce committed
+   locally before its POST reaches Gateway; keep unknown outcomes query-only and
+   preserve original text/files. Finish conflict-copy versus attachment-cleanup
+   races without inventing a second send.
+2. Exercise actual Web and native clients against Gateway/Node/Agent through
+   lost replies, both-host/client restarts, competing devices, revoked permissions,
+   Stop/delete and mixed-version cases. Verify Android MethodChannel/private files
+   and process death; request a physical device when that step is ready.
+3. Complete activation/rollback and the affected full CI/conformance gates before
+   changing `canSubmit`. Then proceed with U2, U4, U5 and U6; U3 remains deferred.
+
+Before this publication, the remote [Check at a926ea38](https://github.com/mozufu/pirc/actions/runs/40350193507)
+was failed and Android CI passed. Local [admission-aware conformance repairs](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
+are included, but the full Chromium/Linux/workspace suite has not been revalidated
+locally. The new remote run must establish its own result; the focused evidence
+above is not a full CI pass. Nix validation was explicitly waived locally.
+
+Run only focused simple Flutter checks when changing Flutter. Clean run-owned
+outputs after verification while preserving shared caches, SDKs, existing APKs,
+user state and other agents' work. App sign-in/topology, Flutter Web and iOS remain
+deferred. The [main plan](unified-conversations.md#current-progress-and-next-delivery-2026-10-27)
+records the authoritative current status and full acceptance contract.
 
 ## Existing work and acceptance backlog
 

@@ -2,15 +2,83 @@
 
 [Plans](README.md) · [Workspace modes](modes.md) · [Mobile](mobile.md) · [Assistant contracts](../docs/architecture/assistant-memory.md) · [Checkpoints](checkpoints.md) · [pots](pots/README.md) · [Rust foundations](library-extraction.md) · [Conversation execution contracts](conversation-execution-contracts.md)
 
-Status: adopted architecture baseline, with the next implementation sequence
-reviewed against `6d87f97f` on 2026-10-26. The user subsequently activated the
-implementation goal for first Send, environment bindings, resource transitions,
-canonical tasks/collaboration and bounded pots. UI redesign/navigation reorganization
-is deferred; Web/Android changes are limited to necessary functional integration.
-Use only focused simple Flutter checks when Flutter changes. Keep work in local
-commits; no push, deployment or release is authorized. Undecided numerical settings
-still need confirmation. Earlier library and pots checkpoints remain in their plans.
-Accepted design choices and still-open details are distinguished below.
+Status: adopted architecture baseline with an authorized staged implementation
+covering first Send, environment bindings, resource transitions, canonical tasks/
+collaboration and bounded pots. The implementation through `578f759a` is summarized
+below (2026-10-27). UI redesign/navigation reorganization remains deferred;
+Web/Android changes are limited to necessary functional integration. Use only
+focused simple Flutter checks when Flutter changes.
+
+The user authorized a one-off pull/rebase and push of the accumulated commits and
+this progress update to `origin/main` on 2026-10-27. Upstream was already `a926ea38`,
+with no newer commits or rebase conflicts. This publication does not enable the
+new flow, deploy it, change versions or create a Release. Subsequent work retains
+the local-commit default. Undecided numerical settings still need confirmation
+when their implementation stage begins; earlier library/pots work is reused.
+
+## Current progress and next delivery (2026-10-27)
+
+**U1 is implemented across Gateway, Node, Web and native Android, but is not
+accepted for activation. `canSubmit: false` remains in production.** Current
+formats: Gateway **1019**, Node **2009**, protocol **15**, client contract **2**,
+Web IndexedDB **3**, Android private envelope **3**. Package/dependency versions
+and Nix hashes are unchanged. Existing session, memory-deletion and checkpoint
+ownership guarantees remain in effect.
+
+Delivered U1 behavior:
+
+- Persist account-scoped immutable first-message intent and original attachment
+  bytes before delivery. Publish the stable conversation only after acceptance;
+  query the same operation across restarts without duplicate allocation/admission.
+- Keep private Web/Android drafts and unsent conflict copies, reject stale writers
+  and retain accepted/uncertain originals. Seven-day expiry is limited to
+  **unaccepted Gateway staging**, not accepted attachments or private drafts.
+- Preserve Stop and authorized deletion before or after Node mapping, including
+  offline queues and independent confirmation of Stop versus message admission.
+- Retry a positively rejected first message only through explicit user action,
+  current authority/control and a durable nonce/predecessor/attempt number. Keep
+  the same conversation and input; ambiguous results are queried, not replayed.
+- Wire the native Android engine and existing Web/Flutter recovery surfaces,
+  including version negotiation, independent Gateway access and minimal bilingual
+  status/actions. New navigation and visual redesign are deferred.
+
+Latest evidence: 320 Gateway tests and five backend process cases; 447 Node tests
+(three existing helper ignores) and three Node retry process cases; 68 focused Web,
+50 native JVM and 22 focused Flutter cases, clean targeted type/static analysis,
+and a dedicated two-page/browser-restart storage proof. These are separate
+recorded verification slices, not a single full workspace/CI or physical-device
+pass. The current backend and client [retry checkpoints](#u1-implementation-checkpoint-gateway-durable-rejected-admission-retries-2026-10-27)
+provide exact boundaries and evidence.
+
+| Stage                             | Current status                                                            | Next deliverable                                                                                                    |
+| --------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| U1 — first Send                   | Implementation present; activation blocked on remaining acceptance        | Ambiguous journal recovery, actual client/backend failure matrix, Android process/device and rollout/rollback proof |
+| U2 — bindings                     | Planned; existing identity/mode model preserved                           | Versioned conversation/project/environment mapping and compatible migration                                         |
+| U3 — navigation/UI                | Explicitly deferred                                                       | Necessary functional controls only until the core model is stable                                                   |
+| U4 — resource transitions         | Planned                                                                   | Idle transitions, then active-worker revocation/acknowledgement and offline recovery                                |
+| U5 — canonical work/collaboration | Existing primitives available; unified mapping pending                    | Common task/attempt identities, shared notes and resource waits without overwrites                                  |
+| U6 — proactive pots               | Existing progress observation/explicit dispatch; content analysis pending | Separate observation/execution grants, finite budgets and quiet synchronized suggestions                            |
+
+Immediate U1 queue:
+
+1. Complete safe reopening/repair of a client nonce committed before POST, and the
+   unsent-editor copy versus source-file cleanup race. A missing remote nonce is
+   not proof that a delayed request cannot arrive. Until resolved, retain the
+   unknown result and existing Stop/blank-continuation/deletion paths.
+2. Connect real Web/native clients to Gateway/Node/Agent for interrupted sends,
+   lost replies, restart, device competition, revocation, Stop/delete and mixed
+   versions. Native JVM and mocked MethodChannel tests do not replace Android
+   process death/private-filesystem/device acceptance.
+3. Finish activation/rollback and affected full CI/conformance checks before
+   enabling the new path. The last remote Check at `a926ea38` failed; included
+   local fixture repairs and focused passes do not imply a new remote green run.
+   Local Nix verification remains waived. Then continue U2, U4, U5 and U6.
+
+The dated checkpoints later in this file preserve what was delivered and tested
+at that time. Historical “local only”, “next slice” and incomplete-adoption notes
+are superseded by this snapshot where they conflict; unchecked acceptance gates
+remain open. The [work queue](README.md#current-implementation-status-2026-10-27)
+provides the compact cross-plan view.
 
 ## Agreed direction and priority
 
@@ -2119,7 +2187,7 @@ The [integrated architecture review](unified-architecture-review.md) separates
 corrected contradictions, pending product settings and engineering proof gates;
 its review scope is this architecture family, not every historical repository plan.
 
-### A. Relationship and workflow review — current priority
+### A. Relationship and workflow review — baseline and remaining proof
 
 - [x] Record the user's direction and separate present behavior from proposals.
 - [x] Draft concept relationships, lifecycle boundaries and primary journeys.
@@ -2153,7 +2221,7 @@ its review scope is this architecture family, not every historical repository pl
 - [ ] Sketch Web and App journeys in the existing design language; do not copy
       current Chat/Work navigation simply to preserve screenshot parity.
 
-### C. Implementation proposal, only after approval
+### C. Accepted implementation sequence and deferred work
 
 - [x] Propose a bounded delivery sequence: reliable first Send, environment-binding
       foundations, unified navigation, real resource transitions and canonical tasks

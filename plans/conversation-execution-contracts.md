@@ -9,10 +9,15 @@ capability composition, message/task routing, overlapping folder permissions,
 Node switching, lifecycle/deletion, content access and pots coordination.
 This document records
 target behavior and future acceptance cases; it does not implement or verify it.
-The later user request authorizes review/rebase/push of repository commits, not
-implementation of these contracts. App authentication/topology, Flutter Web
-selection and the first code implementation remain separate decisions. See the
-[integrated architecture review](unified-architecture-review.md) for remaining gates.
+The user subsequently authorized staged implementation; first-send persistence and
+Web/native Android recovery are now implemented but remain gated. See the
+[current progress snapshot](unified-conversations.md#current-progress-and-next-delivery-2026-10-27)
+for delivered code, evidence and open acceptance. The seven sections below remain
+target contracts; their cases are not automatically verified by that first-send
+work. App authentication/topology and Flutter Web remain separate decisions.
+The 2026-10-27 publication request covers accumulated commits and plan progress,
+not deployment or release. The [integrated architecture review](unified-architecture-review.md)
+retains the original design review and remaining gates.
 
 The main plan owns domain lifetimes, retained context (decision A), revocation,
 checkpoints and migration. This document refines those contracts. Names below

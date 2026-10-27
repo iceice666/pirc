@@ -169,8 +169,7 @@ release asset or new login/connection scheme is included.
 
 Gateway schema **1017** adds pending-input Stop control and durable Stop jobs;
 Node schema **2008**, protocol 15, package versions and dependencies are unchanged.
-Back up Gateway state before any future upgrade; older Gateway binaries refuse
-1017. Rollback needs the full matching backup rather than an edited `user_version`.
+Back up Gateway state before any future upgrade; older Gateway binaries refuse 1017. Rollback needs the full matching backup rather than an edited `user_version`.
 
 The new operation control scope is `pending_first_send_stop`, valid for 30 seconds
 and usable only before a Node mapping exists. It cannot authorize Node commands.

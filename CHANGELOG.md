@@ -16,7 +16,7 @@ User-facing changes are recorded here. See [release policy](docs/development/rel
 
 ### Upgrade notes
 
-- Back up Gateway and Node state before the next upgrade. Gateway schema 1014 adds internal first-send preparation, seven-day unaccepted attachment staging and durable pending-intent acceptance to the 1011 task lifecycle; message admission and client adoption remain in progress; Node schema 2005 adds durable conversation-allocation and attachment-transfer identities to the dispatch deduplication/control records; client adoption remains in progress. Node protocol 15 requires updating Gateway and all Nodes together. These changes are not part of the 0.10.0 tracking-only release.
+- Back up Gateway, Node and client draft state before the next upgrade. Gateway schema 1019 and Node schema 2009 add durable first-message preparation, attachments, admission, Stop/delete recovery and explicit retries. Web/Android recovery is integrated but remains gated pending full acceptance; private draft formats are version 3. The seven-day expiry applies only to unaccepted Gateway staging. Node protocol 15 requires updating Gateway and all Nodes together. These changes are not part of the 0.10.0 tracking-only release.
 
 ## [0.10.0] - 2026-10-25
 
