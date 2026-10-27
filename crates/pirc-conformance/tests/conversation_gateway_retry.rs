@@ -136,9 +136,12 @@ async fn paired_retry_reuses_the_same_conversation_and_file_and_survives_both_ho
         .unwrap()
         .to_owned();
     assert!(cluster.llm.requests().is_empty());
-    let executable = std::path::PathBuf::from(std::env::var("PIRC_CONFORMANCE_BIN_DIR").unwrap())
-        .join("pirc-node");
-    std::os::unix::fs::symlink(executable, cluster.dir.path().join("agent-for-retry")).unwrap();
+    // CI supplies a repository-relative bin dir. Resolve it through the same
+    // harness path as Cluster; a relative symlink would point inside the fixture.
+    let executable = pirc_conformance::bin_dir().unwrap().join("pirc-node");
+    let agent = cluster.dir.path().join("agent-for-retry");
+    std::os::unix::fs::symlink(executable, &agent).unwrap();
+    assert!(agent.is_file(), "retry agent symlink must resolve");
     cluster.restart_node(true).await;
     cluster.restart_gateway(true).await;
     let before = ok(

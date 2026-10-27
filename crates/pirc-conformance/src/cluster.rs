@@ -527,8 +527,9 @@ fn is_gateway_answer(response: &Response) -> bool {
         || response.body["error"]["code"].is_string()
 }
 
-/// Executables under test, or `None` when the suite is not requested.
-pub(crate) fn bin_dir() -> Option<PathBuf> {
+/// Canonical executable directory under test, or `None` when the suite is not requested.
+/// Relative paths are resolved against the repository root, not a fixture directory.
+pub fn bin_dir() -> Option<PathBuf> {
     let Some(dir) = std::env::var_os(BIN_DIR_VARIABLE) else {
         // Not a silent pass where the suite must run.
         assert!(
