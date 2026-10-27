@@ -1,5 +1,36 @@
 # Upgrades
 
+## Unreleased local checkpoint: retiring an unreserved first-message retry
+
+Gateway schema **1020** adds identity-only retry retirement tombstones. Node
+**2009**, protocol **15**, client recovery contract **2**, Web IndexedDB/native
+private envelope **3**, dependency versions and Nix hashes are unchanged. Older
+Gateways refuse schema 1020; before deployment stop the old processes and back up
+complete consistent Gateway/Node state. Rollback requires matching binaries and
+full state, never editing SQLite versions or discarding retirement records.
+
+A client may commit a retry nonce locally and crash before its POST reaches the
+Gateway. A GET 404 alone still cannot prove that a delayed request will not arrive.
+The new owner-scoped `POST .../retries/{retryId}/retire`, advertised by
+`canRetireFirstMessageRetry`, atomically retires an unreserved nonce only with a
+confirmed current rejected predecessor and the user’s held control. It neither
+creates a command nor contacts Node or a model. Retired nonce GETs return explicit
+`status: not_reserved, retired: true` with the nonce/predecessor identity; any late
+Retry POST using that nonce is permanently refused. This does not consume an
+attempt number or replace the original conversation/input/files.
+
+If reservation won the race, retirement only returns/reconciles that existing
+command; it cannot undo an execution, clear Stop or turn unknown admission into
+known rejection. Repeating a completed retirement is read-only, including after
+lease expiry, restart or authorized conversation deletion. The identity-only
+tombstone survives content deletion just like the existing dispatch fences.
+New retirement checks device authorization inside the transaction.
+
+**Web/native Android adoption of this recovery action is still pending.** Older
+clients remain query-only for an unresolved nonce. Production **`canSubmit: false`**
+is unchanged; this backend addition is not activation. Seven-day expiry remains
+limited to unaccepted Gateway staging. No deployment, APK or release is included.
+
 ## Unreleased local checkpoint: Web/native first-message Retry adoption
 
 Gateway **1019**, Node **2009**, protocol 15 and client contract 2 are unchanged.

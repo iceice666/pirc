@@ -41,7 +41,7 @@ pub(crate) use sql_text_enum;
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1019;
+pub const SCHEMA_VERSION: i64 = 1020;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = concat!(
@@ -54,7 +54,8 @@ const SCHEMA: &str = concat!(
     include_str!("conversation_submissions/dispatch.sql"),
     include_str!("conversation_submissions/cancellation.sql"),
     include_str!("conversation_submissions/pre_stop.sql"),
-    include_str!("conversation_submissions/retries.sql")
+    include_str!("conversation_submissions/retries.sql"),
+    include_str!("conversation_submissions/retry_retirements.sql")
 );
 /// Each migration takes a database from the version before it to its own;
 /// [`SCHEMA`] assembles the newest whole schema, including calendar tables.
@@ -134,6 +135,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     // Semantic fence: older Gateways must not execute first Send without the new client contract.
     (1018, "SELECT 1;"),
     (1019, include_str!("conversation_submissions/retries.sql")),
+    (1020, include_str!("conversation_submissions/retry_retirements.sql")),
 ];
 
 /// Placeholder name of a new session until the agent's title replaces it.

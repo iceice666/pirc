@@ -136,6 +136,15 @@ async fn paired_retry_reuses_the_same_conversation_and_file_and_survives_both_ho
         .unwrap()
         .to_owned();
     assert!(cluster.llm.requests().is_empty());
+    // Client persisted its nonce, then died before POST: a 404 is insufficient.
+    // Retire it durably before permitting any later explicit fresh attempt.
+    let retired = ok(cluster.api().send(
+        "POST", "/api/conversation-submissions/first/retries/unsent/retire", &device,
+        Some(json!({"previousCommandId":previous,"clientId":"phone","generation":generation})),
+    ).await, 200);
+    let retirement = json!({"retryId":"unsent","previousCommandId":previous,"status":"not_reserved","retired":true});
+    assert_eq!(retired["retry"], retirement);
+    assert!(cluster.llm.requests().is_empty());
     // CI supplies a repository-relative bin dir. Resolve it through the same
     // harness path as Cluster; a relative symlink would point inside the fixture.
     let executable = pirc_conformance::bin_dir().unwrap().join("pirc-node");
@@ -157,6 +166,25 @@ async fn paired_retry_reuses_the_same_conversation_and_file_and_survives_both_ho
         200,
     );
     assert_eq!(before["preparation"]["state"], "admission_failed");
+    let saved = ok(
+        cluster
+            .api()
+            .send(
+                "GET",
+                "/api/conversation-submissions/first/retries/unsent",
+                &other,
+                None,
+            )
+            .await,
+        200,
+    );
+    assert_eq!(saved["retry"], retirement);
+    // A request delayed across retirement and both host restarts cannot revive it.
+    let late = ok(cluster.api().send("POST", "/api/conversation-submissions/first/retry", &device,
+        Some(json!({"retryId":"unsent","previousCommandId":previous,"clientId":"phone","generation":generation})),
+    ).await, 409);
+    assert_eq!(late["error"]["code"], "retry_retired");
+    assert!(cluster.llm.requests().is_empty());
     let generation = lease(&cluster, &device, &session).await;
     cluster
         .llm
@@ -266,6 +294,12 @@ async fn paired_retry_reuses_the_same_conversation_and_file_and_survives_both_ho
     assert_eq!(status["retry"]["attemptNumber"], 1);
     assert_eq!(status["retry"]["status"], "accepted");
     assert_eq!(status["retry"]["isCurrent"], true);
+    let reserved = ok(cluster.api().send("POST", "/api/conversation-submissions/first/retries/retry-a/retire", &other,
+        Some(json!({"previousCommandId":previous,"clientId":"other-device","generation":999})),
+    ).await, 200);
+    assert_eq!(reserved["retry"]["commandId"], command);
+    assert_eq!(reserved["retry"]["status"], "accepted");
+    assert_ne!(reserved["retry"]["retired"], true);
     let duplicate = ok(
         cluster
             .api()

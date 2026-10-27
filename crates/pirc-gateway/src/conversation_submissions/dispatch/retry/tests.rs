@@ -8,7 +8,7 @@ use crate::conversation_submissions::{
     tests::{call, count},
 };
 use std::sync::{Arc, Mutex};
-async fn rejected(disk: bool) -> (AppState, tempfile::TempDir, Send) {
+pub(super) async fn rejected(disk: bool) -> (AppState, tempfile::TempDir, Send) {
     let (app, dir, _session) = ready(disk).await;
     let send = initial(&app, &identity(), "draft-1", &control())
         .unwrap()
@@ -18,7 +18,7 @@ async fn rejected(disk: bool) -> (AppState, tempfile::TempDir, Send) {
     apply(&app, &identity(), "draft-1", &proof).unwrap();
     (app, dir, send)
 }
-fn input(first: &Send, id: &str) -> Retry {
+pub(super) fn input(first: &Send, id: &str) -> Retry {
     Retry {
         retry_id: id.into(),
         previous_command_id: first.command.clone(),
@@ -26,10 +26,10 @@ fn input(first: &Send, id: &str) -> Retry {
         generation: 1,
     }
 }
-fn body(input: &Retry) -> Value {
+pub(super) fn body(input: &Retry) -> Value {
     json!({"retryId":input.retry_id,"previousCommandId":input.previous_command_id,"clientId":input.client_id,"generation":input.generation})
 }
-fn node(
+pub(super) fn node(
     app: &AppState,
     first: &Send,
     lose: bool,
@@ -343,7 +343,7 @@ async fn schema_1018_upgrade_keeps_the_rejected_original_without_an_implicit_att
     app.db
         .lock()
         .execute_batch(
-            "DROP TABLE conversation_submission_retry_attempts; PRAGMA user_version=1018;",
+            "DROP TABLE conversation_submission_retry_retirements; DROP TABLE conversation_submission_retry_attempts; PRAGMA user_version=1018;",
         )
         .unwrap();
     let reopened = crate::db::Db::open(&app.config.state_dir.join("gateway.sqlite")).unwrap();

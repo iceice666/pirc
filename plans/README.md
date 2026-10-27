@@ -71,23 +71,23 @@ approval to implement every unchecked stage.
 
 ## Current implementation status (2026-10-27)
 
-This snapshot covers the implementation through `578f759a`, on top of remote
-`a926ea38`. The user authorized a one-off pull/rebase and push of these commits
-and this progress update to `origin/main`. Subsequent work defaults to local
-commits; deployment, version changes and a Release are separate actions. The
-pull/rebase found no newer upstream commits or conflicts.
+The published baseline is `303fa8f8`, including the user-authorized CI repairs.
+Its remote Check and Android workflows both passed. The next local checkpoint
+adds Gateway retry-nonce retirement; Web/native recovery adoption remains open.
+Subsequent work defaults to local commits, with no deployment, version change or
+Release. The most recent pull/rebase had no upstream conflicts.
 
-| Area                                           | Current state                                                                                                                                                                      | Remaining delivery                                                                                                                  |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| U1 — reliable first Send                       | Gateway/Node durable intents, original files, admission/Stop/delete fences and explicit rejected-message retries; Web/private Android drafts and recovery controls are implemented | Full live-client failure matrix, ambiguous local-journal repair, Android device/process-death acceptance and rollout/rollback gates |
-| U2 — conversation/project/environment bindings | Existing workspace, session and mode identities are retained                                                                                                                       | Inventory and implement separate membership/binding versions, migrate existing sessions and preserve links/authority                |
-| U3 — unified navigation/UI                     | Deferred by the user                                                                                                                                                               | Revisit after core contracts; current clients receive necessary functional controls only                                            |
-| U4 — mount/workspace transitions               | Design accepted; actual unified transitions not implemented                                                                                                                        | Idle then running-worker revocation, Node acknowledgement, offline/interrupted reconciliation and project resources                 |
-| U5 — canonical tasks and collaboration         | Existing pots/task/team/goal/todo foundations remain                                                                                                                               | Map common task/attempt identities, shared notes and structured waits; preserve other writers and memory provenance                 |
-| U6 — bounded proactive pots                    | Progress-only observation and explicit dispatch exist                                                                                                                              | Scoped content observation, finite budgets, quiet suggestions and synchronized notification/decision lifecycle                      |
+| Area                                           | Current state                                                                                                                                                                                                | Remaining delivery                                                                                                                  |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| U1 — reliable first Send                       | Gateway/Node durable intents, original files, admission/Stop/delete fences, explicit rejected-message retries and Gateway nonce retirement; Web/private Android drafts and recovery controls are implemented | Full live-client failure matrix, ambiguous local-journal repair, Android device/process-death acceptance and rollout/rollback gates |
+| U2 — conversation/project/environment bindings | Existing workspace, session and mode identities are retained                                                                                                                                                 | Inventory and implement separate membership/binding versions, migrate existing sessions and preserve links/authority                |
+| U3 — unified navigation/UI                     | Deferred by the user                                                                                                                                                                                         | Revisit after core contracts; current clients receive necessary functional controls only                                            |
+| U4 — mount/workspace transitions               | Design accepted; actual unified transitions not implemented                                                                                                                                                  | Idle then running-worker revocation, Node acknowledgement, offline/interrupted reconciliation and project resources                 |
+| U5 — canonical tasks and collaboration         | Existing pots/task/team/goal/todo foundations remain                                                                                                                                                         | Map common task/attempt identities, shared notes and structured waits; preserve other writers and memory provenance                 |
+| U6 — bounded proactive pots                    | Progress-only observation and explicit dispatch exist                                                                                                                                                        | Scoped content observation, finite budgets, quiet suggestions and synchronized notification/decision lifecycle                      |
 
 **The new U1 flow is still gated by `canSubmit: false`.** Pushing its code does
-not enable it. Current formats are Gateway schema **1019**, Node schema **2009**,
+not enable it. Current formats are Gateway schema **1020**, Node schema **2009**,
 protocol **15**, client recovery contract **2**, and Web IndexedDB/native private
 envelope **3**. Existing ordinary session APIs remain available. Unaccepted
 Gateway attachment staging expires after **seven days**; accepted attachments and
@@ -95,6 +95,12 @@ private drafts are not subject to that deadline. See [upgrade and rollback
 notes](../docs/deploy/upgrades.md).
 
 Latest completed U1 slices and their recorded evidence:
+
+- [Gateway nonce retirement](unified-conversations.md#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27):
+  schema 1020 atomically fences an unreserved client nonce against delayed POSTs,
+  preserving existing commands and original files. 329 Gateway tests and five
+  backend process cases and strict Clippy pass. Web/native adoption and activation
+  remain pending.
 
 - [Gateway retries](unified-conversations.md#u1-implementation-checkpoint-gateway-durable-rejected-admission-retries-2026-10-27):
   durable retry identity, per-attempt ordering and global Stop reconciliation;
@@ -115,9 +121,9 @@ Latest completed U1 slices and their recorded evidence:
 
 Next, close U1's remaining gates in this order:
 
-1. Repair/reopen ambiguous client journal entries, especially a nonce committed
-   locally before its POST reaches Gateway; keep unknown outcomes query-only and
-   preserve original text/files. Finish conflict-copy versus attachment-cleanup
+1. Adopt the Gateway retirement receipt in Web/native recovery for a nonce
+   committed locally before POST; require matching durable proof before resolving
+   that nonce, retain unknown outcomes as query-only and preserve original files. Finish conflict-copy versus attachment-cleanup
    races without inventing a second send.
 2. Exercise actual Web and native clients against Gateway/Node/Agent through
    lost replies, both-host/client restarts, competing devices, revoked permissions,
@@ -126,11 +132,13 @@ Next, close U1's remaining gates in this order:
 3. Complete activation/rollback and the affected full CI/conformance gates before
    changing `canSubmit`. Then proceed with U2, U4, U5 and U6; U3 remains deferred.
 
-Before this publication, the remote [Check at a926ea38](https://github.com/mozufu/pirc/actions/runs/40350193507)
-was failed and Android CI passed. Local [admission-aware conformance repairs](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
-are included, but the full Chromium/Linux/workspace suite has not been revalidated
-locally. The new remote run must establish its own result; the focused evidence
-above is not a full CI pass. Nix validation was explicitly waived locally.
+The published baseline `303fa8f8` passed remote [Check](https://github.com/mozufu/pirc/actions/runs/40484413613)
+and [Android](https://github.com/mozufu/pirc/actions/runs/40484413359), including
+Linux native sandbox/checkpoint and Nix jobs. Repairs cover the Android test
+controller signature, relative retry-fixture executable path, runner APT mirror
+lists, random-ID normalization and independent checkpoint fixture lifetimes.
+This is evidence for that exact published commit, not the subsequent local
+retirement addition or a physical-device pass. Local Nix validation remains waived.
 
 Run only focused simple Flutter checks when changing Flutter. Clean run-owned
 outputs after verification while preserving shared caches, SDKs, existing APKs,

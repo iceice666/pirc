@@ -228,7 +228,7 @@ async fn migration_from_1015_queues_cancelled_acceptances_without_losing_identit
         .lock()
         .begin_session_deletion(&session, "alice")
         .unwrap();
-    app.db.lock().execute_batch("DROP TABLE conversation_submission_retry_attempts; DROP TRIGGER submission_pre_stop_cancelled; DROP TABLE conversation_submission_pending_stops; DROP TABLE conversation_submission_stop_controls; DROP TRIGGER submission_remote_cancelled; DROP TABLE conversation_submission_remote_cleanup; PRAGMA user_version=1015;").unwrap();
+    app.db.lock().execute_batch("DROP TABLE conversation_submission_retry_retirements; DROP TABLE conversation_submission_retry_attempts; DROP TRIGGER submission_pre_stop_cancelled; DROP TABLE conversation_submission_pending_stops; DROP TABLE conversation_submission_stop_controls; DROP TRIGGER submission_remote_cancelled; DROP TABLE conversation_submission_remote_cleanup; PRAGMA user_version=1015;").unwrap();
     let db = Db::open(&app.config.state_dir.join("gateway.sqlite")).unwrap();
     let j = read(&db.lock(), "alice", "draft-1").unwrap().unwrap();
     assert_eq!(j.session, session);

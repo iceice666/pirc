@@ -4,23 +4,22 @@
 
 Status: adopted architecture baseline with an authorized staged implementation
 covering first Send, environment bindings, resource transitions, canonical tasks/
-collaboration and bounded pots. The implementation through `578f759a` is summarized
-below (2026-10-27). UI redesign/navigation reorganization remains deferred;
+collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-retirement
+checkpoint are summarized below (2026-10-27). UI redesign/navigation reorganization remains deferred;
 Web/Android changes are limited to necessary functional integration. Use only
 focused simple Flutter checks when Flutter changes.
 
-The user authorized a one-off pull/rebase and push of the accumulated commits and
-this progress update to `origin/main` on 2026-10-27. Upstream was already `a926ea38`,
-with no newer commits or rebase conflicts. This publication does not enable the
-new flow, deploy it, change versions or create a Release. Subsequent work retains
-the local-commit default. Undecided numerical settings still need confirmation
-when their implementation stage begins; earlier library/pots work is reused.
+The user authorized publication of the accumulated work and subsequent CI repairs;
+remote Check and Android passed at `303fa8f8`. New architecture work retains the
+local-commit default. This does not enable the new flow, deploy it, change versions
+or create a Release. Undecided numerical settings still need confirmation when
+their implementation stage begins; earlier library/pots work is reused.
 
 ## Current progress and next delivery (2026-10-27)
 
 **U1 is implemented across Gateway, Node, Web and native Android, but is not
 accepted for activation. `canSubmit: false` remains in production.** Current
-formats: Gateway **1019**, Node **2009**, protocol **15**, client contract **2**,
+formats: Gateway **1020**, Node **2009**, protocol **15**, client contract **2**,
 Web IndexedDB **3**, Android private envelope **3**. Package/dependency versions
 and Nix hashes are unchanged. Existing session, memory-deletion and checkpoint
 ownership guarantees remain in effect.
@@ -38,11 +37,15 @@ Delivered U1 behavior:
 - Retry a positively rejected first message only through explicit user action,
   current authority/control and a durable nonce/predecessor/attempt number. Keep
   the same conversation and input; ambiguous results are queried, not replayed.
+- Retire an unreserved retry nonce durably at Gateway, so a delayed POST cannot
+  revive it. Web/native recovery adoption of this new proof remains pending.
 - Wire the native Android engine and existing Web/Flutter recovery surfaces,
   including version negotiation, independent Gateway access and minimal bilingual
   status/actions. New navigation and visual redesign are deferred.
 
-Latest evidence: 320 Gateway tests and five backend process cases; 447 Node tests
+Latest backend slice: **329 Gateway tests and five process cases** pass for
+[nonce retirement](#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27).
+Earlier evidence: 320 Gateway tests and five backend process cases; 447 Node tests
 (three existing helper ignores) and three Node retry process cases; 68 focused Web,
 50 native JVM and 22 focused Flutter cases, clean targeted type/static analysis,
 and a dedicated two-page/browser-restart storage proof. These are separate
@@ -61,18 +64,20 @@ provide exact boundaries and evidence.
 
 Immediate U1 queue:
 
-1. Complete safe reopening/repair of a client nonce committed before POST, and the
-   unsent-editor copy versus source-file cleanup race. A missing remote nonce is
-   not proof that a delayed request cannot arrive. Until resolved, retain the
-   unknown result and existing Stop/blank-continuation/deletion paths.
+1. Adopt the new Gateway retirement receipt in Web/native recovery for a nonce
+   committed before POST, then close the unsent-editor copy versus source-file
+   cleanup race. A missing remote nonce alone is not proof that a delayed request
+   cannot arrive; only explicit matching durable retirement can resolve it. Keep
+   unknown results and existing Stop/blank-continuation/deletion paths otherwise.
 2. Connect real Web/native clients to Gateway/Node/Agent for interrupted sends,
    lost replies, restart, device competition, revocation, Stop/delete and mixed
    versions. Native JVM and mocked MethodChannel tests do not replace Android
    process death/private-filesystem/device acceptance.
 3. Finish activation/rollback and affected full CI/conformance checks before
-   enabling the new path. The last remote Check at `a926ea38` failed; included
-   local fixture repairs and focused passes do not imply a new remote green run.
-   Local Nix verification remains waived. Then continue U2, U4, U5 and U6.
+   enabling the new path. Published `303fa8f8` passed remote Check (including
+   Linux native checkpoints and Nix) and Android; this does not certify the newer
+   local retirement checkpoint. Local Nix verification remains waived. Then
+   continue U2, U4, U5 and U6.
 
 The dated checkpoints later in this file preserve what was delivered and tested
 at that time. Historical “local only”, “next slice” and incomplete-adoption notes
@@ -2179,6 +2184,68 @@ Later environment binding, actual mount revocation, collaboration and bounded po
 remain open. Run-owned isolated output/logs are cleaned; shared caches, SDKs,
 existing APKs and other agents' work remain. Local commit only, no APK, push,
 deployment, Nix validation or Release.
+
+## U1 implementation checkpoint: Gateway retirement of an unreserved retry (2026-10-27)
+
+Local backend foundation over published **`303fa8f8`**, whose remote Check and
+Android workflows passed. Gateway schema advances to **1020**; Node **2009**,
+protocol **15**, client contract **2**, Web IndexedDB/private Android envelope
+**3**, package/dependency versions and Nix hashes are unchanged. Production
+**`canSubmit: false` remains unchanged**. This is not completion or activation of
+U1, and the new client recovery action is not yet wired.
+
+- Close the server side of a client crash after saving its retry nonce but before
+  POST. Owner-scoped `POST /api/conversation-submissions/{operationId}/retries/{retryId}/retire`
+  accepts only `previousCommandId`, `clientId` and `generation`, under recovery
+  contract 2. Capability `canRetireFirstMessageRetry` advertises this addition.
+  A missing GET receipt alone remains inconclusive; no automatic replay is added.
+- If unreserved, retire the nonce only when the original operation's current
+  command is positively rejected, no Stop/deletion intervened, and its owner has
+  current ordinary control. Revalidate paired-device authority inside the write
+  transaction. A retirement needs neither a usable model nor a Node RPC because
+  it only removes the ability to execute that nonce; it never acquires control.
+- Reservation and retirement share an immediate SQLite transaction boundary,
+  including across independent connections. If reservation won, return/reconcile
+  the existing command without undoing, re-sending or retiring it. If retirement
+  won, every delayed `/retry` request with that nonce is refused as `retry_retired`.
+  Reuse with another predecessor is `retry_identity_conflict` in both cases.
+- GET returns a durable owner-scoped `retry` proof with exact nonce/predecessor,
+  `status: not_reserved` and `retired: true`, plus the current preparation. No
+  command, admission attempt number, conversation, message or file is allocated.
+  Repeated retirement is read-only without reacquiring an expired lease. The
+  identity-only tombstone survives restart, Stop and authorized content deletion.
+  A later user-requested new nonce still requires normal retry checks and retains
+  the same frozen conversation/input/files; unknown commands remain query-only.
+- Schema 1019 migration preserves current preparations, original commands and
+  historical retry receipts. Schema 1020 fences older Gateway writers. Future
+  rollback requires matching complete state/binaries; editing schema versions or
+  dropping tombstones would remove the delayed-request protection. Existing
+  seven-day unaccepted staging cleanup, memory provenance/deletion and checkpoint
+  ownership are unchanged.
+
+Validation: **329 Gateway tests pass**, including retirement/reservation races
+across independent connections, request identity, owner/device/lease/Stop/unknown
+refusals, old client contracts, durable replay prevention, content deletion and
+historical migrations. **Five real Gateway/Node/Agent process cases pass** for
+initial admission, Stop, compatibility and retry. The retry case now retires an
+unreceived nonce, restarts both hosts, queries it from another paired HTTP client,
+refuses a delayed POST, then performs one explicit fresh attempt. It verifies one
+public conversation, one user message/model call and unchanged original upload
+bytes; a reserved command is never undone by the retirement endpoint.
+Strict Gateway/conformance Clippy (`--all-targets -- -D warnings`), Rust formatting
+and documentation formatting checks also pass.
+
+Remaining delivery: Web/native recovery must inspect the matching durable proof,
+commit resolution to the private journal without stale-callback overwrites, and
+offer an explicit recovery action separately from user Retry. Do not resolve a
+nonce on GET 404, a generic failure or a mismatched receipt. Older clients remain
+query-only; no private format migration is required by this backend checkpoint.
+Then finish conflict-copy/source-file cleanup races, actual client/backend failure
+acceptance, Android process-death/device checks and activation/rollback gates.
+U2 bindings, U4 resource transitions, U5 collaboration and U6 proactive pots remain
+open. UI redesign and Flutter Web are deferred. Local commit only: no push, APK,
+deployment, Nix validation, browser/emulator or Release. Only this run's isolated
+build/test output is removed; user state, shared caches/SDKs and existing APKs stay.
 
 ## Design stages and later implementation gates
 

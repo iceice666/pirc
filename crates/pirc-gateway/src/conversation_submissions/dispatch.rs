@@ -531,6 +531,10 @@ pub(super) fn routes() -> Router<AppState> {
             "/api/conversation-submissions/{id}/retries/{retryId}",
             get(retry::status),
         )
+        .route(
+            "/api/conversation-submissions/{id}/retries/{retryId}/retire",
+            post(retry::retire),
+        )
 }
 async fn dispatch(
     State(app): State<AppState>,

@@ -82,6 +82,7 @@ async fn http_negotiation_keeps_rollout_closed_for_every_client_and_creates_no_s
         assert_eq!(body["canSubmit"], false);
         assert_eq!(body["clientContract"], version);
         assert_eq!(body["ownerUser"], "alice");
+        assert_eq!(body["canRetireFirstMessageRetry"], true);
     }
     assert_eq!(count(&app.db.lock(), "conversation_submissions"), 0);
     assert_eq!(count(&app.db.lock(), "sessions"), 0);
@@ -182,7 +183,7 @@ async fn migration_from_1017_keeps_original_intent_and_stopping_job() {
     app.db
         .lock()
         .execute_batch(
-            "DROP TABLE conversation_submission_retry_attempts; PRAGMA user_version=1017;",
+            "DROP TABLE conversation_submission_retry_retirements; DROP TABLE conversation_submission_retry_attempts; PRAGMA user_version=1017;",
         )
         .unwrap();
     let reopened = crate::db::Db::open(&app.config.state_dir.join("gateway.sqlite")).unwrap();
@@ -198,4 +199,25 @@ async fn migration_from_1017_keeps_original_intent_and_stopping_job() {
     assert_eq!(row.submission.unwrap().message, "Keep this first message");
     assert_eq!(count(&db, "conversation_submission_pending_stops"), 1);
     assert_eq!(count(&db, "commands"), 0);
+}
+
+#[tokio::test]
+async fn retry_retirement_requires_the_recovery_contract_before_any_mutation() {
+    let (app, _dir) = app();
+    for values in [vec![], vec!["1"], vec!["2", "2"]] {
+        let (code, value) = request(
+            &app,
+            "POST",
+            "/api/conversation-submissions/missing/retries/unsent/retire",
+            &values,
+            Some(json!({"previousCommandId":"old","clientId":"phone","generation":1})),
+        )
+        .await;
+        assert_eq!(code, 409, "{value}");
+        assert_eq!(value["error"]["code"], "first_send_client_upgrade_required");
+        assert_eq!(
+            count(&app.db.lock(), "conversation_submission_retry_retirements"),
+            0
+        );
+    }
 }

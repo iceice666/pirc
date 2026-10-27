@@ -584,7 +584,7 @@ async fn migration_from_1016_preserves_accepted_input_and_existing_commands() {
         .lock()
         .receive_command("old-command", &session, "hash", &json!({"type":"stop"}))
         .unwrap();
-    app.db.lock().execute_batch("DROP TABLE conversation_submission_retry_attempts; DROP TRIGGER submission_pre_stop_cancelled; DROP TABLE conversation_submission_pending_stops; DROP TABLE conversation_submission_stop_controls; PRAGMA user_version=1016;").unwrap();
+    app.db.lock().execute_batch("DROP TABLE conversation_submission_retry_retirements; DROP TABLE conversation_submission_retry_attempts; DROP TRIGGER submission_pre_stop_cancelled; DROP TABLE conversation_submission_pending_stops; DROP TABLE conversation_submission_stop_controls; PRAGMA user_version=1016;").unwrap();
     let fresh = App::new(
         app.config.clone(),
         Arc::new(Db::open(&app.config.state_dir.join("gateway.sqlite")).unwrap()),

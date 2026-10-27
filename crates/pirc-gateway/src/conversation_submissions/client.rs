@@ -24,7 +24,7 @@ pub(super) fn capabilities(identity: &Identity, headers: &HeaderMap, rollout: bo
     json!({"version":1,"clientContract":if compatible {CONTRACT}else{0},"requiredClientContract":CONTRACT,
       "ownerUser":identity.user,"canFenceAccount":true,"canFindPendingSession":true,
       "canPrepare":true,"canStageAttachments":true,"canAcceptIntent":true,"canMaterialize":true,
-      "canDispatchFirstMessage":true,"canRetryFirstMessage":true,"canCancelCreation":true,"canStopBeforeAllocation":true,
+      "canDispatchFirstMessage":true,"canRetryFirstMessage":true,"canRetireFirstMessageRetry":true,"canCancelCreation":true,"canStopBeforeAllocation":true,
       "attachmentRetentionDays":7,"canSubmit":rollout && compatible})
 }
 #[cfg(test)]

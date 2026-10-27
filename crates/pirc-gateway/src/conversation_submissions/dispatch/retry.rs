@@ -1,5 +1,7 @@
 //! A durable successor command for a positively rejected original input.
+mod retirement;
 use super::*;
+pub(super) use retirement::retire;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Retry {
@@ -34,6 +36,17 @@ pub(super) fn eligible(record: &Record) -> bool {
 }
 fn known(db: &Connection, user: &str, op: &str, input: &Retry) -> ApiResult<bool> {
     lookup(db, user, op)?;
+    if let Some(previous) = retirement::previous(db, user, op, &input.retry_id)? {
+        return Err(ApiError::new(
+            409,
+            if previous == input.previous_command_id {
+                "retry_retired"
+            } else {
+                "retry_identity_conflict"
+            },
+            "This retry identity was permanently retired; check its saved result",
+        ));
+    }
     let previous:Option<String>=db.query_row("SELECT previous_command_id FROM conversation_submission_retry_attempts WHERE owner_user=?1 AND operation_id=?2 AND retry_id=?3",params![user,op,input.retry_id],|r|r.get(0)).optional()?;
     if let Some(previous) = previous {
         if previous != input.previous_command_id {
@@ -184,6 +197,9 @@ pub(super) async fn status(
 ) -> ApiResult<axum::Json<Value>> {
     if !valid_id(&op) || !valid_id(&id) {
         return Err(ApiError::invalid_input());
+    }
+    if let Some(receipt) = retirement::receipt(&app.db.lock(), &identity.user, &op, &id)? {
+        return Ok(axum::Json(receipt));
     }
     let (command, previous, number): (String, String, i64) = {
         let db = app.db.lock();
