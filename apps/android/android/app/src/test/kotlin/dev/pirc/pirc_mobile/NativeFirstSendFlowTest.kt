@@ -22,6 +22,11 @@ class NativeFirstSendFlowTest {
         var preparation: JsonObject? = null
         var enabled = true
         var canRetry = true
+        var canRetire = true
+        var loseRetirement = false
+        var retirementTransform: ((JsonObject) -> JsonObject)? = null
+        var onRetirement: (() -> Unit)? = null
+        val retirements = mutableMapOf<String, JsonObject>()
         var unsupportedRetry = false
         var rejectDispatch = false
         var loseRetry = false
@@ -55,12 +60,32 @@ class NativeFirstSendFlowTest {
             calls += "${request.method} $path"
             if (path.endsWith("/capabilities")) {
                 val fields = contract?.let { "\"clientContract\":$it,\"requiredClientContract\":2," } ?: ""
-                return objectReply("""{"version":1,${fields}"ownerUser":"alice","canFenceAccount":true,"canStopBeforeAllocation":true,"canRetryFirstMessage":$canRetry,"canSubmit":$enabled}""")
+                return objectReply("""{"version":1,${fields}"ownerUser":"alice","canFenceAccount":true,"canStopBeforeAllocation":true,"canRetryFirstMessage":$canRetry,"canRetireFirstMessageRetry":$canRetire,"canSubmit":$enabled}""")
             }
             assertEquals("alice", request.headers["x-pirc-account"])
             if (path.contains("/retries/")) {
-                val retry = preparation?.get("messageAdmission")?.jsonObject?.get("retryId")?.jsonPrimitive?.contentOrNull
-                return if(retry == path.substringAfterLast('/')) reply(buildJsonObject {put("preparation",preparation!!)}) else objectReply("{}",404)
+                val id = path.substringAfter("/retries/").substringBefore('/')
+                val retiring = request.method == "POST" && path.endsWith("/retire")
+                if (retiring) onRetirement?.invoke()
+                val admission = preparation?.get("messageAdmission")?.jsonObject
+                if (admission?.get("retryId")?.jsonPrimitive?.contentOrNull == id) return reply(buildJsonObject {
+                    put("preparation", preparation!!); put("retry", buildJsonObject {
+                        put("retryId", id); put("previousCommandId", "cmd-original"); put("commandId", admission.getValue("commandId")); put("attemptNumber", admission.getValue("attemptNumber")); put("status", "outcome_unknown")
+                    })
+                })
+                if (retiring) {
+                    val input = PircJson.parseToJsonElement(request.body!!.utf8()).jsonObject
+                    assertEquals("cmd-original", input["previousCommandId"]?.jsonPrimitive?.content)
+                    assertEquals("android-fixture", input["clientId"]?.jsonPrimitive?.content)
+                    assertEquals(7, input["generation"]?.jsonPrimitive?.int)
+                    val proof = buildJsonObject { put("preparation", preparation!!); put("retry", buildJsonObject {
+                        put("retryId", id); put("previousCommandId", input.getValue("previousCommandId")); put("status", "not_reserved"); put("retired", true)
+                    }) }
+                    retirements[id] = proof
+                    if (loseRetirement) {loseRetirement=false; return objectReply("{}",503)}
+                    return reply(retirementTransform?.invoke(proof) ?: proof)
+                }
+                return retirements[id]?.let {reply(it)} ?: objectReply("{}",404)
             }
             if (path.endsWith("/retry")) {
                 val input=PircJson.parseToJsonElement(request.body!!.utf8()).jsonObject
@@ -209,6 +234,68 @@ class NativeFirstSendFlowTest {
         val saved=f.row(c)!!;assertEquals(false,saved["uncertain"]);assertEquals(true,(saved["retryAttempt"] as Map<*,*>)["notReserved"])
         f.ledger.unsupportedRetry=false
         assertEquals("admitted",prep(c.retry(f.stamp,"alice","op","android-fixture"))["state"])
+    }}
+    private suspend fun interrupted(f: Fixture): NativeFirstSend {
+        val c=f.connection(); f.saved(c); f.ledger.rejectDispatch=true
+        c.submit(f.stamp,"alice","op",1,"android-fixture")
+        f.ledger.dropRetry=true
+        try {c.retry(f.stamp,"alice","op","android-fixture");fail("lost")} catch (_: ApiException) {}
+        f.ledger.calls.clear()
+        return c
+    }
+    @Test fun recoveryRetiresWithoutSendingAndAnotherExplicitRetryKeepsOriginalBytes() = runTest {Fixture().use {f->
+        val c=interrupted(f); val before=f.row(c)!!; val nonce=(before["retryAttempt"] as Map<*,*>)["retryId"]
+        val recovered=c.recoverRetry(f.stamp,"alice","op","android-fixture") as Map<*,*>
+        assertEquals("admission_failed",prep(recovered)["state"]);assertEquals(false,recovered["uncertain"])
+        assertEquals(true,(recovered["retryAttempt"] as Map<*,*>)["notReserved"])
+        assertEquals(nonce,(recovered["retryAttempt"] as Map<*,*>)["retryId"])
+        assertEquals("Original",recovered["message"])
+        val store=FirstSendDraftStore(File(f.parent,"drafts"))
+        assertArrayEquals("hello".toByteArray(),store.attachment(recovered["scope"] as String,"op","file1").second)
+        assertEquals(1,f.ledger.calls.count {it.endsWith("/retire")})
+        assertFalse(f.ledger.calls.any {it.endsWith("/retry") || it.endsWith("/prepare") || it.contains("/attachments/")})
+        assertEquals("admitted",prep(c.retry(f.stamp,"alice","op","android-fixture"))["state"])
+        assertNotEquals(nonce,(f.row(c)!!["retryAttempt"] as Map<*,*>)["retryId"])
+    }}
+    @Test fun lostRetirementReplyReopensAndResolvesOnlyByGet() = runTest {Fixture().use {f->
+        val c=interrupted(f);f.ledger.loseRetirement=true
+        try {c.recoverRetry(f.stamp,"alice","op","android-fixture");fail("lost")}catch(e:ApiException){assertEquals(503,e.status)}
+        assertNotEquals(true,(f.row(c)!!["retryAttempt"] as Map<*,*>)["resolved"])
+        val reopened=f.connection();reopened.capabilities(f.stamp);f.ledger.calls.clear()
+        val recovered=reopened.check(f.stamp,"alice","op") as Map<*,*>
+        assertEquals(true,(recovered["retryAttempt"] as Map<*,*>)["notReserved"])
+        assertEquals(false,recovered["uncertain"]);assertEquals(1,f.ledger.calls.size)
+        assertTrue(f.ledger.calls.single().startsWith("GET "))
+    }}
+    @Test fun retirementCannotResolveAMismatchedOrContradictoryReceipt() = runTest {
+        for(field in listOf("retryId","previousCommandId","status","retired","quotedRetired","commandId","attemptNumber","operationId","sessionId","workspaceId")) Fixture().use {f->
+            val c=interrupted(f)
+            f.ledger.retirementTransform={proof->
+                val key=if(field in setOf("operationId","sessionId","workspaceId")) "preparation" else "retry"
+                val bad=JsonObject(proof.getValue(key).jsonObject+((if(field=="quotedRetired") "retired" else field) to when(field){"quotedRetired"->JsonPrimitive("true");"retired"->JsonPrimitive(false);"attemptNumber"->JsonPrimitive(1);else->JsonPrimitive("wrong")}))
+                JsonObject(proof+(key to bad))
+            }
+            try {c.recoverRetry(f.stamp,"alice","op","android-fixture");fail(field)}catch(_:IllegalArgumentException){}
+            val row=f.row(c)!!;assertEquals(field,true,row["uncertain"]);assertNotEquals(field,true,(row["retryAttempt"] as Map<*,*>)["resolved"])
+        }
+    }
+    @Test fun recoveryDoesNotRequireRolloutButRequiresFreshRetirementCapability() = runTest {Fixture().use {f->
+        val c=interrupted(f);f.ledger.canRetire=false
+        try {c.recoverRetry(f.stamp,"alice","op","android-fixture");fail("unsupported")}catch(_:IllegalStateException){}
+        assertFalse(f.ledger.calls.any {it.startsWith("POST ")})
+        f.ledger.canRetire=true;f.ledger.enabled=false
+        assertEquals(true,((c.recoverRetry(f.stamp,"alice","op","android-fixture") as Map<*,*>)["retryAttempt"] as Map<*,*>)["notReserved"])
+    }}
+    @Test fun lateRetirementProofDoesNotResolveANewerPrivateNonce() = runTest {Fixture().use {f->
+        val c=interrupted(f);val row=f.row(c)!!
+        f.ledger.onRetirement={
+            FirstSendDraftStore(File(f.parent,"drafts")).update(row["scope"] as String,"alice","op") {old->
+                JsonObject(old+("retryAttempt" to buildJsonObject {put("retryId","newer");put("previousCommandId","cmd-original");put("previousAttemptNumber",0)}))
+            }
+        }
+        val result=c.recoverRetry(f.stamp,"alice","op","android-fixture") as Map<*,*>
+        assertEquals("newer",(result["retryAttempt"] as Map<*,*>)["retryId"])
+        assertNotEquals(true,(result["retryAttempt"] as Map<*,*>)["resolved"]);assertEquals(true,result["uncertain"])
     }}
     @Test fun firstSendUsesSavedTextFilesAndIdentityWithoutLegacyCreationOrCommands() = runTest { Fixture().use { f ->
         val connection = f.connection()

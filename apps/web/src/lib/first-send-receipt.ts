@@ -1,5 +1,5 @@
 /** Per-attempt outcomes are ordered; Stop and deletion apply to the whole operation. */
-import type { Preparation } from './first-send';
+import type { Preparation, RetryAttempt, RetryReceipt } from './first-send';
 export function attemptNumber(p?: Preparation): number {
   const n = p?.messageAdmission?.attemptNumber;
   if (n === undefined) return 0;
@@ -58,4 +58,40 @@ export function mergePreparation(
     };
   }
   return result;
+}
+
+/** A 404 or a predecessor rejection cannot retire a possibly delayed request. */
+export function retryRetired(attempt: RetryAttempt, value: RetryReceipt): boolean {
+  const retry = value?.retry,
+    p = value?.preparation;
+  if (
+    !p ||
+    !retry ||
+    retry.retryId !== attempt.retryId ||
+    retry.previousCommandId !== attempt.previousCommandId
+  )
+    throw new Error('The retry receipt does not match the saved retry.');
+  if (retry.retired === true || retry.status === 'not_reserved') {
+    if (
+      retry.retired !== true ||
+      retry.status !== 'not_reserved' ||
+      retry.commandId !== undefined ||
+      retry.attemptNumber !== undefined ||
+      p.messageAdmission?.retryId === attempt.retryId
+    )
+      throw new Error('The retry receipt does not match the saved retry.');
+    return true;
+  }
+  const number = retry.attemptNumber;
+  if (
+    typeof retry.commandId !== 'string' ||
+    !retry.commandId.trim() ||
+    !Number.isSafeInteger(number) ||
+    number! <= attempt.previousAttemptNumber ||
+    (p.state !== 'cancelled' &&
+      (attemptNumber(p) < number! ||
+        (attemptNumber(p) === number && p.messageAdmission?.commandId !== retry.commandId)))
+  )
+    throw new Error('The retry receipt did not identify a successor attempt.');
+  return false;
 }

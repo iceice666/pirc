@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { firstMapped } from '../first-send';
+  import { firstMapped, canRecoverRetry, firstContractCompatible } from '../first-send';
   import { app } from '../app.svelte';
   import { tr } from '../i18n.svelte';
   import { modeOf } from '../modes';
@@ -52,6 +52,11 @@
             record.error ?? record.preparation!.cleanupError ?? record.preparation!.deliveryError!,
           )}
         </p>{/if}
+      {#if canRecoverRetry(record)}
+        <p>
+          {tr('Recovery blocks a retry the server has not received. It never resends the message.')}
+        </p>
+      {/if}
       <div class="actions">
         <button
           class="button ghost"
@@ -65,6 +70,17 @@
             type="button"
             disabled={!app.firstEnabled || app.commandBusy}
             onclick={() => app.continueFirst()}>{tr('Continue sending')}</button
+          >
+        {/if}
+        {#if canRecoverRetry(record)}
+          <button
+            class="button ghost"
+            type="button"
+            disabled={!firstContractCompatible(app.firstCapabilities) ||
+              app.firstCapabilities?.canRetireFirstMessageRetry !== true ||
+              app.firstControlBusy ||
+              app.commandBusy}
+            onclick={() => app.recoverFirstRetry()}>{tr('Recover interrupted retry')}</button
           >
         {/if}
         {#if phase === 'admission_failed' && record.preparation?.messageAdmission?.retryEligible && !record.cancelRequested && !record.stopCommandId && !(record.retryAttempt && !record.retryAttempt.resolved)}

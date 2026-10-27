@@ -6,6 +6,8 @@ import type {
   FirstSpec,
   FirstTransport,
   Preparation,
+  RetryReceipt,
+  StopControl,
 } from '../first-send';
 export class MemoryDraftStore implements DraftStore {
   values = new Map<string, FirstDraft>();
@@ -49,6 +51,7 @@ export class FirstLedger implements FirstTransport {
       canStopBeforeAllocation: true,
       canSubmit: true,
       canRetryFirstMessage: true,
+      canRetireFirstMessageRetry: true,
     };
   }
   async find(owner: string, session: string) {
@@ -112,11 +115,42 @@ export class FirstLedger implements FirstTransport {
     }
     return row;
   }
-  async retryLookup(owner: string, id: string, _retryId: string) {
+  retirements = new Map<string, RetryReceipt>();
+  async retryLookup(owner: string, id: string, retryId: string): Promise<RetryReceipt> {
     this.calls.push('retryLookup');
+    const retired = this.retirements.get(retryId);
+    if (retired) return retired;
     const row = this.entries.get(this.key(owner, id));
     if (!row || !row.messageAdmission?.retryId) throw new ApiError('missing', 404);
-    return row;
+    return {
+      preparation: row,
+      retry: {
+        retryId,
+        previousCommandId: 'cmd-original',
+        commandId: row.messageAdmission.commandId!,
+        attemptNumber: row.messageAdmission.attemptNumber,
+        status: row.messageAdmission.outcome,
+      },
+    };
+  }
+  async retireRetry(
+    owner: string,
+    id: string,
+    retryId: string,
+    body: StopControl & { previousCommandId: string },
+  ): Promise<RetryReceipt> {
+    this.calls.push('retireRetry');
+    const result = {
+      preparation: this.entries.get(this.key(owner, id))!,
+      retry: {
+        retryId,
+        previousCommandId: body.previousCommandId,
+        status: 'not_reserved',
+        retired: true,
+      },
+    };
+    this.retirements.set(retryId, result);
+    return result;
   }
   async acquire() {
     this.calls.push('acquire');

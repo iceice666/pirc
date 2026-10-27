@@ -42,3 +42,20 @@ internal fun mergeFirstPreparation(previous: JsonObject?, value: JsonObject): Js
     }
     return result
 }
+
+/** Only a matching permanent retirement proves an absent nonce cannot arrive later. */
+internal fun firstRetryRetired(attempt: JsonObject, value: JsonObject): Boolean {
+    val retry = value["retry"] as? JsonObject
+    val preparation = value["preparation"] as? JsonObject
+    require(retry != null && preparation != null && retry["retryId"] == attempt["retryId"] && retry["previousCommandId"] == attempt["previousCommandId"]) { "The retry receipt does not match the saved retry." }
+    if (retry["retired"] == JsonPrimitive(true) || retry.text("status") == "not_reserved") {
+        require(retry["retired"] == JsonPrimitive(true) && retry.text("status") == "not_reserved" && "commandId" !in retry && "attemptNumber" !in retry && preparation.admission()?.get("retryId") != attempt["retryId"]) { "The retry receipt does not match the saved retry." }
+        return true
+    }
+    val rawNumber = retry["attemptNumber"] as? JsonPrimitive
+    val number = rawNumber?.takeUnless { it.isString }?.longOrNull
+    val command = retry["commandId"] as? JsonPrimitive
+    require(command?.isString == true && command.content.isNotBlank() && number != null && number in 1..9007199254740991 && number > attempt.getValue("previousAttemptNumber").jsonPrimitive.long &&
+        (preparation.text("state") == "cancelled" || (firstAttemptNumber(preparation) >= number && (firstAttemptNumber(preparation) != number || preparation.admission()?.get("commandId") == retry["commandId"])))) { "The retry receipt did not identify a successor attempt." }
+    return false
+}

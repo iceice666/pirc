@@ -1401,5 +1401,12 @@
   "Connect to the Gateway to confirm first-send support before creating a conversation.": "Connect to the Gateway to confirm first-send support before creating a conversation.",
   "Unsent edits": "Unsent edits",
   "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.",
-  "Retry original message": "Retry original message"
+  "Retry original message": "Retry original message",
+  "Recover interrupted retry": "Recover interrupted retry",
+  "Recovery blocks a retry the server has not received. It never resends the message.": "Recovery blocks a retry the server has not received. It never resends the message.",
+  "This Gateway cannot recover an interrupted retry.": "This Gateway cannot recover an interrupted retry.",
+  "Only a pending retry of a rejected first message can be recovered.": "Only a pending retry of a rejected first message can be recovered.",
+  "The retry receipt does not match the saved retry.": "The retry receipt does not match the saved retry.",
+  "The retry receipt did not identify a successor attempt.": "The retry receipt did not identify a successor attempt.",
+  "The first-message attempt changed; check its result.": "The first-message attempt changed; check its result."
 }

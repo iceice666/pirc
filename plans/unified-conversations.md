@@ -4,8 +4,8 @@
 
 Status: adopted architecture baseline with an authorized staged implementation
 covering first Send, environment bindings, resource transitions, canonical tasks/
-collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-retirement
-checkpoint are summarized below (2026-10-27). UI redesign/navigation reorganization remains deferred;
+collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local Gateway/client retry-recovery
+checkpoints are summarized below (2026-10-27). UI redesign/navigation reorganization remains deferred;
 Web/Android changes are limited to necessary functional integration. Use only
 focused simple Flutter checks when Flutter changes.
 
@@ -38,20 +38,20 @@ Delivered U1 behavior:
   current authority/control and a durable nonce/predecessor/attempt number. Keep
   the same conversation and input; ambiguous results are queried, not replayed.
 - Retire an unreserved retry nonce durably at Gateway, so a delayed POST cannot
-  revive it. Web/native recovery adoption of this new proof remains pending.
+  revive it. Both clients now offer explicit recovery and persist matching proof;
+  checking never sends, and sending again remains a separate user action.
 - Wire the native Android engine and existing Web/Flutter recovery surfaces,
   including version negotiation, independent Gateway access and minimal bilingual
   status/actions. New navigation and visual redesign are deferred.
 
-Latest backend slice: **329 Gateway tests and five process cases** pass for
-[nonce retirement](#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27).
-Earlier evidence: 320 Gateway tests and five backend process cases; 447 Node tests
-(three existing helper ignores) and three Node retry process cases; 68 focused Web,
-50 native JVM and 22 focused Flutter cases, clean targeted type/static analysis,
-and a dedicated two-page/browser-restart storage proof. These are separate
-recorded verification slices, not a single full workspace/CI or physical-device
-pass. The current backend and client [retry checkpoints](#u1-implementation-checkpoint-gateway-durable-rejected-admission-retries-2026-10-27)
-provide exact boundaries and evidence.
+Latest client slice: **76 Web, 57 native JVM and 23 focused Flutter tests** pass
+for [interrupted retry recovery](#u1-implementation-checkpoint-web-and-native-interrupted-retry-recovery-2026-10-27),
+with clean targeted checks and a dedicated two-page/browser-restart storage proof.
+The backend [nonce retirement](#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27)
+slice passed 329 Gateway tests, strict Clippy and five process cases. Earlier
+checkpoints retain Node, migration, source-file and mixed-version evidence.
+These are separate verification slices, not an Android OS/device pass or full
+live-client/backend acceptance; published CI remains tied to `303fa8f8`.
 
 | Stage                             | Current status                                                            | Next deliverable                                                                                                    |
 | --------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -64,11 +64,10 @@ provide exact boundaries and evidence.
 
 Immediate U1 queue:
 
-1. Adopt the new Gateway retirement receipt in Web/native recovery for a nonce
-   committed before POST, then close the unsent-editor copy versus source-file
-   cleanup race. A missing remote nonce alone is not proof that a delayed request
-   cannot arrive; only explicit matching durable retirement can resolve it. Keep
-   unknown results and existing Stop/blank-continuation/deletion paths otherwise.
+1. Finish the unsent-editor copy versus source-file cleanup race and remaining
+   local-journal repair cases. Matching permanent retry retirement now resolves a
+   pre-POST crash in Web/native recovery; missing receipts, generic errors and
+   uncertain reserved commands still cannot authorize a new attempt.
 2. Connect real Web/native clients to Gateway/Node/Agent for interrupted sends,
    lost replies, restart, device competition, revocation, Stop/delete and mixed
    versions. Native JVM and mocked MethodChannel tests do not replace Android
@@ -2246,6 +2245,69 @@ U2 bindings, U4 resource transitions, U5 collaboration and U6 proactive pots rem
 open. UI redesign and Flutter Web are deferred. Local commit only: no push, APK,
 deployment, Nix validation, browser/emulator or Release. Only this run's isolated
 build/test output is removed; user state, shared caches/SDKs and existing APKs stay.
+
+## U1 implementation checkpoint: Web and native interrupted retry recovery (2026-10-27)
+
+Client adoption of local Gateway retirement (`9b5c776b`), on Gateway **1020** /
+Node **2009**, protocol **15**, client contract **2** and existing Web/native
+private format **3**. No format/version/dependency/Nix changes and no activation:
+production **`canSubmit: false` remains unchanged**. UI redesign is still deferred.
+
+- Existing Web and Flutter recovery panels add **Recover interrupted retry** for
+  a pending local nonce with the same positively rejected predecessor. Explain
+  that recovery does not resend. Check still performs GETs only; Retry remains a
+  separate explicit action after durable resolution. Details remain folded and
+  labels/errors use the English/Traditional Chinese catalogs.
+- Recovery first checks the saved outcome, refreshes owner/contract and
+  `canRetireFirstMessageRetry`, then requests ordinary control without force or
+  takeover. Re-read the journal after control acquisition; changed nonce,
+  predecessor, Stop or deletion prevents the retirement POST. Recovery is allowed
+  while Send rollout is disabled because it only removes a pending nonce's ability
+  to execute; a later Retry still needs its separate rollout/capability checks.
+- Preserve the complete retry receipt on GET/retirement, rather than discarding
+  its identity envelope. Require matching nonce/predecessor plus explicit
+  `status: not_reserved, retired: true`, without a contradictory command/ordinal
+  or the retired nonce appearing as a current admission. Validate operation,
+  session and workspace before merging. Reserved receipts require an ordered
+  successor command; missing, malformed or mismatched proofs cannot resolve an
+  uncertain nonce. Unknown reservations remain unknown and cannot resend.
+- Atomically merge the proof into the existing private journal as resolved and
+  not-reserved only if that exact local attempt is still current. Retain original
+  text/attachment bytes; never create a replacement conversation or file. Late
+  results cannot resolve a newer nonce, clear Stop or restore deleted content.
+  Losing the HTTP reply or the subsequent local write is recoverable by a later
+  owned GET; no additional operation identity or new schema is needed.
+- Android uses its paired native HTTP client directly, a narrowly allowed retire
+  endpoint and `firstSendRecoverRetry` bridge action. Requests pin the account,
+  carry contract 2 and are one-shot without redirect/retry-after replay. Flutter
+  restores the native journal after failures; recovery never invokes submit.
+  No Web login, management grant or open Web connection is needed.
+
+Validation: **76 focused Web tests**, zero Svelte errors/warnings, **57 native JVM
+cases** and **23 focused Flutter tests** pass; targeted Dart analysis is clean.
+The Kotlin 2.3.20 compile uses warnings-as-errors. Native tests compile the actual
+core/submission/receipt sources against cached dependencies and exercise private
+files with MockWebServer. Pure bridge conversion/pairing helpers are extracted
+unchanged for this isolated JVM harness; Android OS/Keystore and a live Flutter
+MethodChannel are not exercised by it. Flutter tests use the existing fake port.
+
+A dedicated Headless Shell with a new run-owned profile runs production
+`FirstSend`, HTTP transport and IndexedDB in two competing pages. A simulated
+unreceived retry and lost retirement response retain the same nonce; both pages
+can retire that nonce idempotently without another Retry POST. Closing/reopening
+that browser keeps the exact original Blob bytes, one draft and resolved proof;
+post-restart traffic is GET-only. Its HTTP server is synthetic, distinct from
+`9b5c776b`'s real Gateway/Node/Agent process proof. It never launches or closes the
+user's everyday Chrome/profile.
+
+Remaining: conflict-copy/source-file cleanup races and remaining journal repair;
+actual Web/native clients connected to Gateway/Node/Agent through the full
+interruption/permission matrix; Android process death/private-storage/device and
+activation/rollback acceptance. U1 is not yet cleared for activation. U2 bindings,
+U4 mount revocation, U5 tasks/collaboration and U6 bounded proactive pots remain
+open. Existing memory and checkpoint contracts are untouched. No APK, push,
+deployment, Release or local Nix validation. Clean only this run's isolated
+Flutter/JVM/browser artifacts; preserve SDKs, shared caches, existing APKs and data.
 
 ## Design stages and later implementation gates
 

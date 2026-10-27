@@ -72,19 +72,19 @@ approval to implement every unchecked stage.
 ## Current implementation status (2026-10-27)
 
 The published baseline is `303fa8f8`, including the user-authorized CI repairs.
-Its remote Check and Android workflows both passed. The next local checkpoint
-adds Gateway retry-nonce retirement; Web/native recovery adoption remains open.
+Its remote Check and Android workflows both passed. Local work adds Gateway retry-nonce retirement (`9b5c776b`) and its Web/native
+recovery action; full live-client acceptance and activation remain open.
 Subsequent work defaults to local commits, with no deployment, version change or
 Release. The most recent pull/rebase had no upstream conflicts.
 
-| Area                                           | Current state                                                                                                                                                                                                | Remaining delivery                                                                                                                  |
-| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| U1 — reliable first Send                       | Gateway/Node durable intents, original files, admission/Stop/delete fences, explicit rejected-message retries and Gateway nonce retirement; Web/private Android drafts and recovery controls are implemented | Full live-client failure matrix, ambiguous local-journal repair, Android device/process-death acceptance and rollout/rollback gates |
-| U2 — conversation/project/environment bindings | Existing workspace, session and mode identities are retained                                                                                                                                                 | Inventory and implement separate membership/binding versions, migrate existing sessions and preserve links/authority                |
-| U3 — unified navigation/UI                     | Deferred by the user                                                                                                                                                                                         | Revisit after core contracts; current clients receive necessary functional controls only                                            |
-| U4 — mount/workspace transitions               | Design accepted; actual unified transitions not implemented                                                                                                                                                  | Idle then running-worker revocation, Node acknowledgement, offline/interrupted reconciliation and project resources                 |
-| U5 — canonical tasks and collaboration         | Existing pots/task/team/goal/todo foundations remain                                                                                                                                                         | Map common task/attempt identities, shared notes and structured waits; preserve other writers and memory provenance                 |
-| U6 — bounded proactive pots                    | Progress-only observation and explicit dispatch exist                                                                                                                                                        | Scoped content observation, finite budgets, quiet suggestions and synchronized notification/decision lifecycle                      |
+| Area                                           | Current state                                                                                                                                                                                                | Remaining delivery                                                                                                   |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| U1 — reliable first Send                       | Gateway/Node durable intents, original files, admission/Stop/delete fences, explicit rejected-message retries and Gateway nonce retirement; Web/private Android drafts and recovery controls are implemented | Conflict-copy/file cleanup races, full live-client failure matrix, Android process/device and rollout/rollback gates |
+| U2 — conversation/project/environment bindings | Existing workspace, session and mode identities are retained                                                                                                                                                 | Inventory and implement separate membership/binding versions, migrate existing sessions and preserve links/authority |
+| U3 — unified navigation/UI                     | Deferred by the user                                                                                                                                                                                         | Revisit after core contracts; current clients receive necessary functional controls only                             |
+| U4 — mount/workspace transitions               | Design accepted; actual unified transitions not implemented                                                                                                                                                  | Idle then running-worker revocation, Node acknowledgement, offline/interrupted reconciliation and project resources  |
+| U5 — canonical tasks and collaboration         | Existing pots/task/team/goal/todo foundations remain                                                                                                                                                         | Map common task/attempt identities, shared notes and structured waits; preserve other writers and memory provenance  |
+| U6 — bounded proactive pots                    | Progress-only observation and explicit dispatch exist                                                                                                                                                        | Scoped content observation, finite budgets, quiet suggestions and synchronized notification/decision lifecycle       |
 
 **The new U1 flow is still gated by `canSubmit: false`.** Pushing its code does
 not enable it. Current formats are Gateway schema **1020**, Node schema **2009**,
@@ -99,8 +99,13 @@ Latest completed U1 slices and their recorded evidence:
 - [Gateway nonce retirement](unified-conversations.md#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27):
   schema 1020 atomically fences an unreserved client nonce against delayed POSTs,
   preserving existing commands and original files. 329 Gateway tests and five
-  backend process cases and strict Clippy pass. Web/native adoption and activation
-  remain pending.
+  backend process cases and strict Clippy pass. Client adoption is recorded below;
+  activation remains pending.
+- [Web/native retry recovery](unified-conversations.md#u1-implementation-checkpoint-web-and-native-interrupted-retry-recovery-2026-10-27):
+  explicit recovery fences an unreceived nonce; read-only Check resolves a matching
+  durable retirement, preserving original files and newer work. 76 Web, 57 native
+  JVM and 23 focused Flutter tests pass; a dedicated two-page browser/restart
+  proof keeps original Blob bytes and one Retry POST.
 
 - [Gateway retries](unified-conversations.md#u1-implementation-checkpoint-gateway-durable-rejected-admission-retries-2026-10-27):
   durable retry identity, per-attempt ordering and global Stop reconciliation;
@@ -121,10 +126,9 @@ Latest completed U1 slices and their recorded evidence:
 
 Next, close U1's remaining gates in this order:
 
-1. Adopt the Gateway retirement receipt in Web/native recovery for a nonce
-   committed locally before POST; require matching durable proof before resolving
-   that nonce, retain unknown outcomes as query-only and preserve original files. Finish conflict-copy versus attachment-cleanup
-   races without inventing a second send.
+1. Finish remaining local journal repair and conflict-copy versus source-file
+   cleanup races. The pre-POST nonce recovery now exists in both clients; unknown
+   commands still remain query-only and original files must remain available.
 2. Exercise actual Web and native clients against Gateway/Node/Agent through
    lost replies, both-host/client restarts, competing devices, revoked permissions,
    Stop/delete and mixed-version cases. Verify Android MethodChannel/private files

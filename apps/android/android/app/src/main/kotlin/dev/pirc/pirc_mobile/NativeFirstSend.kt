@@ -13,7 +13,7 @@ internal class NativeFirstSend(
     private val capture: suspend (String) -> PircApi,
     private val validate: (String) -> Unit,
 ) {
-    private data class Account(val stamp: String, val owner: String, val scope: String, val api: FirstSendApi, val enabled: Boolean, val pendingStop: Boolean, val canRetry: Boolean, val requireContract: Boolean, val connection: PircApi)
+    private data class Account(val stamp: String, val owner: String, val scope: String, val api: FirstSendApi, val enabled: Boolean, val pendingStop: Boolean, val canRetry: Boolean, val canRetire: Boolean, val requireContract: Boolean, val connection: PircApi)
     private var account: Account? = null
     private var revision = 0L
     private val store = FirstSendDraftStore(directory)
@@ -33,9 +33,10 @@ internal class NativeFirstSend(
         val enabled = compatible && value.flag("canSubmit")
         val pendingStop = value["version"]?.jsonPrimitive?.intOrNull == 1 && value["canStopBeforeAllocation"]?.jsonPrimitive?.booleanOrNull == true
         val canRetry = compatible && value.flag("canRetryFirstMessage")
+        val canRetire = compatible && value.flag("canRetireFirstMessageRetry")
         account = if (!owner.isNullOrBlank() && value["canFenceAccount"]?.jsonPrimitive?.booleanOrNull == true)
-            account?.takeIf { it.stamp == stamp && it.owner == owner && it.connection === api && it.enabled == enabled && it.pendingStop == pendingStop && it.canRetry == canRetry && it.requireContract == requireContract }
-                ?: Account(stamp, owner, FirstSendDraftStore.scope(api.pairing.baseUrl, owner), FirstSendApi(api), enabled, pendingStop, canRetry, requireContract, api)
+            account?.takeIf { it.stamp == stamp && it.owner == owner && it.connection === api && it.enabled == enabled && it.pendingStop == pendingStop && it.canRetry == canRetry && it.canRetire == canRetire && it.requireContract == requireContract }
+                ?: Account(stamp, owner, FirstSendDraftStore.scope(api.pairing.baseUrl, owner), FirstSendApi(api), enabled, pendingStop, canRetry, canRetire, requireContract, api)
             else null
         return JsonObject(value + mapOf("canSubmit" to JsonPrimitive(enabled), "firstSendUpgradeRequired" to JsonPrimitive(blocked)) + (account?.let { mapOf("draftScope" to JsonPrimitive(it.scope)) } ?: emptyMap())).wire()
     }
@@ -141,7 +142,7 @@ internal class NativeFirstSend(
         return captured.api.request(method, path, captured.owner, body).also { recheck(captured) }
     }
     private fun path(id: String) = "/api/conversation-submissions/${id.urlSegment()}"
-    private suspend fun receipt(captured: Account, id: String, value: JsonObject): JsonObject {
+    private suspend fun receipt(captured: Account, id: String, value: JsonObject, retired: JsonObject? = null): JsonObject {
         require(value.string("operationId") == id) { "The server returned a different first-message operation" }
         return change(captured, id) { row ->
             val previous = row.preparation()
@@ -149,10 +150,12 @@ internal class NativeFirstSend(
                 "The original conversation binding changed"
             }
             val result = mergeFirstPreparation(previous, value)
-            val retry = row["retryAttempt"] as? JsonObject
+            val saved = row["retryAttempt"] as? JsonObject
+            val retiredMatches = saved != null && retired != null && listOf("retryId", "previousCommandId", "previousAttemptNumber").all { saved[it] == retired[it] }
+            val retry = if (retiredMatches) JsonObject(saved + mapOf("resolved" to JsonPrimitive(true), "notReserved" to JsonPrimitive(true))) else saved
             val resolved = retry != null && (result.string("state") == "cancelled" || firstAttemptNumber(result) > retry.getValue("previousAttemptNumber").jsonPrimitive.long)
             JsonObject((row - "error") + mapOf("preparation" to result, "uncertain" to JsonPrimitive(result.string("state") != "cancelled" && (result.string("state") == "outcome_unknown" || (retry != null && !retry.flag("resolved") && !resolved)))) +
-                (if (resolved) mapOf("retryAttempt" to JsonObject(retry + ("resolved" to JsonPrimitive(true)))) else emptyMap()) +
+                (if (resolved || retiredMatches) mapOf("retryAttempt" to JsonObject(retry!! + ("resolved" to JsonPrimitive(true)))) else emptyMap()) +
                 if (result.string("state") == "cancelled") mapOf("message" to JsonPrimitive(""), "files" to JsonArray(emptyList())) else emptyMap())
         }
     }
@@ -163,10 +166,9 @@ internal class NativeFirstSend(
             val retry = row["retryAttempt"] as? JsonObject
             if (retry != null && !retry.flag("resolved")) {
                 try {
-                    val value = api(captured, "GET", path(id) + "/retries/${retry.getValue("retryId").jsonPrimitive.content.urlSegment()}")?.jsonObject?.get("preparation")?.jsonObject
+                    val value = api(captured, "GET", path(id) + "/retries/${retry.getValue("retryId").jsonPrimitive.content.urlSegment()}")?.jsonObject
                         ?: throw ApiException(502, "bad_reply", "Missing retry receipt")
-                    check(value.string("state") == "cancelled" || firstAttemptNumber(value) > retry.getValue("previousAttemptNumber").jsonPrimitive.long) { "The retry receipt did not identify a successor attempt" }
-                    return receipt(captured, id, value)
+                    return retryReceipt(captured, id, retry, value)
                 } catch (error: ApiException) { if (error.status != 404) throw error }
                 // Missing nonce does not prove that a pending request cannot arrive.
             }
@@ -209,6 +211,35 @@ internal class NativeFirstSend(
         check(value?.string("clientId") == clientId) { "Another device has control; take control explicitly before continuing" }
         return value["generation"]?.jsonPrimitive?.longOrNull?.takeIf { it > 0 }
             ?: error("Missing control generation")
+    }
+    private suspend fun retryReceipt(captured: Account, id: String, attempt: JsonObject, value: JsonObject): JsonObject {
+        val retired = firstRetryRetired(attempt, value)
+        return receipt(captured, id, value.getValue("preparation").jsonObject, if (retired) attempt else null)
+    }
+    private fun canRecoverRetry(row: JsonObject): Boolean {
+        val retry = row["retryAttempt"] as? JsonObject ?: return false
+        val admission = row.admission() ?: return false
+        return !retry.flag("resolved") && row.phase() == "admission_failed" && admission.string("outcome") == "not_admitted" && admission.flag("retryEligible") &&
+            admission["commandId"] == retry["previousCommandId"] && firstAttemptNumber(row.preparation()) == retry.getValue("previousAttemptNumber").jsonPrimitive.long &&
+            !admission.flag("stopRequested") && !admission.flag("stopConfirmed") && !row.flag("cancelRequested") && row.string("stopCommandId") == null
+    }
+    /** Fences an interrupted local retry; a later user Retry remains a separate action. */
+    suspend fun recoverRetry(stamp: String, owner: String, id: String, clientId: String): Any? {
+        var row = check(current(stamp, owner), id)
+        val attempt = row["retryAttempt"] as? JsonObject ?: return row.wire()
+        if (attempt.flag("resolved")) return row.wire()
+        check(canRecoverRetry(row)) { "Only a pending retry of a rejected first message can be recovered." }
+        capabilities(stamp)
+        val captured = current(stamp, owner)
+        check(captured.canRetire) { "This Gateway cannot recover an interrupted retry." }
+        val generation = acquire(captured, row.preparation()!!.getValue("sessionId").jsonPrimitive.content, clientId)
+        row = local(captured, id)
+        val current = row["retryAttempt"] as? JsonObject
+        check(canRecoverRetry(row) && current != null && current["retryId"] == attempt["retryId"] && current["previousCommandId"] == attempt["previousCommandId"]) { "The first-message attempt changed; check its result." }
+        val value = api(captured, "POST", path(id) + "/retries/${attempt.getValue("retryId").jsonPrimitive.content.urlSegment()}/retire", buildJsonObject {
+            put("previousCommandId", attempt.getValue("previousCommandId")); put("clientId", clientId); put("generation", generation)
+        })?.jsonObject ?: throw ApiException(502, "bad_reply", "Missing retry receipt")
+        return retryReceipt(captured, id, attempt, value).wire()
     }
     /** Exact immutable input, a fresh control lease, and a nonce committed before POST. */
     suspend fun retry(stamp: String, owner: String, id: String, clientId: String): Any? {

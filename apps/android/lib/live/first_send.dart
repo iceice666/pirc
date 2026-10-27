@@ -68,6 +68,24 @@ class FirstSendState {
       current?['stopCommandId'] == null &&
       !(current?['retryAttempt'] is Map &&
           obj(current?['retryAttempt'])['resolved'] != true);
+  bool get canRecoverRetry {
+    final p = obj(current?['preparation']), a = obj(p['messageAdmission']);
+    final retry = obj(current?['retryAttempt']);
+    return _compatible &&
+        capabilities['canRetireFirstMessageRetry'] == true &&
+        retry.isNotEmpty &&
+        retry['resolved'] != true &&
+        phase == 'admission_failed' &&
+        a['outcome'] == 'not_admitted' &&
+        a['retryEligible'] == true &&
+        a['commandId'] == retry['previousCommandId'] &&
+        (a['attemptNumber'] ?? 0) == retry['previousAttemptNumber'] &&
+        a['stopRequested'] != true &&
+        a['stopConfirmed'] != true &&
+        current?['cancelRequested'] != true &&
+        current?['stopCommandId'] == null;
+  }
+
   bool get canStop =>
       obj(current?['preparation'])['accepted'] == true &&
       phase != 'cancelled' &&
@@ -590,6 +608,7 @@ class FirstSendState {
     }
   }
 
+  Future<void> recoverRetry() => _control('firstSendRecoverRetry');
   Future<void> retry() => _control('firstSendRetry', finish: true);
   Future<void> check() => _control('firstSendCheck');
   Future<void> stop() => _control('firstSendStop');

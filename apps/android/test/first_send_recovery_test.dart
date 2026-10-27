@@ -261,4 +261,68 @@ void main() {
       await g.stream.close();
     },
   );
+  testWidgets(
+    'interrupted retry recovery updates the saved journal without sending',
+    (tester) async {
+      final (c, g, p) = await setup();
+      final row = p.records.values.single;
+      row['frozen'] = true;
+      row['prepareAttempted'] = true;
+      row['uncertain'] = true;
+      row['revision']++;
+      row['retryAttempt'] = {
+        'retryId': 'nonce',
+        'previousCommandId': 'cmd',
+        'previousAttemptNumber': 0,
+      };
+      row['preparation'] = {
+        'operationId': row['operationId'],
+        'sessionId': 'pending',
+        'workspaceId': 'w',
+        'accepted': true,
+        'nodeMapped': true,
+        'state': 'admission_failed',
+        'cleanupPending': false,
+        'messageAdmission': {
+          'commandId': 'cmd',
+          'attemptNumber': 0,
+          'outcome': 'not_admitted',
+          'retryEligible': true,
+          'stopRequested': false,
+          'stopConfirmed': false,
+        },
+      };
+      await c.firstSend.check();
+      final original = p.call;
+      g.handler = (method, args) async {
+        if (method == 'firstSendRecoverRetry') {
+          expect(args['ownerUser'], 'alice');
+          expect(args['operationId'], row['operationId']);
+          row['revision']++;
+          row['uncertain'] = false;
+          row['retryAttempt'] = {
+            ...obj(row['retryAttempt']),
+            'resolved': true,
+            'notReserved': true,
+          };
+          return p.clone(row);
+        }
+        return original(method, args);
+      };
+      await tester.pumpWidget(page(c, () => FirstSendRecovery(controller: c)));
+      expect(find.text('Recover interrupted retry'), findsOneWidget);
+      expect(find.text('Retry original message'), findsNothing);
+      g.calls.clear();
+      await tester.tap(find.text('Recover interrupted retry'));
+      await tester.pumpAndSettle();
+      expect(g.calls.map((call) => call.$1), ['firstSendRecoverRetry']);
+      expect(find.text('Recover interrupted retry'), findsNothing);
+      expect(find.text('Retry original message'), findsOneWidget);
+      expect(find.byType(SelectableText), findsNothing);
+      expect(row['message'], 'One line\nOriginal details stay folded');
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+      await g.stream.close();
+    },
+  );
 }

@@ -3375,6 +3375,19 @@ const englishMessages = <String, String>{
   "Unsent edits": "Unsent edits",
   "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.",
   "Retry original message": "Retry original message",
+  "Recover interrupted retry": "Recover interrupted retry",
+  "Recovery blocks a retry the server has not received. It never resends the message.":
+      "Recovery blocks a retry the server has not received. It never resends the message.",
+  "This Gateway cannot recover an interrupted retry.":
+      "This Gateway cannot recover an interrupted retry.",
+  "Only a pending retry of a rejected first message can be recovered.":
+      "Only a pending retry of a rejected first message can be recovered.",
+  "The retry receipt does not match the saved retry.":
+      "The retry receipt does not match the saved retry.",
+  "The retry receipt did not identify a successor attempt.":
+      "The retry receipt did not identify a successor attempt.",
+  "The first-message attempt changed; check its result.":
+      "The first-message attempt changed; check its result.",
 };
 const traditionalChineseMessages = <String, String>{
   "無法確認最新狀態，請重試": "無法確認最新狀態，請重試",
@@ -6237,4 +6250,13 @@ const traditionalChineseMessages = <String, String>{
   "Unsent edits": "尚未送出的修改",
   "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "其他視窗已變更此草稿。你尚未送出的修改已另存為草稿，請開啟並檢視後再送出。",
   "Retry original message": "重試原訊息",
+  "Recover interrupted retry": "恢復中斷的重試",
+  "Recovery blocks a retry the server has not received. It never resends the message.":
+      "恢復操作會阻止伺服器尚未收到的重試執行，不會重新傳送訊息。",
+  "This Gateway cannot recover an interrupted retry.": "此 Gateway 不支援恢復中斷的重試。",
+  "Only a pending retry of a rejected first message can be recovered.":
+      "只有尚未確認、且原首則訊息已遭拒絕的重試可以恢復。",
+  "The retry receipt does not match the saved retry.": "重試回執與儲存的重試紀錄不符。",
+  "The retry receipt did not identify a successor attempt.": "重試回執未確認後續嘗試的身分。",
+  "The first-message attempt changed; check its result.": "首則訊息的嘗試狀態已變更，請檢查結果。",
 };

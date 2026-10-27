@@ -41,4 +41,15 @@ class FirstSendReceiptTest {
         val swap=JsonObject(value()+ ("messageAdmission" to JsonObject(value().admission()+("commandId" to JsonPrimitive("other")))))
         try {mergeFirstPreparation(value(),swap);fail("swap")}catch(_:IllegalArgumentException){}
     }
+    @Test fun reservedProofRequiresNumericOrdinalAndNonemptyStringCommand() {
+        val attempt=buildJsonObject {put("retryId","nonce");put("previousCommandId","cmd-0");put("previousAttemptNumber",0)}
+        val retry=buildJsonObject {put("retryId","nonce");put("previousCommandId","cmd-0");put("commandId","cmd-1");put("attemptNumber",1);put("status","outcome_unknown")}
+        val proof=buildJsonObject {put("preparation",value(1,"outcome_unknown","outcome_unknown"));put("retry",retry)}
+        assertFalse(firstRetryRetired(attempt,proof))
+        for ((key,bad) in listOf("attemptNumber" to JsonPrimitive("1"),"attemptNumber" to JsonPrimitive(0),"attemptNumber" to JsonPrimitive(-1),"attemptNumber" to JsonPrimitive(1.5),"commandId" to JsonPrimitive(123),"commandId" to JsonPrimitive(" "),"commandId" to JsonNull)) {
+            try {firstRetryRetired(attempt,JsonObject(proof+("retry" to JsonObject(retry+(key to bad)))));fail("malformed proof")}
+            catch (_:IllegalArgumentException){}
+        }
+    }
+
 }

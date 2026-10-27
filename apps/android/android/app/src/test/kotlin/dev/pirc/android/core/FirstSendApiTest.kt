@@ -58,4 +58,16 @@ class FirstSendApiTest {
         val stop=server.takeRequest();assertEquals("alice",stop.headers["x-pirc-account"])
         assertEquals(11,PircJson.parseToJsonElement(stop.body!!.utf8()).jsonObject["generation"]?.jsonPrimitive?.int)
     }}
+    @Test fun retirementIsAnAuthenticatedOneShotRequestAndCannotEscapeItsRoute() = fixture {server,api->runTest {
+        server.enqueue(MockResponse.Builder().code(503).addHeader("Retry-After","0").body("{}").build())
+        server.enqueue(MockResponse.Builder().body("{}").build())
+        try {api.request("POST","/api/conversation-submissions/op/retries/r/retire","alice",buildJsonObject {put("previousCommandId","cmd");put("clientId","phone");put("generation",1)});fail("lost")}catch(e:ApiException){assertEquals(503,e.status)}
+        val req=server.takeRequest();assertEquals("alice",req.headers["x-pirc-account"]);assertEquals("2",req.headers["x-pirc-first-send-contract"])
+        assertEquals(1,server.requestCount)
+        for(path in listOf("/api/conversation-submissions/op/retries/r/retire/else", "/api/conversation-submissions/op/retries/%2e%2e/retire")) {
+            try {api.request("POST",path,"alice");fail("unsafe route")}catch(_:IllegalArgumentException){}
+        }
+        assertEquals(1,server.requestCount)
+    }}
+
 }

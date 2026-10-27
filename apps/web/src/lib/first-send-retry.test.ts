@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { ApiError } from './http';
-import { FirstSend, draftScope, type Preparation } from './first-send';
-import { mergePreparation } from './first-send-receipt';
+import { FirstSend, draftScope, type Preparation, type RetryReceipt } from './first-send';
+import { mergePreparation, retryRetired } from './first-send-receipt';
 import { FirstLedger, MemoryDraftStore } from './testing/first-send';
 const scope = draftScope('https://pirc.test', 'alice');
 const rejected: Preparation = {
@@ -224,4 +224,214 @@ it('only explicit pre-reservation refusal unlocks another user retry; generic co
   expect((await store.get(scope, 'op'))!.retryAttempt?.resolved).not.toBe(true);
   await flow.retry(scope, 'op');
   expect(post).toHaveBeenCalledTimes(2);
+});
+
+async function interrupted() {
+  const context = await setup();
+  const post = vi.spyOn(context.remote, 'action').mockRejectedValue(new ApiError('lost', 503));
+  await expect(context.flow.retry(scope, 'op')).rejects.toThrow('lost');
+  const attempt = (await context.store.get(scope, 'op'))!.retryAttempt!;
+  const proof: RetryReceipt = {
+    preparation: structuredClone(rejected),
+    retry: {
+      retryId: attempt.retryId,
+      previousCommandId: attempt.previousCommandId,
+      status: 'not_reserved',
+      retired: true,
+    },
+  };
+  return { ...context, post, attempt, proof };
+}
+it('recovery fences a pre-POST nonce without sending and retains original bytes for a separate user retry', async () => {
+  const { store, remote, flow, post, attempt } = await interrupted();
+  await store.update(scope, 'op', (row) => ({
+    ...row!,
+    files: row!.files.map((f) => ({ ...f, blob: new Blob(['hello']) })),
+  }));
+  remote.calls = [];
+  const recovered = await flow.recoverRetry(scope, 'op');
+  expect(recovered.retryAttempt).toEqual({ ...attempt, resolved: true, notReserved: true });
+  expect(recovered.uncertain).toBe(false);
+  expect(recovered.message).toBe('Immutable original');
+  expect(await recovered.files[0].blob?.text()).toBe('hello');
+  expect(remote.calls).toEqual(['retryLookup', 'receipt', 'acquire', 'retireRetry']);
+  expect(post).toHaveBeenCalledTimes(1);
+  post.mockResolvedValueOnce(successor(rejected));
+  expect((await flow.retry(scope, 'op')).preparation?.state).toBe('admitted');
+  expect(post).toHaveBeenCalledTimes(2);
+  expect((await store.get(scope, 'op'))!.retryAttempt?.retryId).not.toBe(attempt.retryId);
+  expect(await store.list(scope)).toHaveLength(1);
+});
+it('a lost retirement reply survives reopening and Check resolves only its durable proof without another POST', async () => {
+  const { store, remote, flow, post, proof } = await interrupted();
+  vi.spyOn(remote, 'retireRetry').mockImplementation(async () => {
+    remote.retirements.set(proof.retry.retryId, proof);
+    throw new ApiError('lost retirement reply', 503);
+  });
+  await expect(flow.recoverRetry(scope, 'op')).rejects.toThrow('lost retirement reply');
+  expect((await store.get(scope, 'op'))!.retryAttempt?.resolved).not.toBe(true);
+  remote.calls = [];
+  const row = await new FirstSend(store, remote).check(scope, 'op');
+  expect(row.retryAttempt).toMatchObject({ resolved: true, notReserved: true });
+  expect(remote.calls).toEqual(['retryLookup']);
+  expect(post).toHaveBeenCalledTimes(1);
+});
+it('retirement local-save failure keeps the journal recoverable through a later proof GET', async () => {
+  const { store, remote, flow, proof } = await interrupted();
+  vi.spyOn(remote, 'retireRetry').mockImplementation(async () => {
+    remote.retirements.set(proof.retry.retryId, proof);
+    store.fail = true;
+    return proof;
+  });
+  await expect(flow.recoverRetry(scope, 'op')).rejects.toThrow('storage failed');
+  store.fail = false;
+  expect((await store.get(scope, 'op'))!.retryAttempt?.resolved).not.toBe(true);
+  expect((await new FirstSend(store, remote).check(scope, 'op')).retryAttempt?.notReserved).toBe(
+    true,
+  );
+});
+it('unknown, contradictory and mismatched retirement proofs never unlock the saved retry', async () => {
+  const { store, remote, flow, proof } = await interrupted();
+  const lookup = vi.spyOn(remote, 'retryLookup');
+  for (const change of [
+    'nonce',
+    'previous',
+    'status',
+    'flag',
+    'command',
+    'number',
+    'ownAttempt',
+    'operation',
+    'session',
+    'workspace',
+  ]) {
+    const bad = structuredClone(proof);
+    if (change === 'nonce') bad.retry.retryId = 'other';
+    if (change === 'previous') bad.retry.previousCommandId = 'other';
+    if (change === 'status') bad.retry.status = 'outcome_unknown';
+    if (change === 'flag') delete bad.retry.retired;
+    if (change === 'command') bad.retry.commandId = 'exists';
+    if (change === 'number') bad.retry.attemptNumber = 1;
+    if (change === 'ownAttempt') bad.preparation.messageAdmission!.retryId = proof.retry.retryId;
+    if (change === 'operation') bad.preparation.operationId = 'other';
+    if (change === 'session') bad.preparation.sessionId = 'other';
+    if (change === 'workspace') bad.preparation.workspaceId = 'other';
+    lookup.mockResolvedValueOnce(bad);
+    await expect(flow.check(scope, 'op'), change).rejects.toThrow();
+    expect((await store.get(scope, 'op'))!.retryAttempt?.resolved, change).not.toBe(true);
+    expect((await store.get(scope, 'op'))!.uncertain, change).toBe(true);
+  }
+});
+it('fresh unsupported capability, account change, or control refusal cannot retire a nonce', async () => {
+  const { remote, flow } = await interrupted();
+  const retire = vi.spyOn(remote, 'retireRetry'),
+    caps = await remote.capabilities();
+  const capability = vi.spyOn(remote, 'capabilities');
+  for (const c of [
+    { ...caps, canRetireFirstMessageRetry: false },
+    { ...caps, ownerUser: 'bob' },
+    { ...caps, clientContract: 1 },
+  ]) {
+    capability.mockResolvedValueOnce(c);
+    await expect(flow.recoverRetry(scope, 'op')).rejects.toThrow('cannot recover');
+  }
+  vi.spyOn(remote, 'acquire').mockRejectedValue(new ApiError('control held elsewhere', 409));
+  await expect(flow.recoverRetry(scope, 'op')).rejects.toThrow('control held elsewhere');
+  expect(retire).not.toHaveBeenCalled();
+});
+it('a peer Stop during acquisition prevents the retirement POST', async () => {
+  const { store, remote, flow } = await interrupted();
+  const retire = vi.spyOn(remote, 'retireRetry');
+  vi.spyOn(remote, 'acquire').mockImplementation(async () => {
+    await store.update(scope, 'op', (r) => ({ ...r!, stopCommandId: 'stop' }));
+    return 7;
+  });
+  await expect(flow.recoverRetry(scope, 'op')).rejects.toThrow('attempt changed');
+  expect(retire).not.toHaveBeenCalled();
+});
+it('a reserved-but-unknown retry returned by recovery remains unknown and is never sent again', async () => {
+  const { remote, flow, post, attempt } = await interrupted();
+  const next = successor(rejected, 'outcome_unknown', 'outcome_unknown');
+  next.messageAdmission!.retryId = attempt.retryId;
+  vi.spyOn(remote, 'retireRetry').mockResolvedValue({
+    preparation: next,
+    retry: {
+      retryId: attempt.retryId,
+      previousCommandId: attempt.previousCommandId,
+      commandId: 'cmd-next',
+      attemptNumber: 1,
+      status: 'outcome_unknown',
+    },
+  });
+  const row = await flow.recoverRetry(scope, 'op');
+  expect(row.retryAttempt?.resolved).toBe(true);
+  expect(row.retryAttempt?.notReserved).not.toBe(true);
+  expect(row.uncertain).toBe(true);
+  expect(post).toHaveBeenCalledTimes(1);
+});
+it('a late retirement receipt cannot resolve a newer local nonce or undo concurrent deletion', async () => {
+  for (const deleted of [false, true]) {
+    const { store, remote, flow, proof } = await interrupted();
+    vi.spyOn(remote, 'retireRetry').mockImplementation(async () => {
+      await store.update(scope, 'op', (row) =>
+        deleted
+          ? {
+              ...row!,
+              cancelRequested: true,
+              message: '',
+              files: [],
+              preparation: { ...rejected, state: 'cancelled' },
+            }
+          : {
+              ...row!,
+              preparation: successor(rejected, 'admission_failed', 'not_admitted'),
+              retryAttempt: {
+                retryId: 'newer',
+                previousCommandId: 'cmd-next',
+                previousAttemptNumber: 1,
+              },
+              uncertain: true,
+            },
+      );
+      return proof;
+    });
+    const result = await flow.recoverRetry(scope, 'op');
+    if (deleted) {
+      expect(result.preparation?.state).toBe('cancelled');
+      expect(result.message).toBe('');
+      expect(result.files).toEqual([]);
+    } else {
+      expect(result.retryAttempt?.retryId).toBe('newer');
+      expect(result.retryAttempt?.resolved).not.toBe(true);
+      expect(result.uncertain).toBe(true);
+    }
+  }
+});
+
+it('reserved proof requires a numeric successor ordinal and a nonempty string command', () => {
+  const attempt = { retryId: 'nonce', previousCommandId: 'cmd-original', previousAttemptNumber: 0 };
+  const proof: RetryReceipt = {
+    preparation: successor(rejected, 'outcome_unknown', 'outcome_unknown'),
+    retry: {
+      retryId: 'nonce',
+      previousCommandId: 'cmd-original',
+      commandId: 'cmd-next',
+      attemptNumber: 1,
+      status: 'outcome_unknown',
+    },
+  };
+  expect(retryRetired(attempt, proof)).toBe(false);
+  for (const patch of [
+    { attemptNumber: '1' },
+    { attemptNumber: 0 },
+    { attemptNumber: -1 },
+    { attemptNumber: 1.5 },
+    { commandId: 123 },
+    { commandId: ' ' },
+    { commandId: null },
+  ]) {
+    expect(() =>
+      retryRetired(attempt, { ...proof, retry: { ...proof.retry, ...patch } } as RetryReceipt),
+    ).toThrow('successor');
+  }
 });

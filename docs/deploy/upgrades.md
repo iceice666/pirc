@@ -1,5 +1,28 @@
 # Upgrades
 
+## Unreleased local checkpoint: client interrupted-retry recovery
+
+Web and native Android now adopt the Gateway **1020** retirement proof via
+**Recover interrupted retry**. Current Node **2009**, protocol **15**, client
+contract **2**, Web IndexedDB/private envelope **3**, package/dependency versions
+and Nix hashes remain unchanged. Production **`canSubmit: false`** is unchanged.
+
+Checking is still read-only. Explicit recovery refreshes capability/account and
+ordinary held control, then retires only the saved nonce against its exact rejected
+predecessor. It does not submit a message; another Retry needs a separate user
+action and enabled Send. A reserved unknown command cannot be retired or retried.
+Lost responses/local writes resolve only through matching durable GET evidence.
+Older Gateways without the capability cannot expose this action; existing Stop,
+query and authorized deletion remain available. Older clients may inspect but do
+not understand retirement proof, so keep their unresolved drafts for an updated
+client rather than editing local status. Do not downgrade Gateway state from 1020.
+
+Original input/files, Stop/delete fences, seven-day unaccepted staging expiry,
+memory provenance and checkpoint isolation are preserved. Focused client and
+synthetic browser/private-filesystem tests pass; full live-client/backend,
+Android OS/device and activation/rollback acceptance remain open. No rollout,
+APK, deployment or Release is performed.
+
 ## Unreleased local checkpoint: retiring an unreserved first-message retry
 
 Gateway schema **1020** adds identity-only retry retirement tombstones. Node
@@ -26,7 +49,8 @@ lease expiry, restart or authorized conversation deletion. The identity-only
 tombstone survives content deletion just like the existing dispatch fences.
 New retirement checks device authorization inside the transaction.
 
-**Web/native Android adoption of this recovery action is still pending.** Older
+**At this backend checkpoint client adoption was pending; the newer checkpoint
+above adds it.** Older
 clients remain query-only for an unresolved nonce. Production **`canSubmit: false`**
 is unchanged; this backend addition is not activation. Seven-day expiry remains
 limited to unaccepted Gateway staging. No deployment, APK or release is included.

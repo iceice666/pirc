@@ -157,3 +157,63 @@ it('a confirmed rejection offers explicit Retry; uncertain local attempts hide i
   ).toBe(false);
   expect(document.body.textContent).toContain('First message outcome is unknown');
 });
+
+it('interrupted recovery is separate from Retry, stays available while rollout is off, and honors capability and Stop', async () => {
+  const recover = vi.spyOn(app, 'recoverFirstRetry').mockResolvedValue();
+  const retry = vi.spyOn(app, 'retryFirst').mockResolvedValue();
+  app.firstCapabilities = {
+    version: 1,
+    clientContract: 2,
+    requiredClientContract: 2,
+    ownerUser: 'alice',
+    canSubmit: false,
+    canFenceAccount: true,
+    canStopBeforeAllocation: true,
+    canRetireFirstMessageRetry: true,
+  };
+  show('admission_failed');
+  app.firstDraft = {
+    ...app.firstDraft!,
+    uncertain: true,
+    retryAttempt: { retryId: 'pending', previousCommandId: 'cmd', previousAttemptNumber: 0 },
+    preparation: {
+      ...app.firstDraft!.preparation!,
+      messageAdmission: {
+        commandId: 'cmd',
+        attemptNumber: 0,
+        outcome: 'not_admitted',
+        retryEligible: true,
+        stopRequested: false,
+        stopConfirmed: false,
+      },
+    },
+  };
+  const { flushSync } = await import('svelte');
+  flushSync();
+  const buttons = () => [...document.querySelectorAll('button')];
+  const recovery = () =>
+    buttons().find((b) => b.textContent?.trim() === 'Recover interrupted retry');
+  expect(recovery()?.disabled).toBe(false);
+  expect(buttons().some((b) => b.textContent?.trim() === 'Retry original message')).toBe(false);
+  recovery()!.click();
+  await Promise.resolve();
+  expect(recover).toHaveBeenCalledOnce();
+  expect(retry).not.toHaveBeenCalled();
+  app.firstCapabilities = { ...app.firstCapabilities!, canRetireFirstMessageRetry: false };
+  flushSync();
+  expect(recovery()?.disabled).toBe(true);
+  app.firstDraft = { ...app.firstDraft!, stopCommandId: 'stop' };
+  flushSync();
+  expect(recovery()).toBeUndefined();
+  // Damaged metadata must not throw while rendering the recovery panel.
+  app.firstDraft = {
+    ...app.firstDraft!,
+    stopCommandId: undefined,
+    preparation: {
+      ...app.firstDraft!.preparation!,
+      messageAdmission: { ...app.firstDraft!.preparation!.messageAdmission!, attemptNumber: -1 },
+    },
+  };
+  flushSync();
+  expect(recovery()).toBeUndefined();
+});

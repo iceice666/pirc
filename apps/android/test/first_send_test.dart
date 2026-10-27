@@ -41,6 +41,7 @@ class FirstPort {
         'canFindPendingSession': true,
         'canStopBeforeAllocation': true,
         'canRetryFirstMessage': true,
+        'canRetireFirstMessageRetry': true,
         'ownerUser': owner,
         'draftScope': jsonEncode(['https://gateway.example', owner]),
       };

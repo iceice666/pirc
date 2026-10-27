@@ -1,6 +1,6 @@
 /** Durable, account-scoped first Send. Reconnect checks never advance execution. */
 import { request, ApiError } from './http';
-import { attemptNumber, mergePreparation } from './first-send-receipt';
+import { attemptNumber, mergePreparation, retryRetired } from './first-send-receipt';
 import { uuid } from './id';
 import { getClientId } from './storage';
 import type { ThinkingLevel } from './types';
@@ -15,6 +15,7 @@ export interface FirstCapabilities {
   canFindPendingSession?: boolean;
   canStopBeforeAllocation?: boolean;
   canRetryFirstMessage?: boolean;
+  canRetireFirstMessageRetry?: boolean;
 }
 export const FIRST_SEND_CLIENT_CONTRACT = 2;
 export const firstContractCompatible = (caps?: FirstCapabilities) =>
@@ -95,6 +96,39 @@ export interface FirstDraft {
   /** Private unsent edits, never a retry of the source operation. */
   recoveredFrom?: string;
 }
+export type RetryAttempt = NonNullable<FirstDraft['retryAttempt']>;
+export interface RetryReceipt {
+  preparation: Preparation;
+  retry: {
+    retryId: string;
+    previousCommandId: string;
+    status: string;
+    retired?: boolean;
+    commandId?: string;
+    attemptNumber?: number;
+  };
+}
+export const canRecoverRetry = (row?: FirstDraft) => {
+  const p = row?.preparation,
+    a = p?.messageAdmission,
+    retry = row?.retryAttempt,
+    number = a?.attemptNumber ?? 0;
+  return !!(
+    retry &&
+    !retry.resolved &&
+    p?.state === 'admission_failed' &&
+    a?.outcome === 'not_admitted' &&
+    a.retryEligible &&
+    a.commandId === retry.previousCommandId &&
+    Number.isSafeInteger(number) &&
+    number >= 0 &&
+    number === retry.previousAttemptNumber &&
+    !a.stopRequested &&
+    !a.stopConfirmed &&
+    !row?.cancelRequested &&
+    !row?.stopCommandId
+  );
+};
 export interface StopControl {
   clientId: string;
   generation: number;
@@ -115,7 +149,13 @@ export interface FirstTransport {
     action: 'accept' | 'materialize' | 'dispatch' | 'retry',
     body?: unknown,
   ): Promise<Preparation>;
-  retryLookup(owner: string, op: string, retryId: string): Promise<Preparation>;
+  retryLookup(owner: string, op: string, retryId: string): Promise<RetryReceipt>;
+  retireRetry(
+    owner: string,
+    op: string,
+    retryId: string,
+    body: StopControl & { previousCommandId: string },
+  ): Promise<RetryReceipt>;
   acquire(owner: string, session: string, force?: boolean): Promise<number>;
   acquirePending(owner: string, op: string, force?: boolean): Promise<StopControl>;
   stopPending(owner: string, op: string, held: StopControl): Promise<Preparation>;
@@ -162,9 +202,13 @@ export const firstTransport: FirstTransport = {
       }),
     ),
   retryLookup: (owner, op, retryId) =>
-    prep(
-      request(`${path(op)}/retries/${encodeURIComponent(retryId)}`, { headers: headers(owner) }),
-    ),
+    request(`${path(op)}/retries/${encodeURIComponent(retryId)}`, { headers: headers(owner) }),
+  retireRetry: (owner, op, retryId, body) =>
+    request(`${path(op)}/retries/${encodeURIComponent(retryId)}/retire`, {
+      method: 'POST',
+      headers: headers(owner),
+      body: JSON.stringify(body),
+    }),
   async acquire(owner, session, force = false) {
     const { lease } = await request<{ lease: { clientId: string; generation: number } }>(
       `${sessionPath(session)}/control/acquire`,
@@ -365,7 +409,7 @@ export class FirstSend {
       return { ...change(old), revision: old.revision + 1, updatedAt: Date.now() };
     }))!;
   }
-  async #receipt(scope: string, id: string, value: Preparation) {
+  async #receipt(scope: string, id: string, value: Preparation, retired?: RetryAttempt) {
     if (value.operationId !== id) throw new Error('The server returned a different submission.');
     return this.#change(scope, id, (row) => {
       if (
@@ -374,10 +418,19 @@ export class FirstSend {
       )
         throw new Error('The original conversation binding changed.');
       const current = mergePreparation(row.preparation, value);
-      const retryAttempt = row.retryAttempt;
+      const saved = row.retryAttempt;
+      const retryAttempt =
+        saved &&
+        retired &&
+        saved.retryId === retired.retryId &&
+        saved.previousCommandId === retired.previousCommandId &&
+        saved.previousAttemptNumber === retired.previousAttemptNumber
+          ? { ...saved, resolved: true, notReserved: true }
+          : saved;
       return {
         ...row,
         preparation: current,
+        ...(retryAttempt !== saved ? { retryAttempt } : {}),
         ...(retryAttempt &&
         (current.state === 'cancelled' ||
           attemptNumber(current) > retryAttempt.previousAttemptNumber)
@@ -485,12 +538,7 @@ export class FirstSend {
             id,
             row.retryAttempt.retryId,
           );
-          if (
-            value.state !== 'cancelled' &&
-            attemptNumber(value) <= row.retryAttempt.previousAttemptNumber
-          )
-            throw new Error('The retry receipt did not identify a successor attempt.');
-          return this.#receipt(scope, id, value);
+          return this.#retryReceipt(scope, id, row.retryAttempt, value);
         } catch (error) {
           if (!(error instanceof ApiError && error.status === 404)) throw error;
           // An absent nonce is not evidence that a pending POST cannot still arrive.
@@ -585,6 +633,40 @@ export class FirstSend {
       );
       throw error;
     }
+  }
+  async #retryReceipt(scope: string, id: string, attempt: RetryAttempt, value: RetryReceipt) {
+    const retired = retryRetired(attempt, value);
+    return this.#receipt(scope, id, value.preparation, retired ? attempt : undefined);
+  }
+  /** Explicit recovery only fences an unreserved nonce; sending is a separate action. */
+  async recoverRetry(scope: string, id: string) {
+    let row = await this.check(scope, id);
+    const attempt = row.retryAttempt;
+    if (!attempt || attempt.resolved) return row;
+    if (!canRecoverRetry(row))
+      throw new Error('Only a pending retry of a rejected first message can be recovered.');
+    const caps = await this.transport.capabilities();
+    if (
+      caps.ownerUser !== row.ownerUser ||
+      !firstContractCompatible(caps) ||
+      caps.canRetireFirstMessageRetry !== true
+    )
+      throw new Error('This Gateway cannot recover an interrupted retry.');
+    const generation = await this.transport.acquire(row.ownerUser, row.preparation!.sessionId);
+    row = await this.#read(scope, id);
+    if (
+      !canRecoverRetry(row) ||
+      row.retryAttempt?.retryId !== attempt.retryId ||
+      row.retryAttempt.previousCommandId !== attempt.previousCommandId
+    )
+      throw new Error('The first-message attempt changed; check its result.');
+    // The nonce was durably stored before its original POST. No new identity is made.
+    const value = await this.transport.retireRetry(row.ownerUser, id, attempt.retryId, {
+      previousCommandId: attempt.previousCommandId,
+      clientId: getClientId(),
+      generation,
+    });
+    return this.#retryReceipt(scope, id, attempt, value);
   }
   /** A new command is permitted only by a positive rejection and explicit user action. */
   async retry(scope: string, id: string) {

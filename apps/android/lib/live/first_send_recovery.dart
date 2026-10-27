@@ -200,6 +200,13 @@ class FirstSendRecovery extends StatelessWidget {
                   ),
                   style: webText(context, size: 12, color: 'status.danger'),
                 ),
+              if (first.canRecoverRetry)
+                Text(
+                  tr(
+                    'Recovery blocks a retry the server has not received. It never resends the message.',
+                  ),
+                  style: webText(context, size: 12, color: 'text.muted'),
+                ),
               Wrap(
                 spacing: 4,
                 children: [
@@ -223,6 +230,12 @@ class FirstSendRecovery extends StatelessWidget {
                       'Continue sending',
                       first.submit,
                       enabled: first.enabled && !controller.busy,
+                    ),
+                  if (first.canRecoverRetry)
+                    action(
+                      'Recover interrupted retry',
+                      first.recoverRetry,
+                      enabled: !first.controlBusy && !controller.busy,
                     ),
                   if (first.canRetry)
                     action(
