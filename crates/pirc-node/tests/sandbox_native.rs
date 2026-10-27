@@ -487,7 +487,7 @@ fn client(prepared: &Prepared, targets: &str) -> tokio::process::Command {
     args[at] = std::env::current_exe().unwrap().into_os_string();
     let mut client = tokio::process::Command::new(command.as_std().get_program());
     // The descriptor mapping is not copied with the arguments.
-    pirc_node::sandbox::linux::seccomp::pass(&mut client).unwrap();
+    prepared.prepare_command_fds(&mut client).unwrap();
     client
         .args(&args)
         .args([

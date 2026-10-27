@@ -63,6 +63,7 @@ mod common;
 pub mod fds;
 pub mod linux;
 pub mod macos;
+pub mod processes;
 pub mod proxy;
 pub mod srt;
 pub mod unavailable;
@@ -223,6 +224,7 @@ pub struct Prepared {
     temp_dir: Option<PathBuf>,
     /// A read-only command's ([`Prepared::with_wrapper_status`]).
     status: Option<Box<dyn WrapperStatus>>,
+    processes: Option<Arc<dyn processes::ProcessScope>>,
     cleanup: Mutex<Option<Box<dyn FnOnce() + Send>>>,
 }
 
@@ -246,7 +248,53 @@ impl Prepared {
             control,
             temp_dir: None,
             status: None,
+            processes: None,
             cleanup: Mutex::new(Some(Box::new(cleanup))),
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn with_process_scope(
+        mut self,
+        processes: Arc<dyn processes::ProcessScope>,
+    ) -> Self {
+        self.processes = Some(processes);
+        self
+    }
+
+    /// Call immediately after spawn, before anything can reap the wrapper PID.
+    pub fn process_spawned(&self, pid: u32) {
+        if let Some(processes) = &self.processes {
+            processes.spawned(pid);
+        }
+    }
+
+    /// Retire a kernel-owned process scope, if this backend captured one.
+    /// This is separate from signaling the wrapper's process group.
+    pub fn terminate_processes(&self) {
+        if let Some(processes) = &self.processes {
+            processes.terminate();
+        }
+    }
+
+    pub fn process_scope_state(&self) -> processes::State {
+        self.processes
+            .as_ref()
+            .map_or(processes::State::Unsupported, |p| p.state())
+    }
+
+    pub async fn wait_processes(&self, timeout: std::time::Duration) -> processes::State {
+        let deadline = tokio::time::Instant::now() + timeout;
+        loop {
+            let state = self.process_scope_state();
+            if !matches!(
+                state,
+                processes::State::Observing | processes::State::Running
+            ) || tokio::time::Instant::now() >= deadline
+            {
+                return state;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
         }
     }
 
@@ -285,13 +333,23 @@ impl Prepared {
     pub fn command(&self) -> std::io::Result<tokio::process::Command> {
         let mut command = tokio::process::Command::new(&self.program);
         command.args(&self.args);
+        self.prepare_command_fds(&mut command)?;
+        Ok(command)
+    }
+
+    /// When a caller rebuilds a command with different arguments, descriptor
+    /// mappings must be installed again; copying argv alone is insufficient.
+    pub fn prepare_command_fds(
+        &self,
+        command: &mut tokio::process::Command,
+    ) -> std::io::Result<()> {
         if let Some(control) = &self.control {
-            control.prepare_command(&mut command)?;
+            control.prepare_command(command)?;
         }
         if let Some(status) = &self.status {
-            status.prepare_command(&mut command)?;
+            status.prepare_command(command)?;
         }
-        Ok(command)
+        Ok(())
     }
 
     pub(crate) fn with_recovery(
@@ -320,6 +378,9 @@ impl Prepared {
     /// Remove what the session's sandbox left (settings file, temp
     /// directory, proxy). Runs once; later calls do nothing.
     pub fn cleanup(&self) {
+        if let Some(processes) = &self.processes {
+            processes.cleanup();
+        }
         let cleanup = self
             .cleanup
             .lock()

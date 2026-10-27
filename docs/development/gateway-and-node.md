@@ -167,6 +167,15 @@ At startup (of the gateway or a node) unfinished runs become `interrupted`, pend
 
 `stop` sends `clear_queue` before `abort`; cleared steering/follow-up text is returned in the command result. This does not guarantee termination of arbitrary extension background jobs or team children.
 
+Runner teardown is separate from conversational `stop`. The native Linux backend
+observes bubblewrap's namespace init over a private status pipe and pins it with a
+pidfd. Teardown requests termination of that captured namespace and waits briefly
+for its handle to report exit, including descendants that changed process groups.
+Missing or late identity remains unconfirmed. This local proof primitive does not
+cover Node restart, macOS, approved host commands or panel terminals; the durable
+transition receipt still never claims `revocationConfirmed`. See the [current
+U4 evidence and remaining gates](../../plans/unified-conversations.md#u4-implementation-checkpoint-pinned-linux-sandbox-process-scope-2026-10-28).
+
 ## Data
 
 Each process keeps its own SQLite below its `PIRC_STATE_DIR`. The gateway's holds the session index, leases, and command outcomes; a node's also holds runs, interactions, and uploads, and its state directory contains the agent session JSONL files (the conversation source of truth) and uploaded files. Non-image uploads are also copied into the workspace at `.pirc/uploads/` so the agent's read/bash tools can reach them (that directory is writable by the uploader but protected from the agent's own writes).

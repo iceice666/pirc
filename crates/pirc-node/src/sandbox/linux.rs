@@ -84,6 +84,7 @@
 mod args;
 pub mod caps;
 pub mod plan;
+pub mod processes;
 pub mod scan;
 pub mod seccomp;
 mod status;
@@ -576,12 +577,17 @@ impl Sandbox for NativeSandbox {
             agent.extend(self.config.agent_args.iter().map(OsString::from));
             let auth = Arc::new(proxy::ProxyAuth::generate());
             let proxy_env = self.proxy_env(&auth);
-            let options = bwrap_args(
+            let mut options = bwrap_args(
                 filesystem,
                 &tmp_text,
                 &socket.display().to_string(),
                 &proxy_env,
             );
+            options.options.extend([
+                "--json-status-fd".to_owned(),
+                processes::STATUS_FD.to_string(),
+            ]);
+            let processes = Arc::new(processes::Scope::default());
             let tail = self.command_args(Vec::new(), &socket, &agent);
             let invocation = match args::render(
                 &bwrap,
@@ -612,7 +618,10 @@ impl Sandbox for NativeSandbox {
                 vec![("CLAUDE_CODE_TMPDIR".to_owned(), tmp_text)],
                 policy,
                 warnings,
-                Some(Box::new(NativeControl { allowlist })),
+                Some(Box::new(NativeControl {
+                    allowlist,
+                    processes: processes.clone(),
+                })),
                 move || {
                     proxy.abort();
                     drop(profile);
@@ -620,6 +629,7 @@ impl Sandbox for NativeSandbox {
                     Session::remove_tmp(&tmp);
                 },
             )
+            .with_process_scope(processes)
             .with_recovery(input.recovery))
         })
     }
@@ -638,12 +648,13 @@ impl Sandbox for NativeSandbox {
 /// Approvals widen the proxy's allowlist directly.
 struct NativeControl {
     allowlist: Arc<Allowlist>,
+    processes: Arc<processes::Scope>,
 }
 
 impl NetworkControl for NativeControl {
-    /// bubblewrap's seccomp filter on its descriptor ([`seccomp::mapping`]).
+    /// Map bubblewrap's seccomp filter and private process-status pipe together.
     fn prepare_command(&self, command: &mut tokio::process::Command) -> std::io::Result<()> {
-        seccomp::pass(command)
+        self.processes.prepare_command(command)
     }
 
     fn is_open(&self) -> bool {

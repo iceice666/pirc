@@ -3486,3 +3486,59 @@ Tests use synthetic local model replies, never third-party providers. No fronten
 physical Android/Keystore/MethodChannel, full workspace, Linux revocation, Nix and
 deployment acceptance are not claimed. Keep this slice local, preserve APKs and
 shared caches, and remove only this run's completed build/test outputs.
+
+## U4 implementation checkpoint: pinned Linux sandbox process scope (2026-10-28)
+
+The native Linux runner now captures the PID-namespace init through bubblewrap's
+private `--json-status-fd` pipe. It pins the unreaped wrapper before observing the
+record, then pins and checks the reported child against its parent, namespace-init
+status and both live process handles. Agent stdout/RPC cannot supply this identity.
+Subsequent retirement addresses only the captured pidfd, never a later process
+that reuses its PID. After the native wrapper is reaped, runner teardown no longer
+signals its stale numeric process group. The existing unsupported-backend group
+lifecycle has not been replaced by a claimed cross-platform guarantee.
+
+A retirement racing initial observation is remembered and applied after capture.
+Sending SIGKILL is only a request: `Terminated` requires the namespace init handle
+to report exit. Missing/malformed/oversized status, missed short-lived wrappers,
+unsupported pidfd kernels and inaccessible identity remain unconfirmed. Bounded
+observation uses no process-wide scan or name-based kill. Wrapper exit, explicit
+kill, cleanup and drop retire the captured scope; cleanup releases the status pipe
+and observer. This adds no database/wire/version or frontend changes. Cargo enables
+existing rustix `event`/`process` features; lockfile and Nix hashes are unchanged.
+
+The mechanism follows bubblewrap's [trusted status and PID-init lifecycle](https://github.com/containers/bubblewrap/blob/main/bubblewrap.c)
+and Linux's [PID namespace shutdown](https://github.com/torvalds/linux/blob/master/kernel/pid_namespace.c).
+A pid namespace contains descendants even after they change process groups or
+sessions; its init shutdown disables further allocation and kills/waits for its
+remaining processes. The local `Terminated` state applies only to that captured
+namespace. It does **not** acknowledge a complete conversation transition.
+
+Still open: actual native Linux runtime acceptance, durable launch accounting and
+restart reconciliation, macOS descendant containment, user terminals/approved host
+commands, browser/other admitted effects, alias handling, target policy installation
+and the Gateway coordinator plus Web/Android controls. Previously exited/untracked
+launches cannot be declared revoked from an absent supervisor. Transition receipts
+remain `revocationConfirmed: false`, `targetInstalled: false`; `canSubmit: false`
+and `enforcement: not_tracked` are unchanged. Do not enable workspace switching.
+
+Local validation: **480 Node library tests passed, 3 existing tests ignored**.
+**16 required process cases** passed: checkpoints (3), conversation admission (2),
+creation (2), execution-fence restart (1), inference retirement (1), memory (1),
+node-link side channels (5) and project deletion (1). Eight new focused tests cover
+identity parsing, partial/missing/forged status, retirement-before-capture, exact
+handle lifetime, peer isolation and observation cleanup. The complete suite also
+caught and corrected a test-only assumption that pipe EOF must already be visible
+amid concurrent process startup; absent trusted evidence stays unconfirmed.
+Final focused tests (8), strict Node/conformance all-target Clippy, Linux module
+cross-target Clippy, formatting and diff checks passed. The Linux compile harness,
+its isolated Rust toolchain copy and this run's target/test files are disposable;
+APKs, shared SDKs/caches and user files are retained.
+
+The dedicated Linux acceptance suite (`sandbox_linux_processes`) covers a detached `setsid`
+writer holding an open writable descriptor, a simultaneous peer sandbox, preserved
+later user edits, repeated retirement and a killed wrapper. It is added to the
+native CI job with missing bubblewrap treated as failure. This local macOS run
+cannot execute it. The isolated Linux module cross-compile checks the actual source
+and tests with a seccomp mapping stub; it is not a full Linux Node build or a kernel
+runtime test. No user browser, emulator, device, live provider or Nix run is needed.

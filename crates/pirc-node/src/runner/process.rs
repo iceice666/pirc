@@ -350,6 +350,17 @@ impl Runner {
 
     /// Signal srt with the agent and everything under it.
     pub(super) fn kill(&self, signal: Signal) {
+        if signal == Signal::SIGKILL {
+            self.prepared.terminate_processes();
+        }
+        // Once a native wrapper was reaped, its numeric PGID can be reused.
+        // Retire the captured namespace handle above, never signal that stale
+        // group. Missing capture remains unconfirmed; it is not a safe PID.
+        if self.reaped.load(Ordering::Acquire)
+            && self.prepared.process_scope_state() != crate::sandbox::processes::State::Unsupported
+        {
+            return;
+        }
         if let Some(pid) = self.pid.and_then(|pid| i32::try_from(pid).ok()) {
             if killpg(Pid::from_raw(pid), signal).is_ok() {
                 return;
@@ -935,6 +946,9 @@ fn spawn_child(
     let child = command.spawn().map_err(|error| {
         ApiError::runner_unavailable(format!("Runner is not available: {error}"))
     })?;
+    if let Some(pid) = child.id() {
+        prepared.process_spawned(pid);
+    }
     Ok((child, epoch))
 }
 
@@ -1153,6 +1167,10 @@ async fn wait_exit(
     // Reaped (or `wait` failed: then no bare-pid signal either, the safe side).
     runner.reaped.store(true, Ordering::Release);
     runner.kill(Signal::SIGKILL);
+    // A wrapper's exit is not evidence of descendant exit. Native Linux uses
+    // the independently captured PID namespace init handle, including children
+    // that left the wrapper's process group. Unknown stays unknown.
+    let _ = runner.prepared.wait_processes(Duration::from_secs(2)).await;
     let drained = tokio::time::Instant::now() + Duration::from_secs(1);
     let readers = std::iter::once(&mut reading).chain(errors.as_mut());
     for reader in readers {

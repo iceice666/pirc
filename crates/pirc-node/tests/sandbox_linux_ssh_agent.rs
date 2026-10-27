@@ -123,7 +123,7 @@ fn client(prepared: &Prepared, sockets: &[&Path]) -> tokio::process::Child {
     let targets: Vec<String> = sockets.iter().map(|s| s.display().to_string()).collect();
     let mut rebuilt = tokio::process::Command::new(command.as_std().get_program());
     // The descriptor mapping is not copied with the arguments.
-    pirc_node::sandbox::linux::seccomp::pass(&mut rebuilt).unwrap();
+    prepared.prepare_command_fds(&mut rebuilt).unwrap();
     rebuilt
         .args(&args)
         .args([
