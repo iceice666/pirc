@@ -145,7 +145,7 @@ Every session route is answered by the node that owns the session; the gateway c
 - WebSocket `GET /api/events?sessionId=...&cursor=<epoch>:<sequence>`
 - `GET /api/nodes` lists online nodes; `GET|POST /api/workspaces` lists workspaces or adds one on a node
 - Side panel, read-only: `GET /api/sessions/:id/git/{status,diff,log}`, `GET /api/sessions/:id/git/commits/:sha`, `GET /api/sessions/:id/files[/content]?path=...` (confined to the workspace), `GET /api/sessions/:id/panel/state` (memory, background tasks, teammates) and `GET /api/sessions/:id/panel/background/:taskId`. A `panel_changed` event tells clients which sections to refetch.
-- Terminals (run on the session's node; the stream is relayed over the node link): `GET|POST /api/sessions/:id/terminals`, `POST /api/sessions/:id/terminals/:terminalId/close`, and WebSocket `GET /api/sessions/:id/terminals/:terminalId/stream`, which replays recent output on connect. Creating, closing, typing and resizing require a live control lease.
+- Terminals (run on the session's node; the stream is relayed over the node link): `GET|POST /api/sessions/:id/terminals`, `POST /api/sessions/:id/terminals/:terminalId/close`, and WebSocket `GET /api/sessions/:id/terminals/:terminalId/stream`, which replays recent output on connect. Creating, closing, typing and resizing require a live control lease. Terminal creation rechecks it at spawn; queued input and resizes recheck the original controller, connection and terminal environment at each actual PTY operation, including after backpressure. A takeover or accepted environment fence refuses the remaining input; closing drops the writer queue. Already-delivered input cannot be recalled.
 
 Mutations that affect the agent require `{clientId,generation}` from a live control lease. Commands additionally require a client-generated `commandId`. Reusing the ID with the same canonical payload returns the known command; using it with a different payload returns `409`.
 
@@ -178,7 +178,7 @@ and historical epochs remain explicit unresolved evidence. This now prevents new
 permission commit. Unknown trusted-wrapper exit is still unknown, and it does not
 cover macOS, approved host commands, panel terminals or every admitted effect. The transition receipt exposes
 `sandboxProcesses` counts but still never claims `revocationConfirmed`. See the
-[current U4 evidence and remaining gates](../../plans/unified-conversations.md#u4-implementation-checkpoint-guarded-native-linux-launch-2026-10-28).
+[current U4 evidence and remaining gates](../../plans/unified-conversations.md#u4-implementation-checkpoint-fenced-terminal-input-2026-10-28).
 
 ## Data
 

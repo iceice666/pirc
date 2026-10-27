@@ -178,6 +178,7 @@ pub fn routes() -> Vec<Route> {
                 &cwd,
                 Some(cols.unwrap_or(80)),
                 Some(rows.unwrap_or(24)),
+                (&client_id, generation),
             )?;
             Ok(Response::status(201, json!({ "terminal": terminal })))
         }),

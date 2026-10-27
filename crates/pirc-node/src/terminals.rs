@@ -15,7 +15,9 @@
 //!
 //! Each terminal has three tasks: one reads the PTY (scrollback, then
 //! `output` to its listeners), one writes it (input and resizes, in order),
-//! one waits for the shell: then, 50 ms later (to drain what the PTY still
+//! input is rechecked against its original connection/controller and terminal
+//! environment at each nonblocking write or resize; closing cancels the writer.
+//! One task waits for the shell: then, 50 ms later (to drain what the PTY still
 //! holds), the PTY closes and listeners get `exit`. Output reaches
 //! listeners while the terminal's lock is held, so an attach sees each byte
 //! either in its replay or as output, never both nor neither; exits reach
@@ -34,8 +36,12 @@ use tokio::sync::{mpsc, watch};
 
 use crate::error::{ApiError, ApiResult};
 use crate::services::WeakNode;
+use crate::store::Store;
 
+mod input;
 pub(crate) mod pty;
+pub(crate) use input::Control;
+use input::{Authority, Binding};
 
 const SCROLLBACK_BYTES: usize = 256 * 1024;
 const PER_SESSION: usize = 4;
@@ -93,6 +99,8 @@ struct Registry {
 
 struct Entry {
     pid: Option<u32>,
+    binding: Option<Binding>,
+    stopping: watch::Sender<bool>,
     state: Mutex<EntryState>,
     pty: mpsc::UnboundedSender<PtyCommand>,
     /// True once the shell exited.
@@ -100,6 +108,7 @@ struct Entry {
 }
 
 struct EntryState {
+    closing: bool,
     info: TerminalInfo,
     /// Retained output (raw bytes) for replay on attach.
     scrollback: VecDeque<Vec<u8>>,
@@ -108,9 +117,19 @@ struct EntryState {
     decoder: Utf8Stream,
 }
 
-enum PtyCommand {
+struct PtyCommand {
+    authority: Authority,
+    action: Action,
+}
+
+enum Action {
     Write(Vec<u8>),
-    Resize { rows: u16, cols: u16 },
+    Resize { rows: f64, cols: f64 },
+}
+
+struct Environment {
+    vars: BTreeMap<String, String>,
+    binding: Option<Binding>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -187,6 +206,7 @@ impl Terminals {
         cwd: &Path,
         cols: Option<i64>,
         rows: Option<i64>,
+        control: (&str, i64),
     ) -> ApiResult<TerminalInfo> {
         let node = self.node.upgrade().ok_or_else(ApiError::internal)?;
         let shell = default_shell(node.config.terminal_shell.as_deref(), node.env.get("SHELL"));
@@ -204,13 +224,18 @@ impl Terminals {
         // Hold the same database lock as fence acceptance through PTY creation.
         let db = node.db.lock();
         crate::execution_fences::require_open(&db, session_id)?;
+        db.validate_lease(session_id, control.0, control.1)?;
+        let binding = Binding::capture(&node, &db, session_id, cwd)?;
         self.spawn(
             session_id,
             cwd,
             cols.map_or(f64::NAN, |cols| cols as f64),
             rows.map_or(f64::NAN, |rows| rows as f64),
             &shell,
-            env,
+            Environment {
+                vars: env,
+                binding: Some(binding),
+            },
         )
     }
 
@@ -222,8 +247,12 @@ impl Terminals {
         cols: f64,
         rows: f64,
         shell: &str,
-        mut env: BTreeMap<String, String>,
+        environment: Environment,
     ) -> ApiResult<TerminalInfo> {
+        let Environment {
+            vars: mut env,
+            binding,
+        } = environment;
         let mut registry = self.registry();
         if registry.closing {
             return Err(ApiError::runner_unavailable("Gateway is shutting down"));
@@ -288,7 +317,10 @@ impl Terminals {
         };
         let entry = Arc::new(Entry {
             pid: child.id(),
+            binding,
+            stopping: watch::channel(false).0,
             state: Mutex::new(EntryState {
+                closing: false,
                 info: info.clone(),
                 scrollback: VecDeque::new(),
                 scrollback_bytes: 0,
@@ -301,6 +333,7 @@ impl Terminals {
         registry.terminals.insert(id, entry.clone());
         drop(registry);
         run(
+            self.node.clone(),
             Arc::downgrade(&self.registry),
             entry,
             child,
@@ -363,30 +396,81 @@ impl Terminals {
         }
     }
 
-    /// Type into the terminal (ignored once it exited, or past the limit).
-    pub fn input(&self, session_id: &str, id: &str, data: &str) -> ApiResult<()> {
+    /// Queue input with its original controller. Authority is checked again at
+    /// each nonblocking PTY write, including after backpressure or takeover.
+    pub(crate) fn input_controlled(
+        &self,
+        session_id: &str,
+        id: &str,
+        data: &str,
+        control: Arc<Control>,
+    ) -> ApiResult<()> {
+        self.queue_input(session_id, id, data, Authority::Client(control))
+    }
+
+    fn queue_input(
+        &self,
+        session_id: &str,
+        id: &str,
+        data: &str,
+        authority: Authority,
+    ) -> ApiResult<()> {
         let entry = self.lookup(session_id, id)?;
         if entry.state().info.exited || data.encode_utf16().count() > INPUT_MAX_UNITS {
             return Ok(());
         }
-        let _ = entry.pty.send(PtyCommand::Write(data.as_bytes().to_vec()));
-        Ok(())
+        input::authorized(&self.node, &entry, &authority, |_| Ok(()))?;
+        entry
+            .pty
+            .send(PtyCommand {
+                authority,
+                action: Action::Write(data.as_bytes().to_vec()),
+            })
+            .map_err(|_| ApiError::not_found("Terminal is closed"))
     }
 
-    /// Resize, clamped; a non-number keeps that dimension.
-    pub fn resize(&self, session_id: &str, id: &str, cols: f64, rows: f64) -> ApiResult<()> {
+    /// Resize in queue order under the same authority as typed input. The
+    /// visible dimensions change only when the PTY accepted the resize.
+    pub(crate) fn resize_controlled(
+        &self,
+        session_id: &str,
+        id: &str,
+        cols: f64,
+        rows: f64,
+        control: Arc<Control>,
+    ) -> ApiResult<()> {
+        self.queue_resize(session_id, id, cols, rows, Authority::Client(control))
+    }
+
+    fn queue_resize(
+        &self,
+        session_id: &str,
+        id: &str,
+        cols: f64,
+        rows: f64,
+        authority: Authority,
+    ) -> ApiResult<()> {
         let entry = self.lookup(session_id, id)?;
-        let mut state = entry.state();
-        if state.info.exited {
+        if entry.state().info.exited {
             return Ok(());
         }
-        state.info.cols = clamp(cols, 20, 500, state.info.cols);
-        state.info.rows = clamp(rows, 5, 200, state.info.rows);
-        let _ = entry.pty.send(PtyCommand::Resize {
-            rows: state.info.rows,
-            cols: state.info.cols,
-        });
-        Ok(())
+        input::authorized(&self.node, &entry, &authority, |_| Ok(()))?;
+        entry
+            .pty
+            .send(PtyCommand {
+                authority,
+                action: Action::Resize { rows, cols },
+            })
+            .map_err(|_| ApiError::not_found("Terminal is closed"))
+    }
+
+    #[cfg(test)]
+    fn input(&self, session_id: &str, id: &str, data: &str) -> ApiResult<()> {
+        self.queue_input(session_id, id, data, Authority::Test)
+    }
+    #[cfg(test)]
+    fn resize(&self, session_id: &str, id: &str, cols: f64, rows: f64) -> ApiResult<()> {
+        self.queue_resize(session_id, id, cols, rows, Authority::Test)
     }
 
     /// 404 `not_found` "Terminal not found".
@@ -448,6 +532,8 @@ impl Terminals {
 fn kill(entry: &Arc<Entry>) {
     let (listeners, exited) = {
         let mut state = entry.state();
+        state.closing = true;
+        entry.stopping.send_replace(true);
         (std::mem::take(&mut state.listeners), state.info.exited)
     };
     for (_, listener) in listeners {
@@ -488,6 +574,7 @@ fn output(entry: &Entry, chunk: &[u8]) {
 
 /// The terminal's tasks: see the module documentation.
 fn run(
+    node: WeakNode,
     registry: Weak<Mutex<Registry>>,
     entry: Arc<Entry>,
     mut child: Box<dyn process_wrap::tokio::ChildWrapper>,
@@ -507,18 +594,24 @@ fn run(
             }
         })
     };
-    let writing = tokio::spawn(async move {
-        while let Some(command) = commands.recv().await {
-            match command {
-                PtyCommand::Write(bytes) => {
-                    let _ = writer.write_all(&bytes).await;
+    let writing = {
+        let entry = entry.clone();
+        let mut stopping = entry.stopping.subscribe();
+        tokio::spawn(async move {
+            let work = async {
+                while let Some(command) = commands.recv().await {
+                    if let Err(error) = input::execute(&node, &entry, &writer, &command).await {
+                        command.authority.rejected(error);
+                    }
                 }
-                PtyCommand::Resize { rows, cols } => {
-                    let _ = writer.resize(rows, cols);
-                }
+            };
+            tokio::select! {
+                biased;
+                _ = stopping.wait_for(|stopped| *stopped) => {},
+                () = work => {},
             }
-        }
-    });
+        })
+    };
     tokio::spawn(async move {
         let code = match child.wait().await {
             // A signal's death is `null` (TS: `signalCode`).
@@ -626,3 +719,7 @@ impl Utf8Stream {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "terminals/input_tests.rs"]
+mod input_tests;

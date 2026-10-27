@@ -11,7 +11,8 @@
 //! open is `terminal_closed` with 4401/4403/4404 by the error's status
 //! (else 4400) and the message's first 120 UTF-16 units; a shell's exit is
 //! the `exit` frame then `terminal_closed` 1000 "terminal exited". Input is
-//! checked against the control lease per message. An already open
+//! checked against the control lease when queued and at every actual PTY write;
+//! closing a stream discards its pending input. An already open
 //! `streamId` is ignored.
 //!
 //! Locks: the stream table is held while a stream opens (so a shell that
@@ -45,6 +46,7 @@ enum Connection {
         session_id: String,
         terminal_id: String,
         listener: u64,
+        open: Arc<Mutex<bool>>,
     },
     Browser {
         input: UnboundedSender<Map<String, Value>>,
@@ -60,6 +62,7 @@ enum Target {
     Terminal {
         session_id: String,
         terminal_id: String,
+        open: Arc<Mutex<bool>>,
     },
     Browser {
         input: UnboundedSender<Map<String, Value>>,
@@ -95,6 +98,15 @@ fn frame(link: &LinkSender, stream_id: &str, frame: Value) {
         stream_id: stream_id.to_owned(),
         frame: Some(frame),
     });
+}
+
+fn terminal_error(error: ApiError) -> Value {
+    let message = if error.code == "lost_control" {
+        "Take control to type here".to_owned()
+    } else {
+        error.message
+    };
+    json!({"type":"error", "code":error.code, "message":message})
 }
 
 /// The close code of a failed open, by the error's status.
@@ -231,6 +243,7 @@ impl Streams {
             session_id: session.id,
             terminal_id: terminal_id.to_owned(),
             listener: attached.listener,
+            open: Arc::new(Mutex::new(true)),
         })
     }
 
@@ -344,10 +357,12 @@ impl Streams {
             Some(Connection::Terminal {
                 session_id,
                 terminal_id,
+                open,
                 ..
             }) => Target::Terminal {
                 session_id: session_id.clone(),
                 terminal_id: terminal_id.clone(),
+                open: open.clone(),
             },
             Some(Connection::Browser {
                 input,
@@ -369,8 +384,10 @@ impl Streams {
             Target::Terminal {
                 session_id,
                 terminal_id,
+                open,
             } => {
-                if !lease_holds(&node, &session_id, &message) {
+                let generation = crate::panels::js_number(message.get("generation"));
+                if !generation.is_finite() || generation.fract() != 0.0 {
                     frame(
                         &node.link,
                         stream_id,
@@ -379,25 +396,37 @@ impl Streams {
                     );
                     return;
                 }
+                let client = match message.get("clientId") {
+                    None | Some(Value::Null) => String::new(),
+                    Some(value) => string_of(value),
+                };
+                let link = node.link.clone();
+                let id = stream_id.to_owned();
+                let control = Arc::new(crate::terminals::Control {
+                    client,
+                    generation: generation as i64,
+                    open,
+                    rejected: Arc::new(move |error| {
+                        frame(&link, &id, terminal_error(error));
+                    }),
+                });
                 let result = match (kind, message.get("data")) {
                     (Some("input"), Some(Value::String(data))) => {
-                        node.terminals.input(&session_id, &terminal_id, data)
+                        node.terminals
+                            .input_controlled(&session_id, &terminal_id, data, control)
                     }
-                    (Some("resize"), _) => node.terminals.resize(
+                    (Some("resize"), _) => node.terminals.resize_controlled(
                         &session_id,
                         &terminal_id,
                         crate::panels::js_number(message.get("cols")),
                         crate::panels::js_number(message.get("rows")),
+                        control,
                     ),
                     // Anything else is ignored.
                     _ => Ok(()),
                 };
                 if let Err(error) = result {
-                    frame(
-                        &node.link,
-                        stream_id,
-                        json!({ "type": "error", "code": "not_found", "message": error.message }),
-                    );
+                    frame(&node.link, stream_id, terminal_error(error));
                 }
             }
             Target::Browser {
@@ -438,8 +467,10 @@ impl Streams {
             Connection::Terminal {
                 terminal_id,
                 listener,
+                open,
                 ..
             } => {
+                *open.lock().unwrap_or_else(|p| p.into_inner()) = false;
                 if let Some(node) = self.node.upgrade() {
                     node.terminals.detach(&terminal_id, listener);
                 }

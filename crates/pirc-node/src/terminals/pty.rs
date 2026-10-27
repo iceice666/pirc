@@ -41,6 +41,19 @@ pub struct Slave {
     path: PathBuf,
 }
 
+#[cfg(test)]
+impl Slave {
+    pub(super) fn raw_reader(&self) -> io::Result<std::fs::File> {
+        let mut attrs = rustix::termios::tcgetattr(&self.fd)?;
+        attrs.make_raw();
+        rustix::termios::tcsetattr(&self.fd, rustix::termios::OptionalActions::Now, &attrs)?;
+        let fd = self.fd.try_clone()?;
+        let flags = rustix::fs::fcntl_getfl(&fd)?;
+        rustix::fs::fcntl_setfl(&fd, flags | OFlags::NONBLOCK)?;
+        Ok(fd.into())
+    }
+}
+
 /// A new PTY of `rows` x `cols`.
 pub fn open(rows: u16, cols: u16) -> io::Result<(Master, Slave)> {
     let master = rustix::fs::open(
@@ -90,15 +103,12 @@ impl Master {
         }
     }
 
-    /// Type `bytes` into the terminal.
-    pub async fn write_all(&self, mut bytes: &[u8]) -> io::Result<()> {
-        while !bytes.is_empty() {
-            let mut ready = self.0.writable().await?;
-            if let Ok(written) = ready.try_io(|fd| Ok(rustix::io::write(fd.get_ref(), bytes)?)) {
-                bytes = &bytes[written?..];
-            }
-        }
-        Ok(())
+    /// Wait without holding admission/lease locks. The caller then checks its
+    /// captured authority and performs one nonblocking write under those locks.
+    pub(super) async fn writable(
+        &self,
+    ) -> io::Result<tokio::io::unix::AsyncFdReadyGuard<'_, OwnedFd>> {
+        self.0.writable().await
     }
 }
 

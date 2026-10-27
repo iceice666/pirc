@@ -167,3 +167,139 @@ async fn persisted_fence_survives_reboot_without_rebinding_or_erasing_context() 
         "deleted"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn terminal_stream_reports_the_fence_while_a_peer_remains_interactive() {
+    let gateway = FakeGateway::bind().await;
+    let Some(_node) = LoneNode::start_with(
+        gateway.port(),
+        NodeOptions {
+            chat_node: true,
+            agent_core_only: true,
+            env: vec![
+                ("PIRC_BROWSER", "false".into()),
+                ("PIRC_TERMINAL_SHELL", "/bin/sh".into()),
+            ],
+        },
+    ) else {
+        return;
+    };
+    let mut link = register(&gateway).await;
+    let mut sessions = Vec::new();
+    for stream in ["source", "peer"] {
+        let created = link
+            .request(
+                &format!("create-{stream}"),
+                req("POST", "/api/sessions", json!({"workspaceId":"chats"})),
+            )
+            .await;
+        assert_eq!(created["data"]["status"], 201, "{created}");
+        let session = created["data"]["body"]["session"]["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        let epoch = created["data"]["body"]["session"]["runnerEpoch"].clone();
+        let base = format!("/api/sessions/{session}");
+        let acquired = link
+            .request(
+                &format!("lease-{stream}"),
+                req(
+                    "POST",
+                    &format!("{base}/control/acquire"),
+                    json!({"clientId":"phone"}),
+                ),
+            )
+            .await;
+        assert_eq!(acquired["data"]["status"], 200, "{acquired}");
+        let generation = acquired["data"]["body"]["lease"]["generation"].clone();
+        let terminal = link
+            .request(
+                &format!("terminal-{stream}"),
+                req(
+                    "POST",
+                    &format!("{base}/terminals"),
+                    json!({"clientId":"phone","generation":generation}),
+                ),
+            )
+            .await;
+        assert_eq!(terminal["data"]["status"], 201, "{terminal}");
+        let terminal = terminal["data"]["body"]["terminal"]["id"].as_str().unwrap();
+        link.send(&json!({"type":"terminal_open","streamId":stream,"sessionId":session,"terminalId":terminal,"user":USER})).await;
+        link.recv_where(|f| {
+            f["type"] == "terminal_frame"
+                && f["streamId"] == stream
+                && f["frame"]["type"] == "ready"
+        })
+        .await;
+        sessions.push((session, base, epoch, generation));
+    }
+    let (_, base, epoch, generation) = &sessions[0];
+    let accepted=link.request("terminal-fence",req("POST",&format!("{base}/execution-fences"),json!({"intent":{
+        "operationId":"terminal-fence","planHash":"a".repeat(64),"expectedWorkspaceId":"chats","expectedRunnerEpoch":epoch},
+        "clientId":"phone","generation":generation}))).await;
+    assert_eq!(accepted["data"]["status"], 200, "{accepted}");
+    for command in [
+        json!({"type":"input","data":"printf stale > should-not-exist\n"}),
+        json!({"type":"resize","cols":180,"rows":60}),
+    ] {
+        let mut message = command;
+        message["clientId"] = json!("phone");
+        message["generation"] = generation.clone();
+        link.send(&json!({"type":"terminal_input","streamId":"source","message":message}))
+            .await;
+        let refused = link
+            .recv_where(|f| {
+                f["type"] == "terminal_frame"
+                    && f["streamId"] == "source"
+                    && f["frame"]["type"] == "error"
+            })
+            .await;
+        assert_eq!(
+            refused["frame"]["code"], "environment_transition_pending",
+            "{refused}"
+        );
+    }
+    link.send(
+        &json!({"type":"terminal_input","streamId":"peer","message":{
+        "type":"input","clientId":"phone","generation":sessions[1].3,
+        "data":"printf 'PEER-%s\\n' $((6*7))\n"}}),
+    )
+    .await;
+    let mut output = String::new();
+    while !output.contains("PEER-42") {
+        let frame = link
+            .recv_where(|f| f["type"] == "terminal_frame" && f["streamId"] == "peer")
+            .await;
+        assert_ne!(frame["frame"]["type"], "error", "{frame}");
+        if frame["frame"]["type"] == "output" {
+            output.push_str(frame["frame"]["data"].as_str().unwrap());
+        }
+    }
+    // Draining closes the old terminal but cannot claim OS-wide revocation.
+    let drained = link
+        .request(
+            "terminal-drain",
+            req(
+                "POST",
+                &format!("{base}/execution-fences/terminal-fence/drain"),
+                json!({}),
+            ),
+        )
+        .await;
+    assert_eq!(
+        drained["data"]["body"]["transition"]["state"], "supervisor_drained",
+        "{drained}"
+    );
+    assert_eq!(
+        drained["data"]["body"]["transition"]["revocationConfirmed"],
+        false
+    );
+    let removed = link
+        .request("terminal-delete", req("DELETE", base, Value::Null))
+        .await;
+    assert_eq!(removed["data"]["status"], 204, "{removed}");
+    let peer_removed = link
+        .request("peer-delete", req("DELETE", &sessions[1].1, Value::Null))
+        .await;
+    assert_eq!(peer_removed["data"]["status"], 204, "{peer_removed}");
+}

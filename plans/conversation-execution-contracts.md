@@ -324,6 +324,10 @@ start](unified-conversations.md#u4-implementation-checkpoint-guarded-native-linu
 new Agent execution waits for durable identity and a one-time release. Unknown
 wrapper exit, prior untracked launches, non-runner effects and target installation
 remain open; process counts do not grant access.
+[Terminal effect-boundary checks](unified-conversations.md#u4-implementation-checkpoint-fenced-terminal-input-2026-10-28)
+now retain the original controller/connection/binding through queued and partial PTY
+writes, rejecting after takeover or an accepted fence. This does not recall bytes
+already delivered or prove termination of terminal descendants.
 
 - Resolve and validate path components, containment and aliases at the trusted
   boundary. String-prefix checks or one-time symlink canonicalization are not

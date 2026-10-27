@@ -21,7 +21,17 @@ fn terminals() -> Terminals {
 }
 
 fn open(terminals: &Terminals, session: &str, cols: f64, rows: f64) -> ApiResult<TerminalInfo> {
-    terminals.spawn(session, Path::new("/"), cols, rows, "/bin/sh", env())
+    terminals.spawn(
+        session,
+        Path::new("/"),
+        cols,
+        rows,
+        "/bin/sh",
+        Environment {
+            vars: env(),
+            binding: None,
+        },
+    )
 }
 
 /// Attach and collect events in a channel.
@@ -102,7 +112,10 @@ fn scrollback_drops_whole_chunks_but_never_the_last() {
     let (_, exited) = watch::channel(false);
     let entry = Entry {
         pid: None,
+        binding: None,
+        stopping: watch::channel(false).0,
         state: Mutex::new(EntryState {
+            closing: false,
             info: TerminalInfo {
                 id: "t".into(),
                 session_id: "s".into(),

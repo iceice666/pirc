@@ -41,7 +41,7 @@ counts below this point in the U1 section describe that prior U1 slice, not all
 newer U2 changes.
 
 U4 has begun with an [internal Node admission fence](#u4-implementation-checkpoint-node-transition-admission-fence-2026-10-28)
-and tracked supervisor drain, followed by [runner-scoped inference retirement](#u4-implementation-checkpoint-runner-scoped-inference-retirement-2026-10-28). Linux process scopes now have a [durable launch journal and bounded restart reconciliation](#u4-implementation-checkpoint-durable-sandbox-launch-journal-2026-10-28). Its receipts explicitly deny revocation/installation
+and tracked supervisor drain, followed by [runner-scoped inference retirement](#u4-implementation-checkpoint-runner-scoped-inference-retirement-2026-10-28). Linux process scopes now have a [durable launch journal and bounded restart reconciliation](#u4-implementation-checkpoint-durable-sandbox-launch-journal-2026-10-28), followed by [guarded startup](#u4-implementation-checkpoint-guarded-native-linux-launch-2026-10-28) and [terminal effect-boundary checks](#u4-implementation-checkpoint-fenced-terminal-input-2026-10-28). Its receipts explicitly deny revocation/installation
 completion. No public workspace switch or new resource grant is enabled; Gateway
 coordination, OS enforcement, replacement binding and Web/App controls remain.
 
@@ -3667,3 +3667,57 @@ and preserved RPC bytes after release; it remains unexecuted on this macOS host.
 No Flutter changes, device/emulator, live provider, user browser or local Nix
 verification were needed. Work stays local. The isolated build, compiler copy and
 test artifacts are removed after validation; APKs and shared caches are preserved.
+
+## U4 implementation checkpoint: fenced terminal input (2026-10-28)
+
+After `12f82947`, each panel terminal captures its original workspace, canonical
+path and mode. Creation rechecks the controller and expected root under the same
+Node DB lock used for fence acceptance, through the shell spawn. Input and resize
+commands retain their original connection and client/lease generation while queued.
+
+Before each actual nonblocking PTY write, including after a readiness wait and
+between partial writes, Node rechecks session availability, the transition fence,
+terminal binding/mode, original control lease and connection lifetime. The DB lock
+serializes this write with takeover/fence acceptance; a separate connection gate
+serializes it with detach, and the entry lock serializes it with terminal close.
+No readiness wait holds those locks. A lost lease never silently becomes the new
+controller's authority. Delayed rejections use the existing stream error frame
+with the actual reason, retaining the previous `lost_control` message.
+
+Closing a terminal cancels its writer and drops queued commands immediately, even
+while PTY input is backpressured. Disconnecting a viewer invalidates only its own
+queued input; other viewers and sessions retain their independent authority.
+Resizes apply in queue order, change visible dimensions only after the ioctl
+succeeds, and calculate missing dimensions against the last applied size.
+
+This applies to the shared Node terminal path used by Web and paired Android;
+there are no UI, schema, protocol, version, dependency or Nix hash changes. Bytes
+already delivered to the kernel are not recalled, and shell exit does not prove
+that detached descendants terminated. Panel-terminal process containment, approved
+host commands, other admitted effects, macOS enforcement, native Linux runtime
+acceptance and target installation/Gateway coordination remain U4 requirements.
+The public switch stays disabled and completion flags remain false. U1 activation,
+remaining U2 resources, U5 collaboration and U6 proactive pots are not complete.
+
+Local validation: **504 Node library tests passed, 3 existing tests ignored**.
+After the final creation-time controller check, all **13 focused terminal tests**
+passed. Five new cases use real PTYs and Node state for stale creation, queued
+input/resize after takeover, transition/peer isolation, detach/close/deletion/mode
+or workspace changes, and a partially delivered input blocked by kernel
+backpressure. Both takeover and a transition prevent the unwritten tail from
+being delivered. Queue-order resize fallback remains covered.
+
+**10 required process cases** passed with the rebuilt final Node: terminal routes
+and streams through a real Gateway (2), relayed streams (1), transition restart
+and live terminal fencing (2), checkpoints (3), memory (1) and project deletion
+(1). The new real Node-link case receives `environment_transition_pending` for
+both typing and resize while its peer remains interactive; drain/deletion still
+preserve the existing incomplete-revocation contract.
+
+Strict Node/conformance all-target Clippy, Rust formatting, changed-document
+Prettier and diff checks passed. These are local macOS tests, not Linux kernel,
+Android OS/device or full workspace-transition acceptance. No Flutter source,
+user browser, emulator/device, live provider or local Nix verification was needed.
+Work stays local. The isolated build and test fixtures are removed after
+validation, including the two fixtures from an initial test-only lock-order
+mistake; APKs, shared SDKs/caches and other agents' work are preserved.
