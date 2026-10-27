@@ -1,10 +1,12 @@
-//! One immutable initial command, durable Stop and read-only outcome recovery.
+//! Immutable first-message attempts, durable Stop and read-only outcome recovery.
+mod retry;
 use super::*;
 use crate::{
     runner::{CommandPayload, InitialSettings},
     store::CommandStatus,
     util::payload_hash,
 };
+pub(crate) use retry::{attempt_status, retry};
 use serde_json::Value;
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -77,6 +79,14 @@ fn creation(db: &Connection, owner: &str, op: &str) -> ApiResult<Creation> {
     current(db, owner, row)
 }
 fn receipt(db: &Connection, owner: &str, op: &str) -> ApiResult<Response> {
+    receipt_for(db, owner, op, None)
+}
+fn receipt_for(
+    db: &Connection,
+    owner: &str,
+    op: &str,
+    attempt: Option<&str>,
+) -> ApiResult<Response> {
     let parent = creation(db, owner, op)?;
     let row = read(db, owner, op)?;
     if matches!(parent.state, State::Deleting | State::Deleted) {
@@ -84,11 +94,16 @@ fn receipt(db: &Connection, owner: &str, op: &str) -> ApiResult<Response> {
             json!({"admission":{"operationId":op,"sessionId":parent.session_id,"state":parent.state,"command":null,"stopRequested":true,"stopConfirmed":parent.state==State::Deleted}}),
         ));
     }
-    let command = row
-        .as_ref()
-        .and_then(|r| r.command.as_ref())
+    let command = attempt
+        .or_else(|| row.as_ref().and_then(|r| r.command.as_deref()))
         .map(|id| db.get_command(id))
         .transpose()?;
+    if command
+        .as_ref()
+        .is_some_and(|c| c.session_id != parent.session_id)
+    {
+        return Err(ApiError::conflict("Initial attempt binding changed"));
+    }
     let stop = row.as_ref().is_some_and(|r| r.stop);
     let confirmed = row.as_ref().is_some_and(|r| r.confirmed);
     let state = if confirmed {
@@ -179,10 +194,12 @@ pub(crate) async fn submit(node: crate::services::Node, request: Request) -> Api
         }
         super::pre_stop::mirror(&tx, &request.user, &parent)?;
         if let Some(prior) = read(&tx, &request.user, &op)? {
-            if prior
+            let known_attempt:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM creation_admission_attempts WHERE owner_user=?1 AND operation_id=?2 AND command_id=?3 AND input_hash=?4)",params![request.user,op,input.command_id,input.hash()],|r|r.get(0))?;
+            if (prior
                 .command
                 .as_ref()
                 .is_some_and(|id| id != &input.command_id)
+                && !known_attempt)
                 || prior
                     .hash
                     .as_ref()
@@ -196,7 +213,12 @@ pub(crate) async fn submit(node: crate::services::Node, request: Request) -> Api
                 || prior.stop
                 || matches!(parent.state, State::Deleting | State::Deleted)
             {
-                let result = receipt(&tx, &request.user, &op)?;
+                let result = receipt_for(
+                    &tx,
+                    &request.user,
+                    &op,
+                    prior.command.as_ref().map(|_| input.command_id.as_str()),
+                )?;
                 tx.commit()?;
                 return Ok(result);
             }
@@ -223,9 +245,19 @@ pub(crate) async fn submit(node: crate::services::Node, request: Request) -> Api
         )?;
         let stamp = now_ms();
         tx.execute("INSERT INTO creation_initial_admissions(owner_user,operation_id,session_id,command_id,input_hash,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?6)",params![request.user,op,parent.session_id,input.command_id,input.hash(),stamp])?;
+        tx.execute("INSERT INTO creation_admission_attempts(owner_user,operation_id,command_id,input_hash,created_at) VALUES(?1,?2,?3,?4,?5)",params![request.user,op,input.command_id,input.hash(),stamp])?;
         tx.commit()?;
         parent.session_id
     };
+    dispatch(node, &op, &request.user, input, session).await
+}
+async fn dispatch(
+    node: crate::services::Node,
+    op: &str,
+    user: &str,
+    input: Input,
+    session: String,
+) -> ApiResult<Response> {
     let settings = InitialSettings {
         provider: input.model.provider.clone(),
         model_id: input.model.id.clone(),
@@ -237,7 +269,7 @@ pub(crate) async fn submit(node: crate::services::Node, request: Request) -> Api
             &session,
             &input.command_id,
             &input.payload(),
-            &request.user,
+            user,
             (&input.client_id, input.generation),
             &settings,
         )
@@ -261,7 +293,7 @@ pub(crate) async fn submit(node: crate::services::Node, request: Request) -> Api
             )?;
         }
     }
-    receipt(&node.db.lock(), &request.user, &op)
+    receipt_for(&node.db.lock(), user, op, Some(&input.command_id))
 }
 pub(crate) async fn status(node: crate::services::Node, request: Request) -> ApiResult<Response> {
     let op = request

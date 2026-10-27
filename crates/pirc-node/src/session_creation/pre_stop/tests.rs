@@ -369,7 +369,7 @@ fn migration_from_2007_preserves_existing_admission_and_storage() {
     let storage = dir.path().join(&creation.session_id).join("session.jsonl");
     std::fs::write(&storage, "existing history").unwrap();
     db.lock()
-        .execute_batch("DROP TABLE creation_pre_stops; PRAGMA user_version=2007;")
+        .execute_batch("DROP TABLE creation_admission_attempts; DROP TABLE creation_pre_stops; PRAGMA user_version=2007;")
         .unwrap();
     drop(db);
     let db = Db::open(&path).unwrap();
@@ -377,7 +377,7 @@ fn migration_from_2007_preserves_existing_admission_and_storage() {
         .lock()
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .unwrap();
-    assert_eq!(version, 2008);
+    assert_eq!(version, crate::store::SCHEMA_VERSION);
     assert_eq!(count(&db.lock(), "creation_pre_stops"), 0);
     assert_eq!(db.lock().get_command("first-command").unwrap(), command);
     assert_eq!(flags(&db.lock(), &creation.session_id), (false, false));

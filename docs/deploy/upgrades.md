@@ -1,5 +1,28 @@
 # Upgrades
 
+## Unreleased local checkpoint: Node rejected-admission retries
+
+Node schema **2009** adds immutable first-message attempt/predecessor identities
+and backfills existing initial command/hash metadata. Gateway remains **1018**;
+protocol **15**, package/dependency versions and Nix hashes are unchanged.
+Stop the old Node and take a complete consistent state backup before a future
+upgrade. Older Nodes refuse 2009; restore matching full state and binaries for
+rollback, never change SQLite `user_version` to force it.
+
+The new trusted Node API permits an explicit fresh command only after its exact
+current predecessor is durably rejected, with identical input/model/files and
+valid current mode/control. It reuses the same session and attachments. Attempts
+in progress, accepted, unknown or stopped cannot be replaced. Duplicate retries
+and historical lookups read receipts only; restart never replays unacknowledged
+work. Stop/deletion still fence the whole original first-message operation.
+
+**Gateway/Web/Android have not adopted this retry API yet.** Existing App behavior
+and production `canSubmit: false` stay unchanged. The real Node/Agent test proves
+a known pre-message startup failure, repair/restart and one persisted user message;
+it is not blanket permission to reopen an uncertain/corrupt journal. Complete
+client-to-Gateway/Node and device acceptance remain open. No deployment, APK or
+release asset is included.
+
 ## Unreleased local checkpoint: unsent edit recovery
 
 Web/Android preserve a stale editor's text/settings/selected file bytes as an

@@ -1892,6 +1892,79 @@ revocation, canonical tasks/collaboration and bounded pots stages stay open. No
 full Flutter suite, emulator, device, Nix, APK, push, deployment or Release is used.
 Only this run's isolated output, temporary profiles and logs are removed afterward.
 
+## U1 implementation checkpoint: Node rejected-admission retry foundation (2026-10-27)
+
+Implemented locally as the Node foundation for useful known-failure recovery.
+Node schema advances to **2009**; Gateway remains **1018**, protocol 15, package
+versions, dependency locks and Nix hashes are unchanged. **`canSubmit: false`
+remains in effect. Gateway/Web/Android retry integration and U1 are not complete.**
+
+- Node advertises `canRetryInitialAdmission: true`. The new trusted-link endpoint
+  `POST /api/session-creations/{id}/admission/retry` takes
+  `{previousCommandId, admission}`; `admission` is the full original immutable
+  input plus a new `commandId` and current `{clientId, generation}`. It does not
+  allocate a conversation, move its binding, re-upload files or replace the input.
+- One immediate SQLite transaction validates ownership, ready storage, unchanged
+  submission/model/thinking/text/upload IDs, the exact current predecessor, its
+  durable **rejected** command status, current mode and the held control lease.
+  Only then does it reserve a new command and advance the current attempt pointer.
+  Pending, accepted, outcome-unknown, deleted or stopped work cannot become a new
+  attempt. Competing new IDs for the same predecessor have one winner.
+- `creation_admission_attempts` stores immutable owner/creation/command/input-hash,
+  predecessor and time only. It backfills existing nonempty initial command
+  identities during migration; prompt/files stay in their existing stores.
+  Reusing an attempt identity returns its own read-only receipt without invoking
+  the runner or renewing control. Changed content/predecessor conflicts. A late
+  original POST is also only its old-attempt receipt, not an alias for execution.
+- `GET /api/session-creations/{id}/admission` keeps reporting the current attempt;
+  `GET /api/session-creations/{id}/admission/attempts/{commandId}` reads an owned
+  historical attempt. Results retain the creation's global Stop/deletion facts.
+  The existing command/Stop enqueue lock checks the current attempt ID, so old
+  enqueues cannot run after replacement and Stop cannot miss a late retry.
+  Startup marks an unacknowledged current retry unknown; it never replays it.
+- Older Node binaries refuse schema 2009. Rollback needs the full matching state
+  backup and binary, including session/file state, not an edited `user_version`.
+  Existing initial-request and ordinary command APIs retain their behavior.
+  This Node-only endpoint adds no client permission or automatic retry loop.
+
+Validation: **447 Node library tests pass**, with the same three existing ignored
+subprocess/PTY helpers; no new ignore or real-host test is enabled. Coverage
+includes all historical migrations, predecessor/owner/input checks, competing
+attempt IDs, Stop/control refusal, per-attempt receipts and startup uncertainty.
+Strict Node/conformance Clippy passes with `--all-targets -- -D warnings`.
+**Three real Node-process cases pass**: existing transfer/crash/deletion and
+pre-allocation Stop cases, plus the new Node/Agent retry proof. The new case
+provokes a known pre-message rejection with an unavailable synthetic model
+catalog, repairs it, explicitly restarts the fixture and retries with a fresh
+lease. Creation/session and upload IDs stay identical; the actual Agent JSONL
+contains exactly one user message, a duplicate adds none, and the original
+rejected receipt remains queryable. This is not a simulated accepted response.
+The trusted Gateway is a local fake link; no provider/browser is contacted.
+
+Required next delivery:
+
+1. Add Gateway durable retry identity/predecessor/command history and atomic
+   eligibility/current-grant/lease checks; require the Node retry capability.
+   Keep the accepted input and public/Node conversation identities unchanged.
+2. Reconcile each attempt without replay. Late replies for an older attempt must
+   not overwrite the current receipt or turn an unknown new attempt into a known
+   rejection. Record reservation before relay; a crash/lost response remains an
+   explicit read/Stop recovery case, not permission for an automatic new attempt.
+3. Web/native Android must persist the exact retry identity and predecessor before
+   an explicit Retry action, retain original files, and query unknown results.
+   Retry must use the same conversation; a private new-draft copy is not a
+   replacement for this first-message recovery operation.
+4. Verify real Gateway/Node/Agent and both clients, competing devices, lost replies,
+   restart, grant/control revocation, Stop/deletion and retained attachments.
+   Generic storage/journal reopening still needs its own proof; this known
+   pre-message-failure case does not authorize reopening an uncertain append.
+
+The broader client/device/failure and activation gates from preceding checkpoints
+remain open, as do later bindings, mounts, canonical collaboration and proactive
+pots. No Flutter change or test, device, Nix check, APK, push, deployment or Release
+is included. Only this run's isolated build/logs are removed after verification;
+SDKs, existing APKs, shared output and other agents' files stay intact.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

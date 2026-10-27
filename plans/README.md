@@ -174,6 +174,14 @@ overwrites another editor's copy. Common navigation waits for persistence; nativ
 byte copying remains account-scoped and local. 508 Web, 40 native JVM and 21 focused
 Flutter tests pass, plus a real two-page/browser-restart storage proof. Full U1
 client/process/device, cleanup-race and activation gates remain open.
+The [Node rejected-admission retry foundation](unified-conversations.md#u1-implementation-checkpoint-node-rejected-admission-retry-foundation-2026-10-27)
+adds Node schema 2009's attempt/predecessor history and a held-lease retry only
+after a known rejection. It retains the same conversation/input/files, preserves
+old receipts and never replays unknown work. 447 Node tests (three existing helper
+ignores), strict Node/conformance Clippy and three Node-process cases pass; the
+new actual Agent journal proof contains one user message after failure/restart/
+retry. Gateway persistence and Web/Android retry adoption are the next required
+delivery; production activation and all later architecture stages remain open.
 The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
 records local fixture/transcript repairs and 50 Agent plus five Node process
 passes; the remote Check is still failed, and full Chromium/Linux verification
