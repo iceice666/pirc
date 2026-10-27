@@ -60,6 +60,8 @@ impl Masker {
         // Neither a longer hex run nor part of a UUID or other dashed id.
         let edge =
             |b: Option<&u8>| b.is_none_or(|b| !hex(*b) && *b != b'-' && !b.is_ascii_alphanumeric());
+        // Timestamps must be complete numeric tokens, not digits within an id.
+        let epoch_edge = |b: Option<&u8>| edge(b) && b != Some(&b'_');
         let mut out = String::with_capacity(text.len());
         let mut at = 0;
         while at < bytes.len() {
@@ -91,8 +93,8 @@ impl Masker {
             // Epoch milliseconds inside text (JSON a script returned).
             if at + 13 <= bytes.len()
                 && bytes[at..at + 13].iter().all(u8::is_ascii_digit)
-                && (at == 0 || !bytes[at - 1].is_ascii_digit())
-                && bytes.get(at + 13).is_none_or(|b| !b.is_ascii_digit())
+                && epoch_edge(if at == 0 { None } else { bytes.get(at - 1) })
+                && epoch_edge(bytes.get(at + 13))
                 && text[at..at + 13]
                     .parse::<u64>()
                     .is_ok_and(|ms| (1_500_000_000_000..=2_500_000_000_000).contains(&ms))
