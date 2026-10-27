@@ -35,7 +35,7 @@ pub(crate) fn connected() -> ConnectedNode {
     }
 }
 pub(crate) fn caps() -> Value {
-    json!({"version":1,"canAllocate":true,"canTransferAttachments":true,"attachmentMimeInQuery":true,"canAdmitFirstMessage":true,"canReadFirstMessageReceipt":true,"canCancelCreation":true,"maxUploadBytes":1024,"maxAttachments":16})
+    json!({"version":1,"canAllocate":true,"canTransferAttachments":true,"attachmentMimeInQuery":true,"canAdmitFirstMessage":true,"canReadFirstMessageReceipt":true,"canCancelCreation":true,"canStopBeforeAllocation":true,"maxUploadBytes":1024,"maxAttachments":16})
 }
 pub(crate) fn fake(request: &NodeHttpRequest) -> NodeHttpResponse {
     let value = if request.url.ends_with("/capabilities") {
@@ -877,4 +877,32 @@ fn expiry_and_acceptance_serialize_without_expiring_accepted_files() {
             assert_eq!(row.submission.unwrap().message, "Keep this first message");
         }
     }
+}
+
+#[tokio::test]
+async fn a_node_without_pre_allocation_stop_support_cannot_accept_a_new_intent() {
+    let (app, _dir) = app();
+    model(&app);
+    prepared(&app, false);
+    app.nodes.set_test_node(connected(), |r| {
+        assert_eq!(r.method, HttpMethod::Get);
+        assert!(r.url.ends_with("/capabilities"));
+        let mut old = caps();
+        old.as_object_mut()
+            .unwrap()
+            .remove("canStopBeforeAllocation");
+        Ok(NodeHttpResponse {
+            status: 200,
+            body: Some(old),
+        })
+    });
+    assert_eq!(
+        accept_intent(&app, &identity(), "draft-1")
+            .await
+            .unwrap_err()
+            .code,
+        "first_send_unsupported"
+    );
+    assert_eq!(count(&app.db.lock(), "sessions"), 0);
+    assert!(!lookup(&app.db.lock(), "alice", "draft-1").unwrap().accepted);
 }

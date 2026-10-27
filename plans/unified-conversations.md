@@ -1622,6 +1622,78 @@ frontend change, Flutter test, APK build, emulator, device, Nix validation,
 push, deployment or Release is part of this Node foundation. All later goal
 stages and the other U1 gates listed above remain open.
 
+## U1 implementation checkpoint: Gateway queued pre-allocation Stop (2026-10-27)
+
+Implemented locally on top of the Node 2008 fence. Gateway schema **1017** adds
+an operation-scoped Stop-control lease and durable Stop jobs; Node schema 2008,
+protocol 15, versions/dependency locks and Nix hashes are unchanged. **U1 stays
+in progress and `canSubmit: false` remains in effect.** Web/Android have not yet
+adopted these new Stop endpoints.
+
+- `POST /api/conversation-submissions/{operation}/stop-control/acquire` grants a
+  **30-second `pending_first_send_stop` scope**, with explicit force takeover and
+  monotonic generations. GET `.../stop-control` only reads it, and POST
+  `.../stop-control/release` expires it. It is owner/account-scoped, requires a
+  live initiating identity and never acquires, renews or impersonates Node
+  command control. Another active client requires explicit takeover.
+- POST `.../stop` consumes that current lease and persists the Stop/job together
+  with the original dispatch fence, before any Node request. It is available
+  only for an accepted intent with no Node mapping or first-command intake.
+  If mapping wins first, `session_control_required` directs the caller to the
+  existing fresh Node lease/Stop flow. No authority silently changes scope.
+- The worker negotiates Node support and retries only the immutable creation
+  Stop; it cannot send a prompt or abort later work. The accepted job survives
+  Gateway restart and initiating-device revocation. GET `.../receipt` reconciles
+  via Node GET only, with no hidden lease acquisition or Stop POST. Offline,
+  unsupported or invalid receipts remain visibly unconfirmed; no replay occurs.
+  New acceptance now requires Node `canStopBeforeAllocation: true`, failing
+  before publication if the selected Node cannot honor this workflow.
+- Operation/workspace/manifest/known mapping must match before confirmation.
+  Stop completion releases only the pending-input gate. Node command leases,
+  current mode/owner checks and memory/checkpoint rules still apply. Delete
+  supersedes the queued Stop and a late Stop receipt cannot revive its source.
+- Responses include `nodeMapped`, independent of the admission/Stop phase.
+  Confirmed Stop need not imply a Node session exists. Explicit POST
+  `.../materialize` after confirmation prepares the same blank conversation
+  under freshly checked grants, without sending the original message or
+  promoting its original attachments. The frozen input and Gateway file bytes
+  remain retained; the seven-day unaccepted-staging deadline does not apply.
+
+Validation: **303 Gateway tests pass** (19 added cases: 16 pending Stop/control
+cases, one capability-negotiation refusal and two ordinary Stop/admission receipt
+regressions). Coverage includes independent SQLite connections, takeover/stale
+leases, device revocation, restart/reopen, deletion races, removed mode, mapping
+races, identity proofs and 1016-to-1017 plus historical schema migrations.
+Confirmed Stop and message-admission knowledge remain separate: unknown original
+admission still reconciles after Stop, and a pending later Stop still reconciles
+after known admission. A weaker late empty receipt cannot turn an unknown
+admission into a fabricated non-admission by reusing an older Stop flag.
+
+**Seven required real-process tests pass** across creation, admission,
+cancellation and Stop. The new paired-client Gateway/Node/Agent proof uses two
+devices, explicit takeover while Node is offline, Gateway hard restart, revocation
+of the initiating device, Node reconnect and durable Stop confirmation. Explicit
+blank continuation retains exact original file bytes, creates no old attachment
+upload and runs only a deliberate new message under a fresh Node lease. Node and
+Gateway are restarted again; history contains the new input and no old
+input, and no duplicate provider request occurs. A synthetic local provider and
+HTTP fixtures supply all input; there is no live Web page/event connection, real
+provider traffic or Android device in this proof. Existing first-admission and
+attachment/deletion process regressions also pass. Strict Gateway/conformance
+Clippy (`--all-targets -- -D warnings`), targeted Rust formatting and diff checks
+pass. Only this run's isolated Rust target/logs are removed; existing APKs,
+SDKs, browser caches, user data and other agents' artifacts are retained.
+
+Remaining U1: Web/native Android/Flutter must adopt scoped pending Stop and
+`nodeMapped`, handle a mapping race by asking for the proper Node control, and
+explicitly continue into the stopped blank conversation. Complete the remaining
+client/process/account/permission failure matrix, usable known-admission-failure
+recovery with files and unsaved-edit preservation when another window accepts
+an operation. Actual Android process-death/filesystem acceptance is still open.
+Later binding, revocation, canonical collaboration and bounded pots stages stay
+open. This checkpoint stays local; no frontend redesign, Flutter test, APK build,
+emulator/device, Nix check, push, deployment or Release is included.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

@@ -5,11 +5,13 @@ mod acceptance;
 mod attachments;
 mod cancellation;
 mod dispatch;
+mod pre_stop;
 pub(crate) use acceptance::require_initial_submission_complete;
 pub(crate) use cancellation::try_delete;
 pub(crate) fn start_cleanup(app: &AppState) {
     attachments::start_cleanup(app);
     cancellation::start_cleanup(app);
+    pre_stop::start(app);
 }
 pub(crate) use dispatch::{note_stop, observe_stop};
 
@@ -155,6 +157,8 @@ struct Preparation {
     state: Phase,
     /// True only after validated intent/session publication committed together.
     accepted: bool,
+    /// Validated Node mapping, independent of dispatch/Stop state.
+    node_mapped: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     accepted_at: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -182,11 +186,12 @@ fn lookup(db: &Connection, owner: &str, operation: &str) -> ApiResult<Preparatio
             let state=match state.as_str() { "preparing"=>Phase::Preparing,"cancelled"=>Phase::Cancelled,_=>return Err(rusqlite::Error::InvalidQuery) };
             let raw:Option<String>=r.get(4)?;
             let submission=raw.map(|raw|serde_json::from_str(&raw)).transpose().map_err(|_|rusqlite::Error::InvalidQuery)?;
-            Ok(Preparation { operation_id:r.get(0)?,session_id:r.get(1)?,workspace_id:r.get(2)?,state,accepted:false,accepted_at:None,delivery_error:None,message_admission:None,submission,hash:r.get(5)?,staged_attachment_ids:vec![],attachments_expires_at:r.get(6)?,attachments_expired_at:r.get(7)?,cleanup_pending:false,cleanup_error:None })
+            Ok(Preparation { operation_id:r.get(0)?,session_id:r.get(1)?,workspace_id:r.get(2)?,state,accepted:false,node_mapped:false,accepted_at:None,delivery_error:None,message_admission:None,submission,hash:r.get(5)?,staged_attachment_ids:vec![],attachments_expires_at:r.get(6)?,attachments_expired_at:r.get(7)?,cleanup_pending:false,cleanup_error:None })
         }
     ).optional()?.ok_or_else(||ApiError::not_found("Submission not found"))?;
     if let Some((phase, stamp, error)) = acceptance::summary(db, owner, operation)? {
         row.accepted = true;
+        row.node_mapped=db.query_row("SELECT node_session_id IS NOT NULL FROM conversation_submission_acceptances WHERE owner_user=?1 AND operation_id=?2",params![owner,operation],|r|r.get(0))?;
         row.accepted_at = Some(stamp);
         row.delivery_error = error;
         row.state = match phase.as_str() {
@@ -276,6 +281,7 @@ pub fn router() -> Router<AppState> {
         .merge(attachments::routes())
         .merge(acceptance::routes())
         .merge(dispatch::routes())
+        .merge(pre_stop::routes())
         .route(
             "/api/conversation-submissions/capabilities",
             get(capabilities),
@@ -294,7 +300,7 @@ async fn capabilities(Extension(identity): Extension<Identity>) -> axum::Json<Va
     // Existing clients stay on their current flow until durable client recovery
     // and the multi-client failure table are verified.
     axum::Json(
-        json!({"version":1,"ownerUser":identity.user,"canFenceAccount":true,"canFindPendingSession":true,"canPrepare":true,"canStageAttachments":true,"canAcceptIntent":true,"canMaterialize":true,"canDispatchFirstMessage":true,"canCancelCreation":true,"attachmentRetentionDays":7,"canSubmit":false}),
+        json!({"version":1,"ownerUser":identity.user,"canFenceAccount":true,"canFindPendingSession":true,"canPrepare":true,"canStageAttachments":true,"canAcceptIntent":true,"canMaterialize":true,"canDispatchFirstMessage":true,"canCancelCreation":true,"canStopBeforeAllocation":true,"attachmentRetentionDays":7,"canSubmit":false}),
     )
 }
 async fn pending_for_session(

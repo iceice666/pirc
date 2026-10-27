@@ -265,6 +265,7 @@ async fn supported(
         || caps["canAdmitFirstMessage"] != true
         || caps["canReadFirstMessageReceipt"] != true
         || caps["canCancelCreation"] != true
+        || caps["canStopBeforeAllocation"] != true
         || caps["maxAttachments"]
             .as_u64()
             .is_none_or(|n| n < spec.attachments.len() as u64)
@@ -432,7 +433,7 @@ pub(super) async fn advance(
     identity: &Identity,
     op: &str,
 ) -> ApiResult<Preparation> {
-    let (row, target) = {
+    let (row, target, blank) = {
         let db = app.db.lock();
         let row = lookup(&db, &identity.user, op)?;
         if !row.accepted {
@@ -442,13 +443,18 @@ pub(super) async fn advance(
                 "Accept the validated intent first",
             ));
         }
-        if row.state != Phase::Accepted {
+        // This POST is an explicit continuation after confirmed Stop. Prepare
+        // the same blank storage, retaining the original input/staging without
+        // promoting its attachments or attempting its first command again.
+        let blank = row.state == Phase::Stopped;
+        let ready = summary(&db, &identity.user, op)?.is_some_and(|s| s.0 == "ready");
+        if (row.state != Phase::Accepted && !blank) || (blank && ready) {
             return Ok(row);
         }
         require_caller(app, &db, identity)?;
         let target = target(&db, &identity.user, op)?;
         require_current(app, &db, &identity.user, &row, &target)?;
-        (row, target)
+        (row, target, blank)
     };
     let remote=response(app.relay(&target.node,identity,HttpMethod::Post,"/api/session-creations".into(),Some(json!({"operationId":target.creation,"workspaceId":target.workspace,"submissionHash":target.hash}))).await?, "allocation")?;
     let creation = &remote["creation"];
@@ -465,11 +471,13 @@ pub(super) async fn advance(
     }
     publish_mapping(app, identity, op, &session)?;
     let mut uploads = Vec::new();
-    for item in &row
+    for item in row
         .submission
         .as_ref()
         .ok_or_else(pending_error)?
         .attachments
+        .iter()
+        .filter(|_| !blank)
     {
         let app_for_read = app.clone();
         let owner = identity.user.clone();
@@ -547,6 +555,10 @@ pub(super) async fn advance(
         return Err(pending_error());
     }
     tx.require_session_available(&current.session_id)?;
+    if blank {
+        require_caller(app, &tx, identity)?;
+        require_current(app, &tx, &identity.user, &current, &target)?;
+    }
     tx.execute("UPDATE conversation_submission_acceptances SET phase='ready',upload_ids_json=?3,last_error_code=NULL,updated_at=?4 WHERE owner_user=?1 AND operation_id=?2 AND phase='accepted'",params![identity.user,op,serde_json::to_string(&uploads).map_err(|_|ApiError::internal())?,now_ms()])?;
     let row = lookup(&tx, &identity.user, op)?;
     tx.commit()?;

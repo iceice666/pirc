@@ -9,7 +9,7 @@ use pirc_protocol::HttpMethod;
 pub(super) struct MessageAdmission {
     outcome: String,
     stop_requested: bool,
-    stop_confirmed: bool,
+    pub(super) stop_confirmed: bool,
 }
 struct Record {
     command: String,
@@ -259,7 +259,11 @@ fn apply(app: &AppState, identity: &Identity, op: &str, evidence: &Value) -> Api
             "outcome_unknown" => ("outcome_unknown", "outcome_unknown"),
             _ => return Err(invalid_receipt()),
         }
-    } else if confirmed {
+    } else if evidence["stopConfirmed"] == true
+        || (previous.confirmed && previous.outcome == "not_admitted")
+    {
+        // A stale empty receipt cannot combine with an earlier Stop flag to
+        // prove non-admission of a command whose outcome was still unknown.
         ("stopped", "not_admitted")
     } else {
         ("outcome_unknown", "outcome_unknown")
@@ -335,15 +339,25 @@ fn failure(app: &AppState, identity: &Identity, op: &str, code: &str) -> ApiResu
 }
 
 async fn reconcile(app: &AppState, identity: &Identity, op: &str) -> ApiResult<Preparation> {
-    let (row, target, has_record) = {
+    let (row, target, record) = {
         let db = app.db.lock();
         let row = lookup(&db, &identity.user, op)?;
         let target = target(&db, &identity.user, op)?;
-        let has = read(&db, &identity.user, op)?.is_some();
-        (row, target, has)
+        let record = read(&db, &identity.user, op)?;
+        (row, target, record)
     };
-    if row.state == Phase::Cancelled || !has_record || row.state == Phase::Admitted {
+    if row.state == Phase::Cancelled
+        || record.is_none()
+        || (row.state == Phase::Admitted
+            && !record.as_ref().is_some_and(|r| r.stop && !r.confirmed))
+        // Only a never-dispatched input can finish reconciliation here. A
+        // confirmed ordinary Stop does not resolve an earlier unknown admission.
+        || record.as_ref().is_some_and(|r| r.hash.is_none() && r.confirmed)
+    {
         return Ok(row);
+    }
+    if pre_stop::pending(&app.db.lock(), &identity.user, op)? {
+        return pre_stop::reconcile(app, &identity.user, op).await;
     }
     let result = app
         .relay(

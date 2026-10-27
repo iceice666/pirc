@@ -147,6 +147,13 @@ Node schema 2008 serializes it with allocation and initial command intake; it
 neither deletes history nor aborts later work. Gateway pending Stop authorization,
 queuing and Web/Android adoption remain open, so `canSubmit` stays false. This
 is a local Node foundation, not completed client acceptance.
+The [Gateway queued-Stop checkpoint](unified-conversations.md#u1-implementation-checkpoint-gateway-queued-pre-allocation-stop-2026-10-27)
+adds Gateway schema 1017: a separate Stop-only pending-input control lease,
+durable offline/restart recovery, read-only receipts and explicit blank
+continuation with original input/files retained. Node mapping readiness is
+reported separately from Stop. New acceptance requires Node 2008's Stop support.
+Web/Android adoption and the remaining U1 failure gates stay open; activation
+remains closed and all work stays local.
 The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
 records local fixture/transcript repairs and 50 Agent plus five Node process
 passes; the remote Check is still failed, and full Chromium/Linux verification

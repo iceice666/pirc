@@ -1,5 +1,31 @@
 # Upgrades
 
+## Unreleased local checkpoint: Gateway queued pre-allocation Stop
+
+Gateway schema **1017** adds pending-input Stop control and durable Stop jobs;
+Node schema **2008**, protocol 15, package versions and dependencies are unchanged.
+Back up Gateway state before any future upgrade; older Gateway binaries refuse
+1017. Rollback needs the full matching backup rather than an edited `user_version`.
+
+The new operation control scope is `pending_first_send_stop`, valid for 30 seconds
+and usable only before a Node mapping exists. It cannot authorize Node commands.
+Mapping races require the existing Node control/Stop flow. Once authorized, the
+job survives offline periods, Gateway restart and initiating-device revocation;
+only a validated Node acknowledgement confirms Stop. New first-send acceptance
+requires the Node's `canStopBeforeAllocation` capability; older Nodes are refused
+before intent/session publication. Existing accepted operations may still show
+pending/unsupported until their Node supports the fence.
+
+Explicit materialization after confirmed Stop may prepare the same blank
+conversation under current grants. It never replays the original input or
+promotes the stopped input's files; text/staged bytes remain retained and Delete
+keeps its existing separate authorization and memory cleanup. `nodeMapped` tells
+clients whether mapping is known independently of the Stop phase.
+
+Web/Android adoption and full U1 client/device acceptance are not complete.
+**`canSubmit: false` remains in effect**. No deployment, release asset, UI redesign
+or new device connection scheme is included.
+
 ## Unreleased local checkpoint: Node pre-allocation Stop foundation
 
 Node schema **2008** adds a durable first-message Stop that may precede Node

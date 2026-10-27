@@ -389,7 +389,7 @@ async fn migration_from_1014_preserves_pending_acceptance_and_existing_commands(
         let db = app.db.lock();
         db.receive_command("legacy-command", &session, "hash", &json!({"type":"stop"}))
             .unwrap();
-        db.execute_batch("DROP TRIGGER submission_remote_cancelled; DROP TABLE conversation_submission_remote_cleanup; DROP TRIGGER submission_dispatch_cancelled; DROP TABLE conversation_submission_dispatches; PRAGMA user_version=1014;").unwrap();
+        db.execute_batch("DROP TRIGGER submission_pre_stop_cancelled; DROP TABLE conversation_submission_pending_stops; DROP TABLE conversation_submission_stop_controls; DROP TRIGGER submission_remote_cancelled; DROP TABLE conversation_submission_remote_cleanup; DROP TRIGGER submission_dispatch_cancelled; DROP TABLE conversation_submission_dispatches; PRAGMA user_version=1014;").unwrap();
     }
     drop(app);
     let db = Db::open(&path).unwrap();
@@ -455,4 +455,114 @@ async fn a_late_network_error_cannot_undo_a_confirmed_stop() {
     let row = lookup(&app.db.lock(), "alice", "draft-1").unwrap();
     assert_eq!(row.state, Phase::Stopped);
     assert_eq!(row.message_admission.unwrap().outcome, "not_admitted");
+}
+
+#[tokio::test]
+async fn confirmed_stop_does_not_prevent_reconciling_an_unknown_original_admission() {
+    let (app, _dir, session) = ready(false).await;
+    let send = reserve(&app, &identity(), "draft-1", &control())
+        .unwrap()
+        .unwrap();
+    let mut stopped = evidence(&send.request, "outcome_unknown");
+    stopped["operationId"] = json!(operation(&app));
+    stopped["state"] = json!("stopped");
+    stopped["stopRequested"] = json!(true);
+    stopped["stopConfirmed"] = json!(true);
+    apply(&app, &identity(), "draft-1", &stopped).unwrap();
+    let prior = lookup(&app.db.lock(), "alice", "draft-1").unwrap();
+    assert_eq!(prior.state, Phase::Stopped);
+    assert_eq!(prior.message_admission.unwrap().outcome, "outcome_unknown");
+    let weaker = json!({"operationId":operation(&app),"sessionId":"session-stable","state":"not_submitted","command":null,"stopRequested":false,"stopConfirmed":false});
+    set_node(&app, weaker, false);
+    let (_, still_unknown) = call(
+        &app,
+        "GET",
+        "/api/conversation-submissions/draft-1/receipt",
+        Some("alice"),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(
+        still_unknown["preparation"]["messageAdmission"]["outcome"],
+        "outcome_unknown"
+    );
+    assert_eq!(
+        still_unknown["preparation"]["messageAdmission"]["stopConfirmed"],
+        true
+    );
+    let mut accepted = evidence(&send.request, "accepted");
+    accepted["operationId"] = json!(operation(&app));
+    let calls = set_node(&app, accepted, false);
+    app.db.lock().execute("DELETE FROM leases", []).unwrap();
+    let (code, body) = call(
+        &app,
+        "GET",
+        "/api/conversation-submissions/draft-1/receipt",
+        Some("alice"),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(code, 200, "{body}");
+    assert_eq!(body["preparation"]["state"], "admitted");
+    assert_eq!(
+        body["preparation"]["messageAdmission"]["outcome"],
+        "admitted"
+    );
+    assert_eq!(
+        body["preparation"]["messageAdmission"]["stopConfirmed"],
+        true
+    );
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![(
+            HttpMethod::Get,
+            format!("/api/session-creations/{}/admission", operation(&app))
+        )]
+    );
+    assert!(app.db.lock().get_lease(&session).unwrap().is_null());
+}
+
+#[tokio::test]
+async fn known_admission_still_reconciles_an_unconfirmed_later_stop() {
+    let (app, _dir, session) = ready(false).await;
+    let send = reserve(&app, &identity(), "draft-1", &control())
+        .unwrap()
+        .unwrap();
+    let mut accepted = evidence(&send.request, "accepted");
+    accepted["operationId"] = json!(operation(&app));
+    apply(&app, &identity(), "draft-1", &accepted).unwrap();
+    note_stop(&app.db.lock(), &session, "alice").unwrap();
+    accepted["stopRequested"] = json!(true);
+    accepted["stopConfirmed"] = json!(true);
+    let calls = set_node(&app, accepted, false);
+    app.db.lock().execute("DELETE FROM leases", []).unwrap();
+    let (code, body) = call(
+        &app,
+        "GET",
+        "/api/conversation-submissions/draft-1/receipt",
+        Some("alice"),
+        None,
+        None,
+    )
+    .await;
+    assert_eq!(code, 200, "{body}");
+    assert_eq!(body["preparation"]["state"], "admitted");
+    assert_eq!(
+        body["preparation"]["messageAdmission"]["outcome"],
+        "admitted"
+    );
+    assert_eq!(
+        body["preparation"]["messageAdmission"]["stopConfirmed"],
+        true
+    );
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![(
+            HttpMethod::Get,
+            format!("/api/session-creations/{}/admission", operation(&app))
+        )]
+    );
+    assert!(app.db.lock().get_lease(&session).unwrap().is_null());
 }
