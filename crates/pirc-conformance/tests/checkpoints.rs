@@ -15,6 +15,13 @@ use serde_json::{Value, json};
 
 type Headers = Vec<(&'static str, String)>;
 
+// Each fixture has an independent HOME/registry, but Linux's /proc/net/unix
+// spans them all. A sibling fixture tearing down its inference socket while
+// another builds a native sandbox can fail the latter's deny mount. Serialize
+// fixture lifetimes (as the dedicated native CI does), not the concurrent
+// devices, writers, or requests exercised inside each scenario.
+static NATIVE_FIXTURE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 fn native_available() -> bool {
     let available = if cfg!(target_os = "macos") {
         Path::new("/usr/bin/sandbox-exec").exists()
@@ -245,6 +252,7 @@ fn tree(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn native_recovery_preserves_dirty_git_and_continues_once_across_devices_and_restarts() {
+    let _fixture = NATIVE_FIXTURE.lock().await;
     let Some(mut cluster) = cluster().await else {
         return;
     };
@@ -573,6 +581,7 @@ async fn native_recovery_preserves_dirty_git_and_continues_once_across_devices_a
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn stale_previews_and_conflicts_require_fresh_review_and_preserve_later_writes() {
+    let _fixture = NATIVE_FIXTURE.lock().await;
     let Some(cluster) = cluster().await else {
         return;
     };
@@ -698,6 +707,7 @@ async fn stale_previews_and_conflicts_require_fresh_review_and_preserve_later_wr
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn killed_node_marks_unfinished_capture_incomplete_instead_of_inventing_a_postimage() {
+    let _fixture = NATIVE_FIXTURE.lock().await;
     let Some(mut cluster) = cluster().await else {
         return;
     };
