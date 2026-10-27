@@ -109,6 +109,18 @@ impl Link {
     }
 }
 
+/// In-process identity of one registered connection, never a reusable Node ID.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct NodeConnection(u64);
+
+fn connection_changed() -> ApiError {
+    ApiError::new(
+        409,
+        "node_connection_changed",
+        "The Node reconnected; check the saved operation before continuing",
+    )
+}
+
 /// A registered node as `/api/nodes` lists it.
 #[derive(Clone, Debug)]
 pub struct ConnectedNode {
@@ -180,6 +192,8 @@ struct State {
     connections: HashMap<String, Connection>,
     #[cfg(test)]
     test_connections: HashMap<String, ConnectedNode>,
+    #[cfg(test)]
+    test_connection_ids: HashMap<String, NodeConnection>,
     #[cfg(test)]
     test_request: Option<Arc<dyn Fn(NodeHttpRequest) -> ApiResult<NodeHttpResponse> + Send + Sync>>,
     #[cfg(test)]
@@ -306,6 +320,10 @@ impl NodeRegistry {
         request: impl Fn(NodeHttpRequest) -> ApiResult<NodeHttpResponse> + Send + Sync + 'static,
     ) {
         let mut state = self.lock();
+        state.test_connection_ids.insert(
+            node.id.clone(),
+            NodeConnection(self.next_link.fetch_add(1, Ordering::Relaxed)),
+        );
         state.test_connections.insert(node.id.clone(), node);
         state.test_request = Some(Arc::new(request));
     }
@@ -404,6 +422,39 @@ impl NodeRegistry {
         }
     }
 
+    /// Capture the connection whose capabilities are about to be checked.
+    pub(crate) fn connection(&self, node_id: &str) -> ApiResult<NodeConnection> {
+        let state = self.lock();
+        #[cfg(test)]
+        if let Some(id) = state.test_connection_ids.get(node_id) {
+            return Ok(*id);
+        }
+        Ok(NodeConnection(Self::link_of(&state, node_id)?.id))
+    }
+
+    /// Reject a completed probe whose connection has already been replaced,
+    /// before reserving a command. The send itself checks atomically again.
+    pub(crate) fn require_connection(
+        &self,
+        node_id: &str,
+        expected: NodeConnection,
+    ) -> ApiResult<()> {
+        if self.connection(node_id)? != expected {
+            return Err(connection_changed());
+        }
+        Ok(())
+    }
+
+    /// Send only to the connection that supplied the checked capabilities.
+    pub(crate) async fn request_on(
+        &self,
+        node_id: &str,
+        connection: NodeConnection,
+        data: NodeHttpRequest,
+    ) -> ApiResult<NodeHttpResponse> {
+        self.request_scoped(node_id, Some(connection), data).await
+    }
+
     /// Replay an HTTP request on the node. `Ok` with the node's status and
     /// body (4xx/5xx included); `Err` only when the transport fails, in
     /// which case the outcome on the node is unknown.
@@ -412,10 +463,27 @@ impl NodeRegistry {
         node_id: &str,
         data: NodeHttpRequest,
     ) -> ApiResult<NodeHttpResponse> {
+        self.request_scoped(node_id, None, data).await
+    }
+
+    async fn request_scoped(
+        &self,
+        node_id: &str,
+        connection: Option<NodeConnection>,
+        data: NodeHttpRequest,
+    ) -> ApiResult<NodeHttpResponse> {
         #[cfg(test)]
         {
             let test_request = {
                 let state = self.lock();
+                if connection.is_some_and(|id| {
+                    state
+                        .test_connection_ids
+                        .get(node_id)
+                        .is_some_and(|current| id != *current)
+                }) {
+                    return Err(connection_changed());
+                }
                 state
                     .test_connections
                     .contains_key(node_id)
@@ -430,6 +498,7 @@ impl NodeRegistry {
             node_id,
             "request",
             serde_json::to_value(data).map_err(|_| ApiError::internal())?,
+            connection,
         )
         .await
     }
@@ -451,6 +520,7 @@ impl NodeRegistry {
             node_id,
             "pots_request",
             serde_json::to_value(data).map_err(|_| ApiError::internal())?,
+            None,
         )
         .await
     }
@@ -460,6 +530,7 @@ impl NodeRegistry {
         node_id: &str,
         kind: &str,
         data: Value,
+        connection: Option<NodeConnection>,
     ) -> ApiResult<NodeHttpResponse> {
         let request_id = uuid();
         let (reply, answer) = oneshot::channel();
@@ -473,6 +544,9 @@ impl NodeRegistry {
                 ));
             }
             let link = Self::link_of(&state, node_id)?;
+            if connection.is_some_and(|expected| expected.0 != link.id) {
+                return Err(connection_changed());
+            }
             let frame = json!({ "type": kind, "requestId": request_id, "data": data });
             if let Err(failure) = link.send(&frame, 0) {
                 return Err(match failure {

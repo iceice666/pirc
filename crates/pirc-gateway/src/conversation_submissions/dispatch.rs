@@ -426,6 +426,7 @@ async fn send_attempt(
     op: &str,
     send: Send,
     previous: Option<&str>,
+    connection: crate::nodes::NodeConnection,
 ) -> ApiResult<Preparation> {
     let target = target(&app.db.lock(), &identity.user, op)?;
     let (url, body) = if let Some(previous) = previous {
@@ -440,7 +441,19 @@ async fn send_attempt(
         )
     };
     let result = app
-        .relay(&target.node, identity, HttpMethod::Post, url, Some(body))
+        .nodes
+        .request_on(
+            &target.node,
+            connection,
+            pirc_protocol::NodeHttpRequest {
+                method: HttpMethod::Post,
+                url,
+                user: identity.user.clone(),
+                payload: Some(body),
+                body_base64: None,
+                content_type: None,
+            },
+        )
         .await;
     complete(app, identity, op, &send.command, result)?;
     app.sessions_changed(Some(&identity.user));
@@ -549,13 +562,38 @@ async fn dispatch(
     }
     let input: Control = body.parse()?;
     input.validate()?;
+    let pending = {
+        let db = app.db.lock();
+        let row = lookup(&db, &identity.user, &op)?;
+        if row.state == Phase::Cancelled || read(&db, &identity.user, &op)?.is_some() {
+            None
+        } else {
+            validated_send(&app, &db, &identity, &op, &input)?;
+            Some((row, target(&db, &identity.user, &op)?))
+        }
+    };
+    let Some((row, target)) = pending else {
+        return Ok(axum::Json(
+            json!({"preparation":reconcile(&app,&identity,&op).await?}),
+        ));
+    };
+    let connection = super::acceptance::supported(
+        &app,
+        &identity,
+        &target,
+        row.submission
+            .as_ref()
+            .ok_or_else(super::acceptance::pending_error)?,
+    )
+    .await?;
+    app.nodes.require_connection(&target.node, connection)?;
     let Some(send) = reserve(&app, &identity, &op, &input)? else {
         return Ok(axum::Json(
             json!({"preparation":reconcile(&app,&identity,&op).await?}),
         ));
     };
     Ok(axum::Json(
-        json!({"preparation":send_attempt(&app,&identity,&op,send,None).await?}),
+        json!({"preparation":send_attempt(&app,&identity,&op,send,None,connection).await?}),
     ))
 }
 async fn receipt(

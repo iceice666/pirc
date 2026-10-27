@@ -652,3 +652,49 @@ async fn concurrent_connections_queue_exactly_one_stop_identity() {
     );
     assert_eq!(count(&app.db.lock(), "commands"), 0);
 }
+
+#[tokio::test]
+async fn blank_release_checks_connection_without_applying_old_attachment_limits() {
+    let (app, _dir) = disk_app();
+    model(&app);
+    register(&app);
+    prepared(&app, true);
+    super::super::attachments::stage(&app, "alice", OP, "file-1", b"test").unwrap();
+    let original = super::super::acceptance::accept_intent(&app, &alice(), OP)
+        .await
+        .unwrap();
+    let generation = lease(&app).await;
+    queue(&app, &alice(), OP, &held("phone", generation)).unwrap();
+    let job = read(&app.db.lock(), "alice", OP).unwrap().unwrap();
+    complete(&app, &job, &proof(&job, None)).unwrap();
+    app.nodes.set_test_node(connected(), |r| {
+        assert!(!r.url.contains("/attachments/"));
+        assert!(!r.url.contains("/admission"));
+        let mut result = super::super::acceptance::tests::fake(&r);
+        if r.url.ends_with("/capabilities") {
+            let caps = result.body.as_mut().unwrap();
+            caps["maxAttachments"] = json!(0);
+            caps["maxUploadBytes"] = json!(0);
+        }
+        Ok(result)
+    });
+    let released = super::super::acceptance::advance(&app, &alice(), OP)
+        .await
+        .unwrap();
+    assert_eq!(released.state, Phase::Stopped);
+    assert!(released.node_mapped);
+    assert_eq!(released.session_id, original.session_id);
+    assert_eq!(released.submission.unwrap().attachments.len(), 1);
+    assert_eq!(
+        std::fs::read(
+            app.config
+                .state_dir
+                .join("submission-staging")
+                .join(original.session_id)
+                .join("file-1.bin")
+        )
+        .unwrap(),
+        b"test"
+    );
+    assert_eq!(count(&app.db.lock(), "commands"), 0);
+}

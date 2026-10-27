@@ -1,5 +1,27 @@
 # Upgrades
 
+## Unreleased local checkpoint: first-send Node connection fencing
+
+Gateway now rechecks reliable-first-send capabilities before materialization and
+initial admission, and requires the full workflow plus retry support for a new
+retry. Capability evidence belongs to one registered Node connection. Allocation,
+attachment transfer, admission and retry cannot carry it across a reconnect,
+even when the replacement uses the same Node ID and protocol number.
+
+An unsupported Node leaves the original accepted input/files pending. A known
+connection change after probing is refused before command reservation; if an
+attempt was already reserved when the connection changes, keep its outcome
+uncertain and query it without replay. Check, Stop and authorized deletion retain
+their existing paths. Explicit blank release after confirmed Stop does not upload
+the original files. Web/Android show readable compatibility/reconnection errors.
+
+Gateway **1020**, Node **2009**, protocol **15**, client contract **2**, private
+client envelope **3**, dependency versions and Nix hashes are unchanged. Production
+**`canSubmit: false`** remains; this is neither activation nor deployment. Unit
+fault tests and current-binary client/checkpoint regressions pass. Historical
+mixed-version deployment, rollout/rollback and Android OS/device acceptance remain
+open; do not downgrade state or discard unresolved drafts to bypass the gate.
+
 ## Unreleased local checkpoint: client interrupted-retry recovery
 
 Web and native Android now adopt the Gateway **1020** retirement proof via

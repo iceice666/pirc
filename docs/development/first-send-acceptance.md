@@ -234,6 +234,30 @@ process death, all permission transitions, old Node protocol versions or the ful
 application UI. The native JVM/compiler and dedicated browser restrictions above
 still apply. Production `canSubmit` remains false.
 
+## Capability changes, connection replacement and authority races
+
+Gateway unit coverage exercises accepted and ready inputs against a missing
+capability route, unknown capability version, missing Stop/receipt support and
+reduced upload limits. It also revokes the paired device, removes the workspace
+or loses control while a probe is pending. Allocation/admission cannot proceed,
+and the original operation/input/files remain available to authorized recovery.
+A replaced connection cannot receive requests based on its predecessor's proof;
+a replacement detected before reservation creates no command or retry record.
+Retry requires the full workflow as well as retry support. Blank release after
+confirmed Stop does not apply old attachment limits or promote original bytes.
+
+```sh
+cargo test --locked -p pirc-gateway --bin pirc-gateway
+PIRC_CONFORMANCE_BIN_DIR="$CARGO_TARGET_DIR/debug" \
+  cargo test --locked -p pirc-conformance --test conversation_contract --test node_link
+```
+
+The unit responders simulate capability and connection changes. The normal Node
+protocol test uses real Gateway sockets; it does not run an old Node executable.
+The five live-client fixtures above must still pass against the rebuilt current
+Gateway/Node. Keep this evidence separate from historical-binary rolling upgrades,
+the full permission matrix and actual Android OS/device acceptance.
+
 ## Cleanup and remaining gates
 
 The browser helper closes its own profile/server, and the conformance fixture

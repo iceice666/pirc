@@ -4,7 +4,7 @@
 
 Status: adopted architecture baseline with an authorized staged implementation
 covering first Send, environment bindings, resource transitions, canonical tasks/
-collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-recovery, editor-snapshot, native blob cleanup and live Web/native fault/control-race/storage-reply acceptance
+collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-recovery, editor-snapshot, native blob cleanup, Node connection capability fencing and live Web/native acceptance
 checkpoints are summarized below (2026-10-27). UI redesign/navigation reorganization remains deferred;
 Web/Android changes are limited to necessary functional integration. Use only
 focused simple Flutter checks when Flutter changes.
@@ -47,12 +47,20 @@ Delivered U1 behavior:
   including version negotiation, independent Gateway access and minimal bilingual
   status/actions. New navigation and visual redesign are deferred.
 
-Latest slice: [Node storage reply loss](#u1-implementation-checkpoint-node-storage-reply-loss-2026-10-27)
-passes actual Node allocation and attachment-upload replies lost after durable
-storage. Gateway/Node restart and fresh native/Web clients preserve the same
-accepted input, operation and files. Recovery is GET-only; a separate explicit
-Send reuses the original Node allocation/upload and admits exactly one command.
-A second restart preserves those identities without another execution.
+Latest slice: [capabilities bound to the checked Node connection](#u1-implementation-checkpoint-node-capabilities-and-connection-fencing-2026-10-27)
+fixes a compatibility gap after intent acceptance: materialization and first
+admission now recheck capabilities, and allocation/uploads/admission/retry cannot
+reuse that proof on a replacement Node connection. Authority and control are
+revalidated after asynchronous probes. A known replacement is refused before
+command reservation; already reserved uncertain outcomes remain query-only.
+Original inputs/files and the explicit blank release after confirmed Stop survive.
+
+The [previous storage-reply proof](#u1-implementation-checkpoint-node-storage-reply-loss-2026-10-27)
+remains covered by the live client regression suite. Current validation adds
+**336 Gateway tests**, strict all-target Gateway Clippy, three native checkpoint
+process cases, the old-client contract and Node protocol tests, two Web i18n cases
+and focused Dart localization analysis. Web/Android recovery prompts describe
+unsupported Nodes and changed connections in English/Traditional Chinese.
 
 All **five explicit live-client process tests** pass: the new two-case storage-reply
 test, [offline Stop/deletion](#u1-implementation-checkpoint-offline-allocation-fencing-and-private-blob-cleanup-2026-10-27)
@@ -66,8 +74,8 @@ rerun for this fixture-only slice.
 
 The earlier marker repair retains **79 Web tests**, clean Svelte checks and
 **63 native JVM cases**; [editor snapshots](#u1-implementation-checkpoint-editor-attachments-survive-source-cleanup-2026-10-27)
-retain 26 focused Flutter cases. This slice changes only conformance fixtures;
-no production behavior, Flutter UI, backend API or format changes.
+retain 26 focused Flutter cases. This slice changes Gateway compatibility checks
+and recovery error translations; schemas, protocol and client contract are unchanged.
 The backend [nonce retirement](#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27)
 slice retains 329 Gateway tests and five process cases. These are bounded proofs,
 not the full permission/Stop/delete matrix or Android OS/device acceptance.
@@ -85,8 +93,10 @@ the last verified published green CI remains tied to `303fa8f8`.
 
 Immediate U1 queue:
 
-1. Close the remaining mixed-version and broader permission-change gates.
-   Node allocation/upload reply loss after storage exists now passes. Initial
+1. Finish historical-binary/rolling-upgrade and broader permission-change
+   acceptance. Unit cases now cover missing/reduced Node capabilities, changed
+   connections and authority/control lost during probes; this is not a full mixed
+   deployment proof. Node allocation/upload reply loss after storage exists passes. Initial
    interruption/restart, device revocation,
    mapped Web-dispatch/native takeover and reverse-direction offline pre-allocation
    Stop/deletion now pass. They do not imply every mapped reverse-direction race
@@ -2638,6 +2648,40 @@ checked, not treated as full old-Node/version negotiation acceptance. JVM proces
 recovery remains distinct from Android OS/Keystore/MethodChannel/device proof.
 This is local-only work; `canSubmit: false` and the remaining U1 acceptance gates
 stay in place. The rollout/rollback gate and U2/U4/U5/U6 remain pending.
+
+## U1 implementation checkpoint: Node capabilities and connection fencing (2026-10-27)
+
+Fixed a real gap: acceptance probed Node capabilities, but later materialization
+and initial dispatch relied on that earlier proof. A Node replacement sharing the
+same Node ID/protocol could lack the required first-send semantics. Gateway now
+probes before each effectful stage and binds the proof to an in-process connection
+identity. The registry checks that identity under the same lock used to select
+and enqueue the request; changed connections cannot receive old allocation,
+attachment, initial admission or retry requests. Ordinary relay behavior remains
+unchanged. No wire/schema or Nix/dependency changes are needed.
+
+After a capability probe, materialization rechecks Stop/deletion, paired-device
+validity and workspace permission. Admission revalidates the session/control
+lease before reservation; retry requires the full first-send capability set as
+well as retry support. A replacement already visible after the probe is rejected
+before creating a command/retry record. Failures after an attempt was reserved
+retain its conservative unknown result; queries never resend. Existing receipts
+remain readable without a new capability probe. Explicit blank release after
+Stop checks the Node connection but does not transfer or apply upload limits to
+the retained original attachments. Both clients gain readable recovery errors.
+
+Validation: 336 Gateway tests (seven new regression tests, including multiple
+capability/authority fault cases); all five explicit live Web/native process tests;
+three native checkpoint process cases, old-client compatibility and Node protocol
+conformance; strict Gateway Clippy, Rust formatting, two Web i18n tests and focused
+Dart analysis. Unit fault responders simulate older capabilities and connection
+replacement; the live tests use the current real executables. These are not
+historical-binary rolling-upgrade or Android OS/device acceptance.
+
+Production `canSubmit: false` remains. The remaining compatibility/permission
+matrix, device/process/Keystore/MethodChannel, rollout/rollback and full CI gates
+are still open. U2/U4/U5/U6 remain the subsequent authorized stages; UI redesign is
+deferred. This checkpoint is local-only and preserves memory/checkpoint ownership.
 
 ## Design stages and later implementation gates
 

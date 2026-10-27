@@ -53,7 +53,11 @@ pub(super) fn node(
         if request.url.ends_with("/capabilities") {
             return Ok(pirc_protocol::NodeHttpResponse {
                 status: 200,
-                body: Some(json!({"version":1,"canRetryInitialAdmission":capable})),
+                body: Some({
+                    let mut caps = crate::conversation_submissions::acceptance::tests::caps();
+                    caps["canRetryInitialAdmission"] = json!(capable);
+                    caps
+                }),
             });
         }
         if request.method == HttpMethod::Post {
@@ -567,4 +571,61 @@ async fn retry_identity_get_is_owned_read_only_and_keeps_an_unreceived_attempt_u
         count(&app.db.lock(), "conversation_submission_retry_attempts"),
         1
     );
+}
+
+#[tokio::test]
+async fn retry_requires_the_full_workflow_and_pins_its_capability_connection() {
+    for reconnect in [false, true] {
+        let (app, _dir, first) = rejected(false).await;
+        let weak = Arc::downgrade(&app);
+        app.nodes.set_test_node(connected(), move |r| {
+            assert_eq!(r.method, HttpMethod::Get);
+            assert_eq!(r.url, "/api/session-creations/capabilities");
+            let mut caps = crate::conversation_submissions::acceptance::tests::caps();
+            caps["canRetryInitialAdmission"] = json!(true);
+            if reconnect {
+                weak.upgrade()
+                    .unwrap()
+                    .nodes
+                    .set_test_node(connected(), |_| {
+                        panic!("replacement must not receive retry input")
+                    });
+            } else {
+                caps.as_object_mut()
+                    .unwrap()
+                    .remove("canStopBeforeAllocation");
+            }
+            Ok(pirc_protocol::NodeHttpResponse {
+                status: 200,
+                body: Some(caps),
+            })
+        });
+        let input = input(&first, "new-retry");
+        let (status, result) = call(
+            &app,
+            "POST",
+            "/api/conversation-submissions/draft-1/retry",
+            Some("alice"),
+            None,
+            Some(body(&input)),
+        )
+        .await;
+        assert_eq!(status, 409, "{result}");
+        assert_eq!(
+            result["error"]["code"],
+            if reconnect {
+                "node_connection_changed"
+            } else {
+                "first_send_unsupported"
+            }
+        );
+        assert_eq!(
+            count(&app.db.lock(), "conversation_submission_retry_attempts"),
+            0
+        );
+        assert_eq!(
+            lookup(&app.db.lock(), "alice", "draft-1").unwrap().state,
+            Phase::AdmissionFailed
+        );
+    }
 }

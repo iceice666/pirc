@@ -800,6 +800,9 @@ async fn device_revoked_during_allocation_cannot_send_attachment_bytes() {
     let accepted = accept_intent(&app, &caller, "draft-1").await.unwrap();
     let weak = Arc::downgrade(&app);
     app.nodes.set_test_node(connected(), move |r| {
+        if r.url.ends_with("/capabilities") {
+            return Ok(fake(&r));
+        }
         assert_eq!(r.url, "/api/session-creations");
         let response = fake(&r);
         weak.upgrade()
@@ -905,4 +908,164 @@ async fn a_node_without_pre_allocation_stop_support_cannot_accept_a_new_intent()
     );
     assert_eq!(count(&app.db.lock(), "sessions"), 0);
     assert!(!lookup(&app.db.lock(), "alice", "draft-1").unwrap().accepted);
+}
+
+#[tokio::test]
+async fn accepted_input_rechecks_node_capabilities_before_storage_and_preserves_files() {
+    for unsupported in [
+        "missing-route",
+        "new-version",
+        "missing-stop",
+        "upload-limit",
+    ] {
+        let (app, _dir) = disk_app();
+        model(&app);
+        register(&app);
+        prepared(&app, true);
+        attachments::stage(&app, "alice", "draft-1", "file-1", b"test").unwrap();
+        let accepted = accept_intent(&app, &identity(), "draft-1").await.unwrap();
+        app.nodes.set_test_node(connected(), move |r| {
+            assert_eq!(r.method, HttpMethod::Get);
+            assert_eq!(r.url, "/api/session-creations/capabilities");
+            let mut capabilities = caps();
+            match unsupported {
+                "new-version" => capabilities["version"] = json!(2),
+                "missing-stop" => {
+                    capabilities
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("canStopBeforeAllocation");
+                }
+                "upload-limit" => capabilities["maxUploadBytes"] = json!(1),
+                _ => (),
+            }
+            Ok(NodeHttpResponse {
+                status: if unsupported == "missing-route" {
+                    404
+                } else {
+                    200
+                },
+                body: Some(capabilities),
+            })
+        });
+        let error = advance(&app, &identity(), "draft-1").await.unwrap_err();
+        assert_eq!(
+            error.code,
+            if unsupported == "upload-limit" {
+                "attachment_too_large"
+            } else {
+                "first_send_unsupported"
+            }
+        );
+        let reopened = Db::open(&app.config.state_dir.join("gateway.sqlite")).unwrap();
+        let pending = lookup(&reopened.lock(), "alice", "draft-1").unwrap();
+        assert_eq!(pending.session_id, accepted.session_id);
+        assert_eq!(pending.state, Phase::Accepted);
+        assert_eq!(
+            file(
+                &app,
+                &pending,
+                &pending.submission.as_ref().unwrap().attachments[0]
+            )
+            .unwrap(),
+            b"test"
+        );
+        assert!(
+            app.db
+                .lock()
+                .get_session(&pending.session_id)
+                .unwrap()
+                .pi_session_id
+                .is_none()
+        );
+        assert_eq!(count(&app.db.lock(), "commands"), 0);
+        register(&app);
+        let ready = advance(&app, &identity(), "draft-1").await.unwrap();
+        assert_eq!(ready.state, Phase::Ready);
+        assert_eq!(ready.session_id, accepted.session_id);
+    }
+}
+
+#[tokio::test]
+async fn revocation_or_workspace_removal_during_capability_check_prevents_allocation() {
+    for revoke in [false, true] {
+        let (app, _dir) = app();
+        model(&app);
+        register(&app);
+        prepared(&app, false);
+        let (device, _) = app.devices.create("alice", "Native").unwrap();
+        let mut caller = identity();
+        caller.device_id = Some(device.id.clone());
+        let accepted = accept_intent(&app, &caller, "draft-1").await.unwrap();
+        let weak = Arc::downgrade(&app);
+        app.nodes.set_test_node(connected(), move |r| {
+            assert_eq!(r.url, "/api/session-creations/capabilities");
+            let app = weak.upgrade().unwrap();
+            if revoke { app.devices.revoke("alice", &device.id).unwrap(); }
+            else { app.db.lock().execute("INSERT INTO workspace_removals(workspace_id,owner_user,removed_at,status) VALUES('node:repo','alice',1,'removed')",[]).unwrap(); }
+            Ok(fake(&r))
+        });
+        let error = advance(&app, &caller, "draft-1").await.unwrap_err();
+        assert_eq!(
+            error.code,
+            if revoke {
+                "unauthorized"
+            } else {
+                "workspace_removed"
+            }
+        );
+        assert!(
+            app.db
+                .lock()
+                .get_session(&accepted.session_id)
+                .unwrap()
+                .pi_session_id
+                .is_none()
+        );
+        assert_eq!(
+            lookup(&app.db.lock(), "alice", "draft-1").unwrap().state,
+            Phase::Accepted
+        );
+    }
+}
+
+#[tokio::test]
+async fn replacing_connection_after_probe_or_allocation_cannot_inherit_capability_proof() {
+    for after_allocation in [false, true] {
+        let (app, _dir) = app();
+        model(&app);
+        register(&app);
+        prepared(&app, true);
+        attachments::stage(&app, "alice", "draft-1", "file-1", b"test").unwrap();
+        accept_intent(&app, &identity(), "draft-1").await.unwrap();
+        let weak = Arc::downgrade(&app);
+        app.nodes.set_test_node(connected(), move |r| {
+            let reply = fake(&r);
+            if (after_allocation && r.url == "/api/session-creations")
+                || (!after_allocation && r.url.ends_with("/capabilities"))
+            {
+                weak.upgrade()
+                    .unwrap()
+                    .nodes
+                    .set_test_node(connected(), |_| {
+                        panic!(
+                            "replacement connection must not receive allocation or attachment bytes"
+                        )
+                    });
+            }
+            Ok(reply)
+        });
+        assert_eq!(
+            advance(&app, &identity(), "draft-1")
+                .await
+                .unwrap_err()
+                .code,
+            "node_connection_changed"
+        );
+        assert_eq!(
+            lookup(&app.db.lock(), "alice", "draft-1").unwrap().state,
+            Phase::Accepted
+        );
+        assert_eq!(count(&app.db.lock(), "commands"), 0);
+    }
 }

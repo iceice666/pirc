@@ -2551,5 +2551,7 @@
   "Only a pending retry of a rejected first message can be recovered.": "Only a pending retry of a rejected first message can be recovered.",
   "The retry receipt does not match the saved retry.": "The retry receipt does not match the saved retry.",
   "The retry receipt did not identify a successor attempt.": "The retry receipt did not identify a successor attempt.",
-  "The first-message attempt changed; check its result.": "The first-message attempt changed; check its result."
+  "The first-message attempt changed; check its result.": "The first-message attempt changed; check its result.",
+  "node_connection_changed": "The Node reconnected. Check the saved result before continuing.",
+  "first_send_unsupported": "This Node does not support reliable first Send. Upgrade it before continuing."
 }

@@ -3388,6 +3388,8 @@ const englishMessages = <String, String>{
       "The retry receipt did not identify a successor attempt.",
   "The first-message attempt changed; check its result.":
       "The first-message attempt changed; check its result.",
+  "node_connection_changed": "The Node reconnected. Check the saved result before continuing.",
+  "first_send_unsupported": "This Node does not support reliable first Send. Upgrade it before continuing.",
 };
 const traditionalChineseMessages = <String, String>{
   "無法確認最新狀態，請重試": "無法確認最新狀態，請重試",
@@ -6259,4 +6261,6 @@ const traditionalChineseMessages = <String, String>{
   "The retry receipt does not match the saved retry.": "重試回執與儲存的重試紀錄不符。",
   "The retry receipt did not identify a successor attempt.": "重試回執未確認後續嘗試的身分。",
   "The first-message attempt changed; check its result.": "首則訊息的嘗試狀態已變更，請檢查結果。",
+  "node_connection_changed": "Node 已重新連線。請先檢查已儲存的結果，再決定是否繼續。",
+  "first_send_unsupported": "此 Node 不支援可靠的首次送出流程。請先更新 Node 再繼續。",
 };

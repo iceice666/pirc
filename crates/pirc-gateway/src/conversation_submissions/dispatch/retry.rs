@@ -152,21 +152,28 @@ pub(super) async fn retry(
             json!({"preparation":reconcile(&app,&identity,&op).await?}),
         ));
     }
-    let target = {
+    let (row, target) = {
         let db = app.db.lock();
         require_caller(&app, &db, &identity)?;
         let row = lookup(&db, &identity.user, &op)?;
         let target = target(&db, &identity.user, &op)?;
         require_current(&app, &db, &identity.user, &row, &target)?;
-        target
+        (row, target)
     };
+    let connection = app.nodes.connection(&target.node)?;
     let caps = app
-        .relay(
+        .nodes
+        .request_on(
             &target.node,
-            &identity,
-            HttpMethod::Get,
-            "/api/session-creations/capabilities".into(),
-            None,
+            connection,
+            pirc_protocol::NodeHttpRequest {
+                method: HttpMethod::Get,
+                url: "/api/session-creations/capabilities".into(),
+                user: identity.user.clone(),
+                payload: None,
+                body_base64: None,
+                content_type: None,
+            },
         )
         .await?;
     if caps.status >= 400
@@ -181,13 +188,20 @@ pub(super) async fn retry(
             "The Node must be upgraded before retrying this first message",
         ));
     }
+    super::super::acceptance::check_support(
+        caps,
+        row.submission
+            .as_ref()
+            .ok_or_else(super::super::acceptance::pending_error)?,
+    )?;
+    app.nodes.require_connection(&target.node, connection)?;
     let Some(send) = reserve(&app, &identity, &op, &input)? else {
         return Ok(axum::Json(
             json!({"preparation":reconcile(&app,&identity,&op).await?}),
         ));
     };
     Ok(axum::Json(
-        json!({"preparation":send_attempt(&app,&identity,&op,send,Some(&input.previous_command_id)).await?}),
+        json!({"preparation":send_attempt(&app,&identity,&op,send,Some(&input.previous_command_id),connection).await?}),
     ))
 }
 pub(super) async fn status(

@@ -58,6 +58,9 @@ fn set_node(app: &AppState, result: Value, lost: bool) -> Arc<Mutex<Vec<(HttpMet
     let record = requests.clone();
     let once = AtomicBool::new(lost);
     app.nodes.set_test_node(connected(), move |r| {
+        if r.url.ends_with("/capabilities") {
+            return Ok(super::super::acceptance::tests::fake(&r));
+        }
         record.lock().unwrap().push((r.method, r.url));
         if r.method == HttpMethod::Post && once.swap(false, Ordering::SeqCst) {
             Err(ApiError::new(
@@ -565,4 +568,70 @@ async fn known_admission_still_reconciles_an_unconfirmed_later_stop() {
         )]
     );
     assert!(app.db.lock().get_lease(&session).unwrap().is_null());
+}
+
+#[tokio::test]
+async fn ready_submission_rechecks_capabilities_and_authority_before_reserving_a_command() {
+    for fault in ["unsupported", "workspace-removed", "control-lost"] {
+        let (app, _dir, session) = ready(false).await;
+        let weak = Arc::downgrade(&app);
+        app.nodes.set_test_node(connected(), move |r| {
+            assert_eq!(r.method, HttpMethod::Get);
+            assert_eq!(r.url, "/api/session-creations/capabilities");
+            let mut caps = super::super::acceptance::tests::caps();
+            match fault {
+                "unsupported" => { caps.as_object_mut().unwrap().remove("canReadFirstMessageReceipt"); }
+                "workspace-removed" => { weak.upgrade().unwrap().db.lock().execute("INSERT INTO workspace_removals(workspace_id,owner_user,removed_at,status) VALUES('node:repo','alice',1,'removed')",[]).unwrap(); }
+                _ => { weak.upgrade().unwrap().db.lock().execute("DELETE FROM leases",[]).unwrap(); }
+            }
+            Ok(pirc_protocol::NodeHttpResponse { status:200, body:Some(caps) })
+        });
+        let (status, body) = call(
+            &app,
+            "POST",
+            "/api/conversation-submissions/draft-1/dispatch",
+            Some("alice"),
+            None,
+            Some(json!({"clientId":"phone","generation":1})),
+        )
+        .await;
+        assert_eq!(status, 409, "{body}");
+        assert_eq!(count(&app.db.lock(), "commands"), 0);
+        let row = lookup(&app.db.lock(), "alice", "draft-1").unwrap();
+        assert_eq!(row.state, Phase::Ready);
+        assert_eq!(row.session_id, session);
+        assert!(row.message_admission.is_none());
+    }
+}
+
+#[tokio::test]
+async fn node_reconnect_during_dispatch_probe_never_sends_to_replacement() {
+    let (app, _dir, _) = ready(false).await;
+    let weak = Arc::downgrade(&app);
+    app.nodes.set_test_node(connected(), move |r| {
+        assert_eq!(r.url, "/api/session-creations/capabilities");
+        weak.upgrade()
+            .unwrap()
+            .nodes
+            .set_test_node(connected(), |_| {
+                panic!("replacement must not receive stale admission")
+            });
+        Ok(super::super::acceptance::tests::fake(&r))
+    });
+    let (status, result) = call(
+        &app,
+        "POST",
+        "/api/conversation-submissions/draft-1/dispatch",
+        Some("alice"),
+        None,
+        Some(json!({"clientId":"phone","generation":1})),
+    )
+    .await;
+    assert_eq!(status, 409, "{result}");
+    assert_eq!(result["error"]["code"], "node_connection_changed");
+    assert_eq!(count(&app.db.lock(), "commands"), 0);
+    assert_eq!(
+        lookup(&app.db.lock(), "alice", "draft-1").unwrap().state,
+        Phase::Ready
+    );
 }

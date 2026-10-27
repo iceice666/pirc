@@ -146,6 +146,7 @@ async fn deletion_during_unknown_allocation_cannot_publish_the_late_mapping() {
     let sid = session.clone();
     app.nodes.set_test_node(connected(),move |r|{
         let app=weak.upgrade().unwrap();
+        if r.url.ends_with("/capabilities") { return Ok(super::super::acceptance::tests::fake(&r)); }
         if r.url=="/api/session-creations"{
             app.db.lock().begin_session_deletion(&sid,"alice").unwrap();
             let input=r.payload.unwrap();return Ok(pirc_protocol::NodeHttpResponse{status:200,body:Some(json!({"creation":{"operationId":input["operationId"],"workspaceId":input["workspaceId"],"sessionId":"unknown-remote","state":"ready"}}))});

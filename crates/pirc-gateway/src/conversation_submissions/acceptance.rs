@@ -235,21 +235,33 @@ fn response(remote: NodeHttpResponse, stage: &str) -> ApiResult<Value> {
     }
     remote.body.ok_or_else(bad_node)
 }
-async fn supported(
+pub(super) async fn supported(
     app: &AppState,
     identity: &Identity,
     target: &Target,
     spec: &Spec,
-) -> ApiResult<()> {
+) -> ApiResult<crate::nodes::NodeConnection> {
+    let connection = app.nodes.connection(&target.node)?;
     let remote = app
-        .relay(
+        .nodes
+        .request_on(
             &target.node,
-            identity,
-            HttpMethod::Get,
-            "/api/session-creations/capabilities".into(),
-            None,
+            connection,
+            NodeHttpRequest {
+                method: HttpMethod::Get,
+                url: "/api/session-creations/capabilities".into(),
+                user: identity.user.clone(),
+                payload: None,
+                body_base64: None,
+                content_type: None,
+            },
         )
         .await?;
+    check_support(remote, spec)?;
+    Ok(connection)
+}
+
+pub(super) fn check_support(remote: NodeHttpResponse, spec: &Spec) -> ApiResult<()> {
     if remote.status == 404 {
         return Err(ApiError::new(
             409,
@@ -458,7 +470,29 @@ pub(super) async fn advance(
         require_current(app, &db, &identity.user, &row, &target)?;
         (row, target, blank)
     };
-    let remote=response(app.relay(&target.node,identity,HttpMethod::Post,"/api/session-creations".into(),Some(json!({"operationId":target.creation,"workspaceId":target.workspace,"submissionHash":target.hash}))).await?, "allocation")?;
+    let mut transfer = row.submission.as_ref().ok_or_else(pending_error)?.clone();
+    if blank {
+        // Explicit release after Stop allocates blank storage only. The old
+        // input remains retained, so its files must not constrain this action.
+        transfer.attachments.clear();
+    }
+    let connection = supported(app, identity, &target, &transfer).await?;
+    // Capabilities are asynchronous. Stop/deletion, device revocation or a
+    // removed workspace may have won while the Node was answering.
+    {
+        let db = app.db.lock();
+        let current = lookup(&db, &identity.user, op)?;
+        if current.state != row.state {
+            return Ok(current);
+        }
+        require_caller(app, &db, identity)?;
+        require_current(app, &db, &identity.user, &current, &target)?;
+    }
+    let remote = response(app.nodes.request_on(&target.node, connection, NodeHttpRequest {
+        method: HttpMethod::Post, url: "/api/session-creations".into(), user: identity.user.clone(),
+        payload: Some(json!({"operationId":target.creation,"workspaceId":target.workspace,"submissionHash":target.hash})),
+        body_base64: None, content_type: None,
+    }).await?, "allocation")?;
     let creation = &remote["creation"];
     let session = creation["sessionId"]
         .as_str()
@@ -513,8 +547,9 @@ pub(super) async fn advance(
         };
         let remote = response(
             app.nodes
-                .request(
+                .request_on(
                     &target.node,
+                    connection,
                     NodeHttpRequest {
                         method: HttpMethod::Put,
                         url: format!(

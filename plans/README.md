@@ -76,7 +76,8 @@ Its remote Check and Android workflows both passed. Local work adds Gateway
 retry-nonce retirement (`9b5c776b`), Web/native retry recovery (`c41e4e8a`) and
 open-editor attachment protection, live Web/native interruption acceptance and
 mapped Web/native takeover races, offline pre-allocation Stop/deletion and native
-confirmed-deletion blob cleanup and post-storage Node reply-loss acceptance.
+confirmed-deletion blob cleanup, post-storage Node reply-loss acceptance and
+Node capability/connection fencing.
 Full live-client acceptance and activation
 remain open.
 Subsequent work defaults to local commits, with no deployment, version change or
@@ -100,6 +101,15 @@ private drafts are not subject to that deadline. See [upgrade and rollback
 notes](../docs/deploy/upgrades.md).
 
 Latest completed U1 slices and their recorded evidence:
+
+- [Node capability/connection fencing](unified-conversations.md#u1-implementation-checkpoint-node-capabilities-and-connection-fencing-2026-10-27):
+  materialize/dispatch recheck capabilities, and all first-send effects stay bound
+  to that exact Node connection. Mid-probe revocation, workspace removal/control
+  loss and known connection replacement prevent later effects/command reservation.
+  Explicit blank release still retains old files without uploading them. 336
+  Gateway tests, five live-client tests, three native checkpoint cases, contract/
+  protocol checks, strict Clippy and focused localization checks pass. Historical
+  mixed deployments and Android OS/device remain unverified.
 
 - [Node storage reply loss](unified-conversations.md#u1-implementation-checkpoint-node-storage-reply-loss-2026-10-27):
   actual Node allocation or upload commits, then its reply is lost before Gateway
@@ -178,8 +188,10 @@ Latest completed U1 slices and their recorded evidence:
 
 Next, close U1's remaining gates in this order:
 
-1. Close the remaining mixed-version and broader permission-change gates.
-   Node storage reply-loss recovery, initial native revocation, mapped Web-dispatch/native
+1. Finish historical-binary/rolling-upgrade and broader permission-change gates.
+   Node capability/reconnection and mid-probe authority faults now have unit proof;
+   they do not replace mixed deployment/device acceptance. Node storage reply-loss
+   recovery, initial native revocation, mapped Web-dispatch/native
    takeover and reverse-direction offline pre-allocation Stop/deletion now pass;
    those do not imply every mapped reverse-direction race is covered.
 2. Verify Android MethodChannel, OS private storage/Keystore, process death and
