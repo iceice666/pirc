@@ -1,4 +1,6 @@
 //! Actual paired Kotlin first-send engine in fresh JVM processes. Not Android OS.
+#[path = "conversation_clients_support/allocation_gate.rs"]
+mod allocation_gate;
 mod conversation_clients_support;
 use conversation_clients_support::{ClientProcess, verify};
 use pirc_conformance::{Cluster, GatewayOptions, HOST, Reply, browser_headers};
@@ -466,5 +468,182 @@ async fn web_offline_stop_or_delete_fences_native_allocation_and_recovers_on_res
                     .all(|row| row["role"] != "user")
             );
         }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires the prepared Kotlin runtime, Web dependencies, dedicated test browser and real binaries"]
+async fn lost_node_storage_reply_recovers_same_allocation_and_upload_only_after_explicit_send() {
+    let runtime: Value = serde_json::from_slice(
+        &fs::read(
+            std::env::var_os("PIRC_NATIVE_FIRST_SEND_RUNTIME")
+                .expect("prepare the native runtime first"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    for attachment in [false, true] {
+        let id = if attachment {
+            "allocation-upload-loss"
+        } else {
+            "allocation-reply-loss"
+        };
+        let mut cluster = Cluster::start_with(GatewayOptions {
+            without_node: true,
+            ..Default::default()
+        })
+        .await
+        .expect("set PIRC_CONFORMANCE_BIN_DIR");
+        let mut gate = allocation_gate::AllocationGate::start(cluster.port, attachment).await;
+        cluster
+            .connect_node_via(
+                gate.port,
+                pirc_conformance::NodeOptions {
+                    chat_node: true,
+                    agent_core_only: true,
+                    ..Default::default()
+                },
+            )
+            .await;
+        cluster
+            .llm
+            .push([Reply::Text("Recovered exactly once".into())]);
+        let paired = pair(&cluster, "native-allocation-loss").await;
+        let directory = cluster.dir.path().join("allocation-client-acceptance");
+        fs::create_dir(&directory).unwrap();
+        let config = directory.join("config.json");
+        let file = File::create(&config).unwrap();
+        file.set_permissions(fs::Permissions::from_mode(0o600))
+            .unwrap();
+        serde_json::to_writer(
+            file,
+            &json!({
+                "gateway":cluster.base_url(), "host":HOST, "directory":directory,
+                "token":paired["token"], "mode":"allocation", "operationId":id,
+                "owner":pirc_conformance::USER, "origin":pirc_conformance::ORIGIN,
+                "workspace":pirc_conformance::CHATS_WORKSPACE_ID,
+            }),
+        )
+        .unwrap();
+        let mut native = client(&runtime, &config, &directory, "allocation-send");
+        let held = gate.held().await;
+        let proof = &held["response"][if attachment {
+            "creationAttachment"
+        } else {
+            "creation"
+        }];
+        assert_eq!(proof["state"], "ready", "{proof}");
+        let node_session = proof["sessionId"].as_str().unwrap().to_owned();
+        let creation = proof["operationId"].as_str().unwrap().to_owned();
+        let node_sessions = cluster.dir.path().join("node-state/sessions");
+        assert!(
+            node_sessions.join(&node_session).is_dir(),
+            "Node must actually create its storage"
+        );
+        let uploads = cluster.dir.path().join("node-state/uploads");
+        let original_upload = if attachment {
+            let files = fs::read_dir(&uploads)
+                .unwrap()
+                .map(|v| v.unwrap().path())
+                .collect::<Vec<_>>();
+            assert_eq!(files.len(), 1);
+            assert_eq!(
+                fs::read(&files[0]).unwrap(),
+                format!("Original bytes for {id}").as_bytes()
+            );
+            Some(files[0].clone())
+        } else {
+            None
+        };
+        // Kill the Gateway while the client is still awaiting materialization;
+        // the proxy never delivers the successful Node reply to the old process.
+        cluster.restart_gateway(true).await;
+        let interrupted = native
+            .stage(&directory, "native-allocation-interrupted")
+            .await;
+        native.finish().await;
+        cluster.restart_node(true).await;
+        let session = interrupted["record"]["preparation"]["sessionId"]
+            .as_str()
+            .unwrap();
+        let recovered = offline_receipt(&cluster, id).await;
+        assert_eq!(recovered["sessionId"], session);
+        assert_eq!(recovered["state"], "accepted");
+        assert_eq!(recovered["nodeMapped"], attachment);
+        assert!(cluster.llm.requests().is_empty());
+        let before_reads = gate.requests().len();
+        let mut native = client(&runtime, &config, &directory, "allocation-recover");
+        let mut web = web_client(&config, &directory);
+        let (native_checked, web_checked) = tokio::join!(
+            native.stage(&directory, "native-allocation-checked"),
+            web.stage(&directory, "web-allocation-checked"),
+        );
+        for checked in [native_checked, web_checked] {
+            assert_eq!(checked["record"]["preparation"]["sessionId"], session);
+            assert_eq!(checked["record"]["preparation"]["nodeMapped"], attachment);
+        }
+        assert!(
+            gate.requests()[before_reads..]
+                .iter()
+                .all(|r| r["method"] == "GET"),
+            "client reconciliation must not mutate Node storage"
+        );
+        assert!(
+            cluster.llm.requests().is_empty(),
+            "reopening must not start the input"
+        );
+        fs::write(directory.join("explicit-send.json"), b"{}").unwrap();
+        let sent = native.stage(&directory, "native-allocation-sent").await;
+        native.finish().await;
+        assert_eq!(sent["record"]["preparation"]["sessionId"], session);
+        let operations = vec![json!({"id":id,"session":session})];
+        let commands = verify(&cluster, &operations).await;
+        // Every reissued allocation must retain the same durable operation key;
+        // real filesystem and response proofs establish no second storage/upload.
+        let requests = gate.requests();
+        let allocations = requests
+            .iter()
+            .filter(|r| r["method"] == "POST" && r["url"] == "/api/session-creations")
+            .collect::<Vec<_>>();
+        assert_eq!(allocations.len(), 2);
+        assert!(
+            allocations
+                .iter()
+                .all(|r| r["payload"]["operationId"] == creation)
+        );
+        let allocated = fs::read_dir(&node_sessions)
+            .unwrap()
+            .map(|v| v.unwrap().file_name())
+            .collect::<Vec<_>>();
+        assert_eq!(allocated, vec![std::ffi::OsString::from(&node_session)]);
+        if let Some(original) = original_upload {
+            let files = fs::read_dir(&uploads)
+                .unwrap()
+                .map(|v| v.unwrap().path())
+                .collect::<Vec<_>>();
+            assert_eq!(
+                files,
+                vec![original],
+                "retry must retain the original upload identity"
+            );
+        }
+        cluster.restart_gateway(true).await;
+        cluster.restart_node(true).await;
+        let mut final_native = client(&runtime, &config, &directory, "allocation-final");
+        fs::write(directory.join("allocation-finished.json"), b"{}").unwrap();
+        let (native_result, web_result) = tokio::join!(
+            final_native.stage(&directory, "native-allocation-final"),
+            web.stage(&directory, "web-allocation-result"),
+        );
+        final_native.finish().await;
+        web.finish().await;
+        for result in [native_result, web_result] {
+            assert_eq!(result["record"]["preparation"]["sessionId"], session);
+            assert_eq!(
+                result["record"]["preparation"]["messageAdmission"]["commandId"],
+                commands[0]
+            );
+        }
+        assert_eq!(verify(&cluster, &operations).await, commands);
     }
 }

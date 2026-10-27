@@ -289,6 +289,20 @@ impl Cluster {
         )
     }
 
+    /// Attach this fixture's Node through a loopback fault-injection relay.
+    /// Only valid for a cluster started with `without_node`; restarts reuse the
+    /// same launch and state, including the relay endpoint.
+    pub async fn connect_node_via(&mut self, port: u16, options: NodeOptions) {
+        assert!(self.node.is_none(), "cluster already has a Node");
+        self.node = Some(Self::spawn_node(
+            &bin_dir().expect("fixture binaries"),
+            self.dir.path(),
+            &format!("ws://127.0.0.1:{port}"),
+            &options,
+        ));
+        self.wait_ready(1).await.unwrap();
+    }
+
     /// The gateway's models file, which a test may rewrite before
     /// [`Cluster::reload_gateway`]. It starts with one provider, `fake`
     /// (the fake model server, key `test-key`, model `fake-model`), which is

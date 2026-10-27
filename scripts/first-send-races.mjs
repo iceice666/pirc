@@ -178,3 +178,48 @@ export async function runOfflineRace({
   }
   await publish('web-offline-result', { checked, traffic });
 }
+
+/** A different Web client inspects the native first input after Node reply loss. */
+export async function runAllocationRecovery({
+  operationId: id,
+  page,
+  publish,
+  marker,
+  traffic,
+  close,
+  reopen,
+}) {
+  const interrupted = await marker('native-allocation-interrupted');
+  const session = interrupted.record.preparation.sessionId;
+  const reader = await page();
+  const boundary = traffic.length;
+  const checked = await reader.evaluate(
+    async ({ id, session }) => {
+      const { firstTransport } = await import('/src/lib/first-send.ts');
+      const preparation = await firstTransport.find('test@example.com', session);
+      await window.flow.adopt(window.scope, 'test@example.com', preparation);
+      return window.flow.check(window.scope, id);
+    },
+    { id, session },
+  );
+  assert.equal(checked.preparation.state, 'accepted');
+  assert.equal(checked.preparation.sessionId, session);
+  assert.equal(checked.message, 'First message ' + id);
+  assert.equal(checked.files.length, 1);
+  assert(traffic.slice(boundary).every((request) => request.method === 'GET'));
+  await close();
+  await publish('web-allocation-checked', { record: checked, traffic });
+  await marker('allocation-finished');
+  await reopen();
+  const reopened = await page();
+  const finalBoundary = traffic.length;
+  const result = await reopened.evaluate(async (id) => {
+    await window.flow.check(window.scope, id);
+    // Already-admitted input stays query-only even on a later explicit Continue.
+    return window.flow.run(window.scope, id);
+  }, id);
+  assert.equal(result.preparation.state, 'admitted');
+  assert.equal(result.preparation.sessionId, session);
+  assert(traffic.slice(finalBoundary).every((request) => request.method === 'GET'));
+  await publish('web-allocation-result', { record: result, traffic });
+}

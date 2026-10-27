@@ -36,7 +36,7 @@ object NativeFirstSendLive {
         return PircJson.parseToJsonElement(File(root, "$name.json").readText()).jsonObject
     }
     @JvmStatic fun main(args: Array<String>) = runBlocking {
-        require(args.size == 2 && args[1] in setOf("send", "recover", "compete", "compete-recover", "offline-send", "offline-recover"))
+        require(args.size == 2 && args[1] in setOf("send", "recover", "compete", "compete-recover", "offline-send", "offline-recover", "allocation-send", "allocation-recover", "allocation-final"))
         val config = PircJson.parseToJsonElement(File(args[0]).readText()).jsonObject
         val gateway = config.getValue("gateway").jsonPrimitive.content
         require(URI(gateway).host == "127.0.0.1")
@@ -104,6 +104,39 @@ object NativeFirstSendLive {
         try {
             val primary = connection(config.getValue("token").jsonPrimitive.content, directory)
             primary.capabilities(stamp)
+            if (args[1].startsWith("allocation")) {
+                val id = config.getValue("operationId").jsonPrimitive.content
+                if (args[1] == "allocation-send") {
+                    save(primary, id, true)
+                    try {
+                        primary.submit(stamp, owner, id, 1, "native-allocation")
+                        error("The Gateway must be killed before returning materialization")
+                    } catch (_: IOException) { /* The real Gateway connection was interrupted. */ }
+                    val saved = row(primary, id)
+                    check(saved["frozen"] == true && saved["uncertain"] == true)
+                    check(preparation(saved)["state"] == "accepted")
+                    check(calls.none { (it["path"] as String).endsWith("/dispatch") })
+                    publish(root, "native-allocation-interrupted", mapOf("record" to saved, "calls" to calls))
+                } else {
+                    // First retry of uncertain state is query-only. It must not
+                    // recreate storage, transfer attachments or execute the input.
+                    val checked = primary.submit(stamp, owner, id, null, "native-allocation")
+                    val expected = if (args[1] == "allocation-final") "admitted" else "accepted"
+                    check(preparation(checked)["state"] == expected)
+                    check(calls.all { it["method"] == "GET" })
+                    publish(root, "native-allocation-" + if (args[1] == "allocation-final") "final" else "checked", mapOf("record" to checked, "calls" to calls.toList()))
+                    if (args[1] == "allocation-recover") {
+                        marker(root, "explicit-send")
+                        val result = primary.submit(stamp, owner, id, null, "native-allocation")
+                        check(preparation(result)["state"] == "admitted")
+                        check(preparation(result)["sessionId"] == preparation(checked)["sessionId"])
+                        check(calls.count { (it["path"] as String).endsWith("/dispatch") } == 1)
+                        publish(root, "native-allocation-sent", mapOf("record" to result, "calls" to calls))
+                    }
+                }
+                check(FirstSendDraftStore(directory).attachment(scope, id, "original-file").second.contentEquals("Original bytes for $id".toByteArray()))
+                return@runBlocking
+            }
             if (args[1].startsWith("offline")) {
                 val id = config.getValue("operationId").jsonPrimitive.content
                 val deleting = id == "offline-delete"

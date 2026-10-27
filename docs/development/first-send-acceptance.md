@@ -197,6 +197,43 @@ cover the reverse client direction and offline pre-allocation lifecycle, not a
 lost Node allocation reply after storage was already created, the full Web/Flutter
 UI, mixed protocol versions or actual Android OS/device process death.
 
+## Node storage succeeded but its reply was lost
+
+With both client prerequisites prepared, run:
+
+```sh
+PIRC_NATIVE_FIRST_SEND_RUNTIME="$first_send_run/native/runtime.json" \
+  PIRC_CONFORMANCE_BIN_DIR="$CARGO_TARGET_DIR/debug" \
+  cargo test --locked -p pirc-conformance --test conversation_native_client \
+  lost_node_storage_reply -- --ignored --nocapture
+```
+
+A transparent loopback WebSocket relay forwards the real Node authentication,
+registration and protocol frames. It discards exactly one successful response,
+after the Node has committed either its session allocation or its original
+attachment upload. The fixture checks the real storage and bytes before crashing
+Gateway; it then restarts Node from the same files. The old native process must
+retain frozen, uncertain original input after the interrupted materialize request.
+No synthetic allocation/admission receipt or production fault switch is used.
+
+A new native JVM and a separate Web profile inspect that same accepted operation.
+Their recovery calls are GET-only at both the client and Node links, and cause no
+inference. Gateway honestly retains `nodeMapped: false` if allocation's reply was
+lost, or true if only the later attachment reply was lost. It does not infer that
+an absent mapping means no Node storage exists.
+
+Only a separate explicit Send resumes materialization and dispatch. The repeated
+allocation carries the same creation operation ID and leaves exactly the original
+Node session directory; a repeated upload keeps its existing file identity and
+bytes. There is one user entry, one command and one model request. After another
+Gateway/Node restart and fresh native/browser clients, GET-only reconciliation
+retains the same session/command and files without another admission.
+
+This two-case proof covers a real backend storage/reply boundary, not Android OS
+process death, all permission transitions, old Node protocol versions or the full
+application UI. The native JVM/compiler and dedicated browser restrictions above
+still apply. Production `canSubmit` remains false.
+
 ## Cleanup and remaining gates
 
 The browser helper closes its own profile/server, and the conformance fixture

@@ -8,7 +8,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
-import { runClientRaces, runOfflineRace } from './first-send-races.mjs';
+import { runClientRaces, runOfflineRace, runAllocationRecovery } from './first-send-races.mjs';
 import { requireTestBrowserExecutable } from '../apps/android/tool/parity/test_browser.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -176,8 +176,12 @@ try {
   const options = { executablePath: requireTestBrowserExecutable(), headless: true };
   const profile = path.join(directory, 'profile');
   context = await chromium.launchPersistentContext(profile, options);
-  if (config.mode === 'competition' || config.mode === 'offline') {
-    const run = config.mode === 'competition' ? runClientRaces : runOfflineRace;
+  if (['competition', 'offline', 'allocation'].includes(config.mode)) {
+    const run = {
+      competition: runClientRaces,
+      offline: runOfflineRace,
+      allocation: runAllocationRecovery,
+    }[config.mode];
     await run({
       operationId: config.operationId,
       page,

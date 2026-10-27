@@ -4,7 +4,7 @@
 
 Status: adopted architecture baseline with an authorized staged implementation
 covering first Send, environment bindings, resource transitions, canonical tasks/
-collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-recovery, editor-snapshot, native blob cleanup and live Web/native fault/control-race acceptance
+collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-recovery, editor-snapshot, native blob cleanup and live Web/native fault/control-race/storage-reply acceptance
 checkpoints are summarized below (2026-10-27). UI redesign/navigation reorganization remains deferred;
 Web/Android changes are limited to necessary functional integration. Use only
 focused simple Flutter checks when Flutter changes.
@@ -47,24 +47,27 @@ Delivered U1 behavior:
   including version negotiation, independent Gateway access and minimal bilingual
   status/actions. New navigation and visual redesign are deferred.
 
-Latest slice: [offline allocation fencing and private blob cleanup](#u1-implementation-checkpoint-offline-allocation-fencing-and-private-blob-cleanup-2026-10-27)
-passes actual native materialize versus Web Stop/deletion while Node is offline,
-Gateway restart, Node recovery and fresh-client GET-only reconciliation. Stop
-retains original files and permits only a separate explicit blank-conversation
-release. Deleted native private blobs now disappear after the cancellation
-receipt commits; reopening repairs interrupted cleanup without affecting copies.
+Latest slice: [Node storage reply loss](#u1-implementation-checkpoint-node-storage-reply-loss-2026-10-27)
+passes actual Node allocation and attachment-upload replies lost after durable
+storage. Gateway/Node restart and fresh native/Web clients preserve the same
+accepted input, operation and files. Recovery is GET-only; a separate explicit
+Send reuses the original Node allocation/upload and admits exactly one command.
+A second restart preserves those identities without another execution.
 
-All **four explicit live-client process tests** pass: this two-case offline test,
-[mapped takeover](#u1-implementation-checkpoint-delayed-web-dispatch-versus-native-takeover-2026-10-27)
+All **five explicit live-client process tests** pass: the new two-case storage-reply
+test, [offline Stop/deletion](#u1-implementation-checkpoint-offline-allocation-fencing-and-private-blob-cleanup-2026-10-27)
+(two cases), [mapped takeover](#u1-implementation-checkpoint-delayed-web-dispatch-versus-native-takeover-2026-10-27)
 (three cases), [native interruption/revocation](#u1-implementation-checkpoint-paired-native-process-recovery-and-revocation-2026-10-27)
 (two fault cases) and [Web interruption](#u1-implementation-checkpoint-live-web-reconciliation-and-durable-uncertainty-2026-10-27)
-(three fault cases). **65 native JVM cases**, strict targeted Clippy, Kotlin
-warnings-as-errors compilation and formatting checks pass. See [repeatable commands](../docs/development/first-send-acceptance.md).
+(three fault cases). The native compiler treats warnings as errors; strict targeted
+Clippy and formatting are checked. See [repeatable commands](../docs/development/first-send-acceptance.md).
+The preceding native deletion fix retains 65 passing JVM cases; they are not
+rerun for this fixture-only slice.
 
 The earlier marker repair retains **79 Web tests**, clean Svelte checks and
 **63 native JVM cases**; [editor snapshots](#u1-implementation-checkpoint-editor-attachments-survive-source-cleanup-2026-10-27)
-retain 26 focused Flutter cases. This slice changes native private-file cleanup;
-no Flutter UI, backend API or format changes.
+retain 26 focused Flutter cases. This slice changes only conformance fixtures;
+no production behavior, Flutter UI, backend API or format changes.
 The backend [nonce retirement](#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27)
 slice retains 329 Gateway tests and five process cases. These are bounded proofs,
 not the full permission/Stop/delete matrix or Android OS/device acceptance.
@@ -82,8 +85,9 @@ the last verified published green CI remains tied to `303fa8f8`.
 
 Immediate U1 queue:
 
-1. Close allocation-response loss after Node storage exists, mixed-version and
-   broader permission-change gates. Initial interruption/restart, device revocation,
+1. Close the remaining mixed-version and broader permission-change gates.
+   Node allocation/upload reply loss after storage exists now passes. Initial
+   interruption/restart, device revocation,
    mapped Web-dispatch/native takeover and reverse-direction offline pre-allocation
    Stop/deletion now pass. They do not imply every mapped reverse-direction race
    or the full matrix is covered.
@@ -2610,6 +2614,30 @@ engine/process proofs with fake provider/sandbox launcher, not full UI/device or
 production sandbox tests. No full Flutter suite, emulator, APK or local Nix run.
 U2/U4/U5/U6 remain open. Commit locally only and remove this run's isolated
 compiler/JVM/browser/log outputs; preserve SDKs, caches, APKs and user data.
+
+## U1 implementation checkpoint: Node storage reply loss (2026-10-27)
+
+Delivered a two-case opt-in live-client test using a transparent Node WebSocket
+relay. Actual allocation or attachment upload succeeds and is checked on disk;
+only that successful reply is discarded before Gateway is crashed. Node then
+restarts from the same state. No production fault hook, capability activation,
+wire/schema change or synthetic Node receipt is introduced.
+
+Fresh native/Web clients query the same accepted first input without mutating the
+Node or starting inference. The unmapped/mapped state remains honest at the
+respective interruption boundary. Only a further explicit native Send retries
+materialization under the same creation ID, reuses the existing session/upload,
+and dispatches once. A second backend restart, new JVM and reopened IndexedDB
+retain the same command/session and exact original bytes. This closes the storage
+reply-loss gap left by the earlier pre-allocation offline test.
+
+Validation: the new two-case process test and all four previous explicit
+native/Web tests pass; Kotlin warnings-as-errors, targeted strict Clippy and
+formatting checks pass. Existing old-client contract rejection is separately
+checked, not treated as full old-Node/version negotiation acceptance. JVM process
+recovery remains distinct from Android OS/Keystore/MethodChannel/device proof.
+This is local-only work; `canSubmit: false` and the remaining U1 acceptance gates
+stay in place. The rollout/rollback gate and U2/U4/U5/U6 remain pending.
 
 ## Design stages and later implementation gates
 
