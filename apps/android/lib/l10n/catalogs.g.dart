@@ -3372,6 +3372,8 @@ const englishMessages = <String, String>{
   "Stop was requested. Check the result before continuing.": "Stop was requested. Check the result before continuing.",
   "Conversation preparation is not yet confirmed. Check the result.": "Conversation preparation is not yet confirmed. Check the result.",
   "The first message admission is still unknown; Stop does not undo completed work.": "The first message admission is still unknown; Stop does not undo completed work.",
+  "Unsent edits": "Unsent edits",
+  "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.",
 };
 const traditionalChineseMessages = <String, String>{
   "無法確認最新狀態，請重試": "無法確認最新狀態，請重試",
@@ -6231,4 +6233,6 @@ const traditionalChineseMessages = <String, String>{
   "Stop was requested. Check the result before continuing.": "已要求停止。繼續前請先檢查結果。",
   "Conversation preparation is not yet confirmed. Check the result.": "尚未確認對話準備完成，請檢查結果。",
   "The first message admission is still unknown; Stop does not undo completed work.": "首次訊息是否已接收仍未知；停止不會復原已完成的工作。",
+  "Unsent edits": "尚未送出的修改",
+  "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "其他視窗已變更此草稿。你尚未送出的修改已另存為草稿，請開啟並檢視後再送出。",
 };

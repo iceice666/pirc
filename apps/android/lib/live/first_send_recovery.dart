@@ -10,6 +10,9 @@ String _preview(Object? value, [int limit = 120]) {
 }
 
 String firstSendLabel(Json row) {
+  if (row['recoveredFrom'] is String && row['frozen'] != true) {
+    return tr('Unsent edits');
+  }
   final prep = obj(row['preparation']);
   final phase = prep['state'];
   if (phase == 'cancelled') {

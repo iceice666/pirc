@@ -338,4 +338,15 @@ class NativeFirstSendFlowTest {
         assertTrue(f.ledger.calls.all { it == "GET /api/conversation-submissions/capabilities" })
     }}
 
+    @Test fun nativeRecoveryCopiesFrozenPrivateBytesWithoutAnyGatewayMutation() = runTest {Fixture().use {f->
+        val c=f.connection();val original=f.saved(c);f.ledger.failMaterialize=true
+        try {c.submit(f.stamp,"alice","op",1,"android-fixture");fail("pending")}catch(_:ApiException){}
+        f.ledger.calls.clear()
+        try {c.drafts(f.stamp,"alice",mapOf("action" to "put","operationId" to "op","expectedRevision" to 1,"record" to mapOf("workspaceId" to "node:repo","message" to "Unsent","files" to original["files"])));fail("frozen")}
+        catch(e:ApiException){assertEquals("draft_changed",e.code)}
+        val copy=c.drafts(f.stamp,"alice",mapOf("action" to "recover","sourceOperationId" to "op","operationId" to "copy","record" to mapOf("workspaceId" to "node:repo","message" to "Unsent","files" to original["files"]))) as Map<*,*>
+        assertEquals("op",copy["recoveredFrom"]);assertEquals("Unsent",copy["message"]);assertEquals(false,copy["frozen"])
+        assertEquals("Original",f.row(c)!!["message"]);assertTrue(f.ledger.calls.isEmpty())
+    }}
+
 }

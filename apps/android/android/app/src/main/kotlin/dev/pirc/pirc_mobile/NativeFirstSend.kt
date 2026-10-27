@@ -49,7 +49,7 @@ internal class NativeFirstSend(
     }
     suspend fun drafts(stamp: String, owner: String, args: Map<*, *>): Any? {
         val captured = current(stamp, owner)
-        val result = withContext(Dispatchers.IO) {
+        val result = try { withContext(Dispatchers.IO) {
             val id = args["operationId"] as? String
             val expected = (args["expectedRevision"] as? Number)?.toLong()
             when (args["action"]) {
@@ -61,11 +61,10 @@ internal class NativeFirstSend(
                         "First-message status is managed by the native submission flow"
                     }
                     val before = store.get(captured.scope, requireNotNull(id))
-                    check(before == null || (!before.flag("frozen") && !before.flag("prepareAttempted"))) {
-                        "Frozen first-message input cannot be edited"
-                    }
+                    if (before != null && (before.flag("frozen") || before.flag("prepareAttempted"))) throw DraftWriteConflict("Frozen first-message input cannot be edited")
                     val record = JsonObject(supplied.filterKeys { it in setOf("workspaceId", "message", "model", "thinking", "files") } +
-                        mapOf("frozen" to JsonPrimitive(false), "prepareAttempted" to JsonPrimitive(false)))
+                        mapOf("frozen" to JsonPrimitive(false), "prepareAttempted" to JsonPrimitive(false)) +
+                        (before?.get("recoveredFrom")?.let { mapOf("recoveredFrom" to it) } ?: emptyMap()))
                     val files = (args["files"] as? List<*>).orEmpty().map { raw ->
                         val file = raw as? Map<*, *> ?: error("Invalid attachment")
                         (file["id"] as? String ?: error("Missing attachment identity")) to
@@ -73,6 +72,17 @@ internal class NativeFirstSend(
                     }
                     require(files.map { it.first }.distinct().size == files.size)
                     store.put(captured.scope, owner, requireNotNull(id), expected, record, files.toMap()).wire()
+                }
+                "recover" -> {
+                    val supplied = args["record"].json() as? JsonObject ?: error("Missing draft record")
+                    val source = args["sourceOperationId"] as? String ?: error("Missing source draft identity")
+                    val files = (args["files"] as? List<*>).orEmpty().map { raw ->
+                        val file = raw as? Map<*, *> ?: error("Invalid attachment")
+                        (file["id"] as? String ?: error("Missing attachment identity")) to
+                            (file["bytes"] as? ByteArray ?: error("Attachment bytes must be Uint8List"))
+                    }
+                    require(files.map { it.first }.distinct().size == files.size)
+                    store.recover(captured.scope, owner, source, requireNotNull(id), expected, supplied, files.toMap()).wire()
                 }
                 "delete" -> {
                     val row = store.get(captured.scope, requireNotNull(id))
@@ -84,7 +94,7 @@ internal class NativeFirstSend(
                 }
                 else -> error("Invalid draft storage action")
             }
-        }
+        } } catch (error: DraftWriteConflict) { throw ApiException(409, "draft_changed", error.message ?: "This draft changed in another window") }
         recheck(captured)
         return result
     }

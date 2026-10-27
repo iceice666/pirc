@@ -167,6 +167,13 @@ available. Web IndexedDB 2 and native envelope 2 preserve originals and Stop
 metadata while refusing older writers. Fresh activation checks and bound-server
 rollback protection do not enable production sends. Full U1 client/process/device,
 unsaved-edit and activation acceptance remain open; later stages are unchanged.
+The [conflicted-editor checkpoint](unified-conversations.md#u1-implementation-checkpoint-preserving-conflicted-editor-input-2026-10-27)
+preserves unsent Web/Android edits and attachment bytes as explicit private drafts
+when a peer changes/freezes the original. Recovery never sends automatically or
+overwrites another editor's copy. Common navigation waits for persistence; native
+byte copying remains account-scoped and local. 508 Web, 40 native JVM and 21 focused
+Flutter tests pass, plus a real two-page/browser-restart storage proof. Full U1
+client/process/device, cleanup-race and activation gates remain open.
 The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
 records local fixture/transcript repairs and 50 Agent plus five Node process
 passes; the remote Check is still failed, and full Chromium/Linux verification

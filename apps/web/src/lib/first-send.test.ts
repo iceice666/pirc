@@ -398,3 +398,18 @@ it('cached activation cannot send through a server without negotiated recovery s
   expect((await store.get(scope, 'operation-1'))?.frozen).toBe(false);
   expect((await store.get(scope, 'operation-1'))?.message).toBe(value.message);
 });
+
+it('local recovery survives a missing source and preserves bytes without copying status or making remote calls', async () => {
+  const { flow, store, remote } = await setup();
+  const original = (await store.get(scope, 'operation-1'))!;
+  await flow.discard(scope, 'operation-1');
+  remote.calls = [];
+  const copy = await flow.recoverEdits(original, { ...value, message: 'Unsaved local edit' });
+  expect(copy.recoveredFrom).toBe('operation-1');
+  expect(copy.operationId).not.toBe(original.operationId);
+  expect(copy.frozen).toBe(false);
+  expect(copy.preparation).toBeUndefined();
+  expect(await copy.files[0]!.blob!.text()).toBe('hello');
+  expect(remote.calls).toEqual([]);
+  expect(await store.get(scope, 'operation-1')).toBeUndefined();
+});

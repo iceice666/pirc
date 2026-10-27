@@ -1398,5 +1398,7 @@
   "Stop was requested. Check the result before continuing.": "Stop was requested. Check the result before continuing.",
   "Conversation preparation is not yet confirmed. Check the result.": "Conversation preparation is not yet confirmed. Check the result.",
   "The first message admission is still unknown; Stop does not undo completed work.": "The first message admission is still unknown; Stop does not undo completed work.",
-  "Connect to the Gateway to confirm first-send support before creating a conversation.": "Connect to the Gateway to confirm first-send support before creating a conversation."
+  "Connect to the Gateway to confirm first-send support before creating a conversation.": "Connect to the Gateway to confirm first-send support before creating a conversation.",
+  "Unsent edits": "Unsent edits",
+  "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending."
 }

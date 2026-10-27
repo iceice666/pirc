@@ -105,4 +105,50 @@ class FirstSendDraftStoreTest {
         file.writeText(JsonObject(migrated+("version" to JsonPrimitive(3))).toString())
         val future=file.readBytes();refused {restored.get(scope,"op")};assertArrayEquals(future,file.readBytes())
     }
+    @Test fun recoveryCopiesVerifiedOriginalAndNewBytesWithoutOverwritingAnyWriter() = fixture {parent,store,scope->
+        val original=store.put(scope,"alice","op",null,value(files=JsonArray(listOf(attachment()))),mapOf("f1" to "hello".toByteArray()))
+        val frozen=store.put(scope,"alice","op",1,JsonObject(original+("frozen" to JsonPrimitive(true))))
+        val second=JsonObject(attachment()+mapOf("id" to JsonPrimitive("f2"),"name" to JsonPrimitive("second.txt")))
+        val input=JsonObject(original+mapOf("message" to JsonPrimitive("Unsent editor"),"files" to JsonArray(listOf(attachment(),second))))
+        val copy=store.recover(scope,"alice","op","copy",null,input,mapOf("f2" to "world".toByteArray()))
+        assertEquals("op",copy["recoveredFrom"]?.jsonPrimitive?.content)
+        assertEquals(false,copy["frozen"]?.jsonPrimitive?.boolean)
+        assertEquals(frozen,store.get(scope,"op"))
+        assertArrayEquals("hello".toByteArray(),store.attachment(scope,"copy","f1").second)
+        assertArrayEquals("world".toByteArray(),store.attachment(scope,"copy","f2").second)
+        store.remove(scope,"op",2)
+        val updated=store.recover(scope,"alice","op","copy",1,JsonObject(input+("message" to JsonPrimitive("Later edit"))),emptyMap())
+        assertArrayEquals("hello".toByteArray(),FirstSendDraftStore(File(parent,"drafts")).attachment(scope,"copy","f1").second)
+        store.put(scope,"alice","copy",updated.getValue("revision").jsonPrimitive.long,JsonObject(updated+("message" to JsonPrimitive("Peer copy edit"))))
+        refused {store.recover(scope,"alice","op","copy",2,input,emptyMap())}
+        assertEquals("Peer copy edit",store.get(scope,"copy")!!["message"]?.jsonPrimitive?.content)
+        refused {store.recover(scope,"alice","op","op",null,input,emptyMap())}
+    }
+    @Test fun recoveryRefusesMissingOrCorruptBytesWithoutPublishingAnIncompleteCopy() = fixture {parent,store,scope->
+        val input=value(files=JsonArray(listOf(attachment())))
+        refused {store.recover(scope,"alice","missing","copy",null,input,emptyMap())}
+        assertNull(store.get(scope,"copy"))
+        store.put(scope,"alice","op",null,input,mapOf("f1" to "hello".toByteArray()))
+        parent.walkTopDown().first {it.name.startsWith("blob-")}.writeText("wrong")
+        refused {store.recover(scope,"alice","op","copy",null,input,emptyMap())}
+        assertNull(store.get(scope,"copy"))
+    }
+
+    @Test fun simultaneousRecoveryWritersCannotReplaceTheOtherCopyOrReadAnotherAccount() = fixture {parent,store,scope->
+        val input=value(files=JsonArray(listOf(attachment())))
+        store.put(scope,"alice","op",null,input,mapOf("f1" to "hello".toByteArray()))
+        val executor=Executors.newFixedThreadPool(2)
+        try {
+            val winners=executor.invokeAll((1..2).map {n->Callable {
+                try {FirstSendDraftStore(File(parent,"drafts")).recover(scope,"alice","op","copy",null,JsonObject(input+("message" to JsonPrimitive("Writer $n"))),emptyMap());true}
+                catch(_:DraftWriteConflict){false}
+            }}).map {it.get()}
+            assertEquals(1,winners.count {it})
+            assertArrayEquals("hello".toByteArray(),store.attachment(scope,"copy","f1").second)
+            val bob=FirstSendDraftStore.scope("https://example.test","bob")
+            refused {store.recover(bob,"bob","op","copy",null,input,emptyMap())}
+            assertNull(store.get(bob,"copy"))
+        } finally {executor.shutdownNow()}
+    }
+
 }

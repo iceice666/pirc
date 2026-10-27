@@ -1,6 +1,9 @@
 import { tr } from './i18n.svelte';
 import {
   FirstSend,
+  DraftConflict,
+  editsRecovered,
+  sameDraftInput,
   firstContractCompatible,
   firstContractBlocked,
   firstTransport,
@@ -162,6 +165,7 @@ class AppState {
   #firstOpenIntent = 0;
   #firstRevisions = new Map<string, number>();
   #firstWrites = Promise.resolve();
+  #firstEditor?: { conflicted: boolean; recovery?: FirstDraft; serial: number; committed: number };
   readonly firstFlow = new FirstSend(new BrowserDraftStore(), firstTransport, (row, id, scope) => {
     const key = JSON.stringify([scope, id]);
     if (row) this.#firstRevisions.set(key, row.revision);
@@ -293,11 +297,43 @@ class AppState {
     } catch (error) {
       return Promise.reject(error);
     }
+    const editor = (this.#firstEditor ??= { conflicted: false, serial: 0, committed: 0 });
+    const serial = ++editor.serial;
     const write = this.#firstWrites.then(async () => {
-      const revision =
-        this.#firstRevisions.get(JSON.stringify([draft.scope, draft.operationId])) ??
-        (draft.revision || undefined);
-      await this.firstFlow.save(draft.scope, draft.ownerUser, draft.operationId, value, revision);
+      if (!editor.conflicted) {
+        try {
+          const revision =
+            this.#firstRevisions.get(JSON.stringify([draft.scope, draft.operationId])) ??
+            (draft.revision || undefined);
+          await this.firstFlow.save(
+            draft.scope,
+            draft.ownerUser,
+            draft.operationId,
+            value,
+            revision,
+          );
+          editor.committed = serial;
+          return;
+        } catch (error) {
+          if (!(error instanceof DraftConflict)) throw error;
+          const latest = await this.firstFlow.store.get(draft.scope, draft.operationId);
+          if (latest && sameDraftInput(value, latest)) {
+            editor.committed = serial;
+            if (this.#firstEditor === editor && this.firstDraft?.operationId === draft.operationId)
+              this.firstDraft = latest;
+            return;
+          }
+          editor.conflicted = true;
+        }
+      }
+      editor.recovery = await this.firstFlow.recoverEdits(draft, value, editor.recovery);
+      editor.committed = serial;
+      if (this.#firstEditor === editor && this.firstDraft?.operationId === draft.operationId) {
+        // Refresh shared facts only after the unsent private input is durable.
+        const latest = await this.firstFlow.store.get(draft.scope, draft.operationId);
+        if (this.#firstEditor === editor && latest) this.firstDraft = latest;
+        this.pageError = tr(editsRecovered);
+      }
     });
     this.#firstWrites = write.catch((error) => {
       if (this.firstDraft?.operationId === draft.operationId)
@@ -305,8 +341,24 @@ class AppState {
     });
     return write;
   }
+  async #saveBeforeFirstNavigation() {
+    if (!this.firstDraft) return true;
+    const selection = this.#openSeq,
+      editor = this.#firstEditor;
+    try {
+      if (!this.firstDraft.frozen) await this.#saveFirstDraft();
+      await this.#firstWrites;
+      if (editor && editor.serial !== editor.committed)
+        throw new Error(tr('Local draft save failed. Your message is kept.'));
+      return selection === this.#openSeq;
+    } catch (error) {
+      if (selection === this.#openSeq) this.#firstError(error);
+      return false;
+    }
+  }
   async resumeFirst(row: FirstDraft) {
     if (row.scope !== this.#firstScope) return;
+    if (this.firstDraft && !(await this.#saveBeforeFirstNavigation())) return;
     const selection = this.#openSeq;
     const current = await this.firstFlow.store.get(row.scope, row.operationId);
     if (!current || current.scope !== this.#firstScope || selection !== this.#openSeq) return;
@@ -325,6 +377,10 @@ class AppState {
     )
       return;
     if (row.preparation?.state === 'admitted') {
+      await this.#firstWrites;
+      if (this.#firstEditor && this.#firstEditor.serial !== this.#firstEditor.committed)
+        throw new Error(tr('Local draft save failed. Your message is kept.'));
+      if (row.scope !== this.#firstScope || selection !== this.#openSeq) return;
       const id = row.preparation.sessionId;
       await this.firstFlow.forget(row.scope, row.operationId);
       if (row.scope !== this.#firstScope || selection !== this.#openSeq) return;
@@ -359,6 +415,10 @@ class AppState {
     this.pageError = '';
     try {
       if (!draft.frozen) await this.#saveFirstDraft();
+      if (this.#firstEditor?.conflicted) {
+        this.pageError = tr(editsRecovered);
+        return;
+      }
       const row = draft.cancelRequested
         ? await this.firstFlow.discard(draft.scope, draft.operationId)
         : await this.firstFlow.run(draft.scope, draft.operationId, this.firstDraft?.revision);
@@ -426,6 +486,7 @@ class AppState {
         this.firstDraft?.operationId !== row.operationId
       )
         return;
+      if (!(await this.#saveBeforeFirstNavigation())) return;
       this.discardDraftSession();
       await this.openSession(result.preparation!.sessionId, { skipFirst: true });
     } catch (error) {
@@ -466,6 +527,7 @@ class AppState {
     if (!this.isDraftSession) return;
     const pendingFirst = this.firstDraft;
     this.firstDraft = undefined;
+    this.#firstEditor = undefined;
     if (
       pendingFirst &&
       !pendingFirst.frozen &&
@@ -621,14 +683,26 @@ class AppState {
   }
 
   /** Open the owner-scoped pots inbox; viewing never starts work or takes control. */
-  showPots() {
+  async showPots() {
+    const intent = ++this.#firstOpenIntent;
+    if (
+      this.firstDraft &&
+      (!(await this.#saveBeforeFirstNavigation()) || intent !== this.#firstOpenIntent)
+    )
+      return;
     this.discardDraftSession();
     this.view = 'pots';
     this.#address('?open=pots');
   }
 
   /** Show the schedules in the main column, optionally opening one. */
-  showSchedules(scheduleId?: string) {
+  async showSchedules(scheduleId?: string) {
+    const intent = ++this.#firstOpenIntent;
+    if (
+      this.firstDraft &&
+      (!(await this.#saveBeforeFirstNavigation()) || intent !== this.#firstOpenIntent)
+    )
+      return;
     this.discardDraftSession();
     this.calendarFocus = undefined;
     if (scheduleId) this.scheduleFocus = scheduleId;
@@ -636,7 +710,13 @@ class AppState {
   }
 
   /** Show the Calendar, optionally at the occurrence named by a reminder. */
-  showCalendar(eventId?: string, occurrenceStart?: string, date?: string, startAt?: number) {
+  async showCalendar(eventId?: string, occurrenceStart?: string, date?: string, startAt?: number) {
+    const intent = ++this.#firstOpenIntent;
+    if (
+      this.firstDraft &&
+      (!(await this.#saveBeforeFirstNavigation()) || intent !== this.#firstOpenIntent)
+    )
+      return;
     this.discardDraftSession();
     this.scheduleFocus = undefined;
     this.calendarNavigationRevision++;
@@ -679,7 +759,13 @@ class AppState {
    * Show a project's or workspace's page: its sessions and its settings. The
    * open session stays connected behind it, so going back is instant.
    */
-  showWorkspace(workspaceId: string) {
+  async showWorkspace(workspaceId: string) {
+    const intent = ++this.#firstOpenIntent;
+    if (
+      this.firstDraft &&
+      (!(await this.#saveBeforeFirstNavigation()) || intent !== this.#firstOpenIntent)
+    )
+      return;
     this.discardDraftSession();
     const workspace = this.workspaces.find((item) => item.id === workspaceId);
     if (!workspace) return;
@@ -1032,6 +1118,12 @@ class AppState {
     }: { show?: boolean; keepComposer?: boolean; skipFirst?: boolean } = {},
   ) {
     const firstIntent = ++this.#firstOpenIntent;
+    if (
+      !keepComposer &&
+      this.firstDraft &&
+      (!(await this.#saveBeforeFirstNavigation()) || firstIntent !== this.#firstOpenIntent)
+    )
+      return;
     if (!skipFirst && this.firstEnabled && !this.demo) {
       const seq = this.#openSeq,
         scope = this.#firstScope,
@@ -2000,10 +2092,14 @@ class AppState {
       this.pageError = tr('This workspace is unavailable.');
       return false;
     }
+    const intent = ++this.#firstOpenIntent,
+      previousSelection = this.#openSeq;
+    if (this.firstDraft && !(await this.#saveBeforeFirstNavigation())) return false;
+    if (intent !== this.#firstOpenIntent || previousSelection !== this.#openSeq) return false;
     this.flushDraft();
     this.discardDraftSession();
     const selection = ++this.#openSeq;
-    ++this.#firstOpenIntent;
+    this.#firstEditor = { conflicted: false, serial: 0, committed: 0 };
     this.#events?.close();
     this.#events = undefined;
     this.draftWorkspaceId = workspaceId;
@@ -2075,7 +2171,7 @@ class AppState {
           );
         return false;
       }
-      if (selection !== this.#openSeq) return false;
+      if (selection !== this.#openSeq || intent !== this.#firstOpenIntent) return false;
     }
     if (!this.demo) void this.loadModels();
     return true;

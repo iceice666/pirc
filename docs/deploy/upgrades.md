@@ -1,5 +1,27 @@
 # Upgrades
 
+## Unreleased local checkpoint: unsent edit recovery
+
+Web/Android preserve a stale editor's text/settings/selected file bytes as an
+explicit separate local draft when a peer changes or freezes its source operation.
+The **Unsent edits** entry must be opened and reviewed, then explicitly sent;
+recovery and navigation perform no preparation, admission or dispatch. Repeated
+recovery respects the copy's revision too; another writer's copy is never replaced.
+Unchanged input adopts the newer facts without creating a duplicate draft.
+
+Web's common navigation paths wait for persistence and keep the current input
+when saving fails. The native `recover` draft action uses the existing bound
+origin/account and private file lock; it verifies bytes and commits independently.
+Missing/corrupt bytes refuse the copy rather than claiming success. This does not
+add a grant or require a Web connection. Explicit copy discard is independent of
+source conversation/memory deletion; private drafts keep their existing lifetime.
+
+Gateway 1018 / Node 2008, protocol 15, recovery contract 2 and private storage
+versions stay unchanged. The optional local `recoveredFrom` identity is not part
+of server/model input. **Production `canSubmit: false` remains unchanged.** Real
+client-to-Agent, Android process-death and cleanup-race acceptance remain open.
+No migration deployment, APK or release asset is included.
+
 ## Unreleased local checkpoint: first-send client compatibility
 
 Gateway schema **1018** adds a semantic downgrade fence; no tables change.

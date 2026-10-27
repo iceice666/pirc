@@ -1825,6 +1825,73 @@ Flutter suite, Nix check, APK, deployment, push or release is included. Run-owne
 isolated test output is removed after verification; APKs, SDKs, shared output and
 other agents' files are preserved.
 
+## U1 implementation checkpoint: preserving conflicted editor input (2026-10-27)
+
+Implemented locally on top of the recovery-contract checkpoint. Gateway 1018,
+Node 2008, protocol 15, client contract 2, private storage versions, dependency
+locks and package versions stay unchanged. **`canSubmit: false` and the remaining
+U1 acceptance gates stay in effect.**
+
+- A stale Web/Android editor never overwrites a peer's changed/frozen operation.
+  Typed local revision conflicts preserve the current text, settings and selected
+  attachment bytes as a separate private, unfrozen draft. `recoveredFrom` records
+  only the original local operation ID; it is excluded from model/Node submission.
+  No source command, receipt, acceptance, Stop identity or control grant is copied.
+  The source remains available for its normal query/Stop/deletion flow.
+- The functional notice and **Unsent edits** entry make the separate local copy
+  explicit. Opening it restores an editable draft; only a subsequent explicit Send
+  may prepare a new operation. Recovery, navigation and reopening never send it.
+  Repeated edits use the same editor-owned recovery revision. If another editor
+  changes or freezes that copy, a new copy preserves later edits instead of
+  overwriting the peer. Identical input simply adopts the peer's newer facts,
+  without manufacturing an unnecessary duplicate draft. Attachment selection IDs
+  identify immutable bytes; later hashing does not count as an input edit.
+- Web waits for draft persistence before New conversation, opening a conversation,
+  Workspace, Calendar, Schedules, pots and recovery navigation. Persistence refusal
+  retains the current input/selection. Delayed older New conversation completions
+  cannot replace the latest intent. Admission/confirmed-Stop opening also drains
+  queued writes before clearing the editor. Explicit discard and account isolation
+  retain their separate semantics.
+- Android performs local `recover` through the existing authenticated native draft
+  bridge. Under its account/file lock it copies size/digest-verified existing bytes
+  or the editor's newly selected bytes, and atomically commits independent metadata.
+  A recovery remains usable after source-local cleanup once its own bytes committed.
+  Missing/corrupt originals are refused without publishing a partial draft; the
+  controller keeps the editor rather than claiming the files were saved. No Web
+  page, Gateway mutation, new permission or new login scheme is involved.
+- Private recovery copies have the existing local-draft lifetime, not the seven-day
+  unaccepted Gateway-staging deadline. Discarding a copy does not delete the source
+  conversation, its memories or another editor's copy. Original accepted deletion
+  keeps its separate confirmation/memory cleanup. This slice does not change
+  checkpoint ownership or restore behavior.
+
+Validation: **508 Web tests across 64 files pass**; Svelte typecheck has no errors
+or warnings and an isolated production build passes with its existing size advisory.
+The production IndexedDB adapter and FirstSend recovery run in two real isolated
+Headless Shell pages: a peer freeze preserves the original, the unsent text and
+both old/new Blob bytes survive browser restart, and no transport is available to
+send the recovery. Earlier migration, abort, account and competing-tab checks
+remain included. **40 focused native JVM tests pass without skips**, including
+actual file-lock contention, independent byte copies, source cleanup, stale-copy
+refusal, corruption/missing bytes, account isolation and no-HTTP native recovery.
+Actual App Kotlin callers compile against the SDK; Flutter build/asset tasks are
+excluded. **21 focused Flutter tests pass** in the same two controller/recovery
+files; targeted analysis is clean. Fake-port Flutter proofs and synthetic native
+HTTP/filesystem proofs remain distinct from real device acceptance. All **2,545**
+generated Flutter entries per locale match their JSON sources; the two new labels
+also match Web/native English and Traditional Chinese catalogs.
+
+Remaining U1: the real Web/native-client-to-Gateway/Node/Agent failure matrix;
+Android process-death/private-filesystem/device proof, including cleanup racing an
+editor before any independent recovery copy commits; permission and multi-device
+cases; useful known-admission-failure retry with files; and the final activation
+and rollback gate. Abrupt termination before a local transaction acknowledges is
+not proven by these tests. Forced account/workspace removal and explicit deletion
+still need their complete end-to-end acceptance. Later stable bindings, mount
+revocation, canonical tasks/collaboration and bounded pots stages stay open. No
+full Flutter suite, emulator, device, Nix, APK, push, deployment or Release is used.
+Only this run's isolated output, temporary profiles and logs are removed afterward.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

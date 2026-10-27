@@ -75,6 +75,8 @@ export interface FirstDraft {
   stopCommandId?: string;
   pendingStopControl?: StopControl;
   updatedAt: number;
+  /** Private unsent edits, never a retry of the source operation. */
+  recoveredFrom?: string;
 }
 export interface StopControl {
   clientId: string;
@@ -222,6 +224,33 @@ export const pendingFirst = (draft: FirstDraft) =>
   draft.frozen &&
   draft.preparation?.state !== 'admitted' &&
   draft.preparation?.state !== 'cancelled';
+/** Attachment IDs identify immutable local selection bytes; hashes may be added later. */
+export const sameDraftInput = (
+  a: Pick<FirstDraft, 'workspaceId' | 'message' | 'model' | 'thinking' | 'files'>,
+  b: FirstDraft,
+) =>
+  a.workspaceId === b.workspaceId &&
+  a.message === b.message &&
+  a.model?.provider === b.model?.provider &&
+  a.model?.id === b.model?.id &&
+  a.thinking === b.thinking &&
+  a.files.length === b.files.length &&
+  a.files.every((file, index) => {
+    const other = b.files[index]!;
+    return (
+      file.id === other.id &&
+      file.name === other.name &&
+      file.mimeType === other.mimeType &&
+      file.byteSize === other.byteSize
+    );
+  });
+export class DraftConflict extends Error {
+  constructor(message = 'This draft changed in another tab. Reopen the saved version.') {
+    super(message);
+  }
+}
+export const editsRecovered =
+  'Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.';
 export class FirstSend {
   constructor(
     readonly store: DraftStore,
@@ -246,11 +275,13 @@ export class FirstSend {
     revision?: number,
   ) {
     return (await this.#write(scope, operationId, (old) => {
-      if (!old && revision !== undefined) throw new Error('This draft is no longer available.');
+      if (!old && revision !== undefined)
+        throw new DraftConflict('This draft is no longer available.');
       if (old && (old.frozen || revision === undefined || old.revision !== revision))
-        throw new Error('This draft changed in another tab. Reopen the saved version.');
+        throw new DraftConflict();
       return {
         ...value,
+        ...(old?.recoveredFrom ? { recoveredFrom: old.recoveredFrom } : {}),
         scope,
         ownerUser,
         operationId,
@@ -260,6 +291,45 @@ export class FirstSend {
         updatedAt: Date.now(),
       };
     }))!;
+  }
+  /** Local-only recovery. It never prepares, accepts, acquires control or sends. */
+  async recoverEdits(
+    source: FirstDraft,
+    value: Pick<FirstDraft, 'workspaceId' | 'message' | 'model' | 'thinking' | 'files'>,
+    previous?: FirstDraft,
+  ) {
+    let target = previous;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const id = target?.operationId ?? `draft-${uuid()}`;
+      try {
+        return (await this.#write(source.scope, id, (old) => {
+          if (
+            old
+              ? old.frozen ||
+                old.revision !== target?.revision ||
+                old.recoveredFrom !== source.operationId
+              : !!target
+          )
+            throw new DraftConflict();
+          return {
+            ...value,
+            scope: source.scope,
+            ownerUser: source.ownerUser,
+            operationId: id,
+            recoveredFrom: source.operationId,
+            revision: (old?.revision ?? 0) + 1,
+            updatedAt: Date.now(),
+            frozen: false,
+            prepareAttempted: false,
+          };
+        }))!;
+      } catch (error) {
+        if (!(error instanceof DraftConflict)) throw error;
+        // A user may have opened/edited this copy elsewhere. Never overwrite it.
+        target = undefined;
+      }
+    }
+    throw new Error('Local draft save failed. Your message is kept.');
   }
   async #read(scope: string, id: string, allowCancel = false) {
     const row = await this.store.get(scope, id);

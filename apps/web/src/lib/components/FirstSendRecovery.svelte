@@ -113,7 +113,7 @@
         <div class="saved-row">
           <button type="button" class="button ghost" onclick={() => app.resumeFirst(draft)}
             >{draft.message.slice(0, 65) || tr('Pending cleanup')} · {tr(
-              draft.preparation?.state ?? 'Local draft',
+              draft.recoveredFrom ? 'Unsent edits' : (draft.preparation?.state ?? 'Local draft'),
             )}</button
           >
           {#if !draft.frozen}

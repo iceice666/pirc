@@ -25,7 +25,7 @@ try {
             if (req.url !== '/storage-check.html') return next();
             res.setHeader('content-type', 'text/html');
             res.end(
-              '<!doctype html><script type="module">import {BrowserDraftStore} from "/src/lib/first-send-storage.ts";window.store=new BrowserDraftStore();</script>',
+              '<!doctype html><script type="module">import {BrowserDraftStore} from "/src/lib/first-send-storage.ts";import {FirstSend} from "/src/lib/first-send.ts";window.store=new BrowserDraftStore();window.flow=new FirstSend(window.store,{});</script>',
             );
           });
         },
@@ -179,6 +179,61 @@ try {
     (await Promise.all([edit(page, 'tab one'), edit(peer, 'tab two')])).filter(Boolean).length,
     1,
   );
+  // Two actual pages share the production store. Preserve a stale editor's
+  // selection after its peer freezes the immutable source, without a transport.
+  const peerOriginalText = await peer.evaluate(
+    async () => (await window.store.get('account-a', 'op')).message,
+  );
+  await page.evaluate(async () => {
+    window.editor = await window.store.get('account-a', 'op');
+    window.editor.message = 'Unsent editor text';
+    window.editor.files.push({
+      id: 'new-file',
+      name: 'new.txt',
+      mimeType: 'text/plain',
+      byteSize: 9,
+      blob: new Blob(['new bytes']),
+    });
+  });
+  await peer.evaluate(async () =>
+    window.store.update('account-a', 'op', (row) => ({
+      ...row,
+      frozen: true,
+      revision: row.revision + 1,
+    })),
+  );
+  assert.equal(
+    await page.evaluate(async () => {
+      try {
+        await window.flow.save('account-a', 'alice', 'op', window.editor, 2);
+        return false;
+      } catch {
+        return true;
+      }
+    }),
+    true,
+  );
+  const recoveredId = await page.evaluate(async () => {
+    const copy = await window.flow.recoverEdits(window.editor, window.editor);
+    window.recoveredId = copy.operationId;
+    return copy.operationId;
+  });
+  assert.notEqual(recoveredId, 'op');
+  assert.deepEqual(
+    await peer.evaluate(async (id) => {
+      const copy = await window.store.get('account-a', id),
+        original = await window.store.get('account-a', 'op');
+      return [
+        copy.message,
+        await copy.files[0].blob.text(),
+        await copy.files[1].blob.text(),
+        copy.frozen,
+        copy.recoveredFrom,
+        original.message,
+      ];
+    }, recoveredId),
+    ['Unsent editor text', '附件 bytes', 'new bytes', false, 'op', peerOriginalText],
+  );
   await context.close();
   context = undefined;
   context = await chromium.launchPersistentContext(join(temporary, 'profile'), options);
@@ -189,9 +244,16 @@ try {
     const row = await window.store.get('account-a', 'op');
     return { revision: row.revision, bytes: await row.files[0].blob.text() };
   });
-  assert.deepEqual(recovered, { revision: 2, bytes: '附件 bytes' });
+  assert.deepEqual(recovered, { revision: 3, bytes: '附件 bytes' });
+  assert.deepEqual(
+    await cold.evaluate(async (id) => {
+      const copy = await window.store.get('account-a', id);
+      return [copy.message, await copy.files[1].blob.text(), copy.recoveredFrom];
+    }, recoveredId),
+    ['Unsent editor text', 'new bytes', 'op'],
+  );
   console.log(
-    'PASS: production IndexedDB upgrades legacy rows/Blobs without loss, rejects old writers, preserves Blob bytes across reload/browser restart, isolates accounts, rolls back aborted writes, and serializes competing tabs.',
+    'PASS: production IndexedDB upgrades legacy rows/Blobs without loss, rejects old writers, preserves Blob bytes across reload/browser restart, isolates accounts, rolls back aborted writes, serializes competing tabs, and retains unsent conflict text/Blobs through a real peer freeze and browser restart.',
   );
 } finally {
   await context?.close();

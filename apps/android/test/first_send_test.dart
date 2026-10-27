@@ -62,7 +62,11 @@ class FirstPort {
               ? args['expectedRevision'] != null
               : row['revision'] != args['expectedRevision'] ||
                     row['frozen'] == true) {
-            throw PlatformException(code: 'CONFLICT', message: 'draft changed');
+            throw PlatformException(
+              code: 'CONFLICT',
+              message: 'draft changed',
+              details: {'code': 'draft_changed', 'status': 409},
+            );
           }
           final record = clone(obj(args['record']));
           final files = rows(record['files']);
@@ -82,6 +86,41 @@ class FirstPort {
             'scope': jsonEncode(['https://gateway.example', args['ownerUser']]),
             'ownerUser': args['ownerUser'],
             'operationId': args['operationId'],
+            'revision': (row?['revision'] as int? ?? 0) + 1,
+            'frozen': false,
+            'prepareAttempted': false,
+          };
+          return clone(records[k]!);
+        case 'recover':
+          final source = '${args['ownerUser']}:${args['sourceOperationId']}';
+          if (row == null
+              ? args['expectedRevision'] != null
+              : row['revision'] != args['expectedRevision'] ||
+                    row['frozen'] == true) {
+            throw PlatformException(
+              code: 'CONFLICT',
+              details: {'code': 'draft_changed', 'status': 409},
+            );
+          }
+          final input = clone(obj(args['record']));
+          final supplied = {
+            for (final f in rows(args['files']))
+              f['id']: f['bytes'] as Uint8List,
+          };
+          for (final file in rows(input['files'])) {
+            final content =
+                supplied[file['id']] ??
+                bytes['$k:${file['id']}'] ??
+                bytes['$source:${file['id']}'];
+            if (content == null) throw StateError('missing original bytes');
+            bytes['$k:${file['id']}'] = content;
+          }
+          records[k] = {
+            ...input,
+            'ownerUser': args['ownerUser'],
+            'operationId': args['operationId'],
+            'scope': jsonEncode(['https://gateway.example', args['ownerUser']]),
+            'recoveredFrom': args['sourceOperationId'],
             'revision': (row?['revision'] as int? ?? 0) + 1,
             'frozen': false,
             'prepareAttempted': false,
@@ -584,6 +623,82 @@ void main() {
         ),
         isEmpty,
       );
+      await dispose(c, g);
+    },
+  );
+  test(
+    'conflicted edits retain private text and original file bytes until an explicit reviewed Send',
+    () async {
+      final (c, g, p) = await setup();
+      await c.create('w');
+      c.editDraft('Original');
+      await c.attach();
+      await c.flushDraft();
+      final op = c.firstSend.current!['operationId'];
+      final primary = p.records['alice:$op']!;
+      primary['frozen'] = true;
+      primary['revision']++;
+      primary['preparation'] = {
+        'state': 'admitted',
+        'accepted': true,
+        'sessionId': 'public-original',
+        'operationId': op,
+      };
+      c.editDraft('Local unsent changes');
+      await c.flushDraft();
+      await c.send('prompt');
+      final copy = c.firstSend.saved.singleWhere(
+        (r) => r['recoveredFrom'] == op,
+      );
+      expect(copy['message'], 'Local unsent changes');
+      expect(copy['frozen'], false);
+      expect(copy['preparation'], isNull);
+      expect(primary['message'], 'Original');
+      expect(
+        p.bytes['alice:${copy['operationId']}:${rows(copy['files']).single['id']}'],
+        [65, 66],
+      );
+      expect(g.calls.where((call) => call.$1 == 'firstSendSubmit'), isEmpty);
+      await c.firstSend.resume(copy);
+      expect(c.draft, 'Local unsent changes');
+      expect(g.calls.where((call) => call.$1 == 'firstSendSubmit'), isEmpty);
+      await c.send('prompt');
+      expect(
+        g.calls.where((call) => call.$1 == 'firstSendSubmit'),
+        hasLength(1),
+      );
+      expect(primary['message'], 'Original');
+      await dispose(c, g);
+    },
+  );
+  test(
+    'a peer-edited recovery copy is kept while later local edits get a different draft',
+    () async {
+      final (c, g, p) = await setup();
+      await c.create('w');
+      c.editDraft('Original');
+      await c.flushDraft();
+      final op = c.firstSend.current!['operationId'],
+          primary = p.records['alice:${c.firstSend.current!['operationId']}']!;
+      primary['message'] = 'Peer main';
+      primary['revision']++;
+      c.editDraft('Local one');
+      await c.flushDraft();
+      final first = c.firstSend.saved.singleWhere(
+        (r) => r['recoveredFrom'] == op,
+      );
+      p.records['alice:${first['operationId']}']!['message'] = 'Peer copy';
+      p.records['alice:${first['operationId']}']!['revision']++;
+      c.editDraft('Local two');
+      await c.flushDraft();
+      expect(
+        p.records.values
+            .where((r) => r['recoveredFrom'] == op)
+            .map((r) => r['message']),
+        unorderedEquals(['Peer copy', 'Local two']),
+      );
+      expect(primary['message'], 'Peer main');
+      expect(g.calls.where((call) => call.$1 == 'firstSendSubmit'), isEmpty);
       await dispose(c, g);
     },
   );

@@ -1,5 +1,14 @@
 part of 'gateway.dart';
 
+class _FirstSendEditor {
+  bool conflicted = false;
+  Json? recovery;
+  int serial = 0, committed = 0;
+}
+
+const _editsRecovered =
+    'Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.';
+
 /// Private drafts and pending sends are independent of the visible conversation.
 /// Native storage owns revisions, hashes and admission; this class never invents receipts.
 class FirstSendState {
@@ -13,6 +22,7 @@ class FirstSendState {
   String? _submitting;
   int _epoch = 0, _capRevision = 0;
   Future<void> _writes = Future<void>.value();
+  _FirstSendEditor _editor = _FirstSendEditor();
   final _revisions = <String, int>{};
   bool get _compatible =>
       available &&
@@ -116,6 +126,7 @@ class FirstSendState {
     capabilities = {};
     unavailable = true;
     current = null;
+    _editor = _FirstSendEditor();
     saved = [];
     _submitting = null;
     controlBusy = false;
@@ -293,6 +304,23 @@ class FirstSendState {
     };
   }
 
+  bool _sameInput(Json input, Json row) {
+    for (final field in ['workspaceId', 'message', 'thinking']) {
+      if (input[field] != row[field]) return false;
+    }
+    for (final field in ['id', 'provider']) {
+      if (obj(input['model'])[field] != obj(row['model'])[field]) return false;
+    }
+    final a = rows(input['files']), b = rows(row['files']);
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      for (final field in ['id', 'name', 'mimeType', 'byteSize']) {
+        if (a[i][field] != b[i][field]) return false;
+      }
+    }
+    return true;
+  }
+
   Future<void> save() {
     final row = current;
     if (row == null || row['frozen'] == true || sending) return _writes;
@@ -301,22 +329,81 @@ class FirstSendState {
         .where((a) => a['draftBytes'] is Uint8List && a['nativeStored'] != true)
         .map((a) => {'id': a['id'], 'bytes': a['draftBytes']})
         .toList();
+    final editor = _editor, serial = ++_editor.serial;
+    final recoveryFiles = c.attachments
+        .where((a) => a['draftBytes'] is Uint8List)
+        .map((a) => {'id': a['id'], 'bytes': a['draftBytes']})
+        .toList();
     final write = _writes.then((_) async {
-      final revision = _revisions[_key(row)] ?? row['revision'];
-      final stored = obj(
-        await c.gateway.call('firstSendDrafts', {
-          ..._args(row),
-          'action': 'put',
-          if (revision != 0) 'expectedRevision': revision,
-          'record': value,
-          'files': files,
-        }),
-      );
-      _remember(
-        _bound(stored, row['pairingStamp'] as String),
-        epoch,
-        notify: false,
-      );
+      if (!editor.conflicted) {
+        try {
+          final revision = _revisions[_key(row)] ?? row['revision'];
+          final stored = obj(
+            await c.gateway.call('firstSendDrafts', {
+              ..._args(row),
+              'action': 'put',
+              if (revision != 0) 'expectedRevision': revision,
+              'record': value,
+              'files': files,
+            }),
+          );
+          _remember(
+            _bound(stored, row['pairingStamp'] as String),
+            epoch,
+            notify: false,
+          );
+          editor.committed = serial;
+          return;
+        } on PlatformException catch (error) {
+          if (obj(error.details)['code'] != 'draft_changed') {
+            rethrow;
+          }
+          final latest = await _read(row);
+          if (latest != null && _sameInput(value, latest)) {
+            editor.committed = serial;
+            if (identical(_editor, editor)) {
+              _remember(latest, epoch);
+            }
+            return;
+          }
+          editor.conflicted = true;
+        }
+      }
+      for (var attempt = 0; attempt < 3; attempt++) {
+        final copy = editor.recovery;
+        try {
+          final result = obj(
+            await c.gateway.call('firstSendDrafts', {
+              ..._args(row),
+              'action': 'recover',
+              'operationId': copy?['operationId'] ?? 'draft-${identity()}',
+              'sourceOperationId': row['operationId'],
+              if (copy != null) 'expectedRevision': copy['revision'],
+              'record': value,
+              'files': recoveryFiles,
+            }),
+          );
+          editor.recovery = _bound(result, row['pairingStamp'] as String);
+          editor.committed = serial;
+          _remember(editor.recovery!, epoch);
+          if (identical(_editor, editor) &&
+              current?['operationId'] == row['operationId']) {
+            final latest = await _read(row);
+            if (latest != null && identical(_editor, editor)) {
+              _remember(latest, epoch);
+            }
+            c.actionError = tr(_editsRecovered);
+            c.changed();
+          }
+          return;
+        } on PlatformException catch (error) {
+          if (obj(error.details)['code'] != 'draft_changed') {
+            rethrow;
+          }
+          editor.recovery = null;
+        }
+      }
+      throw StateError(tr('Local draft save failed. Your message is kept.'));
     });
     _writes = write.catchError((Object error) {
       if (_visible(row, epoch) &&
@@ -345,6 +432,7 @@ class FirstSendState {
   }
 
   Future<void> reserve() async {
+    _editor = _FirstSendEditor();
     current = {
       'operationId': c.sessionId,
       'scope': capabilities['draftScope'],
@@ -393,6 +481,11 @@ class FirstSendState {
         _revisions[_key(row)] != row['revision']) {
       return;
     }
+    await _writes;
+    if (_editor.serial != _editor.committed) {
+      throw StateError(tr('Local draft save failed. Your message is kept.'));
+    }
+    if (!_visible(row, epoch) || c._selection != selection) return;
     final id = obj(row['preparation'])['sessionId'] as String;
     await _forget(row, epoch);
     if (!_visible(row, epoch) || c._selection != selection) return;
@@ -422,6 +515,10 @@ class FirstSendState {
     c.changed();
     try {
       await saving;
+      if (_editor.conflicted) {
+        c.actionError = tr(_editsRecovered);
+        return;
+      }
       final stored = await _read(row);
       if (stored == null) {
         throw StateError(tr('This draft is no longer available.'));
@@ -496,6 +593,10 @@ class FirstSendState {
         row['pairingStamp'] as String,
       );
       _remember(result, epoch);
+      await _writes;
+      if (_editor.serial != _editor.committed) {
+        throw StateError(tr('Local draft save failed. Your message is kept.'));
+      }
       if (!_visible(row, epoch) || selection != c._selection) return;
       c.discardDraftSession();
       await c.open(
@@ -660,6 +761,7 @@ class FirstSendState {
   }
 
   void restore(Json row) {
+    _editor = _FirstSendEditor();
     current = row;
     c.draft = '${row['message'] ?? ''}';
     c.state = {

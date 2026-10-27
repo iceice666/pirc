@@ -13,6 +13,8 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
+internal class DraftWriteConflict(message: String = "This draft changed in another window. Reopen the saved version.") : IllegalStateException(message)
+
 /** Private no-backup storage. Metadata commits only after its referenced bytes are durable. */
 internal class FirstSendDraftStore(private val root: File) {
     companion object {
@@ -120,10 +122,9 @@ internal class FirstSendDraftStore(private val root: File) {
     private fun putAt(account: File, scope: String, owner: String, id: String, expectedRevision: Long?, value: JsonObject, bytes: Map<String, ByteArray>): JsonObject {
         val dir = operation(account, id, true)!!
         val before = read(dir, scope, id)?.let { checked(it, scope, id) }
-        check(before?.get("deleted")?.jsonPrimitive?.booleanOrNull != true) { "This draft was discarded" }
-        check(if (before == null) expectedRevision == null else before["revision"]?.jsonPrimitive?.longOrNull == expectedRevision) {
-            "This draft changed in another window. Reopen the saved version."
-        }
+        if (before?.get("deleted")?.jsonPrimitive?.booleanOrNull == true) throw DraftWriteConflict("This draft was discarded")
+        if (!(if (before == null) expectedRevision == null else before["revision"]?.jsonPrimitive?.longOrNull == expectedRevision)) throw DraftWriteConflict()
+        if (before?.get("frozen")?.jsonPrimitive?.booleanOrNull == true && value["frozen"]?.jsonPrimitive?.booleanOrNull != true) throw DraftWriteConflict("Frozen first-message input cannot be edited")
         require(value["workspaceId"]?.jsonPrimitive?.content?.isNotBlank() == true)
         require(value["message"]?.jsonPrimitive?.content?.length?.let { it <= 1_000_000 } == true)
         require(value["deleted"] == null)
@@ -180,7 +181,10 @@ internal class FirstSendDraftStore(private val root: File) {
     }
     fun attachment(scope: String, id: String, fileId: String): Pair<JsonObject, ByteArray> = locked(scope) { account ->
         val dir = operation(account, id, false) ?: error("Missing local draft")
-        val row = visible(read(dir, scope, id))?.let { checked(it, scope, id) } ?: error("Missing local draft")
+        val row = visible(read(dir, scope, id)) ?: error("Missing local draft")
+        attachmentAt(dir, row, fileId)
+    }
+    private fun attachmentAt(dir: File, row: JsonObject, fileId: String): Pair<JsonObject, ByteArray> {
         val file = row["files"]?.jsonArray?.map { it.jsonObject }?.singleOrNull { it["id"]?.jsonPrimitive?.content == fileId }
             ?: error("Missing local attachment")
         val hash = file.getValue("sha256").jsonPrimitive.content
@@ -189,7 +193,34 @@ internal class FirstSendDraftStore(private val root: File) {
         check(!Files.isSymbolicLink(blob.toPath()) && blob.length() in 1..MAX_ATTACHMENT.toLong()) { "Local attachment unavailable" }
         val content = blob.readBytes()
         check(content.size.toLong() == file.getValue("byteSize").jsonPrimitive.long && digest(content) == hash) { "Local attachment is corrupt" }
-        file to content
+        return file to content
+    }
+    /** A private copy only: never changes the source operation or its outcome. */
+    fun recover(scope: String, owner: String, sourceId: String, targetId: String, expectedRevision: Long?, value: JsonObject, bytes: Map<String, ByteArray>): JsonObject = locked(scope) { account ->
+        require(sourceId != targetId) { "Recovery must have its own draft identity" }
+        val sourceDir = operation(account, sourceId, false)
+        val source = sourceDir?.let { visible(read(it, scope, sourceId)) }
+        val targetDir = operation(account, targetId, false)
+        val target = targetDir?.let { visible(read(it, scope, targetId)) }
+        if (target != null && (target["frozen"]?.jsonPrimitive?.booleanOrNull == true || target["recoveredFrom"]?.jsonPrimitive?.content != sourceId)) throw DraftWriteConflict()
+        val supplied = bytes.toMutableMap()
+        for (raw in value.getValue("files").jsonArray) {
+            val file = raw.jsonObject
+            val id = file.getValue("id").jsonPrimitive.content
+            if (id in supplied) continue
+            val candidate = listOf(targetDir to target, sourceDir to source).firstOrNull { (_, row) ->
+                row?.get("files")?.jsonArray?.any { entry ->
+                    val known = entry.jsonObject
+                    listOf("id", "name", "mimeType", "byteSize").all { file[it] == known[it] } &&
+                        (file["sha256"] == null || file["sha256"] == known["sha256"])
+                } == true
+            } ?: error("The original attachment is missing from local storage.")
+            supplied[id] = attachmentAt(candidate.first!!, candidate.second!!, id).second
+        }
+        val record = JsonObject(value.filterKeys { it in setOf("workspaceId", "message", "model", "thinking", "files") } + mapOf(
+            "frozen" to JsonPrimitive(false), "prepareAttempted" to JsonPrimitive(false), "recoveredFrom" to JsonPrimitive(sourceId),
+        ))
+        putAt(account, scope, owner, targetId, expectedRevision, record, supplied)
     }
     fun remove(scope: String, id: String, expectedRevision: Long) = locked(scope) { account ->
         val dir = operation(account, id, false) ?: return@locked

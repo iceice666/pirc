@@ -5,6 +5,7 @@ import { app } from './app.svelte';
 import { api, ApiError } from './api';
 import { demoSnapshot } from './mock';
 import { MemoryDraftStore, FirstLedger } from './testing/first-send';
+import { FirstSend } from './first-send';
 import { File as NodeFile } from 'node:buffer';
 import { webcrypto } from 'node:crypto';
 let store: MemoryDraftStore, remote: FirstLedger;
@@ -242,11 +243,10 @@ it('a delayed initial local commit cannot replace a newer draft after navigation
   const firstId = app.activeSessionId;
   app.setDraft('Earlier draft text');
   const next = app.createSession('node:repo');
-  const newerId = app.activeSessionId;
   release();
   expect(await opening).toBe(false);
   expect(await next).toBe(true);
-  expect(app.activeSessionId).toBe(newerId);
+  const newerId = app.activeSessionId;
   expect(app.firstDraft?.operationId).toBe(newerId);
   expect(newerId).not.toBe(firstId);
   expect((await store.get(JSON.stringify(['http://localhost', 'alice']), firstId!))?.message).toBe(
@@ -369,5 +369,123 @@ it.each([401, 404])(
     expect(app.firstEnabled).toBe(true);
     expect(app.firstDraft?.operationId).toBe(original.operationId);
     expect(app.draft).toBe('Newer selection');
+  },
+);
+
+it('a peer freezing a draft preserves this editor text and Blobs as an explicit unsent recovery', async () => {
+  await app.createSession('node:repo');
+  app.setDraft('Original');
+  await app.uploadFiles([
+    new NodeFile(['original bytes'], 'note.txt', { type: 'text/plain' }) as File,
+  ]);
+  const original = app.firstDraft!;
+  const peer = new FirstSend(store, remote);
+  await peer.run(original.scope, original.operationId);
+  remote.calls = [];
+  app.setDraft('Unsent in this tab');
+  await app.continueFirst();
+  const copies = (await store.list(original.scope)).filter(
+    (row) => row.recoveredFrom === original.operationId,
+  );
+  expect(copies).toHaveLength(1);
+  expect(copies[0]!.message).toBe('Unsent in this tab');
+  expect(await copies[0]!.files[0]!.blob!.text()).toBe('original bytes');
+  expect(copies[0]!.frozen).toBe(false);
+  expect(copies[0]!.preparation).toBeUndefined();
+  expect((await store.get(original.scope, original.operationId))?.message).toBe('Original');
+  expect(remote.calls).toEqual([]);
+  await app.resumeFirst(copies[0]!);
+  expect(app.draft).toBe('Unsent in this tab');
+  expect(remote.calls).toEqual([]);
+  await app.sendCommand('prompt');
+  expect(remote.calls.filter((x) => x === 'dispatch')).toHaveLength(1);
+});
+
+it('repeated conflict edits update only this editor copy and never overwrite a peer-edited copy', async () => {
+  await app.createSession('node:repo');
+  app.setDraft('Original');
+  await app.createSession('node:repo');
+  const original = app.firstRecoveries.find((row) => row.message === 'Original')!;
+  await app.resumeFirst(original);
+  const peer = new FirstSend(store, remote);
+  await peer.save(
+    original.scope,
+    'alice',
+    original.operationId,
+    { ...original, message: 'Peer main' },
+    original.revision,
+  );
+  app.setDraft('Local one');
+  await app.continueFirst();
+  const first = (await store.list(original.scope)).find(
+    (row) => row.recoveredFrom === original.operationId,
+  )!;
+  await peer.save(
+    first.scope,
+    'alice',
+    first.operationId,
+    { ...first, message: 'Peer copy' },
+    first.revision,
+  );
+  app.setDraft('Local two');
+  await app.continueFirst();
+  const copies = (await store.list(original.scope)).filter(
+    (row) => row.recoveredFrom === original.operationId,
+  );
+  expect(copies.map((row) => row.message).sort()).toEqual(['Local two', 'Peer copy']);
+  expect((await store.get(original.scope, original.operationId))?.message).toBe('Peer main');
+  expect(remote.calls).toEqual([]);
+});
+
+it('storage refusal while leaving a private draft keeps its current input and selection', async () => {
+  await app.createSession('node:repo');
+  app.setDraft('Keep on storage failure');
+  await app.createSession('node:repo');
+  const original = app.firstRecoveries.find((row) => row.message === 'Keep on storage failure')!;
+  await app.resumeFirst(original);
+  store.fail = true;
+  expect(await app.createSession('node:repo')).toBe(false);
+  expect(app.firstDraft?.operationId).toBe(original.operationId);
+  expect(app.draft).toBe('Keep on storage failure');
+  store.fail = false;
+});
+
+it('an unchanged editor accepts a peer freeze without creating a duplicate unsent copy', async () => {
+  await app.createSession('node:repo');
+  app.setDraft('Same input');
+  await app.createSession('node:repo');
+  const saved = app.firstRecoveries.find((row) => row.message === 'Same input')!;
+  await app.resumeFirst(saved);
+  const peer = new FirstSend(store, remote);
+  await peer.run(saved.scope, saved.operationId);
+  remote.calls = [];
+  await app.continueFirst();
+  expect(
+    (await store.list(saved.scope)).some((row) => row.recoveredFrom === saved.operationId),
+  ).toBe(false);
+  expect(remote.calls.filter((x) => x === 'dispatch')).toHaveLength(0);
+});
+
+it.each(['pots', 'calendar', 'schedules', 'workspace', 'conversation'])(
+  'refuses %s navigation while private input cannot be saved',
+  async (target) => {
+    await app.createSession('node:repo');
+    app.setDraft('Keep navigation input');
+    await app.createSession('node:repo');
+    const saved = app.firstRecoveries.find((row) => row.message === 'Keep navigation input')!;
+    await app.resumeFirst(saved);
+    store.fail = true;
+    const go = {
+      pots: () => app.showPots(),
+      calendar: () => app.showCalendar(),
+      schedules: () => app.showSchedules(),
+      workspace: () => app.showWorkspace('node:repo'),
+      conversation: () => app.openSession('other'),
+    };
+    await go[target as keyof typeof go]();
+    expect(app.firstDraft?.operationId).toBe(saved.operationId);
+    expect(app.draft).toBe('Keep navigation input');
+    expect(app.view).toBe('session');
+    store.fail = false;
   },
 );
