@@ -15,6 +15,7 @@ Start with the [project README](../README.md) for the security model, requiremen
 
 - [Gateway and node development/API](development/gateway-and-node.md)
 - [Web client](../apps/web/README.md)
+- [First-send live client acceptance](development/first-send-acceptance.md)
 - [Android client](../apps/android/README.md)
 - [Nix packaging and module](../nix/README.md)
 - [Timeline fixtures](../fixtures/timeline/README.md)

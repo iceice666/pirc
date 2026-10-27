@@ -413,3 +413,41 @@ it('local recovery survives a missing source and preserves bytes without copying
   expect(remote.calls).toEqual([]);
   expect(await store.get(scope, 'operation-1')).toBeUndefined();
 });
+
+it('a receipt and error write failure retains a committed unknown marker before dispatch', async () => {
+  const { store, remote, flow } = await setup();
+  const action = remote.action.bind(remote);
+  vi.spyOn(remote, 'action').mockImplementation(async (...args) => {
+    if (args[2] === 'dispatch') {
+      expect((await store.get(scope, 'operation-1'))?.uncertain).toBe(true);
+      store.fail = true;
+    }
+    return action(...args);
+  });
+  await expect(flow.run(scope, 'operation-1')).rejects.toThrow('storage failed');
+  const before = (await store.get(scope, 'operation-1'))!;
+  expect(before.preparation?.state).toBe('ready');
+  expect(before.uncertain).toBe(true);
+  expect(await before.files[0]!.blob!.text()).toBe('hello');
+  store.fail = false;
+  remote.calls = [];
+  const reopened = new FirstSend(store, remote);
+  expect((await reopened.run(scope, 'operation-1')).preparation?.state).toBe('admitted');
+  expect(remote.calls).toEqual(['receipt']);
+});
+
+it('persisted uncertainty makes Continue query-only even if the server still reports ready', async () => {
+  const { store, remote, flow } = await setup();
+  const action = remote.action.bind(remote);
+  vi.spyOn(remote, 'action').mockImplementation(async (...args) => {
+    if (args[2] === 'dispatch') throw new ApiError('request did not arrive', 503);
+    return action(...args);
+  });
+  await expect(flow.run(scope, 'operation-1')).rejects.toThrow('request did not arrive');
+  remote.calls = [];
+  expect((await new FirstSend(store, remote).run(scope, 'operation-1')).preparation?.state).toBe(
+    'ready',
+  );
+  expect(remote.calls).toEqual(['receipt']);
+  expect((await store.get(scope, 'operation-1'))?.uncertain).toBe(false);
+});

@@ -4,7 +4,7 @@
 
 Status: adopted architecture baseline with an authorized staged implementation
 covering first Send, environment bindings, resource transitions, canonical tasks/
-collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-recovery and editor-snapshot
+collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-recovery, editor-snapshot and live Web acceptance
 checkpoints are summarized below (2026-10-27). UI redesign/navigation reorganization remains deferred;
 Web/Android changes are limited to necessary functional integration. Use only
 focused simple Flutter checks when Flutter changes.
@@ -40,20 +40,27 @@ Delivered U1 behavior:
 - Retire an unreserved retry nonce durably at Gateway, so a delayed POST cannot
   revive it. Both clients now offer explicit recovery and persist matching proof;
   checking never sends, and sending again remains a separate user action.
+- Commit uncertainty before remote effects, so losing both the successful receipt
+  and the later error write cannot leave a falsely resumable local record. Web and
+  native interrupted submissions query first; a further Send is a separate action.
 - Wire the native Android engine and existing Web/Flutter recovery surfaces,
   including version negotiation, independent Gateway access and minimal bilingual
   status/actions. New navigation and visual redesign are deferred.
 
-Latest client slice: **51 Web, 62 native JVM and 26 focused Flutter tests** pass
-for [editor attachment snapshots](#u1-implementation-checkpoint-editor-attachments-survive-source-cleanup-2026-10-27),
-with clean targeted analysis and a dedicated two-page/browser-restart storage proof.
-The preceding [interrupted retry recovery](#u1-implementation-checkpoint-web-and-native-interrupted-retry-recovery-2026-10-27)
-slice retains its 76 Web, 57 native JVM and 23 Flutter case evidence.
-The backend [nonce retirement](#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27)
-slice passed 329 Gateway tests, strict Clippy and five process cases. Earlier
-checkpoints retain Node, migration, source-file and mixed-version evidence.
-These are separate verification slices, not an Android OS/device pass or full
-live-client/backend acceptance; published CI remains tied to `303fa8f8`.
+Latest slice: [live Web interruption acceptance](#u1-implementation-checkpoint-live-web-reconciliation-and-durable-uncertainty-2026-10-27)
+passes against actual Gateway/Node/Agent processes, including transparent POST
+replay, truncated dispatch response, aborted IndexedDB receipt, full browser and
+both-host restart, and two-page GET-only reconciliation. Each original keeps one
+user entry/model request, the same session/command IDs and exact file bytes.
+**79 Web tests**, clean Svelte checks, **63 native JVM cases** and strict Clippy
+also pass. See its [repeatable acceptance command](../docs/development/first-send-acceptance.md).
+Earlier [editor snapshots](#u1-implementation-checkpoint-editor-attachments-survive-source-cleanup-2026-10-27)
+retain 26 focused Flutter cases; no Flutter code changed in this slice. The
+backend [nonce retirement](#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27)
+slice retains 329 Gateway tests and five process cases. These are bounded proofs,
+not the full permission/Stop/delete matrix or Android OS/device acceptance.
+The new browser test is explicitly run and ignored by the default suite; published
+CI remains tied to `303fa8f8`.
 
 | Stage                             | Current status                                                            | Next deliverable                                                                                                    |
 | --------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -66,18 +73,17 @@ live-client/backend acceptance; published CI remains tied to `303fa8f8`.
 
 Immediate U1 queue:
 
-1. Exercise post-response local-journal write failures and reopening through the
-   actual client/backend matrix. Unreceived retry retirement and open-editor
-   attachment snapshots now have focused proofs; missing receipts, generic errors
-   and uncertain reserved commands still cannot authorize a new attempt.
-2. Connect real Web/native clients to Gateway/Node/Agent for interrupted sends,
-   lost replies, restart, device competition, revocation, Stop/delete and mixed
-   versions. Native JVM and mocked MethodChannel tests do not replace Android
-   process death/private-filesystem/device acceptance.
+1. Connect the actual native paired client to Gateway/Node/Agent for lost replies,
+   local-journal failure/reopening and permission revocation. Its JVM/mock-HTTP
+   proof is not the real native-client/backend matrix or a live MethodChannel.
+2. Extend actual Web/native acceptance through permission/device competition,
+   Stop/delete, interrupted allocation and mixed versions. The three Web fault
+   cases above now have real backend/restart evidence. Verify Android process
+   death/private files and ask for a physical device when ready.
 3. Finish activation/rollback and affected full CI/conformance checks before
    enabling the new path. Published `303fa8f8` passed remote Check (including
    Linux native checkpoints and Nix) and Android; this does not certify the newer
-   local retirement checkpoint. Local Nix verification remains waived. Then
+   local client checkpoints. Local Nix verification remains waived. Then
    continue U2, U4, U5 and U6.
 
 The dated checkpoints later in this file preserve what was delivered and tested
@@ -2372,6 +2378,70 @@ write commits is not claimed durable by an in-memory snapshot. U2/U4/U5/U6 remai
 open. Memory provenance and checkpoint restore guarantees are unchanged. No APK,
 emulator, deployment, Release, push or local Nix check. Remove only this run's
 isolated Flutter/JVM/browser output; preserve shared caches, SDKs, APKs and data.
+
+## U1 implementation checkpoint: live Web reconciliation and durable uncertainty (2026-10-27)
+
+Implemented locally after `9ca70448`. All storage/protocol/package versions and
+Nix hashes stay unchanged. Production **`canSubmit: false`** stays in effect.
+
+The real-client acceptance test exposed a journal gap: after a successful remote
+dispatch, if both receipt and catch-handler writes fail, the older local record
+could still say ready/known. Its original input survived, but the UI could offer
+Continue without acknowledging uncertainty. Web and native Android now commit an
+uncertain marker before preparation/upload/action/control effects; storage refusal
+before that commit prevents the effect. Known admission/cancellation is not
+silently downgraded. Web Continue on an already uncertain frozen record returns
+only its lookup, matching the native behavior; even a ready lookup requires a
+separate later user action to continue. The same stable operation/input is kept.
+
+Added the explicit `conversation_web_client` conformance test and
+`scripts/first-send-browser.mjs`; [execution instructions](../docs/development/first-send-acceptance.md)
+are indexed in the documentation. The production Web `FirstSend`, HTTP transport
+and IndexedDB run in a dedicated Headless Shell. A fixture-only loopback proxy
+supplies synthetic forward authentication and enables the returned capability,
+while asserting the real Gateway still advertises disabled rollout. Mutations and
+lookups reach the actual built Gateway, Node and Agent. The existing conformance
+model provider and sandbox launcher are synthetic, not real inference or sandbox
+isolation proof.
+
+Three operations are verified:
+
+1. Disconnect before dispatch response headers. Observed Chromium transparently
+   repeats the POST; the Gateway resolves it to the same command, not another run.
+2. Truncate a successful dispatch body. The browser retains frozen uncertain
+   original input and receives no successful local receipt.
+3. Abort the actual IndexedDB transaction attempting to store an admitted receipt,
+   then reject subsequent writes (including the error handler). Its prior durable
+   uncertainty marker and original attachment survive.
+
+The helper closes its browser, the fixture crashes/restarts both real hosts, and
+two new pages open the same private journal. Parallel Check and a subsequent
+Continue of the known admitted operation generate GETs only. Both pages retain
+original Blob content. Server-side assertions before/after restart check one
+conversation, one original user entry and one model request **per operation**,
+unchanged session/command IDs and exact native upload bytes. Local copies and
+server receipts cannot manufacture a second operation.
+
+Validation: the explicit integration test **passes with all three cases** after
+the marker repair; **79 tests in four Web first-send/recovery files**, Svelte
+zero errors/warnings, **63 native JVM cases** and strict targeted Clippy pass.
+Native tests verify that each request sees an already committed marker and
+reopen the exact pre-receipt journal for GET-only recovery. They still use
+MockWebServer/private JVM files and unchanged extracted bridge helpers, not
+Android OS, live MethodChannel or actual native-to-Gateway process integration.
+No Flutter changes/full Flutter suite, emulator, device, APK or local Nix test.
+The browser test is opt-in/ignored by the normal suite; normal green CI alone
+cannot be cited for it. The original implementation failed the new real-client
+local-write case; its earlier no-reply case also revealed browser POST replay,
+which is now an explicit duplicate-effect check.
+
+Remaining: actual paired native client/backend fault matrix; Web/native permission
+revocation, competing devices, Stop/delete, interrupted allocation and old-client
+cases; Android process/device/large-attachment pressure; migration/rollback and
+activation including an explicit CI gate for this browser acceptance. U2/U4/U5/U6
+remain open. Memory provenance and checkpoint isolation are unchanged. Commit
+locally only; clean this run's isolated build/JVM/browser outputs after their
+processes exit, preserving SDKs/caches/APKs/user state. No push, deployment or Release.
 
 ## Design stages and later implementation gates
 

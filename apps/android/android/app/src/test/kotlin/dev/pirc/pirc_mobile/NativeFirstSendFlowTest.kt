@@ -43,6 +43,7 @@ class NativeFirstSendFlowTest {
         var cleanupPending = false
         var stopCommand: String? = null
         var onAccept: (() -> Unit)? = null
+        var onResponse: ((RecordedRequest) -> Unit)? = null
         @Volatile var holdAccept: CountDownLatch? = null
         val calls = Collections.synchronizedList(mutableListOf<String>())
         private fun reply(body: JsonElement, code: Int = 200) = MockResponse.Builder().code(code).body(body.toString()).build()
@@ -52,6 +53,7 @@ class NativeFirstSendFlowTest {
         }
         override fun dispatch(request: RecordedRequest): MockResponse {
             val response = synchronized(this) { respond(request) }
+            onResponse?.invoke(request)
             if (request.url.encodedPath.endsWith("/accept")) check(holdAccept?.await(10, TimeUnit.SECONDS) != false)
             return response
         }
@@ -200,6 +202,31 @@ class NativeFirstSendFlowTest {
         assertFalse(f.ledger.calls.any {it.endsWith("/prepare")||it.endsWith("/accept")||it.endsWith("/materialize")||it.contains("/attachments/")||it.endsWith("/dispatch")})
         assertEquals(1,f.parent.walkTopDown().count {it.name=="record.json"})
         assertTrue(f.parent.walkTopDown().filter {it.isFile && it.name.startsWith("blob-")}.all {String(it.readBytes())=="hello"})
+    }}
+    @Test fun networkEffectsHaveDurableUnknownMarkerAndPreReceiptJournalReopensQueryOnly() = runTest { Fixture().use { f ->
+        val c = f.connection(); f.saved(c)
+        val record = f.parent.walkTopDown().single { it.name == "record.json" }
+        var beforeReceipt: ByteArray? = null
+        val mutations = mutableListOf<String>()
+        f.ledger.onResponse = { request ->
+            if (request.method in setOf("POST", "PUT")) {
+                val row = PircJson.parseToJsonElement(record.readText()).jsonObject.getValue("record").jsonObject
+                assertEquals(true, row["uncertain"]?.jsonPrimitive?.boolean)
+                mutations += request.url.encodedPath
+                if (request.url.encodedPath.endsWith("/dispatch")) beforeReceipt = record.readBytes()
+            }
+        }
+        assertEquals("admitted", prep(c.submit(f.stamp, "alice", "op", 1, "android-fixture"))["state"])
+        assertEquals(6, mutations.size) // prepare/upload/accept/materialize/control/dispatch
+        f.ledger.onResponse = null
+        // Restore the exact journal captured before the receipt (crash fixture).
+        record.writeBytes(requireNotNull(beforeReceipt))
+        val reopened = f.connection(); reopened.capabilities(f.stamp); f.ledger.calls.clear()
+        assertEquals(true, f.row(reopened)!!["uncertain"])
+        assertEquals("admitted", prep(reopened.submit(f.stamp, "alice", "op", null, "android-fixture"))["state"])
+        assertEquals(listOf("GET /api/conversation-submissions/op/receipt"), f.ledger.calls)
+        assertEquals("Original", f.row(reopened)!!["message"])
+        assertEquals("hello", f.parent.walkTopDown().single { it.name.startsWith("blob-") }.readText())
     }}
     @Test fun retryLostReplyReopensPrivateJournalAndOnlyQueriesItsNonce() = runTest {Fixture().use {f->
         val c=f.connection();f.saved(c);f.ledger.rejectDispatch=true;c.submit(f.stamp,"alice","op",1,"android-fixture")

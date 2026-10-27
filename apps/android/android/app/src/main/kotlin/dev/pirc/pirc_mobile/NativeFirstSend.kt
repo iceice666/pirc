@@ -191,7 +191,7 @@ internal class NativeFirstSend(
         val row = change(captured, id) { before ->
             check(cancelling || before.string("stopCommandId") == null) { "Stop was requested. Check the result before continuing." }
             check(cancelling || !before.flag("cancelRequested")) { "This draft is being cancelled" }
-            JsonObject(before + ("prepareAttempted" to JsonPrimitive(true)))
+            JsonObject(before + mapOf("prepareAttempted" to JsonPrimitive(true), "uncertain" to JsonPrimitive(true)))
         }
         val result = api(captured, "POST", "/api/conversation-submissions/prepare", buildJsonObject {
             put("expectedOwner", captured.owner); put("operationId", id); put("submission", spec(row))
@@ -199,9 +199,12 @@ internal class NativeFirstSend(
         return receipt(captured, id, result)
     }
     private suspend fun active(captured: Account, id: String, allowStopped: Boolean = false) {
-        val row = local(captured, id)
-        check(!row.flag("cancelRequested")) { "This draft is being cancelled" }
-        check(allowStopped || row.string("stopCommandId") == null) { "Stop was requested. Check the result before continuing." }
+        change(captured, id) { row ->
+            check(!row.flag("cancelRequested") && row.phase() != "cancelled") { "This draft is being cancelled" }
+            check(allowStopped || row.string("stopCommandId") == null) { "Stop was requested. Check the result before continuing." }
+            // Persist uncertainty before effects; a failed receipt write cannot mark it later.
+            JsonObject(row + ("uncertain" to JsonPrimitive(row.phase() != "admitted")))
+        }
     }
     private suspend fun action(captured: Account, id: String, kind: String, body: JsonElement? = null, allowStopped: Boolean = false): JsonObject {
         active(captured, id, allowStopped)

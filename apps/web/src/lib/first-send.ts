@@ -470,10 +470,14 @@ export class FirstSend {
     }
   }
   async #sending(scope: string, id: string) {
-    const row = await this.#read(scope, id);
-    if (row.stopCommandId)
-      throw new Error('Stop was requested. Check the result before continuing.');
-    return row;
+    return this.#change(scope, id, (row) => {
+      if (row.cancelRequested || row.preparation?.state === 'cancelled')
+        throw new Error('This draft was cancelled. Check its saved outcome.');
+      if (row.stopCommandId)
+        throw new Error('Stop was requested. Check the result before continuing.');
+      // Commit before effects: the receipt/error write can also fail or be lost.
+      return { ...row, uncertain: row.preparation?.state !== 'admitted' };
+    });
   }
   async #prepare(row: FirstDraft, cancelling = false) {
     row = await this.#change(row.scope, row.operationId, (old) => {
@@ -481,7 +485,7 @@ export class FirstSend {
         throw new Error('Stop was requested. Check the result before continuing.');
       if (old.cancelRequested && !cancelling)
         throw new Error('This draft was cancelled. Check its saved outcome.');
-      return { ...old, prepareAttempted: true };
+      return { ...old, prepareAttempted: true, uncertain: true };
     });
     return this.#receipt(
       row.scope,
@@ -561,7 +565,7 @@ export class FirstSend {
   }
   async run(scope: string, id: string, revision?: number) {
     let row = await this.#read(scope, id);
-    if (row.stopCommandId) return this.check(scope, id);
+    if (row.stopCommandId || (row.frozen && row.uncertain)) return this.check(scope, id);
     if (!row.frozen && revision !== undefined && revision !== row.revision)
       throw new Error('This draft changed in another tab. Reopen the saved version.');
     const activation = async () => {

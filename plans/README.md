@@ -74,14 +74,15 @@ approval to implement every unchecked stage.
 The published baseline is `303fa8f8`, including the user-authorized CI repairs.
 Its remote Check and Android workflows both passed. Local work adds Gateway
 retry-nonce retirement (`9b5c776b`), Web/native retry recovery (`c41e4e8a`) and
-open-editor attachment protection. Full live-client acceptance and activation
+open-editor attachment protection and initial live Web interruption acceptance.
+Full live-client acceptance and activation
 remain open.
 Subsequent work defaults to local commits, with no deployment, version change or
 Release. The most recent pull/rebase had no upstream conflicts.
 
 | Area                                           | Current state                                                                                                                                                                                                | Remaining delivery                                                                                                   |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| U1 — reliable first Send                       | Gateway/Node durable intents, original files, admission/Stop/delete fences, explicit rejected-message retries and Gateway nonce retirement; Web/private Android drafts and recovery controls are implemented | Live-client failure/local-write matrix, Android process/device and rollout/rollback gates |
+| U1 — reliable first Send                       | Gateway/Node durable intents, original files, admission/Stop/delete fences, explicit rejected-message retries and Gateway nonce retirement; Web/private Android drafts and recovery controls are implemented | Live-client failure/local-write matrix, Android process/device and rollout/rollback gates                            |
 | U2 — conversation/project/environment bindings | Existing workspace, session and mode identities are retained                                                                                                                                                 | Inventory and implement separate membership/binding versions, migrate existing sessions and preserve links/authority |
 | U3 — unified navigation/UI                     | Deferred by the user                                                                                                                                                                                         | Revisit after core contracts; current clients receive necessary functional controls only                             |
 | U4 — mount/workspace transitions               | Design accepted; actual unified transitions not implemented                                                                                                                                                  | Idle then running-worker revocation, Node acknowledgement, offline/interrupted reconciliation and project resources  |
@@ -97,6 +98,13 @@ private drafts are not subject to that deadline. See [upgrade and rollback
 notes](../docs/deploy/upgrades.md).
 
 Latest completed U1 slices and their recorded evidence:
+
+- [Live Web reconciliation](unified-conversations.md#u1-implementation-checkpoint-live-web-reconciliation-and-durable-uncertainty-2026-10-27):
+  actual Web/IndexedDB plus Gateway/Node/Agent passes transport replay, truncated
+  reply and aborted local receipt across all-host/browser restart and parallel
+  GET-only checks. Fixed the pre-effect uncertainty marker in both clients.
+  79 Web/63 native JVM cases, typecheck and strict Clippy pass. The repeatable
+  browser test is explicitly opt-in, not implied by a normal CI pass.
 
 - [Editor attachment snapshots](unified-conversations.md#u1-implementation-checkpoint-editor-attachments-survive-source-cleanup-2026-10-27):
   reopening an editable Android draft atomically reads its verified files before
@@ -135,13 +143,13 @@ Latest completed U1 slices and their recorded evidence:
 
 Next, close U1's remaining gates in this order:
 
-1. Verify post-response local-journal write failures and reopening in the actual
-   client/backend matrix. Interrupted retry recovery and open-editor source-cleanup
-   protection have focused proofs; uncertain commands remain query-only.
-2. Exercise actual Web and native clients against Gateway/Node/Agent through
-   lost replies, both-host/client restarts, competing devices, revoked permissions,
-   Stop/delete and mixed-version cases. Verify Android MethodChannel/private files
-   and process death; request a physical device when that step is ready.
+1. Verify the actual paired native client against Gateway/Node/Agent for lost
+   replies, local-write/reopening failures and revoked authority. Native mock-HTTP
+   proofs do not complete this gate.
+2. Extend Web/native process acceptance through device competition, Stop/delete,
+   interrupted allocation and mixed versions. Initial Web interruption/restart
+   cases pass. Verify Android MethodChannel/private files and process death;
+   request a physical device when that step is ready.
 3. Complete activation/rollback and the affected full CI/conformance gates before
    changing `canSubmit`. Then proceed with U2, U4, U5 and U6; U3 remains deferred.
 
@@ -151,7 +159,7 @@ Linux native sandbox/checkpoint and Nix jobs. Repairs cover the Android test
 controller signature, relative retry-fixture executable path, runner APT mirror
 lists, random-ID normalization and independent checkpoint fixture lifetimes.
 This is evidence for that exact published commit, not the subsequent local
-retirement addition or a physical-device pass. Local Nix validation remains waived.
+local client additions or a physical-device pass. Local Nix validation remains waived.
 
 Run only focused simple Flutter checks when changing Flutter. Clean run-owned
 outputs after verification while preserving shared caches, SDKs, existing APKs,
