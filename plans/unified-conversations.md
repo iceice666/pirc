@@ -2731,6 +2731,43 @@ U1's activation and Android OS/device gates remain open; no APK, release, push o
 local Nix validation is part of this slice. Run-owned build/test outputs are removed
 after checks; shared SDK/caches, existing APKs and other work remain untouched.
 
+## U2 implementation checkpoint: project membership and configured policy (2026-10-27)
+
+Gateway schema **1022** separates canonical project membership from the existing
+workspace association and records append-only configured mode/capability policy
+versions. Missing modes preserve a last known project only while the source
+association still matches, with `mode_unavailable` status. Mode reload, membership
+resolution and affected binding generations commit together; failed persistence
+keeps the previous in-memory catalog. Concurrent capability patches preserve both
+edits instead of overwriting a field changed by another connection.
+
+The owner-scoped, non-cached environment endpoint works for Web and paired Android
+without a browser session, live Node or private Node allocation. Client API adapters
+validate the requested conversation, scope, revisions and `enforcement: not_tracked`.
+This is configuration provenance, not proof of active sandbox revocation. No UI
+redesign, switch/mount API, memory rewrite, or U1 activation is included.
+
+Validation: 354 Gateway tests, including 2048-history migration with four concurrent
+catalog adopters, independent capability writers, rollback/overflow, missing-mode
+restart, deletion/checkpoint privacy and Web/device authorization. 44 focused Web
+cases and 7 Kotlin binding/environment cases pass, with clean Svelte diagnostics
+and warning-as-error Kotlin compilation. Five explicit live Web/native tests pass
+against new Gateway/Node binaries, verifying environment versions after interrupted
+first Send and host restarts. Three native checkpoint cases, the old-client contract
+and Node-link contract pass, plus eleven session/memory/device/schedule/event route
+regressions. Strict Gateway and affected-conformance Clippy, Rustfmt, Prettier and
+diff checks pass. The memory golden changes only two execution generations from 1
+to 3, matching the fixture's two capability patches; every other JSON value is
+unchanged. The previously reproduced `node_panels_state` macOS counter mismatch
+was not rebaselined or claimed fixed.
+
+Remaining: immutable resource and memory write-time provenance, expected-version
+commands/effect fences, actual Node transitions, canonical collaboration and scoped
+proactive pots. Android OS/process/Keystore and deployment/rollback acceptance remain
+open. No APK, local Nix run, remote push, deployment or Release in this slice.
+This run's isolated compiler/JVM/browser-test outputs were removed after all owned
+processes exited; shared caches, APKs and other agents' work were preserved.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

@@ -80,6 +80,11 @@ open class PircApi(val pairing: Pairing, internal val client: OkHttpClient = def
     open suspend fun snapshot(sessionId: String): JsonElement =
         get<JsonElement>("/api/sessions/${sessionId.urlSegment()}/snapshot")
 
+    /** Read configured bindings directly from Gateway, including while Node is offline. */
+    open suspend fun environment(sessionId: String): ConversationEnvironment = readingReply {
+        get<ConversationEnvironment>("/api/sessions/${sessionId.urlSegment()}/environment").also { it.validateSession(sessionId) }
+    }
+
     /** The live event stream of one session; see [EventStream]. */
     open fun events(sessionId: String, cursor: String?) = EventStream(this).open(sessionId, cursor)
 

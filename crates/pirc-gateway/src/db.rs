@@ -41,7 +41,7 @@ pub(crate) use sql_text_enum;
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1021;
+pub const SCHEMA_VERSION: i64 = 1022;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = concat!(
@@ -56,7 +56,8 @@ const SCHEMA: &str = concat!(
     include_str!("conversation_submissions/pre_stop.sql"),
     include_str!("conversation_submissions/retries.sql"),
     include_str!("conversation_submissions/retry_retirements.sql"),
-    include_str!("conversation_bindings/schema.sql")
+    include_str!("conversation_bindings/schema.sql"),
+    include_str!("conversation_bindings/policies.sql")
 );
 /// Each migration takes a database from the version before it to its own;
 /// [`SCHEMA`] assembles the newest whole schema, including calendar tables.
@@ -138,6 +139,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (1019, include_str!("conversation_submissions/retries.sql")),
     (1020, include_str!("conversation_submissions/retry_retirements.sql")),
     (1021, include_str!("conversation_bindings/schema.sql")),
+    (1022, include_str!("conversation_bindings/policies.sql")),
 ];
 
 /// Placeholder name of a new session until the agent's title replaces it.
@@ -1244,26 +1246,28 @@ impl Store for Connection {
         workspace_id: &str,
         patch: &CapabilitiesPatch,
     ) -> ApiResult<Capabilities> {
-        self.get_workspace(workspace_id)?;
-        let mut policy = self.get_workspace_capabilities(workspace_id)?;
-        let set = |field: &mut bool, value: Option<bool>| {
-            if let Some(value) = value {
-                *field = value;
+        atomic(self, |tx| {
+            tx.get_workspace(workspace_id)?;
+            let mut policy = tx.get_workspace_capabilities(workspace_id)?;
+            let set = |field: &mut bool, value: Option<bool>| {
+                if let Some(value) = value {
+                    *field = value;
+                }
+            };
+            set(&mut policy.delegation, patch.delegation);
+            set(&mut policy.memory_search, patch.memory_search);
+            set(&mut policy.remote_recall, patch.remote_recall);
+            set(&mut policy.schedules, patch.schedules);
+            set(&mut policy.web_search, patch.web_search);
+            if let Some(approval) = patch.delegation_approval {
+                policy.delegation_approval = approval;
             }
-        };
-        set(&mut policy.delegation, patch.delegation);
-        set(&mut policy.memory_search, patch.memory_search);
-        set(&mut policy.remote_recall, patch.remote_recall);
-        set(&mut policy.schedules, patch.schedules);
-        set(&mut policy.web_search, patch.web_search);
-        if let Some(approval) = patch.delegation_approval {
-            policy.delegation_approval = approval;
-        }
-        self.execute(
+            tx.execute(
             "INSERT INTO workspace_capabilities (workspace_id,policy_json) VALUES (?,?) ON CONFLICT(workspace_id) DO UPDATE SET policy_json=excluded.policy_json",
             params![workspace_id, json!(policy).to_string()],
         )?;
-        Ok(policy)
+            Ok(policy)
+        })
     }
 
     fn require_workspace_capability(

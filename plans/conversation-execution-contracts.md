@@ -14,7 +14,9 @@ Web/native Android recovery are now implemented but remain gated. See the
 [current progress snapshot](unified-conversations.md#current-progress-and-next-delivery-2026-10-27)
 for delivered code, evidence and open acceptance. The
 [U2 compatibility binding baseline](conversation-binding-migration.md) now persists
-relationship versions; it does not implement authority-changing transitions.
+relationship versions, explicit project membership and configured policy snapshots.
+Its environment read model explicitly reports enforcement as not tracked; it does
+not implement authority-changing transitions.
 The seven sections below remain target contracts; their cases are not automatically
 verified by first-send or binding-baseline work. App authentication/topology and Flutter Web remain separate decisions.
 The 2026-10-27 publication request covers accumulated commits and plan progress,

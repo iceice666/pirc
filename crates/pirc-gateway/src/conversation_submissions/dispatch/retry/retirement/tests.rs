@@ -318,7 +318,7 @@ async fn schema_1019_migration_preserves_original_input_and_reserved_retry() {
     app.db
         .lock()
         .execute_batch(
-            "DROP TABLE conversation_submission_retry_retirements; DROP TRIGGER IF EXISTS conversation_binding_insert; DROP TRIGGER IF EXISTS conversation_binding_mapping; DROP TRIGGER IF EXISTS conversation_binding_mode; DROP TABLE IF EXISTS conversation_bindings; PRAGMA user_version=1019;",
+            concat!(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/conversation_bindings/test_remove_policies.sql")), "DROP TABLE conversation_submission_retry_retirements; DROP TRIGGER IF EXISTS conversation_binding_insert; DROP TRIGGER IF EXISTS conversation_binding_mapping; DROP TRIGGER IF EXISTS conversation_binding_mode; DROP TABLE IF EXISTS conversation_bindings; PRAGMA user_version=1019;"),
         )
         .unwrap();
     let db = Db::open(&app.config.state_dir.join("gateway.sqlite")).unwrap();

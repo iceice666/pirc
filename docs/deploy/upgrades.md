@@ -1,5 +1,27 @@
 # Upgrades
 
+## Unreleased local checkpoint: configured environment policy
+
+Gateway schema **1022** adds explicit conversation project membership and immutable
+mode/workspace-capability policy histories. Migration preserves conversation IDs,
+existing data and control/runner state. The first validated catalog resolves old
+project associations without inventing historical transitions. An unavailable mode
+retains its last known project reference, but never grants access from that record.
+
+Catalog reload and capability patches append policy revisions atomically; affected
+execution generations advance. Failed persistence retains the previous catalog and
+policy. The new owner-scoped `/api/sessions/{id}/environment` read works with paired
+Android and offline Nodes. Its `enforcement: "not_tracked"` explicitly does not prove
+installed sandbox policy. No supported workspace switch or new mount grant is added.
+
+Older Gateway binaries refuse schema 1022. Before an eventual deployment, take a
+consistent complete state backup; policy snapshots are part of that state. Rollback
+requires the matching binary/state pair, not deleting tables or editing user_version.
+Do not run old Gateway binaries against migrated data. Deployment/rollback and
+Android OS/device verification remain open. Node schema **2009**, protocol **15**,
+first-send contract **2**, client envelope **3** and `canSubmit: false` are unchanged.
+No dependency, package version, Nix hash or Release change is part of this slice.
+
 ## Unreleased local checkpoint: conversation binding identities
 
 Gateway schema **1021** adds identity-only conversation bindings and backfills them

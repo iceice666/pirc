@@ -661,6 +661,7 @@ async fn memory() {
     );
     seen!("proposals changed", live);
     call!(
+        // The two earlier capability patches advance the shared binding generation to 3.
         "the chat's snapshot shows the proposals",
         "GET",
         format!("/api/sessions/{a}/snapshot"),

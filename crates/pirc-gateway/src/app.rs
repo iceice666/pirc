@@ -60,12 +60,13 @@ pub struct Claimed {
 impl App {
     /// The app around its backend settings. Backend changes cancel
     /// inference in flight and send nodes the new catalog.
-    pub fn new(
+    pub fn try_new(
         config: GatewayConfig,
         db: Arc<Db>,
         backends: Arc<BackendService>,
         catalog: pirc_config::modes::ModeCatalog,
-    ) -> Arc<Self> {
+    ) -> ApiResult<Arc<Self>> {
+        crate::conversation_bindings::policies::install_catalog(&db.lock(), &catalog)?;
         let devices = DeviceTokens::new(
             db.clone(),
             config.device_token_idle_ms,
@@ -95,7 +96,30 @@ impl App {
                 );
             }
         });
-        app
+        Ok(app)
+    }
+
+    #[cfg(test)]
+    pub fn new(
+        config: GatewayConfig,
+        db: Arc<Db>,
+        backends: Arc<BackendService>,
+        catalog: pirc_config::modes::ModeCatalog,
+    ) -> Arc<Self> {
+        Self::try_new(config, db, backends, catalog).expect("persist initial mode policies")
+    }
+
+    /// Keep lock order consistent with readers that hold the DB while consulting
+    /// modes. Publish to Nodes only after both durable and in-memory state agree.
+    pub(crate) fn replace_catalog(
+        &self,
+        catalog: pirc_config::modes::ModeCatalog,
+    ) -> ApiResult<()> {
+        let db = self.db.lock();
+        let mut modes = self.modes.write().unwrap_or_else(|p| p.into_inner());
+        crate::conversation_bindings::policies::install_catalog(&db, &catalog)?;
+        *modes = Arc::new(catalog);
+        Ok(())
     }
 
     pub fn catalog(&self) -> Arc<pirc_config::modes::ModeCatalog> {
@@ -134,7 +158,12 @@ impl App {
                 for warning in &catalog.warnings {
                     crate::log::warn(&warning.to_string());
                 }
-                *self.modes.write().unwrap_or_else(|p| p.into_inner()) = Arc::new(catalog);
+                if let Err(error) = self.replace_catalog(catalog) {
+                    crate::log::error(&format!(
+                        "mode policy persistence failed; keeping previous catalog: {error}"
+                    ));
+                    return;
+                }
                 self.nodes
                     .broadcast(&serde_json::json!({"type":"modes", "modes":self.public_modes()}));
                 self.directory_changed();
@@ -378,6 +407,10 @@ pub fn router(app: AppState) -> Router {
         )
         .route("/api/sessions/{id}/read", post(routes::read_session))
         .route("/api/sessions/{id}/snapshot", get(routes::snapshot))
+        .route(
+            "/api/sessions/{id}/environment",
+            get(crate::conversation_bindings::policies::get_environment),
+        )
         .route("/api/sessions/{id}/commands", post(routes::command))
         .route(
             "/api/sessions/{id}/commands/{command_id}",
@@ -456,6 +489,7 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
     ("PATCH", "/api/sessions/{id}"),
     ("POST", "/api/sessions/{id}/read"),
     ("GET", "/api/sessions/{id}/snapshot"),
+    ("GET", "/api/sessions/{id}/environment"),
     ("GET", "/api/sessions/{id}/checkpoints"),
     ("POST", "/api/sessions/{id}/checkpoints/{capture}/preview"),
     (

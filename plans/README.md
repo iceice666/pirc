@@ -86,14 +86,14 @@ Release. The most recent pull/rebase had no upstream conflicts.
 | Area                                           | Current state                                                                                                                                                                                                | Remaining delivery                                                                                                  |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
 | U1 — reliable first Send                       | Gateway/Node durable intents, original files, admission/Stop/delete fences, explicit rejected-message retries and Gateway nonce retirement; Web/private Android drafts and recovery controls are implemented | Live-client failure/local-write matrix, Android process/device and rollout/rollback gates                           |
-| U2 — conversation/project/environment bindings | Durable legacy membership/execution versions preserve current session and mode identities                                                                                                                    | Normalize explicit project membership/policy provenance, then version-fenced commands and transitions               |
+| U2 — conversation/project/environment bindings | Durable legacy bindings, explicit project membership and configured mode/capability policy versions                                                                                                          | Resource/memory write-time provenance, version-fenced commands and actual Node-acknowledged transitions             |
 | U3 — unified navigation/UI                     | Deferred by the user                                                                                                                                                                                         | Revisit after core contracts; current clients receive necessary functional controls only                            |
 | U4 — mount/workspace transitions               | Design accepted; actual unified transitions not implemented                                                                                                                                                  | Idle then running-worker revocation, Node acknowledgement, offline/interrupted reconciliation and project resources |
 | U5 — canonical tasks and collaboration         | Existing pots/task/team/goal/todo foundations remain                                                                                                                                                         | Map common task/attempt identities, shared notes and structured waits; preserve other writers and memory provenance |
 | U6 — bounded proactive pots                    | Progress-only observation and explicit dispatch exist                                                                                                                                                        | Scoped content observation, finite budgets, quiet suggestions and synchronized notification/decision lifecycle      |
 
 **The new U1 flow is still gated by `canSubmit: false`.** Pushing its code does
-not enable it. Current formats are Gateway schema **1021**, Node schema **2009**,
+not enable it. Current formats are Gateway schema **1022**, Node schema **2009**,
 protocol **15**, client recovery contract **2**, and Web IndexedDB/native private
 envelope **3**. Existing ordinary session APIs remain available. Unaccepted
 Gateway attachment staging expires after **seven days**; accepted attachments and
@@ -102,16 +102,14 @@ notes](../docs/deploy/upgrades.md).
 
 U2 has started independently of U1 activation: see the
 [binding migration inventory](conversation-binding-migration.md) and
-[implementation checkpoint](unified-conversations.md#u2-implementation-checkpoint-durable-legacy-binding-versions-2026-10-27).
-Schema 1021 adds durable identity revisions to session snapshots/lists; Web and
-native Android preserve them. It does not enable project moves, grant access or
-replace actual Node revocation. Explicit membership, policy provenance and effect
-fences remain next. U1 still needs its device/deployment acceptance before activation.
-U2 validation: 343 Gateway, 29 Web and 4 Kotlin core cases; five live-client,
-three native checkpoint and the old-client process contract pass. Broader session
-conformance has 19 passing cases and one existing macOS memory-counter snapshot
-difference, reproduced with the pre-change Gateway. Full Linux/device acceptance
-is not claimed.
+[implementation checkpoint](unified-conversations.md#u2-implementation-checkpoint-project-membership-and-configured-policy-2026-10-27).
+Schema 1022 adds canonical project membership and append-only configured mode and
+workspace-capability policy histories. Web/native API adapters can read the
+owner-scoped environment state directly while Node is offline. The response marks
+Node enforcement as not tracked. Project moves, resource grants, memory write-time
+provenance and effect fences remain open. U1 still needs device/deployment acceptance
+before activation. Detailed validation and the previously reproduced macOS snapshot
+limitation are recorded in the checkpoints; no full Linux/device acceptance is claimed.
 
 Latest completed U1 slices and their recorded evidence:
 

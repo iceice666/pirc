@@ -49,5 +49,7 @@ impl Binding {
     }
 }
 
+pub mod policies;
+
 #[cfg(test)]
 mod tests;

@@ -154,6 +154,7 @@ fn migrates_the_first_rust_schema() {
             .replace(include_str!("../calendar/schema.sql"), "")
             .replace(include_str!("../pots/schema.sql"), "")
             .replace(include_str!("../conversation_bindings/schema.sql"), "")
+            .replace(include_str!("../conversation_bindings/policies.sql"), "")
             .replace(include_str!("../conversation_submissions/schema.sql"), "")
             .replace(include_str!("../conversation_submissions/pre_stop.sql"), "")
             .replace(include_str!("../conversation_submissions/retries.sql"), "")
@@ -282,6 +283,7 @@ fn reconciles_upstream_memory_and_local_calendar_checkpoint_schemas() {
         let mut schema = SCHEMA
             .replace(include_str!("../pots/schema.sql"), "")
             .replace(include_str!("../conversation_bindings/schema.sql"), "")
+            .replace(include_str!("../conversation_bindings/policies.sql"), "")
             .replace(include_str!("../conversation_submissions/schema.sql"), "")
             .replace(include_str!("../conversation_submissions/pre_stop.sql"), "")
             .replace(include_str!("../conversation_submissions/retries.sql"), "")

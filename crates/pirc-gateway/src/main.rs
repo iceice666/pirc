@@ -141,7 +141,7 @@ async fn run(config: GatewayConfig) -> Result<(), String> {
     for warning in &catalog.warnings {
         log::warn(&warning.to_string());
     }
-    let app = app::App::new(config, db, backends, catalog);
+    let app = app::App::try_new(config, db, backends, catalog).map_err(|e| e.to_string())?;
     // Everything that can refuse to start does so before the port is bound.
     features::start(&app)?;
     app.devices.start_sweeper();

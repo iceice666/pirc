@@ -243,7 +243,7 @@ fn migration_is_restart_safe_under_concurrent_opens_and_preserves_existing_recor
             identities.push(session);
         }
         // Exact 1020 shape: no new table or triggers, original data untouched.
-        conn.execute_batch("DROP TRIGGER conversation_binding_insert; DROP TRIGGER conversation_binding_mapping; DROP TRIGGER conversation_binding_mode; DROP TABLE conversation_bindings; PRAGMA user_version=1020;").unwrap();
+        conn.execute_batch(concat!(include_str!("test_remove_policies.sql"), "DROP TRIGGER conversation_binding_insert; DROP TRIGGER conversation_binding_mapping; DROP TRIGGER conversation_binding_mode; DROP TABLE conversation_bindings; PRAGMA user_version=1020;")).unwrap();
         identities
     };
     drop(db);
@@ -285,7 +285,7 @@ fn migration_is_restart_safe_under_concurrent_opens_and_preserves_existing_recor
     assert_eq!(
         conn.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        1021
+        crate::db::SCHEMA_VERSION
     );
     assert_eq!(
         conn.query_row("SELECT count(*) FROM conversation_bindings", [], |r| r
@@ -323,7 +323,7 @@ fn invalid_historical_workspace_reference_refuses_migration_without_hiding_histo
         let conn = db.lock();
         seed(&conn);
         let session = create(&conn, "repo", "orphan");
-        conn.execute_batch("DROP TRIGGER conversation_binding_insert; DROP TRIGGER conversation_binding_mapping; DROP TRIGGER conversation_binding_mode; DROP TABLE conversation_bindings; PRAGMA user_version=1020; PRAGMA foreign_keys=OFF; DELETE FROM workspaces WHERE id='node:repo';").unwrap();
+        conn.execute_batch(concat!(include_str!("test_remove_policies.sql"), "DROP TRIGGER conversation_binding_insert; DROP TRIGGER conversation_binding_mapping; DROP TRIGGER conversation_binding_mode; DROP TABLE conversation_bindings; PRAGMA user_version=1020; PRAGMA foreign_keys=OFF; DELETE FROM workspaces WHERE id='node:repo';")).unwrap();
         session.id
     };
     drop(db);

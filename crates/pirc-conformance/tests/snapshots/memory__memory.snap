@@ -992,7 +992,7 @@ expression: t.into_value()
       "session": {
         "binding": {
           "execution": {
-            "generation": 1,
+            "generation": 3,
             "modeId": "chat",
             "nodeId": "test",
             "workspaceId": "test:chat"
@@ -1051,7 +1051,7 @@ expression: t.into_value()
       "session": {
         "binding": {
           "execution": {
-            "generation": 1,
+            "generation": 3,
             "modeId": "chat",
             "nodeId": "test",
             "workspaceId": "test:chat"

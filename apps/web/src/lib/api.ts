@@ -1,3 +1,4 @@
+import { conversationEnvironment } from './conversation-environment';
 import { conversationBinding } from './conversation-binding';
 import { tr } from './i18n.svelte';
 import {
@@ -423,6 +424,11 @@ export const api = {
           method: 'POST',
         })
       ).session,
+    ),
+  environment: async (sessionId: string) =>
+    conversationEnvironment(
+      await request<unknown>(`/api/sessions/${encodeURIComponent(sessionId)}/environment`),
+      sessionId,
     ),
   snapshot: async (sessionId: string) =>
     normalizeSnapshot(

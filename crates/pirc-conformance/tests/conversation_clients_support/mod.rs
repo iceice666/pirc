@@ -115,6 +115,23 @@ pub async fn verify(cluster: &Cluster, operations: &[Value]) -> Vec<String> {
         assert_eq!(binding["execution"]["nodeId"], public["nodeId"]);
         assert_eq!(binding["execution"]["modeId"], "chat");
         assert!(public.get("piSessionId").is_none());
+        let environment = cluster
+            .api()
+            .send(
+                "GET",
+                &format!("/api/sessions/{session}/environment"),
+                &browser_headers(),
+                None,
+            )
+            .await;
+        assert_eq!(environment.status, 200, "{}", environment.body);
+        assert_eq!(environment.body["binding"], *binding);
+        assert_eq!(environment.body["project"]["revision"], 1);
+        assert_eq!(environment.body["project"]["resolution"], "none");
+        assert_eq!(environment.body["modePolicy"]["revision"], 1);
+        assert_eq!(environment.body["modePolicy"]["definition"]["id"], "chat");
+        assert_eq!(environment.body["workspacePolicy"]["revision"], 1);
+        assert_eq!(environment.body["enforcement"], "not_tracked");
         bindings.insert(session.to_owned(), binding.clone());
         let expected = format!("First message {id}");
         assert_eq!(

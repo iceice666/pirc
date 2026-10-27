@@ -40,6 +40,7 @@ fn no_store_route(method: &Method, path: &str) -> bool {
         // Checkpoint manifests and file previews contain private workspace data;
         // deny caching for authentication/stale/invalid responses as well.
         (_, ["api", "sessions", id, "checkpoints", ..]) => one(id),
+        ("GET", ["api", "sessions", id, "environment"]) => one(id),
         ("GET" | "POST", ["api", "devices"]) => true,
         ("DELETE", ["api", "devices", id]) => one(id),
         ("GET" | "POST", ["api", "providers"]) => true,

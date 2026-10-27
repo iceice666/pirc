@@ -1,0 +1,20 @@
+-- Test-only reconstruction of schemas before 1022. Never run in production.
+DROP TRIGGER binding_workspace_policy_insert;
+DROP TRIGGER binding_workspace_policy_changed;
+DROP TRIGGER binding_capabilities_insert;
+DROP TRIGGER binding_capabilities_update;
+DROP TRIGGER binding_capabilities_delete;
+DROP TRIGGER binding_project_insert;
+DROP TRIGGER binding_project_mapping;
+DROP TRIGGER binding_mode_policy_changed;
+DROP TRIGGER binding_mode_policy_immutable;
+DROP TRIGGER binding_mode_policy_retained;
+DROP TRIGGER binding_workspace_policy_immutable;
+DROP TRIGGER binding_workspace_policy_retained;
+DROP VIEW conversation_membership_targets;
+DROP VIEW current_workspace_policies;
+DROP VIEW current_mode_policies;
+DROP TABLE conversation_project_memberships;
+DROP TABLE workspace_policy_versions;
+DROP TABLE mode_policy_versions;
+DROP TABLE binding_catalog_state;

@@ -2,11 +2,11 @@
 
 [Unified conversations](unified-conversations.md) · [Execution contracts](conversation-execution-contracts.md)
 
-Status: U2 started locally, 2026-10-27. Schema 1021 delivers the durable legacy
-association adapter below. Independent project membership, mode-policy snapshots,
-authority fences and environment transitions remain to implement. No new mount,
-move, grant, process restart or first-send activation is enabled by this slice.
-The U1 implementation/activation gates remain separate from continued U2 work.
+Status: U2 in progress locally, 2026-10-27. Schema 1021 delivered the durable
+legacy adapter; schema **1022** adds explicit project membership, configured mode
+and workspace-capability histories, and an owner-scoped environment read model.
+Effect fences, memory write-time provenance and supported environment transitions
+remain to implement. No mount, move, grant, process restart or U1 activation is enabled.
 
 ## Identity mapping and current migration
 
@@ -47,11 +47,63 @@ Missing bindings remain compatible with old Gateways. An advertised unsupported
 version or conflicting workspace reference is rejected, not treated as an old
 server or used to choose a different execution destination.
 
-**Boundary:** these revisions identify the relationship, not all mutable policy.
-Editing a mode file under the same ID or changing workspace capabilities still
-uses the existing catalog/current-policy checks. Generation 1 is not proof of
-Node-installed sandbox policy. There is no new client command precondition or
-old-client authority fence yet; U4 must install those before exposing transitions.
+## Explicit membership and configured policy (schema 1022)
+
+`conversation_project_memberships` stores one canonical project association per
+conversation, separately from `membership.legacyWorkspaceId`. Its own revision
+starts at 1. The current validated mode's `projects` capability and existing
+`project_links::is_project` identity rule classify legacy projects. Top-level
+`chats` and directory workspaces do not become projects. No files are copied.
+
+Resolution is `unresolved` before the first catalog adoption, `member` for a
+confirmed project, `none` for a confirmed non-project, or `mode_unavailable` when
+the mode cannot be resolved. A missing mode retains the last known project ID only
+if the source workspace is unchanged. That retained reference grants nothing.
+Initial migration/adoption does not pretend to have observed a past membership
+transition. Later changes to the project ID or resolution advance the canonical
+revision; moving between two non-project directories only changes the legacy
+association and execution generation. These adapter cases remain internal, not a
+new user-facing move API.
+
+`mode_policy_versions` stores each full validated mode definition, including rules,
+under an append-only revision. Removal appends a null definition rather than
+rewriting history. Startup/reload installs the catalog, resolves memberships and
+advances affected execution generations in one transaction; a failed write leaves
+the prior in-memory catalog intact and publishes no replacement to Nodes. The
+first adoption does not advance existing execution generations. Identical reloads
+and restarts do not append versions. All definition changes, including labels,
+conservatively advance the version; finer semantic classification is deferred.
+
+`workspace_policy_versions` seeds each workspace's current capabilities (or its
+existing default) at revision 1. Actual policy changes and reset-to-default append
+snapshots and advance affected execution generations; no-op patches do neither.
+The read/modify/write patch is now an IMMEDIATE transaction, so simultaneous patches
+to different fields retain both edits. Snapshot failure/overflow rolls back the
+policy change. Histories reject UPDATE and direct DELETE; workspace policy history
+is removed with the workspace through its existing authorized deletion flow. Mode
+history remains part of Gateway configuration state. No new memory data is stored.
+
+`GET /api/sessions/{id}/environment` reads one consistent snapshot with:
+
+- `version: 1`, the unchanged `sessionId` and compatibility `binding`;
+- `project: {revision, workspaceId, resolution}`;
+- `modePolicy: {revision, definition}` (null policy for an unknown mode, null
+  definition for a recorded removal), and `workspacePolicy: {revision, capabilities}`;
+- `enforcement: "not_tracked"` — never a claim that Node installed these policies.
+
+The route is owner scoped, respects checkpoint privacy and deletion fences, and
+returns `Cache-Control: no-store` even on authentication failure. Paired Android
+can read it directly without browser consent, a live Node or a private Node session
+mapping. Web and native API adapters validate the version, requested session,
+project/binding scope, revisions and enforcement marker; errors/older-server 404s
+are not turned into synthetic authority. Existing list/snapshot shapes are unchanged
+from schema 1021. No new UI or Flutter bridge operation is claimed in this slice.
+
+**Boundary:** configured policy versions still are not installed/acknowledged
+sandbox versions. Project files, mutable external rules/mounts and memory write-time
+provenance are not yet snapshotted. No expected-version command precondition or
+old-client authority fence is installed. U4 must provide real Node revocation and
+acknowledgement before a project/environment transition can be exposed.
 
 ## Mode-field inventory and preservation
 
@@ -77,21 +129,20 @@ workspace-memory/repository and schedule-any/delegation validations remain.
 
 ## Remaining U2 implementation and gates
 
-1. Persist explicit project membership separately from the legacy association,
-   including detached and unavailable-catalog cases. Joining/moving/departure stays
-   unavailable until U4 can revoke project resources. Keep original context.
-2. Add immutable policy/resource provenance and a read model for current versus
-   pending/acknowledged bindings. Persist membership at new memory write time;
-   historical unknown provenance stays unknown. Do not rewrite existing memory.
-3. Carry expected membership/binding versions through affected client and Node
+1. Persist immutable resource and new-memory write-time provenance. Historical
+   unknown provenance stays unknown; do not rewrite existing memory or its deletion
+   rules. Add current versus pending/acknowledged transitions, not just configuration.
+2. Carry expected membership/binding versions through affected client and Node
    commands, approvals and effect boundaries. Old clients cannot bypass changed
    authority. Runner epoch and device control remain independent inputs.
-4. Test conflicts, restart, missing/changed modes, same-ID policy reloads, pending
-   first Send, project deletion and checkpoint recovery across the full transition.
-   Existing unchanged session behavior is only the migration baseline.
+3. Implement joining/moving/departure only with U4 revocation of actual project
+   resources, retaining original conversation context and protecting other writers.
+4. Exercise the complete transition across Node disconnect/restart, project deletion,
+   checkpoints and memory provenance. The current adapter/read-model tests do not
+   prove those effects.
 
 Local validation and the reproduced pre-change macOS memory-counter snapshot
-difference are recorded in the [U2 checkpoint](unified-conversations.md#u2-implementation-checkpoint-durable-legacy-binding-versions-2026-10-27). Physical
+difference are recorded in the [U2 checkpoints](unified-conversations.md#u2-implementation-checkpoint-project-membership-and-configured-policy-2026-10-27). Physical
 Android process/Keystore/MethodChannel and deployment/rollback acceptance are not
 claimed by JVM or synthetic process checks. UI redesign stays deferred; no remote
 push, deployment or Release is part of this slice.
