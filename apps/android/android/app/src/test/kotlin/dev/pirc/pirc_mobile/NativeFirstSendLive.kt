@@ -36,7 +36,7 @@ object NativeFirstSendLive {
         return PircJson.parseToJsonElement(File(root, "$name.json").readText()).jsonObject
     }
     @JvmStatic fun main(args: Array<String>) = runBlocking {
-        require(args.size == 2 && args[1] in setOf("send", "recover", "compete", "compete-recover"))
+        require(args.size == 2 && args[1] in setOf("send", "recover", "compete", "compete-recover", "offline-send", "offline-recover"))
         val config = PircJson.parseToJsonElement(File(args[0]).readText()).jsonObject
         val gateway = config.getValue("gateway").jsonPrimitive.content
         require(URI(gateway).host == "127.0.0.1")
@@ -54,6 +54,14 @@ object NativeFirstSendLive {
             check(request.header("Authorization")?.startsWith("Bearer pirc_dev_") == true)
             if (faulting && request.url.encodedPath.endsWith("/dispatch")) {
                 beforeDispatch!!(request.url.pathSegments[2])
+            }
+            if (args[1] == "offline-send" && request.url.encodedPath.endsWith("/materialize")) {
+                val id = config.getValue("operationId").jsonPrimitive.content
+                val row = FirstSendDraftStore(directory).get(scope, id)!!
+                val prep = row.getValue("preparation").jsonObject
+                check(prep["state"] == JsonPrimitive("accepted") && prep["nodeMapped"] == JsonPrimitive(false))
+                publish(root, "allocation-held", mapOf("id" to id, "session" to prep.getValue("sessionId").jsonPrimitive.content))
+                runBlocking { marker(root, "release-allocation") }
             }
             // Only fixture routing is substituted; authentication remains the real device bearer.
             val response = chain.proceed(request.newBuilder().header("Host", config.getValue("host").jsonPrimitive.content).build())
@@ -96,6 +104,40 @@ object NativeFirstSendLive {
         try {
             val primary = connection(config.getValue("token").jsonPrimitive.content, directory)
             primary.capabilities(stamp)
+            if (args[1].startsWith("offline")) {
+                val id = config.getValue("operationId").jsonPrimitive.content
+                val deleting = id == "offline-delete"
+                if (args[1] == "offline-send") {
+                    save(primary, id, true)
+                    primary.submit(stamp, owner, id, 1, "native-before-allocation")
+                    val result = primary.check(stamp, owner, id)
+                    check(preparation(result)["state"] == if (deleting) "cancelled" else "stopping")
+                    check(preparation(result)["nodeMapped"] == false)
+                    check(calls.none { (it["path"] as String).endsWith("/dispatch") })
+                    publish(root, "native-offline-paused", mapOf("record" to result, "calls" to calls))
+                } else {
+                    val checked = primary.check(stamp, owner, id)
+                    check(preparation(checked)["state"] == if (deleting) "cancelled" else "stopped")
+                    check(preparation(checked)["nodeMapped"] == false)
+                    primary.submit(stamp, owner, id, null, "native-before-allocation")
+                    check(calls.all { it["method"] == "GET" })
+                    publish(root, "native-offline-checked", checked)
+                    marker(root, "web-offline-result")
+                    val result = primary.check(stamp, owner, id)
+                    check(preparation(result)["nodeMapped"] == !deleting)
+                    check(preparation(result)["state"] == if (deleting) "cancelled" else "stopped")
+                    if (deleting) {
+                        check(obj(result)["message"] == "" && (obj(result)["files"] as List<*>).isEmpty())
+                        check(!directory.walkTopDown().any { it.name.startsWith("blob-") })
+                    } else {
+                        check(obj(result)["message"] == "First message $id")
+                        check(FirstSendDraftStore(directory).attachment(scope, id, "original-file").second.contentEquals("Original bytes for $id".toByteArray()))
+                    }
+                    check(calls.all { it["method"] == "GET" })
+                    publish(root, "native-offline-result", mapOf("record" to result, "calls" to calls))
+                }
+                return@runBlocking
+            }
             if (args[1].startsWith("compete")) {
                 compete(args[1], root, primary, PircApi(Pairing(gateway, config.getValue("token").jsonPrimitive.content), client), calls)
                 return@runBlocking

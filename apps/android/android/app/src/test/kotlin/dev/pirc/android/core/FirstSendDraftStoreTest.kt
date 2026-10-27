@@ -211,4 +211,46 @@ class FirstSendDraftStoreTest {
         assertNull(store.get(scope, "op"))
     }
 
+    private fun cancelled(row: JsonObject) = JsonObject(row + mapOf(
+        "frozen" to JsonPrimitive(true), "message" to JsonPrimitive(""), "files" to JsonArray(emptyList()),
+        "preparation" to buildJsonObject { put("state", "cancelled") },
+    ))
+    @Test fun confirmedCancellationRemovesOnlyItsBytesAfterTheReceiptCommits() = fixture { parent, store, scope ->
+        val original = store.put(scope, "alice", "op", null, value(files = JsonArray(listOf(attachment()))), mapOf("f1" to "hello".toByteArray()))
+        store.recover(scope, "alice", "op", "kept-copy", null, original, emptyMap())
+        val stopped = store.update(scope, "alice", "op") { JsonObject(it + mapOf(
+            "frozen" to JsonPrimitive(true), "cancelRequested" to JsonPrimitive(true), "uncertain" to JsonPrimitive(true),
+            "preparation" to buildJsonObject { put("state", "stopped") },
+        )) }
+        assertArrayEquals("hello".toByteArray(), store.attachment(scope, "op", "f1").second)
+        refused { store.update(scope, "alice", "op") { JsonObject(cancelled(it) + ("message" to JsonPrimitive("x".repeat(1_000_001)))) } }
+        assertEquals(stopped, store.get(scope, "op"))
+        assertArrayEquals("hello".toByteArray(), store.attachment(scope, "op", "f1").second)
+        store.update(scope, "alice", "op", ::cancelled)
+        assertEquals(1, parent.walkTopDown().count { it.name.startsWith("blob-") })
+        assertArrayEquals("hello".toByteArray(), store.attachment(scope, "kept-copy", "f1").second)
+        refused { store.put(scope, "alice", "op", stopped.getValue("revision").jsonPrimitive.long, stopped) }
+        assertEquals("", FirstSendDraftStore(File(parent, "drafts")).get(scope, "op")!!["message"]?.jsonPrimitive?.content)
+    }
+    @Test fun interruptedCancellationCleanupIsRepairedOnReopenWithoutFollowingSymlinks() = fixture { parent, store, scope ->
+        store.put(scope, "alice", "op", null, value(files = JsonArray(listOf(attachment()))), mapOf("f1" to "hello".toByteArray()))
+        val blob = parent.walkTopDown().single { it.name.startsWith("blob-") }
+        val sentinel = File(parent, "keep.txt").apply { writeText("outside") }
+        blob.delete()
+        Files.createSymbolicLink(blob.toPath(), sentinel.toPath())
+        refused { store.update(scope, "alice", "op", ::cancelled) }
+        assertEquals("outside", sentinel.readText())
+        val record = File(blob.parentFile, "record.json")
+        val committed = record.readBytes()
+        assertEquals("cancelled", PircJson.parseToJsonElement(String(committed)).jsonObject["record"]!!.jsonObject["preparation"]!!.jsonObject["state"]?.jsonPrimitive?.content)
+        // Simulate the interrupted unlink after its committed receipt, then a fresh process.
+        Files.delete(blob.toPath())
+        blob.writeText("hello")
+        val reopened = FirstSendDraftStore(File(parent, "drafts"))
+        assertEquals("", reopened.get(scope, "op")!!["message"]?.jsonPrimitive?.content)
+        assertFalse(blob.exists())
+        assertArrayEquals(committed, record.readBytes())
+        assertEquals("outside", sentinel.readText())
+    }
+
 }

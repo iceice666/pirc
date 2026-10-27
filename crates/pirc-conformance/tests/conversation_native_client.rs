@@ -26,6 +26,22 @@ fn client(runtime: &Value, config: &Path, directory: &Path, phase: &str) -> Clie
         log,
     }
 }
+fn web_client(config: &Path, directory: &Path) -> ClientProcess {
+    let log = directory.join("web-races.log");
+    let output = File::create(&log).unwrap();
+    ClientProcess {
+        child: Command::new(std::env::var_os("PIRC_TEST_NODE").unwrap_or_else(|| "node".into()))
+            .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
+            .arg("scripts/first-send-browser.mjs")
+            .arg(config)
+            .stdin(Stdio::null())
+            .stdout(output.try_clone().unwrap())
+            .stderr(output)
+            .spawn()
+            .unwrap(),
+        log,
+    }
+}
 async fn pair(cluster: &Cluster, name: &str) -> Value {
     let response = cluster
         .api()
@@ -267,20 +283,7 @@ async fn native_takeover_stop_and_delete_fence_delayed_web_dispatch_across_resta
         "token":paired["token"], "mode":"competition", "owner":pirc_conformance::USER,
         "origin":pirc_conformance::ORIGIN, "workspace":pirc_conformance::CHATS_WORKSPACE_ID,
     })).unwrap();
-    let log = directory.join("web-races.log");
-    let output = File::create(&log).unwrap();
-    let mut browser = ClientProcess {
-        child: Command::new(std::env::var_os("PIRC_TEST_NODE").unwrap_or_else(|| "node".into()))
-            .current_dir(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
-            .arg("scripts/first-send-browser.mjs")
-            .arg(&config)
-            .stdin(Stdio::null())
-            .stdout(output.try_clone().unwrap())
-            .stderr(output)
-            .spawn()
-            .unwrap(),
-        log,
-    };
+    let mut browser = web_client(&config, &directory);
     let mut native = client(&runtime, &config, &directory, "compete");
     let (pending, done) = tokio::join!(
         browser.stage(&directory, "web-races-done"),
@@ -311,4 +314,157 @@ async fn native_takeover_stop_and_delete_fence_delayed_web_dispatch_across_resta
     assert_eq!(web["operations"], pending["operations"]);
     assert_eq!(native["operations"], done["operations"]);
     verify_competition(&cluster, operations, true).await;
+}
+
+async fn offline_receipt(cluster: &Cluster, id: &str) -> Value {
+    let reply = cluster
+        .api()
+        .send(
+            "GET",
+            &format!("/api/conversation-submissions/{id}/receipt"),
+            &browser_headers(),
+            None,
+        )
+        .await;
+    assert_eq!(reply.status, 200, "{}", reply.body);
+    reply.body["preparation"].clone()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "requires the prepared Kotlin runtime, Web dependencies, dedicated test browser and real binaries"]
+async fn web_offline_stop_or_delete_fences_native_allocation_and_recovers_on_restart() {
+    use std::time::{Duration, Instant};
+    let runtime: Value = serde_json::from_slice(
+        &fs::read(
+            std::env::var_os("PIRC_NATIVE_FIRST_SEND_RUNTIME")
+                .expect("prepare the native runtime first"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    for id in ["offline-stop", "offline-delete"] {
+        let deleting = id == "offline-delete";
+        let mut cluster = Cluster::start_with(GatewayOptions {
+            chat_node: true,
+            agent_core_only: true,
+            ..Default::default()
+        })
+        .await
+        .expect("set PIRC_CONFORMANCE_BIN_DIR");
+        let paired = pair(&cluster, "native-before-allocation").await;
+        let directory = cluster.dir.path().join("offline-client-acceptance");
+        fs::create_dir(&directory).unwrap();
+        let config = directory.join("config.json");
+        let file = File::create(&config).unwrap();
+        file.set_permissions(fs::Permissions::from_mode(0o600))
+            .unwrap();
+        serde_json::to_writer(file, &json!({
+            "gateway":format!("http://127.0.0.1:{}",cluster.port), "host":HOST, "directory":directory,
+            "token":paired["token"], "mode":"offline", "operationId":id, "owner":pirc_conformance::USER,
+            "origin":pirc_conformance::ORIGIN, "workspace":pirc_conformance::CHATS_WORKSPACE_ID,
+        })).unwrap();
+        let mut native = client(&runtime, &config, &directory, "offline-send");
+        let held = native.stage(&directory, "allocation-held").await;
+        assert_eq!(held["id"], id);
+        let session = held["session"].as_str().unwrap();
+        let initial = offline_receipt(&cluster, id).await;
+        assert_eq!(initial["state"], "accepted");
+        assert_eq!(initial["nodeMapped"], false);
+        cluster.stop_node(true).await;
+        fs::write(directory.join("node-offline.json"), b"{}").unwrap();
+        let mut browser = web_client(&config, &directory);
+        let action = browser.stage(&directory, "web-offline-action").await;
+        assert_eq!(action["session"], session);
+        assert_eq!(
+            action["state"],
+            if deleting { "cancelled" } else { "stopping" }
+        );
+        fs::write(directory.join("release-allocation.json"), b"{}").unwrap();
+        let paused = native.stage(&directory, "native-offline-paused").await;
+        native.finish().await;
+        assert_eq!(paused["record"]["preparation"]["sessionId"], session);
+        assert_eq!(paused["record"]["preparation"]["state"], action["state"]);
+        cluster.restart_gateway(true).await;
+        let pending = offline_receipt(&cluster, id).await;
+        assert_eq!(pending["state"], action["state"]);
+        assert_eq!(pending["nodeMapped"], false);
+        assert!(cluster.llm.requests().is_empty());
+        cluster.resume_node().await;
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            let result = offline_receipt(&cluster, id).await;
+            if (deleting && result["cleanupPending"] == false)
+                || (!deleting && result["messageAdmission"]["stopConfirmed"] == true)
+            {
+                assert_eq!(
+                    result["state"],
+                    if deleting { "cancelled" } else { "stopped" }
+                );
+                assert_eq!(result["nodeMapped"], false);
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "offline decision did not settle: {result}"
+            );
+            tokio::time::sleep(Duration::from_millis(30)).await;
+        }
+        let mut recovered = client(&runtime, &config, &directory, "offline-recover");
+        fs::write(directory.join("hosts-restarted.json"), b"{}").unwrap();
+        let (web, native) = tokio::join!(
+            browser.stage(&directory, "web-offline-result"),
+            recovered.stage(&directory, "native-offline-result")
+        );
+        browser.finish().await;
+        recovered.finish().await;
+        assert_eq!(web["checked"]["session"], session);
+        assert_eq!(native["record"]["preparation"]["sessionId"], session);
+        let final_row = offline_receipt(&cluster, id).await;
+        assert_eq!(
+            final_row["state"],
+            if deleting { "cancelled" } else { "stopped" }
+        );
+        assert_eq!(final_row["nodeMapped"], !deleting);
+        assert_eq!(final_row["cleanupPending"], false);
+        assert!(
+            cluster.llm.requests().is_empty(),
+            "old first input must never infer"
+        );
+        let uploads = cluster.dir.path().join("node-state/uploads");
+        assert!(fs::read_dir(uploads).unwrap().next().is_none());
+        let staging = cluster
+            .dir
+            .path()
+            .join("gateway-state/submission-staging")
+            .join(session);
+        if deleting {
+            assert!(!staging.exists());
+        } else {
+            assert_eq!(
+                fs::read(staging.join("original-file.bin")).unwrap(),
+                format!("Original bytes for {id}").as_bytes()
+            );
+        }
+        let snapshot = cluster
+            .api()
+            .send(
+                "GET",
+                &format!("/api/sessions/{session}/snapshot"),
+                &browser_headers(),
+                None,
+            )
+            .await;
+        if deleting {
+            assert_eq!(snapshot.status, 404);
+        } else {
+            assert_eq!(snapshot.status, 200, "{}", snapshot.body);
+            assert!(
+                snapshot.body["history"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|row| row["role"] != "user")
+            );
+        }
+    }
 }

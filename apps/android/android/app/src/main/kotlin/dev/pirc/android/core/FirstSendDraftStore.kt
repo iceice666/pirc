@@ -75,6 +75,8 @@ internal class FirstSendDraftStore(private val root: File) {
         // Migrate only after binding validation, under the account/file lock.
         // Logical revision and Blob contents stay unchanged; old readers refuse 3.
         if (version != 3) persist(directory, row)
+        // A prior process can exit after committing cancellation but before unlinking bytes.
+        cleanupCancelled(directory, row)
         return row
     }
     private fun checked(row: JsonObject, scope: String, id: String? = null): JsonObject {
@@ -190,6 +192,7 @@ internal class FirstSendDraftStore(private val root: File) {
             require(row["frozen"]?.jsonPrimitive?.booleanOrNull == true)
         }
         persist(dir, row)
+        cleanupCancelled(dir, row)
         return row
     }
     fun attachment(scope: String, id: String, fileId: String): Pair<JsonObject, ByteArray> = locked(scope) { account ->
@@ -235,6 +238,22 @@ internal class FirstSendDraftStore(private val root: File) {
         ))
         putAt(account, scope, owner, targetId, expectedRevision, record, supplied)
     }
+    private fun cleanupCancelled(directory: File, row: JsonObject) {
+        if (row["frozen"]?.jsonPrimitive?.booleanOrNull == true &&
+            row["preparation"]?.jsonObject?.get("state")?.jsonPrimitive?.content == "cancelled" &&
+            row["message"]?.jsonPrimitive?.content == "" && row["files"]?.jsonArray?.isEmpty() == true) {
+            clearBlobs(directory)
+        }
+    }
+    /** Called under the account lock, only after the deletion record is durable. */
+    private fun clearBlobs(directory: File) {
+        val files = directory.listFiles() ?: error("Local attachment cleanup is pending")
+        for (file in files) if (file.name.startsWith("blob-") && digestName.matches(file.name.removePrefix("blob-"))) {
+            check(!Files.isSymbolicLink(file.toPath()) && file.isFile) { "Local attachment cleanup is pending" }
+            check(file.delete()) { "Local attachment cleanup is pending" }
+        }
+        syncDirectory(directory)
+    }
     fun remove(scope: String, id: String, expectedRevision: Long) = locked(scope) { account ->
         val dir = operation(account, id, false) ?: return@locked
         val row = read(dir, scope, id)?.let { checked(it, scope, id) } ?: return@locked
@@ -245,10 +264,6 @@ internal class FirstSendDraftStore(private val root: File) {
             })
         }
         // The identifier-only tombstone prevents delayed queued writes from resurrection.
-        for (file in dir.listFiles().orEmpty()) if (file.name.startsWith("blob-") && digestName.matches(file.name.removePrefix("blob-"))) {
-            check(!Files.isSymbolicLink(file.toPath()))
-            check(file.delete()) { "Local attachment cleanup is pending" }
-        }
-        syncDirectory(dir)
+        clearBlobs(dir)
     }
 }

@@ -4,7 +4,7 @@
 
 Status: adopted architecture baseline with an authorized staged implementation
 covering first Send, environment bindings, resource transitions, canonical tasks/
-collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-recovery, editor-snapshot and live Web/native fault/control-race acceptance
+collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-recovery, editor-snapshot, native blob cleanup and live Web/native fault/control-race acceptance
 checkpoints are summarized below (2026-10-27). UI redesign/navigation reorganization remains deferred;
 Web/Android changes are limited to necessary functional integration. Use only
 focused simple Flutter checks when Flutter changes.
@@ -47,28 +47,29 @@ Delivered U1 behavior:
   including version negotiation, independent Gateway access and minimal bilingual
   status/actions. New navigation and visual redesign are deferred.
 
-Latest slice: [delayed Web dispatch versus native takeover](#u1-implementation-checkpoint-delayed-web-dispatch-versus-native-takeover-2026-10-27)
-passes all three mapped-session cases: native Send without control is rejected;
-explicit takeover followed by Stop, confirmed deletion or Send fences the held
-Web request or resolves it to the same original admission. Exactly one model
-request is made across these three inputs. Browser/JVM and both-host restart keep
-session/command identities and exact retained attachment bytes; deleted staging
-cleanup completes, and both clients only GET results after restart.
+Latest slice: [offline allocation fencing and private blob cleanup](#u1-implementation-checkpoint-offline-allocation-fencing-and-private-blob-cleanup-2026-10-27)
+passes actual native materialize versus Web Stop/deletion while Node is offline,
+Gateway restart, Node recovery and fresh-client GET-only reconciliation. Stop
+retains original files and permits only a separate explicit blank-conversation
+release. Deleted native private blobs now disappear after the cancellation
+receipt commits; reopening repairs interrupted cleanup without affecting copies.
 
-All **three explicit live-client process tests** pass: the new three-case race,
-[paired native interruption/revocation](#u1-implementation-checkpoint-paired-native-process-recovery-and-revocation-2026-10-27)
+All **four explicit live-client process tests** pass: this two-case offline test,
+[mapped takeover](#u1-implementation-checkpoint-delayed-web-dispatch-versus-native-takeover-2026-10-27)
+(three cases), [native interruption/revocation](#u1-implementation-checkpoint-paired-native-process-recovery-and-revocation-2026-10-27)
 (two fault cases) and [Web interruption](#u1-implementation-checkpoint-live-web-reconciliation-and-durable-uncertainty-2026-10-27)
-(three fault cases). Strict targeted Clippy, warnings-as-errors Kotlin compilation
-and formatting checks pass. See [repeatable commands](../docs/development/first-send-acceptance.md).
+(three fault cases). **65 native JVM cases**, strict targeted Clippy, Kotlin
+warnings-as-errors compilation and formatting checks pass. See [repeatable commands](../docs/development/first-send-acceptance.md).
 
 The earlier marker repair retains **79 Web tests**, clean Svelte checks and
 **63 native JVM cases**; [editor snapshots](#u1-implementation-checkpoint-editor-attachments-survive-source-cleanup-2026-10-27)
-retain 26 focused Flutter cases. No production/Flutter code changes in this slice.
+retain 26 focused Flutter cases. This slice changes native private-file cleanup;
+no Flutter UI, backend API or format changes.
 The backend [nonce retirement](#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27)
 slice retains 329 Gateway tests and five process cases. These are bounded proofs,
 not the full permission/Stop/delete matrix or Android OS/device acceptance.
-Both live client tests are explicitly run and ignored by the default suite;
-published CI remains tied to `303fa8f8` and was rechecked green this round.
+Live-client tests are explicitly run and ignored by the default suite;
+the last verified published green CI remains tied to `303fa8f8`.
 
 | Stage                             | Current status                                                            | Next deliverable                                                                                                    |
 | --------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -81,11 +82,11 @@ published CI remains tied to `303fa8f8` and was rechecked green this round.
 
 Immediate U1 queue:
 
-1. Extend actual client acceptance to interrupted/unallocated or offline Node
-   work, its Stop/deletion lifecycle, mixed versions and reverse-direction races
-   (native in-flight send versus Web takeover). Initial interruption/restart,
-   native revocation and mapped Web-dispatch/native-takeover proofs now pass;
-   broader permission changes and the full matrix remain open.
+1. Close allocation-response loss after Node storage exists, mixed-version and
+   broader permission-change gates. Initial interruption/restart, device revocation,
+   mapped Web-dispatch/native takeover and reverse-direction offline pre-allocation
+   Stop/deletion now pass. They do not imply every mapped reverse-direction race
+   or the full matrix is covered.
 2. Verify actual Android process death, OS private files/Keystore, MethodChannel
    and attachment memory pressure; ask for a physical device when ready.
 3. Finish activation/rollback and affected full CI/conformance checks, including
@@ -2558,6 +2559,57 @@ sandbox launcher are not provider/sandbox-isolation proof. No Flutter/full Flutt
 suite, emulator, device, APK or local Nix validation. U2/U4/U5/U6 remain open.
 Commit locally only and remove this run's owned target/JVM/browser/log files;
 preserve SDKs, caches, APKs, user data and other agents' work.
+
+## U1 implementation checkpoint: offline allocation fencing and private blob cleanup (2026-10-27)
+
+Implemented locally after `e8a55cec`. Production **`canSubmit: false`** remains;
+package/storage/protocol versions and Nix hashes are unchanged. No backend/API,
+Flutter UI, memory provenance or checkpoint isolation changes.
+
+The new real-client test reverses the previous race: native saves original input
+and bytes, accepts the immutable intent and holds its materialize request before
+Gateway receives it. The fixture kills Node and awaits its actual disconnection.
+Web discovers/adopts the unmapped accepted conversation, then explicitly stops or
+confirms deletion. Stop reports `stopping` without false confirmation; deletion
+reports cancelled with pending remote cleanup. Releasing native's old request
+cannot allocate, upload or dispatch. Native exits and the browser closes;
+Gateway crashes/restarts while Node remains offline and retains the same decision.
+
+After Node resumes, the fixture waits for confirmed Stop/deletion cleanup. Fresh
+JVM/browser clients reconcile with GETs only; repeated original Send cannot run
+work. For Stop, a separate explicit Web release prepares only the same blank
+conversation, without promoting the original files. Native private bytes and
+Gateway staging remain exact. For deletion, the session stays unavailable,
+staging and original native files are removed, and both clients clear the payload.
+Both cases require zero user entries/model calls and zero Node uploads throughout.
+
+This exposed a native storage defect: cancellation receipts cleared message/file
+metadata but left the original private blob files until a later manual draft
+removal. `FirstSendDraftStore` now clears only recognized blob files in that
+operation's directory after a frozen, cancelled, empty-input receipt is durable.
+Reading such a committed record also repairs interrupted cleanup (including older
+cancelled records) under the account lock. Stop/unknown results and separate saved
+copies are untouched. Symlinks/unexpected non-files are refused, and a cleanup
+failure retains its committed cancellation for a later retry. No retention expiry
+or storage-envelope change was introduced.
+
+Validation: the new offline integration test failed on the physical native blob
+assertion before the fix and passes both cases afterward. All **four live-client
+process tests pass** after rebuilding the actual Kotlin engine. **65 JVM tests**
+cover the native engine, receipt merge, HTTP and private store; new regressions
+verify durable-before-cleanup ordering, stopped input/copy preservation, stale
+writer rejection and interrupted/symlink cleanup recovery without touching an
+outside sentinel. Strict Clippy for both Rust test targets, Kotlin compilation
+with warnings as errors, and Rust/JavaScript/docs checks pass.
+
+Remaining: Node allocation reply loss after storage creation, mixed versions,
+broader access revocation and remaining mapped reverse-direction races; Android
+OS/Keystore/MethodChannel/process-death, physical-device and attachment-pressure
+acceptance; activation/rollback and explicit live-client CI. These are opt-in
+engine/process proofs with fake provider/sandbox launcher, not full UI/device or
+production sandbox tests. No full Flutter suite, emulator, APK or local Nix run.
+U2/U4/U5/U6 remain open. Commit locally only and remove this run's isolated
+compiler/JVM/browser/log outputs; preserve SDKs, caches, APKs and user data.
 
 ## Design stages and later implementation gates
 

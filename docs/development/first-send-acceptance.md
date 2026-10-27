@@ -158,6 +158,45 @@ OS/device**. The three mapped-workspace cases do not cover the reverse direction
 protocol versions. The older backend-only tests cover parts of those contracts;
 they are not substituted for client acceptance.
 
+## Native allocation held while Web stops/deletes an offline Node
+
+With both client prerequisites prepared, run:
+
+```sh
+PIRC_NATIVE_FIRST_SEND_RUNTIME="$first_send_run/native/runtime.json" \
+  PIRC_CONFORMANCE_BIN_DIR="$CARGO_TARGET_DIR/debug" \
+  cargo test --locked -p pirc-conformance --test conversation_native_client \
+  web_offline_stop -- --ignored --nocapture
+```
+
+For each of Stop and confirmed deletion, a real paired native client saves the
+original input/file, prepares and accepts it, then pauses its actual materialize
+request before Gateway receives it. The fixture kills Node and verifies its
+registration disconnected. Web discovers/adopts that accepted, still-unmapped
+conversation through the normal client API. Stop must honestly report unconfirmed
+`stopping`; deletion must report `cancelled` with cleanup pending.
+
+The held native request is released while Node remains offline. It cannot dispatch
+or promote files. The native process exits, the browser closes, and Gateway is
+crashed/restarted; its receipt must retain the same pending decision and session.
+After the same Node resumes, the fixture waits for actual Stop confirmation or
+cleanup completion. Fresh browser/JVM clients query their journals and even a
+repeated original Send must emit GETs only (or be refused locally).
+
+For Stop, original native private bytes and Gateway staging survive. A separate
+explicit Web release action may materialize the same **blank** conversation;
+no original attachments are promoted and no old user message/model request runs.
+For deletion, the conversation remains unavailable and Gateway staging is gone.
+Native receipt persistence clears the original private blobs, and reopening a
+previously cancelled journal repairs interrupted blob cleanup. Other private
+copies and stopped/uncertain input are retained. The test checks actual files,
+not only the cleared attachment list.
+
+Both cases require zero model requests and zero Node uploads throughout. They
+cover the reverse client direction and offline pre-allocation lifecycle, not a
+lost Node allocation reply after storage was already created, the full Web/Flutter
+UI, mixed protocol versions or actual Android OS/device process death.
+
 ## Cleanup and remaining gates
 
 The browser helper closes its own profile/server, and the conformance fixture

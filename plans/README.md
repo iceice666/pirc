@@ -75,7 +75,8 @@ The published baseline is `303fa8f8`, including the user-authorized CI repairs.
 Its remote Check and Android workflows both passed. Local work adds Gateway
 retry-nonce retirement (`9b5c776b`), Web/native retry recovery (`c41e4e8a`) and
 open-editor attachment protection, live Web/native interruption acceptance and
-mapped Web/native takeover/Stop/deletion races.
+mapped Web/native takeover races, offline pre-allocation Stop/deletion and native
+confirmed-deletion blob cleanup.
 Full live-client acceptance and activation
 remain open.
 Subsequent work defaults to local commits, with no deployment, version change or
@@ -99,6 +100,14 @@ private drafts are not subject to that deadline. See [upgrade and rollback
 notes](../docs/deploy/upgrades.md).
 
 Latest completed U1 slices and their recorded evidence:
+
+- [Offline allocation and native blob cleanup](unified-conversations.md#u1-implementation-checkpoint-offline-allocation-fencing-and-private-blob-cleanup-2026-10-27):
+  real native materialize is held while Web stops/deletes an offline Node;
+  Gateway restart retains the decision, and fresh clients query without replay.
+  Stop allows only an explicit blank-conversation release. Fixed native private
+  blobs lingering after a confirmed deletion; cleanup follows durable metadata
+  and repairs on reopen without affecting retained copies. Four live process
+  tests and 65 native JVM cases pass; Android OS/device remains unverified.
 
 - [Mixed Web/native control races](unified-conversations.md#u1-implementation-checkpoint-delayed-web-dispatch-versus-native-takeover-2026-10-27):
   a held real Web dispatch loses control to a paired native client. Explicit
@@ -161,10 +170,10 @@ Latest completed U1 slices and their recorded evidence:
 
 Next, close U1's remaining gates in this order:
 
-1. Extend live-client acceptance to interrupted/unallocated or offline Node work,
-   Stop/deletion in that state, mixed versions and reverse-direction client races.
-   Initial native revocation and mapped Web-dispatch/native-takeover races pass;
-   broader permission changes remain open.
+1. Close the remaining allocation-response loss, mixed-version and broader
+   permission-change gates. Initial native revocation, mapped Web-dispatch/native
+   takeover and reverse-direction offline pre-allocation Stop/deletion now pass;
+   those do not imply every mapped reverse-direction race is covered.
 2. Verify Android MethodChannel, OS private storage/Keystore, process death and
    attachment memory pressure; request a physical device when that step is ready.
 3. Complete activation/rollback and the affected full CI/conformance gates before

@@ -77,3 +77,104 @@ export async function runClientRaces({ page, publish, marker, traffic, workspace
   assert(traffic.slice(boundary).every((entry) => entry.method === 'GET'));
   await publish('web-race-result', { operations, traffic, readOnlyAfterRestart: true });
 }
+
+/** Native materialize is held while its Node is offline and Web stops/deletes. */
+export async function runOfflineRace({
+  operationId: id,
+  page,
+  publish,
+  marker,
+  traffic,
+  close,
+  reopen,
+}) {
+  const held = await marker('allocation-held');
+  await marker('node-offline');
+  assert.equal(held.id, id);
+  const deleting = id === 'offline-delete';
+  const actor = await page();
+  const pending = await actor.evaluate(
+    async ({ id, session, deleting }) => {
+      const { firstTransport } = await import('/src/lib/first-send.ts');
+      const preparation = await firstTransport.find('test@example.com', session);
+      if (
+        preparation.operationId !== id ||
+        preparation.nodeMapped ||
+        preparation.state !== 'accepted'
+      )
+        throw new Error('Expected the original unallocated first input');
+      await window.flow.adopt(window.scope, 'test@example.com', preparation);
+      // Represents the explicit confirmed deletion action, not a browser-dialog UI test.
+      if (deleting) await window.flow.discard(window.scope, id);
+      else {
+        await window.flow.takeControl(window.scope, id);
+        await window.flow.stop(window.scope, id);
+      }
+      const row = await window.flow.check(window.scope, id);
+      return {
+        id,
+        session: row.preparation.sessionId,
+        state: row.preparation.state,
+        mapped: row.preparation.nodeMapped,
+        cleanup: row.preparation.cleanupPending,
+        confirmed: row.preparation.messageAdmission?.stopConfirmed ?? false,
+      };
+    },
+    { id, session: held.session, deleting },
+  );
+  assert.equal(pending.state, deleting ? 'cancelled' : 'stopping');
+  assert.equal(pending.mapped, false);
+  assert.equal(pending.confirmed, false);
+  if (deleting) assert.equal(pending.cleanup, true);
+  await close();
+  await publish('web-offline-action', pending);
+  await marker('hosts-restarted');
+  await reopen();
+  const reader = await page();
+  const boundary = traffic.length;
+  const checked = await reader.evaluate(async (id) => {
+    const row = await window.flow.check(window.scope, id);
+    // A delayed/repeated original Send cannot resume work after Stop/deletion.
+    let refused = false;
+    try {
+      await window.flow.run(window.scope, id);
+    } catch {
+      refused = true;
+    }
+    return {
+      session: row.preparation.sessionId,
+      state: row.preparation.state,
+      mapped: row.preparation.nodeMapped,
+      cleanup: row.preparation.cleanupPending,
+      confirmed: row.preparation.messageAdmission?.stopConfirmed ?? false,
+      message: row.message,
+      files: row.files.length,
+      refused,
+    };
+  }, id);
+  assert.equal(checked.session, held.session);
+  assert.equal(checked.state, deleting ? 'cancelled' : 'stopped');
+  assert.equal(checked.mapped, false);
+  assert.equal(checked.cleanup, false);
+  assert.equal(checked.confirmed, !deleting);
+  assert.equal(checked.message, deleting ? '' : 'First message ' + id);
+  assert.equal(checked.files, deleting ? 0 : 1);
+  assert(traffic.slice(boundary).every((request) => request.method === 'GET'));
+  await marker('native-offline-checked');
+  if (!deleting) {
+    const before = traffic.length;
+    const released = await reader.evaluate((id) => window.flow.release(window.scope, id), id);
+    assert.equal(released.preparation.state, 'stopped');
+    assert.equal(released.preparation.sessionId, held.session);
+    assert.equal(released.preparation.nodeMapped, true);
+    assert.equal(released.released, true);
+    assert.deepEqual(
+      traffic
+        .slice(before)
+        .filter((request) => request.method !== 'GET')
+        .map((request) => request.path),
+      ['/api/conversation-submissions/' + id + '/materialize'],
+    );
+  }
+  await publish('web-offline-result', { checked, traffic });
+}
