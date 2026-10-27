@@ -67,6 +67,17 @@
             onclick={() => app.continueFirst()}>{tr('Continue sending')}</button
           >
         {/if}
+        {#if phase === 'admission_failed' && record.preparation?.messageAdmission?.retryEligible && !record.cancelRequested && !record.stopCommandId && !(record.retryAttempt && !record.retryAttempt.resolved)}
+          <button
+            class="button ghost"
+            type="button"
+            disabled={!app.firstEnabled ||
+              app.firstCapabilities?.canRetryFirstMessage !== true ||
+              app.firstControlBusy ||
+              app.commandBusy}
+            onclick={() => app.retryFirst()}>{tr('Retry original message')}</button
+          >
+        {/if}
         {#if canStop && !record.preparation?.messageAdmission?.stopRequested}
           <button
             class="button ghost"

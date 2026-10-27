@@ -21,6 +21,12 @@ class NativeFirstSendFlowTest {
     private class Ledger : Dispatcher() {
         var preparation: JsonObject? = null
         var enabled = true
+        var canRetry = true
+        var unsupportedRetry = false
+        var rejectDispatch = false
+        var loseRetry = false
+        var dropRetry = false
+        var onRetry: ((JsonObject)->Unit)? = null
         var contract: Int? = 2
         var failMaterialize = false
         var losePendingStop = false
@@ -49,9 +55,28 @@ class NativeFirstSendFlowTest {
             calls += "${request.method} $path"
             if (path.endsWith("/capabilities")) {
                 val fields = contract?.let { "\"clientContract\":$it,\"requiredClientContract\":2," } ?: ""
-                return objectReply("""{"version":1,${fields}"ownerUser":"alice","canFenceAccount":true,"canStopBeforeAllocation":true,"canSubmit":$enabled}""")
+                return objectReply("""{"version":1,${fields}"ownerUser":"alice","canFenceAccount":true,"canStopBeforeAllocation":true,"canRetryFirstMessage":$canRetry,"canSubmit":$enabled}""")
             }
             assertEquals("alice", request.headers["x-pirc-account"])
+            if (path.contains("/retries/")) {
+                val retry = preparation?.get("messageAdmission")?.jsonObject?.get("retryId")?.jsonPrimitive?.contentOrNull
+                return if(retry == path.substringAfterLast('/')) reply(buildJsonObject {put("preparation",preparation!!)}) else objectReply("{}",404)
+            }
+            if (path.endsWith("/retry")) {
+                val input=PircJson.parseToJsonElement(request.body!!.utf8()).jsonObject
+                onRetry?.invoke(input)
+                if(unsupportedRetry) return objectReply("""{"error":{"code":"initial_retry_unsupported","message":"Upgrade Node"}}""",409)
+                if(dropRetry){dropRetry=false;return objectReply("{}",503)}
+                assertEquals("cmd-original",input["previousCommandId"]?.jsonPrimitive?.content)
+                assertEquals("android-fixture",input["clientId"]?.jsonPrimitive?.content)
+                assertEquals(7,input["generation"]?.jsonPrimitive?.int)
+                update("admitted")
+                preparation=JsonObject(preparation!!+("messageAdmission" to buildJsonObject {
+                    put("commandId","cmd-next");put("retryId",input.getValue("retryId"));put("attemptNumber",1);put("outcome","admitted");put("stopRequested",false);put("stopConfirmed",false);put("retryEligible",false)
+                }))
+                if(loseRetry){loseRetry=false;return objectReply("{}",503)}
+                return reply(buildJsonObject {put("preparation",preparation!!)})
+            }
             if (path.endsWith("/prepare")) {
                 val input = PircJson.parseToJsonElement(request.body!!.utf8()).jsonObject
                 assertEquals("alice", input["expectedOwner"]!!.jsonPrimitive.content)
@@ -84,7 +109,10 @@ class NativeFirstSendFlowTest {
             }
             else if (path.endsWith("/control/acquire")) return objectReply("""{"lease":{"clientId":"android-fixture","generation":7}}""")
             else if (path.endsWith("/dispatch")) {
-                update("admitted")
+                update(if(rejectDispatch) "admission_failed" else "admitted")
+                if(rejectDispatch) preparation=JsonObject(preparation!!+("messageAdmission" to buildJsonObject {
+                    put("commandId","cmd-original");put("attemptNumber",0);put("outcome","not_admitted");put("stopRequested",false);put("stopConfirmed",false);put("retryEligible",true)
+                }))
                 if (loseDispatch) { loseDispatch = false; return objectReply("{}", 503) }
             } else if (path.endsWith("/commands") && request.method == "POST") {
                 val input = PircJson.parseToJsonElement(request.body!!.utf8()).jsonObject
@@ -130,6 +158,58 @@ class NativeFirstSendFlowTest {
         override fun close() { server.close(); parent.deleteRecursively() }
     }
     private fun prep(row: Any?) = (row as Map<*, *>)["preparation"] as Map<*, *>
+    @Test fun retryCommitsNonceBeforeHttpAndRetainsOriginalTextAndFileBytes() = runTest { Fixture().use {f->
+        val c=f.connection();f.saved(c);f.ledger.rejectDispatch=true
+        assertEquals("admission_failed",prep(c.submit(f.stamp,"alice","op",1,"android-fixture"))["state"])
+        f.ledger.calls.clear()
+        f.ledger.onRetry={input->
+            val file=f.parent.walkTopDown().single {it.name=="record.json"}
+            val row=PircJson.parseToJsonElement(file.readText()).jsonObject.getValue("record").jsonObject
+            assertEquals(input["retryId"],row.getValue("retryAttempt").jsonObject["retryId"])
+            assertEquals("cmd-original",row.getValue("retryAttempt").jsonObject["previousCommandId"]?.jsonPrimitive?.content)
+            assertEquals(true,row["uncertain"]?.jsonPrimitive?.boolean)
+        }
+        val result=c.retry(f.stamp,"alice","op","android-fixture") as Map<*,*>
+        assertEquals("admitted",prep(result)["state"]);assertEquals("public-session",prep(result)["sessionId"])
+        assertEquals("Original",result["message"]);assertEquals(true,(result["retryAttempt"] as Map<*,*>)["resolved"])
+        assertFalse(f.ledger.calls.any {it.endsWith("/prepare")||it.endsWith("/accept")||it.endsWith("/materialize")||it.contains("/attachments/")||it.endsWith("/dispatch")})
+        assertEquals(1,f.parent.walkTopDown().count {it.name=="record.json"})
+        assertTrue(f.parent.walkTopDown().filter {it.isFile && it.name.startsWith("blob-")}.all {String(it.readBytes())=="hello"})
+    }}
+    @Test fun retryLostReplyReopensPrivateJournalAndOnlyQueriesItsNonce() = runTest {Fixture().use {f->
+        val c=f.connection();f.saved(c);f.ledger.rejectDispatch=true;c.submit(f.stamp,"alice","op",1,"android-fixture")
+        f.ledger.loseRetry=true
+        try {c.retry(f.stamp,"alice","op","android-fixture");fail("lost")}catch(e:ApiException){assertEquals(503,e.status)}
+        val saved=f.row(c)!!;val nonce=(saved["retryAttempt"] as Map<*,*>)["retryId"]
+        val reopened=f.connection();reopened.capabilities(f.stamp);f.ledger.calls.clear()
+        assertEquals("admitted",prep(reopened.check(f.stamp,"alice","op"))["state"])
+        assertEquals(listOf("GET /api/conversation-submissions/op/retries/$nonce"),f.ledger.calls)
+        assertEquals(true,(f.row(reopened)!!["retryAttempt"] as Map<*,*>)["resolved"])
+    }}
+    @Test fun retryNotReceivedRemainsUnknownAndRepeatedExplicitRetryNeverReposts() = runTest {Fixture().use {f->
+        val c=f.connection();f.saved(c);f.ledger.rejectDispatch=true;c.submit(f.stamp,"alice","op",1,"android-fixture")
+        f.ledger.dropRetry=true
+        try {c.retry(f.stamp,"alice","op","android-fixture");fail("lost")}catch(_:ApiException){}
+        val reopened=f.connection();reopened.capabilities(f.stamp);f.ledger.calls.clear()
+        val result=reopened.retry(f.stamp,"alice","op","android-fixture") as Map<*,*>
+        assertEquals(true,result["uncertain"]);assertFalse(f.ledger.calls.any {it.startsWith("POST")})
+        assertEquals(2,f.ledger.calls.size)
+        assertTrue(f.ledger.calls[0].contains("/retries/"));assertEquals("GET /api/conversation-submissions/op/receipt",f.ledger.calls[1])
+    }}
+    @Test fun freshRetryCapabilitiesAreRequiredBeforeControlOrJournalMutation() = runTest {Fixture().use {f->
+        val c=f.connection();f.saved(c);f.ledger.rejectDispatch=true;c.submit(f.stamp,"alice","op",1,"android-fixture")
+        f.ledger.canRetry=false;f.ledger.calls.clear()
+        try {c.retry(f.stamp,"alice","op","android-fixture");fail("unsupported")}catch(_:IllegalStateException){}
+        assertNull(f.row(c)!!["retryAttempt"]);assertFalse(f.ledger.calls.any {it.startsWith("POST")})
+    }}
+    @Test fun explicitUnsupportedNodeRefusalDoesNotLeaveAPermanentUnknownRetry() = runTest {Fixture().use {f->
+        val c=f.connection();f.saved(c);f.ledger.rejectDispatch=true;c.submit(f.stamp,"alice","op",1,"android-fixture")
+        f.ledger.unsupportedRetry=true
+        try {c.retry(f.stamp,"alice","op","android-fixture");fail("unsupported")}catch(e:ApiException){assertEquals("initial_retry_unsupported",e.code)}
+        val saved=f.row(c)!!;assertEquals(false,saved["uncertain"]);assertEquals(true,(saved["retryAttempt"] as Map<*,*>)["notReserved"])
+        f.ledger.unsupportedRetry=false
+        assertEquals("admitted",prep(c.retry(f.stamp,"alice","op","android-fixture"))["state"])
+    }}
     @Test fun firstSendUsesSavedTextFilesAndIdentityWithoutLegacyCreationOrCommands() = runTest { Fixture().use { f ->
         val connection = f.connection()
         f.saved(connection)

@@ -48,6 +48,7 @@ export class FirstLedger implements FirstTransport {
       canFenceAccount: true,
       canStopBeforeAllocation: true,
       canSubmit: true,
+      canRetryFirstMessage: true,
     };
   }
   async find(owner: string, session: string) {
@@ -87,7 +88,8 @@ export class FirstLedger implements FirstTransport {
   async action(
     owner: string,
     id: string,
-    action: 'accept' | 'materialize' | 'dispatch',
+    action: 'accept' | 'materialize' | 'dispatch' | 'retry',
+    _body?: unknown,
   ): Promise<Preparation> {
     this.calls.push(action);
     const prior = this.entries.get(this.key(owner, id))!;
@@ -108,6 +110,12 @@ export class FirstLedger implements FirstTransport {
       this.failDispatch = false;
       throw new ApiError('response lost', 503);
     }
+    return row;
+  }
+  async retryLookup(owner: string, id: string, _retryId: string) {
+    this.calls.push('retryLookup');
+    const row = this.entries.get(this.key(owner, id));
+    if (!row || !row.messageAdmission?.retryId) throw new ApiError('missing', 404);
     return row;
   }
   async acquire() {

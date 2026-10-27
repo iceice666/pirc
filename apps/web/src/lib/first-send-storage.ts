@@ -17,14 +17,14 @@ export class BrowserDraftStore implements DraftStore {
         reject(new Error('Local draft storage is unavailable. Your message has not been sent.'));
         return;
       }
-      const request = indexedDB.open('pirc-first-send-v1', 2);
+      const request = indexedDB.open('pirc-first-send-v1', 3);
       let failed = false;
       request.onupgradeneeded = (event) => {
         if (event.oldVersion === 0)
           request.result
             .createObjectStore('drafts', { keyPath: ['scope', 'operationId'] })
             .createIndex('scope', 'scope');
-        // Version 2 fences older writers; existing rows/Blob bytes are untouched.
+        // Version 3 fences pre-retry writers; existing rows/Blob bytes are untouched.
       };
       request.onerror = () => {
         failed = true;

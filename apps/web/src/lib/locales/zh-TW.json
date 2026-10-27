@@ -1400,5 +1400,6 @@
   "The first message admission is still unknown; Stop does not undo completed work.": "首次訊息是否已接收仍未知；停止不會復原已完成的工作。",
   "Connect to the Gateway to confirm first-send support before creating a conversation.": "請先連線至 Gateway 確認首次送出支援，再建立對話。",
   "Unsent edits": "尚未送出的修改",
-  "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "其他視窗已變更此草稿。你尚未送出的修改已另存為草稿，請開啟並檢視後再送出。"
+  "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "其他視窗已變更此草稿。你尚未送出的修改已另存為草稿，請開啟並檢視後再送出。",
+  "Retry original message": "重試原訊息"
 }

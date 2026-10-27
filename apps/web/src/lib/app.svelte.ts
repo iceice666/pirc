@@ -429,6 +429,22 @@ class AppState {
       this.commandBusy = false;
     }
   }
+  async retryFirst() {
+    const draft = this.firstDraft,
+      selection = this.#openSeq;
+    if (!draft || this.firstControlBusy || this.commandBusy) return;
+    this.firstControlBusy = true;
+    try {
+      await this.#finishFirst(
+        await this.firstFlow.retry(draft.scope, draft.operationId),
+        selection,
+      );
+    } catch (error) {
+      if (draft.scope === this.#firstScope && selection === this.#openSeq) this.#firstError(error);
+    } finally {
+      this.firstControlBusy = false;
+    }
+  }
   async checkFirst() {
     const draft = this.firstDraft,
       selection = this.#openSeq;

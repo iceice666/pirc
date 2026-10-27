@@ -3374,6 +3374,7 @@ const englishMessages = <String, String>{
   "The first message admission is still unknown; Stop does not undo completed work.": "The first message admission is still unknown; Stop does not undo completed work.",
   "Unsent edits": "Unsent edits",
   "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.",
+  "Retry original message": "Retry original message",
 };
 const traditionalChineseMessages = <String, String>{
   "無法確認最新狀態，請重試": "無法確認最新狀態，請重試",
@@ -6235,4 +6236,5 @@ const traditionalChineseMessages = <String, String>{
   "The first message admission is still unknown; Stop does not undo completed work.": "首次訊息是否已接收仍未知；停止不會復原已完成的工作。",
   "Unsent edits": "尚未送出的修改",
   "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "其他視窗已變更此草稿。你尚未送出的修改已另存為草稿，請開啟並檢視後再送出。",
+  "Retry original message": "重試原訊息",
 };

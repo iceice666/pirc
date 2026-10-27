@@ -2543,5 +2543,6 @@
   "Conversation preparation is not yet confirmed. Check the result.": "Conversation preparation is not yet confirmed. Check the result.",
   "The first message admission is still unknown; Stop does not undo completed work.": "The first message admission is still unknown; Stop does not undo completed work.",
   "Unsent edits": "Unsent edits",
-  "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending."
+  "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.": "Another window changed this draft. Your unsent edits were saved separately. Open the saved draft to review it before sending.",
+  "Retry original message": "Retry original message"
 }

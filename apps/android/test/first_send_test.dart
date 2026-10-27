@@ -40,6 +40,7 @@ class FirstPort {
         'canFenceAccount': true,
         'canFindPendingSession': true,
         'canStopBeforeAllocation': true,
+        'canRetryFirstMessage': true,
         'ownerUser': owner,
         'draftScope': jsonEncode(['https://gateway.example', owner]),
       };

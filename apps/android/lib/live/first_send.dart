@@ -58,6 +58,16 @@ class FirstSendState {
             : phase != 'accepted');
   }
 
+  bool get canRetry =>
+      enabled &&
+      capabilities['canRetryFirstMessage'] == true &&
+      phase == 'admission_failed' &&
+      obj(obj(current?['preparation'])['messageAdmission'])['retryEligible'] ==
+          true &&
+      current?['cancelRequested'] != true &&
+      current?['stopCommandId'] == null &&
+      !(current?['retryAttempt'] is Map &&
+          obj(current?['retryAttempt'])['resolved'] != true);
   bool get canStop =>
       obj(current?['preparation'])['accepted'] == true &&
       phase != 'cancelled' &&
@@ -566,6 +576,12 @@ class FirstSendState {
         _remember(stored, epoch);
         if (finish) await _finish(stored, selection, epoch);
       }
+    } catch (_) {
+      try {
+        final stored = await _read(row);
+        if (stored != null) _remember(stored, epoch);
+      } catch (_) {}
+      rethrow;
     } finally {
       if (epoch == _epoch) {
         controlBusy = false;
@@ -574,6 +590,7 @@ class FirstSendState {
     }
   }
 
+  Future<void> retry() => _control('firstSendRetry', finish: true);
   Future<void> check() => _control('firstSendCheck');
   Future<void> stop() => _control('firstSendStop');
   Future<void> takeControl() => _control('firstSendTakeControl');

@@ -197,4 +197,68 @@ void main() {
       await g.stream.close();
     },
   );
+  testWidgets(
+    'confirmed rejection offers Retry and a lost native reply restores pending status',
+    (tester) async {
+      final (c, g, p) = await setup();
+      final row = p.records.values.single;
+      row['frozen'] = true;
+      row['prepareAttempted'] = true;
+      row['revision']++;
+      row['preparation'] = {
+        'operationId': row['operationId'],
+        'sessionId': 'pending',
+        'workspaceId': 'w',
+        'accepted': true,
+        'nodeMapped': true,
+        'state': 'admission_failed',
+        'cleanupPending': false,
+        'messageAdmission': {
+          'commandId': 'cmd',
+          'attemptNumber': 0,
+          'outcome': 'not_admitted',
+          'retryEligible': true,
+          'stopRequested': false,
+          'stopConfirmed': false,
+        },
+      };
+      await c.firstSend.check();
+      final original = p.call;
+      g.handler = (method, args) async {
+        if (method == 'firstSendRetry') {
+          expect(args['operationId'], row['operationId']);
+          expect(args['ownerUser'], 'alice');
+          row['revision']++;
+          row['uncertain'] = true;
+          row['retryAttempt'] = {
+            'retryId': 'nonce',
+            'previousCommandId': 'cmd',
+            'previousAttemptNumber': 0,
+          };
+          throw StateError('synthetic lost reply');
+        }
+        return original(method, args);
+      };
+      await tester.pumpWidget(page(c, () => FirstSendRecovery(controller: c)));
+      expect(find.text('Retry original message'), findsOneWidget);
+      g.calls.clear();
+      await tester.tap(find.text('Retry original message'));
+      await tester.pumpAndSettle();
+      expect(
+        g.calls.where((item) => item.$1 == 'firstSendRetry'),
+        hasLength(1),
+      );
+      expect(find.text('Retry original message'), findsNothing);
+      expect(find.text('First message outcome is unknown'), findsOneWidget);
+      expect(
+        g.calls.any(
+          (item) => item.$1 == 'firstSendSubmit' || item.$1 == 'command',
+        ),
+        false,
+      );
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+      await g.stream.close();
+    },
+  );
 }

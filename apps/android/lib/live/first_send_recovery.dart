@@ -224,6 +224,12 @@ class FirstSendRecovery extends StatelessWidget {
                       first.submit,
                       enabled: first.enabled && !controller.busy,
                     ),
+                  if (first.canRetry)
+                    action(
+                      'Retry original message',
+                      first.retry,
+                      enabled: !first.controlBusy && !controller.busy,
+                    ),
                   if (first.canStop && !first.stopRequested)
                     action(
                       'Take control',

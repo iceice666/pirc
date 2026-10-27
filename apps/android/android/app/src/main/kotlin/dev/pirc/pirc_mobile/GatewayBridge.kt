@@ -908,6 +908,7 @@ class GatewayBridge(private val activity: MainActivity, engine: FlutterEngine) {
                             null
                         }
                         "firstSendSubmit" -> firstSend.submit(str("pairingStamp"), str("ownerUser"), str("operationId"), (args["expectedRevision"] as? Number)?.toLong(), runtime.local.clientId)
+                        "firstSendRetry" -> firstSend.retry(str("pairingStamp"), str("ownerUser"), str("operationId"), runtime.local.clientId)
                         "firstSendCheck" -> firstSend.check(str("pairingStamp"), str("ownerUser"), str("operationId"))
                         "firstSendCancel" -> firstSend.cancel(str("pairingStamp"), str("ownerUser"), str("operationId"), args["deleteAccepted"] == true)
                         "firstSendStop" -> firstSend.stop(str("pairingStamp"), str("ownerUser"), str("operationId"), runtime.local.clientId)

@@ -106,3 +106,54 @@ it('a deleted operation with an earlier Stop never offers Open conversation', as
     ),
   ).toBe(false);
 });
+
+it('a confirmed rejection offers explicit Retry; uncertain local attempts hide it', async () => {
+  const retry = vi.spyOn(app, 'retryFirst').mockResolvedValue();
+  app.firstCapabilities = {
+    version: 1,
+    clientContract: 2,
+    requiredClientContract: 2,
+    ownerUser: 'alice',
+    canSubmit: true,
+    canFenceAccount: true,
+    canStopBeforeAllocation: true,
+    canRetryFirstMessage: true,
+  };
+  show('admission_failed');
+  app.firstDraft = {
+    ...app.firstDraft!,
+    preparation: {
+      ...app.firstDraft!.preparation!,
+      messageAdmission: {
+        commandId: 'cmd',
+        attemptNumber: 0,
+        outcome: 'not_admitted',
+        retryEligible: true,
+        stopRequested: false,
+        stopConfirmed: false,
+      },
+    },
+  };
+  const { flushSync } = await import('svelte');
+  flushSync();
+  const button = [...document.querySelectorAll('button')].find(
+    (b) => b.textContent?.trim() === 'Retry original message',
+  )!;
+  expect(button).toBeDefined();
+  expect(button.disabled).toBe(false);
+  button.click();
+  await Promise.resolve();
+  expect(retry).toHaveBeenCalledOnce();
+  app.firstDraft = {
+    ...app.firstDraft!,
+    retryAttempt: { retryId: 'nonce', previousCommandId: 'cmd', previousAttemptNumber: 0 },
+    uncertain: true,
+  };
+  flushSync();
+  expect(
+    [...document.querySelectorAll('button')].some(
+      (b) => b.textContent?.trim() === 'Retry original message',
+    ),
+  ).toBe(false);
+  expect(document.body.textContent).toContain('First message outcome is unknown');
+});

@@ -13,7 +13,7 @@ internal class NativeFirstSend(
     private val capture: suspend (String) -> PircApi,
     private val validate: (String) -> Unit,
 ) {
-    private data class Account(val stamp: String, val owner: String, val scope: String, val api: FirstSendApi, val enabled: Boolean, val pendingStop: Boolean, val requireContract: Boolean, val connection: PircApi)
+    private data class Account(val stamp: String, val owner: String, val scope: String, val api: FirstSendApi, val enabled: Boolean, val pendingStop: Boolean, val canRetry: Boolean, val requireContract: Boolean, val connection: PircApi)
     private var account: Account? = null
     private var revision = 0L
     private val store = FirstSendDraftStore(directory)
@@ -32,9 +32,10 @@ internal class NativeFirstSend(
         val requireContract = alreadyRequired || compatible || blocked
         val enabled = compatible && value.flag("canSubmit")
         val pendingStop = value["version"]?.jsonPrimitive?.intOrNull == 1 && value["canStopBeforeAllocation"]?.jsonPrimitive?.booleanOrNull == true
+        val canRetry = compatible && value.flag("canRetryFirstMessage")
         account = if (!owner.isNullOrBlank() && value["canFenceAccount"]?.jsonPrimitive?.booleanOrNull == true)
-            account?.takeIf { it.stamp == stamp && it.owner == owner && it.connection === api && it.enabled == enabled && it.pendingStop == pendingStop && it.requireContract == requireContract }
-                ?: Account(stamp, owner, FirstSendDraftStore.scope(api.pairing.baseUrl, owner), FirstSendApi(api), enabled, pendingStop, requireContract, api)
+            account?.takeIf { it.stamp == stamp && it.owner == owner && it.connection === api && it.enabled == enabled && it.pendingStop == pendingStop && it.canRetry == canRetry && it.requireContract == requireContract }
+                ?: Account(stamp, owner, FirstSendDraftStore.scope(api.pairing.baseUrl, owner), FirstSendApi(api), enabled, pendingStop, canRetry, requireContract, api)
             else null
         return JsonObject(value + mapOf("canSubmit" to JsonPrimitive(enabled), "firstSendUpgradeRequired" to JsonPrimitive(blocked)) + (account?.let { mapOf("draftScope" to JsonPrimitive(it.scope)) } ?: emptyMap())).wire()
     }
@@ -147,27 +148,11 @@ internal class NativeFirstSend(
             require(row["workspaceId"] == value["workspaceId"] && (previous == null || previous["sessionId"] == value["sessionId"])) {
                 "The original conversation binding changed"
             }
-            val keep = (previous?.string("state") == "cancelled" && (value.string("state") != "cancelled" || (!previous.flag("cleanupPending") && value.flag("cleanupPending")))) ||
-                (previous?.string("state") == "admitted" && value.string("state") !in setOf("admitted", "cancelled")) ||
-                (previous?.flag("accepted") == true && !value.flag("accepted")) ||
-                (row.admission()?.flag("stopConfirmed") == true && value.string("state") != "cancelled" &&
-                    (value["messageAdmission"] as? JsonObject)?.flag("stopConfirmed") != true)
-            val chosen = if (keep) previous!! else value
-            var result = if (previous?.flag("nodeMapped") == true || value.flag("nodeMapped")) JsonObject(chosen + ("nodeMapped" to JsonPrimitive(true))) else chosen
-            if (result.string("state") != "cancelled") {
-                val before = row.admission(); val incoming = value["messageAdmission"] as? JsonObject
-                val confirmed = before?.flag("stopConfirmed") == true || incoming?.flag("stopConfirmed") == true
-                val requested = confirmed || before?.flag("stopRequested") == true || incoming?.flag("stopRequested") == true
-                val admitted = previous?.string("state") == "admitted" || value.string("state") == "admitted"
-                if (before != null || incoming != null) result = JsonObject(result + mapOf(
-                    "state" to JsonPrimitive(if (admitted) "admitted" else if (confirmed) "stopped" else if (requested) "stopping" else result.string("state")),
-                    "messageAdmission" to buildJsonObject {
-                        put("stopRequested",requested);put("stopConfirmed",confirmed)
-                        put("outcome",if(admitted) "admitted" else if(before?.flag("stopConfirmed") == true && before.string("outcome") == "not_admitted") "not_admitted" else incoming?.string("outcome") ?: before?.string("outcome") ?: "pending")
-                    },
-                ))
-            }
-            JsonObject((row - "error") + mapOf("preparation" to result, "uncertain" to JsonPrimitive(result.string("state") == "outcome_unknown")) +
+            val result = mergeFirstPreparation(previous, value)
+            val retry = row["retryAttempt"] as? JsonObject
+            val resolved = retry != null && (result.string("state") == "cancelled" || firstAttemptNumber(result) > retry.getValue("previousAttemptNumber").jsonPrimitive.long)
+            JsonObject((row - "error") + mapOf("preparation" to result, "uncertain" to JsonPrimitive(result.string("state") != "cancelled" && (result.string("state") == "outcome_unknown" || (retry != null && !retry.flag("resolved") && !resolved)))) +
+                (if (resolved) mapOf("retryAttempt" to JsonObject(retry + ("resolved" to JsonPrimitive(true)))) else emptyMap()) +
                 if (result.string("state") == "cancelled") mapOf("message" to JsonPrimitive(""), "files" to JsonArray(emptyList())) else emptyMap())
         }
     }
@@ -175,6 +160,16 @@ internal class NativeFirstSend(
         val row = local(captured, id)
         if (!row.flag("frozen")) return row
         try {
+            val retry = row["retryAttempt"] as? JsonObject
+            if (retry != null && !retry.flag("resolved")) {
+                try {
+                    val value = api(captured, "GET", path(id) + "/retries/${retry.getValue("retryId").jsonPrimitive.content.urlSegment()}")?.jsonObject?.get("preparation")?.jsonObject
+                        ?: throw ApiException(502, "bad_reply", "Missing retry receipt")
+                    check(value.string("state") == "cancelled" || firstAttemptNumber(value) > retry.getValue("previousAttemptNumber").jsonPrimitive.long) { "The retry receipt did not identify a successor attempt" }
+                    return receipt(captured, id, value)
+                } catch (error: ApiException) { if (error.status != 404) throw error }
+                // Missing nonce does not prove that a pending request cannot arrive.
+            }
             val suffix = if (row.preparation()?.flag("accepted") == true) "/receipt" else ""
             val result = api(captured, "GET", path(id) + suffix)?.jsonObject?.get("preparation")?.jsonObject
                 ?: throw ApiException(502, "bad_reply", "Missing first-message receipt")
@@ -215,6 +210,41 @@ internal class NativeFirstSend(
         return value["generation"]?.jsonPrimitive?.longOrNull?.takeIf { it > 0 }
             ?: error("Missing control generation")
     }
+    /** Exact immutable input, a fresh control lease, and a nonce committed before POST. */
+    suspend fun retry(stamp: String, owner: String, id: String, clientId: String): Any? {
+        val before = current(stamp, owner)
+        var row = check(before, id)
+        if ((row["retryAttempt"] as? JsonObject)?.let { !it.flag("resolved") } == true) return row.wire()
+        val admission = row.admission()
+        val command = admission?.string("commandId")
+        check(row.phase() == "admission_failed" && admission?.string("outcome") == "not_admitted" && admission.flag("retryEligible") && command != null && !admission.flag("stopRequested") && !admission.flag("stopConfirmed") && !row.flag("cancelRequested") && row.string("stopCommandId") == null) { "Only a confirmed first-message rejection can be retried" }
+        capabilities(stamp)
+        val captured = current(stamp, owner)
+        check(captured.enabled && captured.canRetry) { "This Gateway cannot retry the original first message" }
+        val generation = acquire(captured, row.preparation()!!.getValue("sessionId").jsonPrimitive.content, clientId)
+        val nonce = UUID.randomUUID().toString(); val number = firstAttemptNumber(row.preparation())
+        row = change(captured, id) { latest ->
+            check(!latest.flag("cancelRequested") && latest.string("stopCommandId") == null && latest.phase() == "admission_failed" && latest.admission()?.string("commandId") == command && firstAttemptNumber(latest.preparation()) == number && (latest["retryAttempt"] as? JsonObject)?.let { !it.flag("resolved") } != true) { "The first-message attempt changed; check its result" }
+            JsonObject((latest - "error") + mapOf("uncertain" to JsonPrimitive(true), "retryAttempt" to buildJsonObject {
+                put("retryId", nonce); put("previousCommandId", command); put("previousAttemptNumber", number)
+            }))
+        }
+        try {
+            return action(captured, id, "retry", buildJsonObject {
+                put("retryId", nonce); put("previousCommandId", command); put("clientId", clientId); put("generation", generation)
+            }).wire()
+        } catch (error: Exception) {
+            // This structured Gateway refusal occurs before reservation/relay.
+            val notReserved = error is ApiException && error.status == 409 && error.code == "initial_retry_unsupported"
+            try { change(captured, id) { latest ->
+                val saved = latest["retryAttempt"] as? JsonObject
+                if (saved?.string("retryId") != nonce || saved.flag("resolved") || latest.phase() == "cancelled") latest
+                else JsonObject(latest + mapOf("uncertain" to JsonPrimitive(!notReserved), "error" to JsonPrimitive(error.message ?: "First-message result is unconfirmed")) +
+                    if (notReserved) mapOf("retryAttempt" to JsonObject(saved + mapOf("resolved" to JsonPrimitive(true), "notReserved" to JsonPrimitive(true)))) else emptyMap())
+            } } catch (_: Exception) { /* Keep the prior durable input and nonce. */ }
+            throw error
+        }
+    }
     /** Only an explicit user Send/Continue invokes this; checking never calls it. */
     suspend fun submit(stamp: String, owner: String, id: String, expectedRevision: Long?, clientId: String): Any? {
         val before = current(stamp, owner)
@@ -252,7 +282,7 @@ internal class NativeFirstSend(
         } catch (error: Exception) {
             // If even this status write fails, the prior immutable input and
             // prepare-attempt marker still survive; never fall back or replay.
-            try { change(captured, id) { before -> JsonObject(before + mapOf(
+            try { change(captured, id) { before -> if (firstAttemptNumber(before.preparation()) > firstAttemptNumber(saved.preparation()) || before.phase() in setOf("admitted", "cancelled")) before else JsonObject(before + mapOf(
                 "error" to JsonPrimitive(error.message ?: "First-message result is unconfirmed"),
                 "uncertain" to JsonPrimitive(before.flag("prepareAttempted") && !(error is ApiException && error.status in 400..499)),
             )) } } catch (_: Exception) { /* Preserve the earlier committed record. */ }

@@ -2043,6 +2043,75 @@ Nix, APK, push, deployment or Release is included in this checkpoint. Run-owned
 isolated output/logs are removed afterward; existing APKs, SDKs, caches and other
 agents' files remain.
 
+## U1 implementation checkpoint: Web and native Android rejected-admission retries (2026-10-27)
+
+Implemented locally on Gateway **1019** / Node **2009**, wire 1 / protocol 15 /
+client contract 2. Production **`canSubmit: false` remains unchanged**; this is
+client adoption, not activation or completion of U1. Package/dependency versions,
+Nix hashes, normal session/memory/checkpoint ownership and APIs are unchanged.
+
+- Both existing recovery surfaces offer **Retry original message** only for a
+  positively rejected current command and advertised support. A new Retry first
+  reconciles, refreshes account/activation/capability and obtains the user's
+  ordinary held control; it never forces a takeover. The private journal then
+  atomically reserves one nonce with the exact rejected command and attempt
+  number before POST. No editable payload, new conversation, copied draft,
+  re-upload or replacement first message is used. The same accepted original
+  text, settings and attachment identities remain frozen.
+- A pending nonce changes repeated Retry/Check into read-only nonce/result GETs.
+  A missing nonce is not permission to POST again or generate another attempt.
+  If the current operation has advanced, the newer command/ordinal resolves the
+  local pending record, including a competing device's winner. Deletion still
+  wins. A lost reply, local restart or concurrent window cannot silently replay.
+- The explicit Gateway `409 initial_retry_unsupported` is known to occur before
+  reservation/relay. It records a resolved **not-reserved** refusal, retains the
+  original and allows a later user Retry after upgrading Node. Generic 4xx/5xx,
+  transport errors and 404 queries have no such meaning and remain query-only.
+- Receipt merging retains command/nonce/attempt metadata and orders per-command
+  outcomes by their persisted number. An older rejection cannot replace a newer
+  unknown outcome; a late unknown cannot undo a positive rejection of the same
+  attempt. Stop is merged independently across the whole operation, without
+  borrowing an older command's rejection to resolve a newer one. Valid admission
+  can still advance after Stop; cancellation/finished cleanup cannot be undone.
+  Late error callbacks cannot mark an already-resolved newer attempt uncertain.
+- Web keeps the same IndexedDB name and upgrades to **version 3**, preserving
+  existing rows/revisions/Blobs while fencing version-1/2 writers. Android private
+  envelope **3** imports validated version-1/2 records under the existing account/
+  file lock without changing their logical revision or bytes. Older native
+  binaries refuse envelope 3; future formats are refused without mutation.
+- Android uses a narrow authenticated native `/retry` / `/retries/{nonce}` route
+  and `firstSendRetry` bridge directly to Gateway. Flutter restores the native
+  journal even after a failed response, so pending status and disabled Retry are
+  truthful. English and Traditional Chinese labels use existing catalogs. Both
+  surfaces keep original details folded, existing Stop/control and memory-aware
+  deletion consent. UI redesign remains deferred.
+
+Validation: **68 focused Web tests**, zero Svelte errors/warnings, **50 native JVM
+cases** and **22 focused Flutter tests** pass. Targeted Flutter analysis has no
+issues. Native proofs compile actual core/submission sources and exercise private
+filesystem/MockWebServer HTTP, migration, persisted-before-POST nonce, lost reply,
+reopen, unsupported capability/Node and read-only uncertain recovery. They do not
+exercise Android OS, Keystore or the live MethodChannel. Production IndexedDB and
+FirstSend are also exercised by two real dedicated Headless Shell pages: one
+competing retry POST, exact saved nonce/original Blob across browser restart,
+no second POST on Check/Retry, old-writer refusal and previous conflict-copy cases.
+That browser transport is synthetic, separate from the prior five real backend
+process proofs. No everyday Chrome/profile, emulator or user data is touched.
+
+Remaining gates: real Web UI and real native client connected to Gateway/Node/
+Agent through the full interruption/permission matrix; Android process death and
+physical-device checks; generic durable-journal reopening/repair and activation/
+rollback acceptance. A client crash after committing its nonce but before POST
+may leave that nonce absent remotely: preserve it as unknown and offer existing
+Stop/blank-continuation or authorized deletion, never silently reconstruct or
+replay it. Full recovery UX for this case remains an activation gate. The accepted
+files stay retained until admission or deletion; **seven-day expiry still applies
+only to unaccepted Gateway staging**, not private drafts or accepted attachments.
+Later environment binding, actual mount revocation, collaboration and bounded pots
+remain open. Run-owned isolated output/logs are cleaned; shared caches, SDKs,
+existing APKs and other agents' work remain. Local commit only, no APK, push,
+deployment, Nix validation or Release.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

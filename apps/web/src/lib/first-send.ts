@@ -1,5 +1,6 @@
 /** Durable, account-scoped first Send. Reconnect checks never advance execution. */
 import { request, ApiError } from './http';
+import { attemptNumber, mergePreparation } from './first-send-receipt';
 import { uuid } from './id';
 import { getClientId } from './storage';
 import type { ThinkingLevel } from './types';
@@ -13,6 +14,7 @@ export interface FirstCapabilities {
   canFenceAccount?: boolean;
   canFindPendingSession?: boolean;
   canStopBeforeAllocation?: boolean;
+  canRetryFirstMessage?: boolean;
 }
 export const FIRST_SEND_CLIENT_CONTRACT = 2;
 export const firstContractCompatible = (caps?: FirstCapabilities) =>
@@ -53,7 +55,15 @@ export interface Preparation {
   cleanupError?: string;
   deliveryError?: string;
   submission?: FirstSpec;
-  messageAdmission?: { outcome: string; stopRequested: boolean; stopConfirmed: boolean };
+  messageAdmission?: {
+    outcome: string;
+    stopRequested: boolean;
+    stopConfirmed: boolean;
+    commandId?: string | null;
+    retryId?: string | null;
+    attemptNumber?: number;
+    retryEligible?: boolean;
+  };
 }
 export interface FirstDraft {
   scope: string;
@@ -74,6 +84,13 @@ export interface FirstDraft {
   cancelRequested?: boolean;
   stopCommandId?: string;
   pendingStopControl?: StopControl;
+  retryAttempt?: {
+    retryId: string;
+    previousCommandId: string;
+    previousAttemptNumber: number;
+    resolved?: boolean;
+    notReserved?: boolean;
+  };
   updatedAt: number;
   /** Private unsent edits, never a retry of the source operation. */
   recoveredFrom?: string;
@@ -95,9 +112,10 @@ export interface FirstTransport {
   action(
     owner: string,
     op: string,
-    action: 'accept' | 'materialize' | 'dispatch',
+    action: 'accept' | 'materialize' | 'dispatch' | 'retry',
     body?: unknown,
   ): Promise<Preparation>;
+  retryLookup(owner: string, op: string, retryId: string): Promise<Preparation>;
   acquire(owner: string, session: string, force?: boolean): Promise<number>;
   acquirePending(owner: string, op: string, force?: boolean): Promise<StopControl>;
   stopPending(owner: string, op: string, held: StopControl): Promise<Preparation>;
@@ -142,6 +160,10 @@ export const firstTransport: FirstTransport = {
         headers: headers(owner),
         ...(body ? { body: JSON.stringify(body) } : {}),
       }),
+    ),
+  retryLookup: (owner, op, retryId) =>
+    prep(
+      request(`${path(op)}/retries/${encodeURIComponent(retryId)}`, { headers: headers(owner) }),
     ),
   async acquire(owner, session, force = false) {
     const { lease } = await request<{ lease: { clientId: string; generation: number } }>(
@@ -351,52 +373,24 @@ export class FirstSend {
         (row.preparation && row.preparation.sessionId !== value.sessionId)
       )
         throw new Error('The original conversation binding changed.');
-      const previous = row.preparation;
-      // Late replies cannot un-delete content or turn a known acceptance into a draft.
-      const keep =
-        (previous?.state === 'cancelled' &&
-          (value.state !== 'cancelled' || (!previous.cleanupPending && value.cleanupPending))) ||
-        (previous?.state === 'admitted' && !['admitted', 'cancelled'].includes(value.state)) ||
-        (previous?.accepted && !value.accepted) ||
-        (previous?.messageAdmission?.stopConfirmed === true &&
-          value.state !== 'cancelled' &&
-          value.messageAdmission?.stopConfirmed !== true);
-      const chosen = keep ? previous! : value;
-      let current =
-        previous?.nodeMapped === true || value.nodeMapped === true
-          ? { ...chosen, nodeMapped: true }
-          : chosen;
-      if (current.state !== 'cancelled') {
-        const before = previous?.messageAdmission,
-          incoming = value.messageAdmission;
-        const confirmed = !!(before?.stopConfirmed || incoming?.stopConfirmed);
-        const requested = !!(confirmed || before?.stopRequested || incoming?.stopRequested);
-        const admitted = previous?.state === 'admitted' || value.state === 'admitted';
-        if (before || incoming)
-          current = {
-            ...current,
-            state: admitted
-              ? 'admitted'
-              : confirmed
-                ? 'stopped'
-                : requested
-                  ? 'stopping'
-                  : current.state,
-            messageAdmission: {
-              stopRequested: requested,
-              stopConfirmed: confirmed,
-              outcome: admitted
-                ? 'admitted'
-                : before?.stopConfirmed && before.outcome === 'not_admitted'
-                  ? 'not_admitted'
-                  : (incoming?.outcome ?? before?.outcome ?? 'pending'),
-            },
-          };
-      }
+      const current = mergePreparation(row.preparation, value);
+      const retryAttempt = row.retryAttempt;
       return {
         ...row,
         preparation: current,
-        uncertain: current.state === 'outcome_unknown',
+        ...(retryAttempt &&
+        (current.state === 'cancelled' ||
+          attemptNumber(current) > retryAttempt.previousAttemptNumber)
+          ? { retryAttempt: { ...retryAttempt, resolved: true } }
+          : {}),
+        uncertain:
+          current.state !== 'cancelled' &&
+          (current.state === 'outcome_unknown' ||
+            !!(
+              retryAttempt &&
+              !retryAttempt.resolved &&
+              attemptNumber(current) <= retryAttempt.previousAttemptNumber
+            )),
         error: undefined,
         ...(current.state === 'cancelled' ? { message: '', files: [] } : {}),
       };
@@ -484,6 +478,24 @@ export class FirstSend {
     const row = await this.#read(scope, id, true);
     if (!row.frozen) return row;
     try {
+      if (row.retryAttempt && !row.retryAttempt.resolved) {
+        try {
+          const value = await this.transport.retryLookup(
+            row.ownerUser,
+            id,
+            row.retryAttempt.retryId,
+          );
+          if (
+            value.state !== 'cancelled' &&
+            attemptNumber(value) <= row.retryAttempt.previousAttemptNumber
+          )
+            throw new Error('The retry receipt did not identify a successor attempt.');
+          return this.#receipt(scope, id, value);
+        } catch (error) {
+          if (!(error instanceof ApiError && error.status === 404)) throw error;
+          // An absent nonce is not evidence that a pending POST cannot still arrive.
+        }
+      }
       return await this.#receipt(
         scope,
         id,
@@ -560,12 +572,103 @@ export class FirstSend {
       }
       return row;
     } catch (error) {
-      await this.#change(scope, id, (old) => ({
-        ...old,
-        error: error instanceof Error ? error.message : String(error),
-        uncertain:
-          old.prepareAttempted === true && !(error instanceof ApiError && error.status < 500),
-      }));
+      await this.#change(scope, id, (old) =>
+        attemptNumber(old.preparation) > attemptNumber(row.preparation) ||
+        ['admitted', 'cancelled'].includes(old.preparation?.state ?? '')
+          ? old
+          : {
+              ...old,
+              error: error instanceof Error ? error.message : String(error),
+              uncertain:
+                old.prepareAttempted === true && !(error instanceof ApiError && error.status < 500),
+            },
+      );
+      throw error;
+    }
+  }
+  /** A new command is permitted only by a positive rejection and explicit user action. */
+  async retry(scope: string, id: string) {
+    let row = await this.check(scope, id);
+    if (row.retryAttempt && !row.retryAttempt.resolved) return row;
+    const prior = row.preparation,
+      admission = prior?.messageAdmission;
+    if (
+      !prior ||
+      prior.state !== 'admission_failed' ||
+      admission?.outcome !== 'not_admitted' ||
+      !admission.retryEligible ||
+      !admission.commandId ||
+      admission.stopRequested ||
+      admission.stopConfirmed ||
+      row.cancelRequested ||
+      row.stopCommandId
+    )
+      throw new Error('Only a confirmed first-message rejection can be retried.');
+    const caps = await this.transport.capabilities();
+    if (
+      caps.ownerUser !== row.ownerUser ||
+      !firstContractCompatible(caps) ||
+      !caps.canSubmit ||
+      caps.canRetryFirstMessage !== true
+    )
+      throw new Error('This Gateway cannot retry the original first message.');
+    const generation = await this.transport.acquire(row.ownerUser, prior.sessionId);
+    const nonce = uuid(),
+      number = attemptNumber(prior);
+    row = await this.#change(scope, id, (current) => {
+      if (
+        current.cancelRequested ||
+        current.stopCommandId ||
+        current.preparation?.state !== 'admission_failed' ||
+        current.preparation.messageAdmission?.commandId !== admission.commandId ||
+        attemptNumber(current.preparation) !== number ||
+        (current.retryAttempt && !current.retryAttempt.resolved)
+      )
+        throw new Error('The first-message attempt changed; check its result.');
+      return {
+        ...current,
+        error: undefined,
+        uncertain: true,
+        retryAttempt: {
+          retryId: nonce,
+          previousCommandId: admission.commandId!,
+          previousAttemptNumber: number,
+        },
+      };
+    });
+    try {
+      await this.#sending(scope, id);
+      return await this.#receipt(
+        scope,
+        id,
+        await this.transport.action(row.ownerUser, id, 'retry', {
+          retryId: nonce,
+          previousCommandId: admission.commandId,
+          clientId: getClientId(),
+          generation,
+        }),
+      );
+    } catch (error) {
+      // This explicit Gateway code is returned before any retry reservation/relay.
+      // A generic 4xx/5xx or missing nonce is not equivalent evidence.
+      const notReserved =
+        error instanceof ApiError &&
+        error.status === 409 &&
+        error.code === 'initial_retry_unsupported';
+      await this.#change(scope, id, (current) =>
+        current.retryAttempt?.retryId !== nonce ||
+        current.retryAttempt.resolved ||
+        current.preparation?.state === 'cancelled'
+          ? current
+          : {
+              ...current,
+              uncertain: !notReserved,
+              ...(notReserved
+                ? { retryAttempt: { ...current.retryAttempt, resolved: true, notReserved: true } }
+                : {}),
+              error: error instanceof Error ? error.message : String(error),
+            },
+      );
       throw error;
     }
   }

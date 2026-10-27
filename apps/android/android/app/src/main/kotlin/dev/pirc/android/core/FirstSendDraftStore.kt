@@ -69,12 +69,12 @@ internal class FirstSendDraftStore(private val root: File) {
         check(file.length() in 1..MAX_METADATA.toLong()) { "Local draft metadata is corrupt" }
         val envelope = PircJson.parseToJsonElement(file.readText(Charsets.UTF_8)).jsonObject
         val version = envelope["version"]?.jsonPrimitive?.intOrNull
-        check(version in setOf(1, 2)) { "Unsupported local draft format" }
+        check(version in setOf(1, 2, 3)) { "Unsupported local draft format" }
         val row = checked(envelope["record"]?.jsonObject ?: error("Missing local draft record"), scope, id)
         check(directory.name == digest(row.getValue("operationId").jsonPrimitive.content.toByteArray(Charsets.UTF_8))) { "Local draft identity changed" }
         // Migrate only after binding validation, under the account/file lock.
-        // Logical revision and Blob contents stay unchanged; old readers refuse 2.
-        if (version == 1) persist(directory, row)
+        // Logical revision and Blob contents stay unchanged; old readers refuse 3.
+        if (version != 3) persist(directory, row)
         return row
     }
     private fun checked(row: JsonObject, scope: String, id: String? = null): JsonObject {
@@ -107,7 +107,7 @@ internal class FirstSendDraftStore(private val root: File) {
         } finally { temporary.delete() }
     }
     private fun persist(directory: File, row: JsonObject) {
-        val bytes = buildJsonObject { put("version", 2); put("record", row) }.toString().toByteArray(Charsets.UTF_8)
+        val bytes = buildJsonObject { put("version", 3); put("record", row) }.toString().toByteArray(Charsets.UTF_8)
         require(bytes.size <= MAX_METADATA) { "Local draft metadata is too large" }
         atomicWrite(directory, "record.json", bytes)
     }

@@ -1,5 +1,33 @@
 # Upgrades
 
+## Unreleased local checkpoint: Web/native first-message Retry adoption
+
+Gateway **1019**, Node **2009**, protocol 15 and client contract 2 are unchanged.
+The existing Web/Android recovery controls now adopt the explicit Retry API; the
+production rollout still has **`canSubmit: false`**, so this does not enable a new
+send path for deployed users. No APK or release assets are built here.
+
+Web IndexedDB (same database name) is now **3**; Android private metadata envelope
+is **3**. Rows, logical revisions, account bindings and attachment bytes migrate
+without replacement; native imports validated envelopes 1/2 under its existing
+lock. Old Web/native writers refuse the newer format. An older binary must not
+write newer state. Preserve a consistent full private-state/browser-profile backup
+if an installation rollback is required; never edit version fields or discard
+unresolved drafts as a downgrade shortcut. Future formats remain read/write refused.
+
+Retry keeps the original conversation/input/files, journals its nonce/predecessor
+before POST and requires current capability/grants/control. Pending retries only
+query their own nonce/result after a lost reply or restart; an absent nonce is not
+permission to resend. Only the explicit Gateway `initial_retry_unsupported` refusal
+proves reservation did not occur and permits a later user Retry after Node repair.
+Global Stop and deletion are independent of any attempt's admission outcome.
+Seven-day expiry continues to cover only unaccepted Gateway staging.
+
+Focused Web/native-JVM/Flutter and isolated browser-storage proofs pass. Full live
+client-to-backend, Android OS/process-death/device, pre-POST crash repair and rollout/
+rollback acceptance remain required before activation. Shared SDKs/caches and APKs
+are preserved; only run-owned test output is removed. No deployment is performed.
+
 ## Unreleased local checkpoint: Gateway first-message retries
 
 Gateway schema **1019** adds durable retry nonce/predecessor/command history and
@@ -23,8 +51,8 @@ files remain retained until known admission or authorized deletion; the seven-da
 rule still applies only to unaccepted staging. Existing memory deletion consent,
 checkpoint isolation and ordinary session APIs are unchanged.
 
-**Web/native Android have not adopted Retry yet; production `canSubmit: false`
-remains unchanged.** Backend synthetic tests and paired direct-HTTP process proof
+**At this backend checkpoint Web/native Android had not adopted Retry; the newer
+client checkpoint above adds it. Production `canSubmit: false` remains unchanged.** Backend synthetic tests and paired direct-HTTP process proof
 are separate from actual native-client/device acceptance. No deployment, APK or
 release asset is included.
 
