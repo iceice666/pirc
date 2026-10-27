@@ -41,7 +41,7 @@ counts below this point in the U1 section describe that prior U1 slice, not all
 newer U2 changes.
 
 U4 has begun with an [internal Node admission fence](#u4-implementation-checkpoint-node-transition-admission-fence-2026-10-28)
-and tracked supervisor drain. Its receipts explicitly deny revocation/installation
+and tracked supervisor drain, followed by [runner-scoped inference retirement](#u4-implementation-checkpoint-runner-scoped-inference-retirement-2026-10-28). Its receipts explicitly deny revocation/installation
 completion. No public workspace switch or new resource grant is enabled; Gateway
 coordination, OS enforcement, replacement binding and Web/App controls remain.
 
@@ -3436,3 +3436,53 @@ deployment acceptance are not claimed.
 All changes remain local; this checkpoint does not enable a public transition,
 change versions, deploy or publish a Release. Run-owned outputs are cleaned after
 verification while APKs, shared caches and user/other-agent files are preserved.
+
+## U4 implementation checkpoint: runner-scoped inference retirement (2026-10-28)
+
+Implemented locally after `f5b54264`. The existing Node transition now retires
+source inference before returning acceptance and again when reconciling drain.
+Gateway **1025**, Node **2012**, protocol **15**, client contract **2**, private
+envelope **3**, package versions, dependencies and Nix hashes are unchanged.
+
+Each runner's private configure line receives a fresh random inference capability,
+bound inside Node to session, workspace, runner epoch and mode snapshot. Shared
+endpoint metadata contains no usable Node bearer. Refreshing `/models` returns
+only the caller's capability. The existing request `sessionId` is preserved for
+model-cache compatibility; it cannot choose which session a capability belongs to.
+Persistence keeps its separate capability and existing drain semantics.
+
+The Node database lock spans current environment/fence validation and synchronous
+model-start enqueue. The per-capability lock also serializes enqueue with retirement.
+Requests that already passed header authentication but are waiting for their body
+must recheck authority before dispatch. Retiring a capability removes its pending
+streams, sends each accepted stream at most one cancel, discards queued old output
+and ignores late provider replies. Failed starts are not canceled. Runner exit or
+lease drop retires only that capability, so delayed old-epoch cleanup cannot close
+a replacement runner or another conversation. No automatic replacement request is
+sent. Hard restart loses old capabilities; the durable transition fence still
+prevents fresh execution admission until reconciliation.
+
+This strengthens the inference boundary, **not complete sandbox revocation**.
+Provider processing already started and bytes already handed to the socket cannot
+be undone; an already admitted tool remains subject to the remaining host/process
+revocation work. The full Gateway coordinator, OS descendants/descriptors and
+ambient aliases, target policy installation/acknowledgement, trusted environment
+notice and Web/App controls remain open. Receipts still say
+`revocationConfirmed: false`, `targetInstalled: false`; `enforcement: not_tracked`
+and U1 `canSubmit: false` are unchanged.
+
+Validation: **472 Node library tests passed, 3 ignored** with the built real
+Gateway/Node binaries available; strict Node/conformance all-target Clippy and
+format checks passed. **16 required process cases** passed: checkpoints (3),
+conversation admission (2), creation (2), execution-fence restart (1), new inference
+fencing (1), memory (1), node-link side channels (5) and project deletion (1).
+The new process case runs two real Agents: acceptance cancels A's model stream,
+a late write proposal does not alter a subsequent user edit, B completes, and A's
+original question remains in its history. It uses a fake Gateway/model responder;
+it is not an end-to-end public Gateway switching acceptance. Four focused unit
+cases cover scoped cancellation/duplicate teardown, body-wait revocation, current
+Node epoch/workspace/mode/fence checks and admission-versus-retirement locking.
+Tests use synthetic local model replies, never third-party providers. No frontend/Android bridge changed;
+physical Android/Keystore/MethodChannel, full workspace, Linux revocation, Nix and
+deployment acceptance are not claimed. Keep this slice local, preserve APKs and
+shared caches, and remove only this run's completed build/test outputs.

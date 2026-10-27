@@ -1,15 +1,16 @@
 //! The agents' inference endpoint (`node/inference.ts`): a private HTTP/1.1
 //! server on a Unix socket that relays model calls to the gateway over the
-//! link. Owner: **runner**.
+//! link. Each runner receives a revocable session/workspace/epoch capability.
+//! Owner: **runner**.
 //!
-//! The server is hand-written over `tokio::net::UnixListener` (two
-//! endpoints, one client: the agent's own hand-written client in
+//! The server is hand-written over `tokio::net::UnixListener` (model endpoints
+//! plus separately scoped persistence, with the agent's own client in
 //! `pirc_agent::remote`), so the node links no HTTP server stack. It takes
 //! one request per connection and closes it after the response; request
 //! bodies may be `Content-Length` or `chunked`.
 //!
 //! What it reproduces: directory `<state>/i-XXXXXX` (0700) with `socket`
-//! (0600); a 32-byte hex token checked as `Bearer` in constant time; 64
+//! (0600); runner-scoped 32-byte hex tokens checked as `Bearer` in constant time; 64
 //! connections, 30 s for headers and body; `GET /models` (the current
 //! catalog, `no-store`; over 16 MiB: 503 `limit_exceeded`) and
 //! `POST /inference` (8 MiB body, 429 beyond [`INFERENCE_MAX_REQUESTS`],
@@ -49,6 +50,10 @@ use tokio::time::Instant;
 use crate::services::WeakNode;
 use crate::util::{hex, random_bytes, uuid};
 
+mod authority;
+pub(crate) use authority::Lease;
+use authority::{Gate, Identity, Scope};
+
 /// `server.maxConnections`.
 const MAX_CONNECTIONS: usize = 64;
 /// `headersTimeout`, `requestTimeout` and the body's `setTimeout`.
@@ -76,8 +81,8 @@ impl InferenceServer {
         }
     }
 
-    /// Listen (before the link connects); the socket path and token for
-    /// the `configure` line and the sandbox policy.
+    /// Listen before the link connects. Endpoint metadata has no credential;
+    /// each configure line gets its runner's lease. Sandbox policy uses the path.
     pub async fn start(&self) -> Result<InferenceConfig, String> {
         let node = self.node.upgrade().ok_or("the node is gone")?;
         let state_dir = node.config.state_dir.clone();
@@ -97,6 +102,7 @@ impl InferenceServer {
                     .unwrap_or_else(|| crate::models::ModelStore::new().current())
             }),
             Duration::from_millis(INFERENCE_TIMEOUT_MS),
+            authority::node_gate(self.node.clone()),
         )
         .await?;
         let config = relay.config.clone();
@@ -104,6 +110,31 @@ impl InferenceServer {
             return Err("the inference socket is already listening".to_owned());
         }
         Ok(config)
+    }
+
+    /// One capability for one runner epoch; never distribute the Node endpoint
+    /// metadata token as authority. Missing only in lightweight test fixtures.
+    pub(crate) fn runner(
+        &self,
+        session: &str,
+        workspace: &str,
+        epoch: i64,
+        mode: &pirc_protocol::Mode,
+    ) -> Option<Lease> {
+        self.relay.get().map(|relay| {
+            relay.register(Identity {
+                session: session.into(),
+                workspace: workspace.into(),
+                epoch,
+                mode: mode.clone(),
+            })
+        })
+    }
+
+    pub(crate) fn revoke_session(&self, session: &str) {
+        if let Some(relay) = self.relay.get() {
+            relay.revoke_session(session);
+        }
     }
 
     pub(crate) fn persistence(
@@ -154,6 +185,7 @@ enum Out {
 }
 
 struct Pending {
+    scope: Arc<Scope>,
     out: mpsc::UnboundedSender<Out>,
     /// Bytes handed to the connection and not yet written
     /// (`response.writableLength`).
@@ -166,6 +198,7 @@ struct Pending {
 #[derive(Default)]
 struct State {
     pending: HashMap<String, Pending>,
+    scopes: HashMap<String, Arc<Scope>>,
     receiving: usize,
     closed: bool,
 }
@@ -177,6 +210,7 @@ pub(crate) struct Relay {
     directory: PathBuf,
     send: Sender,
     get_models: GetModels,
+    gate: Gate,
     timeout: Duration,
     state: Mutex<State>,
     connections: AtomicUsize,
@@ -216,17 +250,19 @@ fn make_directory(state_dir: &Path) -> Result<PathBuf, String> {
 }
 
 impl Relay {
-    pub(crate) async fn start(
+    async fn start(
         state_dir: &Path,
         send: Sender,
         get_models: GetModels,
         timeout: Duration,
+        gate: Gate,
     ) -> Result<Arc<Self>, String> {
         use std::os::unix::fs::PermissionsExt;
         let directory = make_directory(state_dir)?;
         let config = InferenceConfig {
             socket_path: directory.join("socket").to_string_lossy().into_owned(),
-            token: hex(&random_bytes::<32>()),
+            // Endpoint metadata has no usable Node-wide bearer credential.
+            token: String::new(),
         };
         let listener = match pirc_protocol::SocketPath::new(Path::new(&config.socket_path))
             .and_then(|bind| UnixListener::bind(&bind.path))
@@ -249,6 +285,7 @@ impl Relay {
             directory,
             send,
             get_models,
+            gate,
             timeout,
             state: Mutex::default(),
             connections: AtomicUsize::new(0),
@@ -709,16 +746,22 @@ async fn serve(relay: &Arc<Relay>, stream: &mut UnixStream) {
         )
         .await;
     }
-    let actual = head.header("authorization").unwrap_or_default().as_bytes();
-    let expected = format!("Bearer {}", relay.config.token);
-    if actual.len() != expected.len() || !bool::from(actual.ct_eq(expected.as_bytes())) {
+    let Some(scope) = relay.authenticate(head.header("authorization").unwrap_or_default()) else {
         return error(stream, 401, InferenceErrorCode::Unavailable).await;
-    }
+    };
     if relay.lock().closed {
         return error(stream, 503, InferenceErrorCode::Unavailable).await;
     }
     if head.method == "GET" && head.target == "/models" {
-        let body = serde_json::to_vec(&(relay.get_models)()).unwrap_or_default();
+        let mut models = None;
+        if !relay.authorized(&scope, &mut || {
+            let mut catalog = (relay.get_models)();
+            catalog.inference = Some(scope.config.clone());
+            models = Some(catalog);
+        }) {
+            return error(stream, 401, InferenceErrorCode::Unavailable).await;
+        }
+        let body = serde_json::to_vec(&models).unwrap_or_default();
         if body.len() > INFERENCE_BUFFER_MAX_BYTES {
             return error(stream, 503, InferenceErrorCode::LimitExceeded).await;
         }
@@ -758,11 +801,16 @@ async fn serve(relay: &Arc<Relay>, stream: &mut UnixStream) {
     else {
         return error(stream, 400, InferenceErrorCode::InvalidRequest).await;
     };
-    stream_response(relay, stream, request).await;
+    stream_response(relay, stream, request, scope).await;
 }
 
 /// An accepted request: the NDJSON stream of its relay.
-async fn stream_response(relay: &Arc<Relay>, stream: &mut UnixStream, request: InferenceRequest) {
+async fn stream_response(
+    relay: &Arc<Relay>,
+    stream: &mut UnixStream,
+    request: InferenceRequest,
+    scope: Arc<Scope>,
+) {
     let head = "HTTP/1.1 200 OK\r\nContent-Type: application/x-ndjson\r\n\
                 Cache-Control: no-store\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
     if stream.write_all(head.as_bytes()).await.is_err() {
@@ -771,37 +819,63 @@ async fn stream_response(relay: &Arc<Relay>, stream: &mut UnixStream, request: I
     let request_id = uuid();
     let (out, mut lines) = mpsc::unbounded_channel();
     let queued = Arc::new(AtomicUsize::new(0));
-    let timer = {
-        let timeout = relay.timeout;
-        let relay = Arc::downgrade(relay);
-        let id = request_id.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(timeout).await;
-            if let Some(relay) = relay.upgrade() {
-                relay.fail(&id, InferenceErrorCode::Timeout, true);
-            }
-        })
-        .abort_handle()
-    };
-    relay.lock().pending.insert(
-        request_id.clone(),
-        Pending {
-            out,
-            queued: queued.clone(),
-            bytes: 0,
-            timer: Some(timer),
-        },
-    );
+    let mut revoked = scope.revoked.subscribe();
     let start = NodeMessage::ModelStart {
         request_id: request_id.clone(),
         request,
     };
-    if !relay.send(&start) {
-        relay.fail(&request_id, InferenceErrorCode::Unavailable, false);
+    let admitted = relay.authorized(&scope, &mut || {
+        relay.lock().pending.insert(
+            request_id.clone(),
+            Pending {
+                scope: scope.clone(),
+                out: out.clone(),
+                queued: queued.clone(),
+                bytes: 0,
+                timer: None,
+            },
+        );
+        // The scope and database fence span enqueue: revoke cannot cancel a
+        // request before its start or allow a body read to resume old authority.
+        if !relay.send(&start) {
+            relay.fail(&request_id, InferenceErrorCode::Unavailable, false);
+            return;
+        }
+        let timer = {
+            let timeout = relay.timeout;
+            let weak = Arc::downgrade(relay);
+            let id = request_id.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(timeout).await;
+                if let Some(relay) = weak.upgrade() {
+                    relay.fail(&id, InferenceErrorCode::Timeout, true);
+                }
+            })
+            .abort_handle()
+        };
+        if let Some(pending) = relay.lock().pending.get_mut(&request_id) {
+            pending.timer = Some(timer);
+        } else {
+            timer.abort();
+        }
+    });
+    if !admitted {
+        let _ = out.send(Out::End(error_line(InferenceErrorCode::Unavailable)));
     }
+    drop(out);
     let mut probe = [0; 1024];
     loop {
         tokio::select! {
+            biased;
+            _ = async { let _ = revoked.wait_for(|revoked| *revoked).await; } => {
+                // Discard queued old-generation output. Bytes already written
+                // to the OS socket cannot be recalled; this is not tool revocation.
+                let line = error_line(InferenceErrorCode::Unavailable);
+                let chunk = format!("{:x}\r\n{}\r\n0\r\n\r\n", line.len(), line);
+                let _ = tokio::time::timeout(CLOSE_FLUSH, stream.write_all(chunk.as_bytes())).await;
+                let _ = stream.shutdown().await;
+                return relay.gone(&request_id);
+            }
             next = lines.recv() => {
                 let (line, last) = match next {
                     Some(Out::Line(line)) => (line, false),
@@ -817,7 +891,16 @@ async fn stream_response(relay: &Arc<Relay>, stream: &mut UnixStream, request: I
                 if last {
                     chunk.extend_from_slice(b"0\r\n\r\n");
                 }
-                let written = stream.write_all(&chunk).await;
+                let written = tokio::select! {
+                    biased;
+                    _ = async { let _ = revoked.wait_for(|revoked| *revoked).await; } => {
+                        // A partial chunk cannot safely be followed by a new
+                        // NDJSON frame. Close instead of forwarding its remainder.
+                        let _ = stream.shutdown().await;
+                        return relay.gone(&request_id);
+                    }
+                    written = stream.write_all(&chunk) => written,
+                };
                 if !last {
                     queued.fetch_sub(line.len(), Ordering::AcqRel);
                 }

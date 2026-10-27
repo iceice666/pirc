@@ -78,6 +78,7 @@ pub struct Runner {
     pid: Option<u32>,
     pub(super) prepared: Prepared,
     persistence: Option<crate::persistence::Lease>,
+    inference: Option<crate::inference::Lease>,
     stdin: mpsc::UnboundedSender<Outbound>,
     pub(super) inner: Mutex<Inner>,
     /// Held while one agent line is handled, and while a snapshot reads the
@@ -248,6 +249,7 @@ impl Runner {
             pid: None,
             prepared,
             persistence: None,
+            inference: None,
             stdin,
             inner: Mutex::default(),
             view: Mutex::default(),
@@ -450,6 +452,9 @@ impl Runner {
         // `ensure` and `stop` wait for this: it must come even if a step
         // below panics.
         let _exited = Exited(&self.exited);
+        if let Some(lease) = &self.inference {
+            lease.close();
+        }
         if let Some(lease) = &self.persistence {
             lease.close();
         }
@@ -984,6 +989,9 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
         pid,
         prepared,
         persistence,
+        inference: node
+            .inference
+            .runner(&session.id, &workspace.id, epoch, &mode),
         stdin: stdin_tx,
         inner: Mutex::default(),
         view: Mutex::default(),
@@ -999,9 +1007,11 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
     if let Some(lease) = &runner.persistence {
         configure.insert("persistence".into(), json!(lease.config));
     }
+    let mut models = node.models.current();
+    models.inference = runner.inference.as_ref().map(|lease| lease.config.clone());
     configure.insert(
         "models".into(),
-        serde_json::to_value(node.models.current()).unwrap_or_default(),
+        serde_json::to_value(models).unwrap_or_default(),
     );
     let instructions = crate::chat::read_project_instructions(&workspace, &mode);
     if !instructions.is_empty() {
@@ -1193,6 +1203,7 @@ mod memory_concurrency_tests {
                 || {},
             ),
             persistence: None,
+            inference: None,
             stdin: mpsc::unbounded_channel().0,
             inner: Mutex::default(),
             view: Mutex::default(),

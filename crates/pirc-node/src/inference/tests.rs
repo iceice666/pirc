@@ -54,13 +54,43 @@ fn final_message() -> AssistantMessage {
 }
 
 type Sent = Arc<Mutex<Vec<NodeMessage>>>;
+struct TestRelay {
+    relay: Arc<Relay>,
+    config: InferenceConfig,
+    _lease: Lease,
+}
+impl std::ops::Deref for TestRelay {
+    type Target = Arc<Relay>;
+    fn deref(&self) -> &Self::Target {
+        &self.relay
+    }
+}
+fn permit() -> Gate {
+    Arc::new(|_, action| {
+        action();
+        true
+    })
+}
+fn scoped(relay: Arc<Relay>, session: &str, epoch: i64) -> TestRelay {
+    let lease = relay.register(Identity {
+        session: session.into(),
+        workspace: "workspace".into(),
+        epoch,
+        mode: pirc_protocol::mode::default_work(),
+    });
+    TestRelay {
+        config: lease.config.clone(),
+        relay,
+        _lease: lease,
+    }
+}
 
 /// A relay whose link records every frame (and accepts it), with a hook
 /// run on each.
 async fn relay(
     timeout: Duration,
     hook: impl Fn(&Arc<Relay>, &NodeMessage) + Send + Sync + 'static,
-) -> (Arc<Relay>, Sent, tempfile::TempDir) {
+) -> (TestRelay, Sent, tempfile::TempDir) {
     let dir = tempfile::tempdir().unwrap();
     let sent: Sent = Arc::default();
     let cell: Arc<OnceLock<std::sync::Weak<Relay>>> = Arc::default();
@@ -82,10 +112,12 @@ async fn relay(
             models
         }),
         timeout,
+        permit(),
     )
     .await
     .unwrap();
     cell.set(Arc::downgrade(&relay)).unwrap();
+    let relay = scoped(relay, "session", 1);
     config.set(relay.config.clone()).unwrap();
     (relay, sent, dir)
 }
@@ -248,7 +280,7 @@ async fn disconnect_ends_streams_without_retry_and_timeouts_cancel() {
     relay.close().await;
 }
 
-async fn relay_with_timeout() -> (Arc<Relay>, Sent, tempfile::TempDir) {
+async fn relay_with_timeout() -> (TestRelay, Sent, tempfile::TempDir) {
     relay(Duration::from_millis(20), |_, _| {}).await
 }
 
@@ -381,9 +413,11 @@ async fn limits_the_requests_in_flight_and_refused_starts_do_not_cancel() {
         Arc::new(|_: &NodeMessage| false),
         Arc::new(models),
         Duration::from_secs(600),
+        permit(),
     )
     .await
     .unwrap();
+    let relay = scoped(relay, "session", 1);
     let (status, body) = raw(&relay.config, &post(&relay.config, "/inference", &body)).await;
     assert_eq!(status, 200);
     assert!(body.contains("{\"type\":\"model_error\",\"code\":\"unavailable\"}"));
@@ -500,3 +534,5 @@ async fn persistence_auth_is_separate_scoped_and_revocable() {
     );
     relay.close().await;
 }
+
+mod authority;

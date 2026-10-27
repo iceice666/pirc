@@ -211,6 +211,7 @@ pub(crate) async fn drain(node: &Node, owner: &str, session: &str, op: &str) -> 
                     let db = node.db.lock();
                     db.claim_session(&session, &owner, false)?;
                     stage(&db, &owner, &session, &op, "stopping", None)?;
+                    node.inference.revoke_session(&session);
                 }
                 let stopped = async {
                     node.runners.stop_session(&session).await?;
@@ -251,14 +252,20 @@ pub async fn capabilities(_node: Node, _request: Request) -> ApiResult<Response>
 }
 pub async fn create(node: Node, request: Request) -> ApiResult<Response> {
     let body: Acceptance = request.parse_body()?;
-    let result = accept(
-        &node.db.lock(),
-        &request.user,
-        request.param("id").unwrap_or_default(),
-        &body.intent,
-        &body.client_id,
-        body.generation,
-    )?;
+    let result = {
+        let db = node.db.lock();
+        let result = accept(
+            &db,
+            &request.user,
+            request.param("id").unwrap_or_default(),
+            &body.intent,
+            &body.client_id,
+            body.generation,
+        )?;
+        node.inference
+            .revoke_session(request.param("id").unwrap_or_default());
+        result
+    };
     Ok(Response::json(json!({"transition":result})))
 }
 pub async fn status(node: Node, request: Request) -> ApiResult<Response> {

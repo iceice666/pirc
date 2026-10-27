@@ -1,9 +1,9 @@
 //! The model catalog the node's agents start with (`ModelStore` in
 //! `apps/gateway/src/models.ts`): the gateway's secret-free catalog from
 //! `registered` and `models` frames, always with the node's own inference
-//! socket merged in, so an agent never falls back to a direct provider.
-//! Running agents keep the copy they got on their `configure` line; the
-//! socket's `GET /models` serves the current one.
+//! socket metadata merged in. The runner supplies a private inference lease on
+//! its `configure` line; the shared catalog has no usable bearer token.
+//! `GET /models` serves the current catalog with only that caller's lease.
 
 use std::sync::RwLock;
 

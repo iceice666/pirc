@@ -22,7 +22,7 @@ Native clients (the Android app) authenticate with a **device token** instead of
 
 Nodes authenticate to `/node/connect` with a per-node secret (`PIRC_NODE_TOKENS` on the gateway, `PIRC_NODE_TOKEN` on the node). That path must bypass the browser forward-auth, and the proxy must never hand node tokens to browsers. Each node checks the user of every relayed request against its own `PIRC_ALLOWED_USERS`, and sessions are visible only to the user who created them. Agents and side-panel shells that a node starts do not inherit `PIRC_NODE_TOKEN` (or any `PIRC_*SECRET*` variable). This keeps the token out of their output; it is not isolation, since they still run as the node's account, which can read the token file.
 
-Model credentials (API keys, subscription OAuth tokens) stay on the gateway, which runs every model request. A node forwards its agents' requests over its link and receives only streamed results and a secret-free model catalog. Agents reach the node through a Unix socket in the node's state directory (mode 0600, random per-start token), not a TCP port. Backend settings and logins are in `$PIRC_STATE_DIR/backends/settings.json` (0600); this is file-permission protection for a single-user deployment, not isolation from processes running as the same account.
+Model credentials (API keys, subscription OAuth tokens) stay on the gateway, which runs every model request. A node forwards its agents' requests over its link and receives only streamed results and a secret-free model catalog. Agents reach the node through a Unix socket in the node's state directory (mode 0600, a separate random capability for each runner epoch), not a TCP port. Backend settings and logins are in `$PIRC_STATE_DIR/backends/settings.json` (0600); this is file-permission protection for a single-user deployment, not isolation from processes running as the same account.
 
 The workspace registry is an execution allowlist. Agents always run inside the native OS sandbox; a node unable to sandbox starts no agents (see "Agent sandbox" in the top-level README); side-panel shells, which you drive yourself, keep the Unix permissions of the node's account. Do not run a node as root or expose the gateway directly to an untrusted network.
 
@@ -95,6 +95,21 @@ The assistant's memory lives on the gateway, per user (SQLite, `crates/pirc-gate
 The assistant can also delegate: hand a task to a new session in one of your directory workspaces, on any node (`crates/pirc-gateway/src/delegations.rs`). By default every delegation first shows in the chat as a confirmation with the workspace and the whole task, and lapses after `PIRC_DELEGATION_TTL_MS` (default one hour); a project's `delegation_approval` setting can start them at once instead ([chat projects guide](../guides/chat-projects.md#delegation)). Once it starts, the gateway creates and names the session and pushes the task into it as a message from the assistant, never as yours, so auto mode there still asks you before dangerous commands; only the user's own words the delegation quoted count as their request. Those questions are relayed to the chat, which can answer them through the node's gateway-only `POST /api/sessions/:id/interactions/:interactionId/relayed-answer` without a lease, and `POST /api/delegations/:id/stop` stops a running one. The chat is told when the task finishes, fails or waits for you. Pushes go through a node route that only the gateway calls (`POST /api/sessions/:id/deliver`); they need no control lease and start the agent if it is not running.
 
 The assistant can also search what coding sessions noted in every repository (workspace memory). Each node mirrors the ledgers in `PIRC_WORKSPACE_MEMORY_DIR` (default `$PIRC_STATE_DIR/workspace-memory`, which its agents use too) to the gateway every `PIRC_MEMORY_MIRROR_MS` (default 30 s), without paths: an item names the session that wrote it, and only that session's owner can find it. Recalling a note asks its node, which reads the session that wrote it; with the node offline, the answer is the gateway's copy.
+Each runner's inference capability is bound on the Node to its private session,
+workspace, runner epoch and mode snapshot. `GET /models` returns only the caller's
+capability; there is no shared Node bearer fallback. Before enqueueing each model
+request, the Node checks the current environment and durable transition fence.
+Runner exit retires its capability. Transition acceptance retires that session's
+capabilities and cancels its active inference streams without canceling another
+session's streams. An old agent's request `sessionId` remains a model-cache label,
+not the authority used for these checks. Restart creates fresh capabilities.
+
+Canceling inference does not undo provider processing already started or bytes
+already delivered to a client. It does not revoke OS children, open descriptors,
+other host-side effects or replace the sandbox. The transition receipt therefore
+still reports incomplete revocation and target installation until those remaining
+stages are implemented.
+
 A node gets the model catalog from the gateway when it registers and sends every model request back over the link, so its agents cannot call a model while it is disconnected (they report `Gateway inference is unavailable`). Provider keys never reach nodes; a leaked node token still allows using the gateway's models. The link must use `wss://` unless the gateway is on loopback; only local development should set `PIRC_ALLOW_INSECURE_NODE_TRANSPORT=true`.
 
 Each chat/coding node runs its own executable with the internal `agent` subcommand for each session; agents run each `ptc` script in an embedded QuickJS interpreter inside a `ptc-guest` child process of the same executable. OAuth flows run as cancellable tasks inside the gateway; there is no `oauth-worker` subcommand. To use a different agent executable, set `PIRC_AGENT_COMMAND` (and optionally `PIRC_AGENT_ARGS` as a JSON array). `PIRC_TERMINALS=false` disables side-panel shells; the shell comes from `PIRC_TERMINAL_SHELL` or `$SHELL`.
