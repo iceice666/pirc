@@ -319,6 +319,33 @@ implement live-file/cache/preview provenance, provide cross-Node copies, update
 client presentation or install/revoke sandbox authority. Source workspaces are
 not reclassified as projects. Actual mount/switch transitions remain U4 work.
 
+## Transition admission fence integration (Node 2012)
+
+The [first U4 implementation](unified-conversations.md#u4-implementation-checkpoint-node-transition-admission-fence-2026-10-28)
+adds durable Node admission fences and tracked supervisor drain, independently of
+binding generations. The frozen operation ID/plan hash and expected local
+workspace/runner epoch are not a new binding, grant, policy revision or replacement
+attempt. Acceptance checks current ownership/control; replay returns the same
+receipt without reauthorizing effects. One pending intent per session prevents
+two devices from installing different plans implicitly.
+
+Internal Node-link routes are `/api/execution-fences/capabilities`,
+`POST /api/sessions/:id/execution-fences`, and
+`GET /api/sessions/:id/execution-fences/:operation` with explicit `POST .../drain`.
+No Gateway public route or Web/App entry is exposed. The forthcoming coordinator
+must capture and validate canonical source/target bindings and actual grants before
+calling these endpoints; an arbitrary hash is not authority to install anything.
+The node only records/reconciles the admission fence and closes tracked supervisors.
+No completion, cancellation or fence-release endpoint is provided in this slice.
+
+`supervisor_drained` describes that close sequence, not OS-level revocation or an
+installed target. Both acknowledgement flags remain false, including after
+restart. `enforcement: not_tracked` in the Gateway remains accurate. Queued input,
+RPC mutation, startup, approval and selected host admission paths reject a fenced
+session. Previously admitted effects and kernel access remain subject to the U4
+revocation work; this fence must never substitute for it. Context and the source
+binding stay unchanged, and deletion retains the operation's terminal receipt.
+
 ## Remaining U2 implementation and gates
 
 1. Extend provenance beyond saved uploads/global memory to live files, previews,

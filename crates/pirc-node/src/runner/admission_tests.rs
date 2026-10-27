@@ -615,3 +615,211 @@ async fn corrupted_saved_attachment_is_rejected_before_admission_and_stays_dedup
     runner.exit(Some(0), None);
     f.node.close().await;
 }
+
+#[tokio::test]
+async fn transition_blocks_queued_input_and_late_approval_but_keeps_stop_available() {
+    let f = Fixture::new().await;
+    let (runner, mut lines) = register(&f);
+    let lease = f
+        .node
+        .db
+        .lock()
+        .acquire_lease(&f.current, "phone", false, 60_000)
+        .unwrap();
+    let first = CommandPayload::Prompt {
+        message: "already sent".into(),
+        upload_ids: None,
+    };
+    receive(&f, "before-transition", &first);
+    let sending = {
+        let node = f.node.clone();
+        let session = f.current.clone();
+        tokio::spawn(async move {
+            node.runners
+                .dispatch(
+                    &session,
+                    "before-transition",
+                    &first,
+                    "alice",
+                    ("phone", lease.generation),
+                )
+                .await
+        })
+    };
+    let prompt = next(&mut lines).await;
+    let queued = CommandPayload::Prompt {
+        message: "must not execute".into(),
+        upload_ids: None,
+    };
+    receive(&f, "queued-transition", &queued);
+    let waiting = {
+        let node = f.node.clone();
+        let session = f.current.clone();
+        tokio::spawn(async move {
+            node.runners
+                .dispatch(
+                    &session,
+                    "queued-transition",
+                    &queued,
+                    "alice",
+                    ("phone", lease.generation),
+                )
+                .await
+        })
+    };
+    let interaction = {
+        let db = f.node.db.lock();
+        db.create_interaction(
+            &f.current,
+            runner.epoch(),
+            "approve",
+            "confirm",
+            &Map::new(),
+            crate::util::now_ms() + 60_000,
+        )
+        .unwrap()
+    };
+    let intent = crate::execution_fences::Intent {
+        operation_id: "switch".into(),
+        plan_hash: "a".repeat(64),
+        expected_workspace_id: "repo".into(),
+        expected_runner_epoch: runner.epoch(),
+    };
+    crate::execution_fences::accept(
+        &f.node.db.lock(),
+        "alice",
+        &f.current,
+        &intent,
+        "phone",
+        lease.generation,
+    )
+    .unwrap();
+    assert_eq!(
+        f.node
+            .db
+            .lock()
+            .claim_interaction(
+                &interaction.id,
+                &f.current,
+                runner.epoch(),
+                &json!({"confirmed":true})
+            )
+            .unwrap_err()
+            .code,
+        "environment_transition_pending"
+    );
+    // Stop still overtakes the pending answer and can clear the old queue.
+    receive(&f, "stop-transition", &CommandPayload::Stop);
+    let stop = {
+        let node = f.node.clone();
+        let session = f.current.clone();
+        tokio::spawn(async move {
+            node.runners
+                .dispatch(
+                    &session,
+                    "stop-transition",
+                    &CommandPayload::Stop,
+                    "alice",
+                    ("phone", lease.generation),
+                )
+                .await
+        })
+    };
+    let clear = next(&mut lines).await;
+    assert_eq!(clear["type"], "clear_queue");
+    answer(&runner, &clear, json!({"success":true}));
+    let abort = next(&mut lines).await;
+    assert_eq!(abort["type"], "abort");
+    answer(&runner, &abort, json!({"success":true}));
+    stop.await.unwrap().unwrap();
+    answer(&runner, &prompt, json!({"success":false,"error":"stopped"}));
+    sending.await.unwrap().unwrap();
+    assert_eq!(
+        waiting.await.unwrap().unwrap_err().code,
+        "environment_transition_pending"
+    );
+    assert_eq!(
+        f.node
+            .db
+            .lock()
+            .get_command("queued-transition")
+            .unwrap()
+            .status,
+        CommandStatus::Rejected
+    );
+    assert!(lines.try_recv().is_err());
+    // The final spawn boundary refuses even a direct stale prepared start.
+    let row = f.node.db.lock().get_session(&f.current).unwrap();
+    let error = spawn_child(
+        &f.node,
+        &row,
+        &runner.workspace,
+        &f.mode,
+        &runner.prepared,
+        None,
+    )
+    .unwrap_err();
+    assert_eq!(error.code, "environment_transition_pending");
+    runner.exit(Some(0), None);
+    f.node.close().await;
+}
+
+#[tokio::test]
+async fn disconnected_drain_caller_does_not_abandon_or_duplicate_supervisor_shutdown() {
+    let f = Fixture::new().await;
+    let (runner, mut lines) = register(&f);
+    let lease = f
+        .node
+        .db
+        .lock()
+        .acquire_lease(&f.current, "phone", false, 60_000)
+        .unwrap();
+    let intent = crate::execution_fences::Intent {
+        operation_id: "drain-reply-lost".into(),
+        plan_hash: "a".repeat(64),
+        expected_workspace_id: "repo".into(),
+        expected_runner_epoch: runner.epoch(),
+    };
+    crate::execution_fences::accept(
+        &f.node.db.lock(),
+        "alice",
+        &f.current,
+        &intent,
+        "phone",
+        lease.generation,
+    )
+    .unwrap();
+    let first = {
+        let node = f.node.clone();
+        let session = f.current.clone();
+        tokio::spawn(async move {
+            crate::execution_fences::drain(&node, "alice", &session, "drain-reply-lost").await
+        })
+    };
+    let abort = next(&mut lines).await;
+    assert_eq!(abort["type"], "abort");
+    first.abort();
+    assert!(first.await.unwrap_err().is_cancelled());
+    let resumed = {
+        let node = f.node.clone();
+        let session = f.current.clone();
+        tokio::spawn(async move {
+            crate::execution_fences::drain(&node, "alice", &session, "drain-reply-lost").await
+        })
+    };
+    // The join cannot finish until the original supervised stop finishes.
+    tokio::task::yield_now().await;
+    assert!(!resumed.is_finished());
+    assert!(lines.try_recv().is_err());
+    answer(&runner, &abort, json!({"success":true}));
+    runner.exit(Some(0), None);
+    let receipt = tokio::time::timeout(Duration::from_secs(2), resumed)
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(receipt.state, "supervisor_drained");
+    assert!(!receipt.revocation_confirmed && !receipt.target_installed);
+    assert!(crate::execution_fences::require_open(&f.node.db.lock(), &f.current).is_err());
+    f.node.close().await;
+}

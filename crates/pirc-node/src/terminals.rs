@@ -201,6 +201,9 @@ impl Terminals {
             .get("HOME")
             .map_or_else(|| node.env.home().display().to_string(), str::to_owned);
         env.insert("HOME".into(), home);
+        // Hold the same database lock as fence acceptance through PTY creation.
+        let db = node.db.lock();
+        crate::execution_fences::require_open(&db, session_id)?;
         self.spawn(
             session_id,
             cwd,

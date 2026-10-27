@@ -129,7 +129,11 @@ fn migration_preserves_legacy_scope_without_inventing_a_creation_origin() {
         let db = Db::open(&path).unwrap();
         let db = db.lock();
         let ids = setup(&db);
-        db.execute_batch(include_str!("remove_schema.sql")).unwrap();
+        db.execute_batch(concat!(
+            include_str!("../execution_fences/remove_schema.sql"),
+            include_str!("remove_schema.sql")
+        ))
+        .unwrap();
         let mut u = upload(&ids.0);
         u.workspace_id = None;
         u.session_id = None;

@@ -1,0 +1,246 @@
+use super::*;
+use crate::store::{Db, ModeId};
+
+fn setup(db: &Connection) -> (String, Intent, i64) {
+    db.add_workspace(
+        "repo",
+        "node",
+        "Repo",
+        "/repo",
+        ModeId::new("directory").unwrap(),
+    )
+    .unwrap();
+    let s = db
+        .create_session("repo", "/private/session", "alice")
+        .unwrap();
+    let lease = db.acquire_lease(&s.id, "phone", false, 60_000).unwrap();
+    (
+        s.id,
+        Intent {
+            operation_id: "transition-1".into(),
+            plan_hash: "a".repeat(64),
+            expected_workspace_id: "repo".into(),
+            expected_runner_epoch: s.runner_epoch,
+        },
+        lease.generation,
+    )
+}
+#[test]
+fn receipt_survives_restart_takeover_and_deletion_without_releasing_the_fence() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("node.db");
+    let (session, intent, generation) = {
+        let db = Db::open(&path).unwrap();
+        let db = db.lock();
+        let (session, intent, generation) = setup(&db);
+        let r = accept(&db, "alice", &session, &intent, "phone", generation).unwrap();
+        assert_eq!(r.state, "fenced");
+        assert!(!r.revocation_confirmed && !r.target_installed);
+        assert_eq!(
+            require_open(&db, &session).unwrap_err().code,
+            "environment_transition_pending"
+        );
+        // Context/control records remain readable; no source binding is rewritten.
+        assert_eq!(
+            db.claim_session(&session, "alice", false)
+                .unwrap()
+                .workspace_id,
+            "repo"
+        );
+        db.acquire_lease(&session, "web", true, 60_000).unwrap();
+        let replay = accept(&db, "alice", &session, &intent, "phone", generation).unwrap();
+        assert_eq!(
+            serde_json::to_value(&r).unwrap(),
+            serde_json::to_value(&replay).unwrap()
+        );
+        (session, intent, generation)
+    };
+    let db = Db::open(&path).unwrap();
+    let db = db.lock();
+    assert!(require_open(&db, &session).is_err());
+    let mut changed = intent.clone();
+    changed.plan_hash = "b".repeat(64);
+    assert!(accept(&db, "alice", &session, &changed, "phone", generation).is_err());
+    assert!(
+        receipt(&db, "bob", &session, &intent.operation_id)
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        db.execute("UPDATE execution_fences SET intent_json='{}'", [])
+            .is_err()
+    );
+    assert!(db.execute("DELETE FROM execution_fences", []).is_err());
+    db.begin_session_deletion(&session, "alice").unwrap();
+    db.finish_session_deletion(&session).unwrap();
+    assert_eq!(
+        accept(&db, "alice", &session, &intent, "phone", generation)
+            .unwrap()
+            .state,
+        "deleted"
+    );
+    assert!(db.get_session(&session).is_err());
+}
+#[test]
+fn stale_unauthorized_and_failed_acceptance_leave_no_fence() {
+    let db = Db::memory();
+    let db = db.lock();
+    let (session, intent, generation) = setup(&db);
+    let mut stale = intent.clone();
+    stale.expected_runner_epoch += 1;
+    assert_eq!(
+        accept(&db, "alice", &session, &stale, "phone", generation)
+            .unwrap_err()
+            .code,
+        "stale_environment"
+    );
+    assert!(accept(&db, "bob", &session, &intent, "phone", generation).is_err());
+    assert!(accept(&db, "alice", &session, &intent, "other-device", generation).is_err());
+    let mut invalid = intent.clone();
+    invalid.plan_hash = "not-a-hash".into();
+    assert!(accept(&db, "alice", &session, &invalid, "phone", generation).is_err());
+    db.execute_batch("CREATE TRIGGER fail_fence BEFORE INSERT ON execution_fences BEGIN SELECT RAISE(ABORT,'disk full'); END;").unwrap();
+    assert!(accept(&db, "alice", &session, &intent, "phone", generation).is_err());
+    assert!(require_open(&db, &session).is_ok());
+    assert!(
+        receipt(&db, "alice", &session, &intent.operation_id)
+            .unwrap()
+            .is_none()
+    );
+}
+#[test]
+fn concurrent_transition_intents_have_one_winner_and_preserve_other_sessions() {
+    let db = std::sync::Arc::new(Db::memory());
+    let (session, intent, generation) = setup(&db.lock());
+    let peer = db.lock().create_session("repo", "/peer", "alice").unwrap();
+    let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+    let handles = (0..2)
+        .map(|n| {
+            let db = db.clone();
+            let barrier = barrier.clone();
+            let session = session.clone();
+            let mut intent = intent.clone();
+            intent.operation_id = format!("switch-{n}");
+            std::thread::spawn(move || {
+                barrier.wait();
+                accept(&db.lock(), "alice", &session, &intent, "phone", generation)
+            })
+        })
+        .collect::<Vec<_>>();
+    barrier.wait();
+    let outcomes = handles
+        .into_iter()
+        .map(|h| h.join().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(outcomes.iter().filter(|r| r.is_ok()).count(), 1);
+    assert!(require_open(&db.lock(), &session).is_err());
+    assert!(require_open(&db.lock(), &peer.id).is_ok());
+    assert_eq!(
+        db.lock().get_session(&peer.id).unwrap().workspace_id,
+        "repo"
+    );
+}
+#[test]
+fn migration_does_not_invent_historical_transition_fences() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("node.db");
+    let session = {
+        let db = Db::open(&path).unwrap();
+        let db = db.lock();
+        let (session, _, _) = setup(&db);
+        db.execute_batch(include_str!("remove_schema.sql")).unwrap();
+        db.execute_batch("PRAGMA user_version=2011;").unwrap();
+        session
+    };
+    let db = Db::open(&path).unwrap();
+    let db = db.lock();
+    assert!(require_open(&db, &session).is_ok());
+    let count: i64 = db
+        .query_row("SELECT COUNT(*) FROM execution_fences", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 0);
+    assert_eq!(db.get_session(&session).unwrap().workspace_id, "repo");
+}
+#[tokio::test]
+async fn draining_is_idempotent_does_not_touch_files_and_never_claims_revocation() {
+    let f = crate::workspace_memory::tests::Fixture::new().await;
+    let row = f.node.db.lock().get_session(&f.current).unwrap();
+    let workspace = f.node.db.lock().get_workspace("repo").unwrap();
+    let user_file = std::path::Path::new(&workspace.canonical_path).join("user.txt");
+    std::fs::write(&user_file, b"later user edits").unwrap();
+    {
+        let mut history =
+            pirc_agent::session_store::SessionStore::open(f.dir.clone(), &workspace.canonical_path)
+                .unwrap();
+        history
+            .append(pirc_agent::session_store::EntryData::Message(
+                pirc_protocol::Message::User {
+                    content: pirc_protocol::UserContent::Text(
+                        "Retain this original conversation context".into(),
+                    ),
+                    timestamp: 1,
+                },
+            ))
+            .unwrap();
+    }
+    let history_before =
+        serde_json::to_value(pirc_agent::session_store::read_session_history(&f.dir).unwrap())
+            .unwrap();
+    assert!(
+        history_before
+            .to_string()
+            .contains("Retain this original conversation context")
+    );
+
+    let peer = f
+        .node
+        .db
+        .lock()
+        .create_session("repo", "/peer", "alice")
+        .unwrap();
+    let lease = f
+        .node
+        .db
+        .lock()
+        .acquire_lease(&f.current, "phone", false, 60_000)
+        .unwrap();
+    let intent = Intent {
+        operation_id: "drain".into(),
+        plan_hash: "a".repeat(64),
+        expected_workspace_id: "repo".into(),
+        expected_runner_epoch: row.runner_epoch,
+    };
+    accept(
+        &f.node.db.lock(),
+        "alice",
+        &f.current,
+        &intent,
+        "phone",
+        lease.generation,
+    )
+    .unwrap();
+    let (a, b) = tokio::join!(
+        drain(&f.node, "alice", &f.current, "drain"),
+        drain(&f.node, "alice", &f.current, "drain")
+    );
+    for r in [a.unwrap(), b.unwrap()] {
+        assert_eq!(r.state, "supervisor_drained");
+        assert!(!r.revocation_confirmed && !r.target_installed);
+    }
+    assert!(require_open(&f.node.db.lock(), &f.current).is_err());
+    assert!(f.node.session_mode(&peer.id).is_ok());
+    assert_eq!(std::fs::read(&user_file).unwrap(), b"later user edits");
+    assert_eq!(
+        serde_json::to_value(pirc_agent::session_store::read_session_history(&f.dir).unwrap())
+            .unwrap(),
+        history_before
+    );
+    assert!(
+        f.node
+            .db
+            .lock()
+            .claim_session(&f.current, "alice", false)
+            .is_ok()
+    );
+    f.node.close().await;
+}

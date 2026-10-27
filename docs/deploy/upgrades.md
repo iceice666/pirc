@@ -1,5 +1,33 @@
 # Upgrades
 
+## Unreleased local checkpoint: transition admission fences
+
+Node schema **2012** adds immutable execution-fence identities and durable stop
+receipts. Gateway stays **1025**. Migration does not fence historical sessions.
+Existing public APIs continue to use their ordinary environment until a trusted
+coordinator explicitly accepts a transition. The new routes are internal to the
+Node link; no public Gateway switch or UI is enabled in this checkpoint.
+
+An accepted operation blocks new execution admission and persists across restarts.
+Retries with the same intent query/rejoin that operation. A changed plan conflicts;
+control/status, Stop and deletion remain available subject to existing ownership
+and mode checks. Do not clear a pending row or edit its plan to force progress.
+There is deliberately no release/regrant API before replacement-policy installation
+and acknowledgement are implemented. Delete follows its existing destructive
+semantics; it is not a substitute for a non-destructive transition recovery flow.
+
+`supervisor_drained` records tracked supervisor shutdown only. Every response still
+says `revocationConfirmed: false`, `targetInstalled: false`; never treat it as a
+ready environment. OS descendants/descriptors, pending effects, crash recovery and
+actual target installation need the remaining U4 implementation. A reply timeout
+does not cancel the tracked stop work or automatically restore old access.
+
+Older Node binaries refuse schema 2012. Before eventual deployment, retain a
+consistent matching binary/state backup. Do not decrement the schema version or
+remove fence records to downgrade. Package versions, dependency locks, protocol,
+client contracts and Nix hashes are unchanged. This slice stays local; native
+revocation and deployment/rollback acceptance remain outstanding.
+
 ## Unreleased local checkpoint: saved attachment provenance
 
 Node schema **2011** atomically records immutable origins for new uploads. Gateway

@@ -650,6 +650,8 @@ impl RunnerManager {
                     db.validate_lease(session_id, lease.0, lease.1)?;
                     runner.send_request(rpc)?
                 } else {
+                    let db = node.db.lock();
+                    crate::execution_fences::require_open(&db, session_id)?;
                     runner.send_request(rpc)?
                 };
                 admission_wait = Some(lock.admission());
@@ -803,6 +805,7 @@ impl RunnerManager {
         {
             let db = node.db.lock();
             db.require_session_available(&session_id)?;
+            crate::execution_fences::require_open(&db, &session_id)?;
             // The controller may have expired or been replaced during idle RPCs
             // or process shutdown. Hold the DB fence through the disk mutation so
             // a competing lease acquisition cannot overtake this final check.

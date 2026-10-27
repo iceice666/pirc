@@ -247,7 +247,7 @@ fn schema_2008_migration_keeps_command_and_stop_history() {
         let db = Db::open(&path).unwrap();
         let conn = db.lock();
         conn.execute("INSERT INTO creation_initial_admissions(owner_user,operation_id,session_id,command_id,input_hash,stop_requested,created_at,updated_at) VALUES('alice','op','session','first','hash',1,1,1)",[]).unwrap();
-        conn.execute_batch("DROP TRIGGER upload_origin_capture; DROP TRIGGER upload_origin_immutable; DROP TRIGGER upload_origin_remove; DROP TRIGGER upload_record_immutable; DROP TABLE upload_origins; DROP TRIGGER command_environment_immutable; DROP TABLE command_environments; DROP TABLE creation_admission_attempts; PRAGMA user_version=2008;")
+        conn.execute_batch("DROP TRIGGER execution_fence_identity; DROP TRIGGER execution_fence_retained; DROP TRIGGER execution_fence_session_deleted; DROP INDEX execution_fence_active; DROP TABLE execution_fences; DROP TRIGGER upload_origin_capture; DROP TRIGGER upload_origin_immutable; DROP TRIGGER upload_origin_remove; DROP TRIGGER upload_record_immutable; DROP TABLE upload_origins; DROP TRIGGER command_environment_immutable; DROP TABLE command_environments; DROP TABLE creation_admission_attempts; PRAGMA user_version=2008;")
             .unwrap();
     }
     let db = Db::open(&path).unwrap();

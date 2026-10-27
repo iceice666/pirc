@@ -88,12 +88,12 @@ Release. The most recent pull/rebase had no upstream conflicts.
 | U1 — reliable first Send                       | Gateway/Node durable intents, original files, admission/Stop/delete fences, explicit rejected-message retries and Gateway nonce retirement; Web/private Android drafts and recovery controls are implemented | Live-client failure/local-write matrix, Android process/device and rollout/rollback gates                           |
 | U2 — conversation/project/environment bindings | Durable bindings/membership/policy histories, frozen memory origins and cleanup receipts; captured command intent with Gateway/Node rechecks; frozen saved-upload origins                                    | Live-resource provenance, effect-boundary fencing and acknowledged transitions                                      |
 | U3 — unified navigation/UI                     | Deferred by the user                                                                                                                                                                                         | Revisit after core contracts; current clients receive necessary functional controls only                            |
-| U4 — mount/workspace transitions               | Design accepted; actual unified transitions not implemented                                                                                                                                                  | Idle then running-worker revocation, Node acknowledgement, offline/interrupted reconciliation and project resources |
+| U4 — mount/workspace transitions               | Node admission fence and tracked supervisor drain implemented; transitions not enabled                                                                                                                       | Gateway coordinator, OS revocation proof, replacement policy/acknowledgement and project resources                  |
 | U5 — canonical tasks and collaboration         | Existing pots/task/team/goal/todo foundations remain                                                                                                                                                         | Map common task/attempt identities, shared notes and structured waits; preserve other writers and memory provenance |
 | U6 — bounded proactive pots                    | Progress-only observation and explicit dispatch exist                                                                                                                                                        | Scoped content observation, finite budgets, quiet suggestions and synchronized notification/decision lifecycle      |
 
 **The new U1 flow is still gated by `canSubmit: false`.** Pushing its code does
-not enable it. Current formats are Gateway schema **1025**, Node schema **2011**,
+not enable it. Current formats are Gateway schema **1025**, Node schema **2012**,
 protocol **15**, client recovery contract **2**, and Web IndexedDB/native private
 envelope **3**. Existing ordinary session APIs remain available. Unaccepted
 Gateway attachment staging expires after **seven days**; accepted attachments and
@@ -117,7 +117,10 @@ queue/startup waits. Node schema 2011 freezes new saved-upload origins and exist
 access scopes, exposes owner-scoped metadata through Web/paired-device HTTP, and
 verifies stored bytes before Agent use. Existing uploads retain their legacy rules;
 workspace copies retain later user edits. Live-resource grants, full effect fencing,
-installed policy acknowledgement and transitions remain pending.
+installed policy acknowledgement and transitions remain pending. Node schema 2012 adds the internal transition admission
+fence and retriable tracked-supervisor drain. Draining does not acknowledge OS
+revocation or install a new environment; no public switch is enabled. See the
+[transition checkpoint](unified-conversations.md#u4-implementation-checkpoint-node-transition-admission-fence-2026-10-28).
 Resource grants, project moves and full effect fences remain open. U1 still needs device/deployment acceptance
 before activation. Detailed validation and the previously reproduced macOS snapshot
 limitation are recorded in the checkpoints; no full Linux/device acceptance is claimed.

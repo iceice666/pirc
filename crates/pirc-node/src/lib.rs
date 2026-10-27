@@ -53,6 +53,7 @@ pub mod cli;
 pub mod command_environment;
 pub mod error;
 pub mod events;
+pub mod execution_fences;
 pub mod inference;
 pub mod link;
 pub mod log;

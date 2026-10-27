@@ -68,6 +68,7 @@ pub struct Services {
     pub inference: InferenceServer,
     pub runners: RunnerManager,
     pub(crate) pots: crate::pots::Pots,
+    pub(crate) execution_drains: Arc<crate::execution_fences::Drains>,
     // panels
     pub terminals: Terminals,
     pub streams: Streams,
@@ -155,6 +156,16 @@ impl Services {
     }
 
     pub fn session_mode(&self, session_id: &str) -> crate::error::ApiResult<Mode> {
+        crate::execution_fences::require_open(&self.db.lock(), session_id)?;
+        self.session_mode_for_control(session_id)
+    }
+
+    /// Keep existing mode checks for control operations without treating a
+    /// transition's execution fence as a prohibition on taking control to Stop.
+    pub(crate) fn session_mode_for_control(
+        &self,
+        session_id: &str,
+    ) -> crate::error::ApiResult<Mode> {
         let db = self.db.lock();
         let session = db.get_session(session_id)?;
         let workspace = db.get_workspace(&session.workspace_id)?;
@@ -284,6 +295,7 @@ impl Services {
             inference: InferenceServer::new(weak.clone()),
             runners: RunnerManager::new(weak.clone()),
             pots: crate::pots::Pots::default(),
+            execution_drains: Arc::default(),
             terminals: Terminals::new(weak.clone()),
             streams: Streams::new(weak.clone()),
             mirror: MemoryMirror::new(weak.clone()),

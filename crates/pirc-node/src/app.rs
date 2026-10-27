@@ -70,6 +70,22 @@ pub fn routes(config: &NodeConfig) -> Vec<Route> {
         get("/api/workspaces/:id/project-config", project_config),
         post("/api/workspaces/:id/project-trust", project_trust),
         post("/api/sessions", create_session),
+        get(
+            "/api/execution-fences/capabilities",
+            crate::execution_fences::capabilities,
+        ),
+        post(
+            "/api/sessions/:id/execution-fences",
+            crate::execution_fences::create,
+        ),
+        get(
+            "/api/sessions/:id/execution-fences/:operation",
+            crate::execution_fences::status,
+        ),
+        post(
+            "/api/sessions/:id/execution-fences/:operation/drain",
+            crate::execution_fences::resume,
+        ),
         post("/api/session-creations", crate::session_creation::prepare),
         get(
             "/api/session-creations/capabilities",
@@ -1492,7 +1508,9 @@ async fn control(node: Node, request: Request) -> ApiResult<Response> {
 }
 
 async fn acquire(node: Node, request: Request) -> ApiResult<Response> {
-    let session = claim_mutable(&node, &request)?;
+    // Control is separate from execution: keep Stop/reconciliation reachable.
+    let session = claim(&node, &request)?;
+    node.session_mode_for_control(&session.id)?;
     let map = object(request.json())?;
     let client_id = string(map, "clientId", false, 1, 200)?;
     if map.contains_key("generation") {
@@ -1516,7 +1534,9 @@ fn held_lease_body(body: &Value) -> ApiResult<(String, i64)> {
 }
 
 async fn heartbeat(node: Node, request: Request) -> ApiResult<Response> {
-    let session = claim_mutable(&node, &request)?;
+    // Control is separate from execution: keep Stop/reconciliation reachable.
+    let session = claim(&node, &request)?;
+    node.session_mode_for_control(&session.id)?;
     let (client_id, generation) = held_lease_body(request.json())?;
     let lease = node.db.lock().heartbeat_lease(
         &session.id,
@@ -1528,7 +1548,9 @@ async fn heartbeat(node: Node, request: Request) -> ApiResult<Response> {
 }
 
 async fn release(node: Node, request: Request) -> ApiResult<Response> {
-    let session = claim_mutable(&node, &request)?;
+    // Control is separate from execution: keep Stop/reconciliation reachable.
+    let session = claim(&node, &request)?;
+    node.session_mode_for_control(&session.id)?;
     let (client_id, generation) = held_lease_body(request.json())?;
     node.db
         .lock()

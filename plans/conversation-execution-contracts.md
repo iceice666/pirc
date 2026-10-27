@@ -311,6 +311,13 @@ grant already permits writes; a read-only new alias does not revoke that grant.
 
 ### Enforcement and transition requirements
 
+Implementation note: Node schema 2012 now supplies the
+[durable admission fence and tracked supervisor drain](unified-conversations.md#u4-implementation-checkpoint-node-transition-admission-fence-2026-10-28).
+It blocks new admitted work without releasing the old binding after timeout or
+restart. Its receipts explicitly report that OS revocation and target installation
+are unconfirmed. The enforcement/alias/descriptor requirements below remain open;
+no public transition or complete revocation proof is supplied by this checkpoint.
+
 - Resolve and validate path components, containment and aliases at the trusted
   boundary. String-prefix checks or one-time symlink canonicalization are not
   sufficient. Define behavior for root renames, symlink replacement, bind mounts,

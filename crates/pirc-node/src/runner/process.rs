@@ -266,9 +266,18 @@ impl Runner {
     /// "Runner is not available" when the process is gone, or "Runner
     /// exited (...)" when it exits first.
     pub async fn request(&self, command: Map<String, Value>) -> ApiResult<Map<String, Value>> {
-        self.send_request(command)?
-            .await
-            .unwrap_or_else(|_| Err(runner_unavailable()))
+        let answer = if matches!(
+            command.get("type").and_then(Value::as_str),
+            Some("abort" | "clear_queue" | "get_state" | "get_panel_state")
+        ) {
+            self.send_request(command)?
+        } else {
+            let node = self.node().ok_or_else(runner_unavailable)?;
+            let db = node.db.lock();
+            crate::execution_fences::require_open(&db, &self.session_id)?;
+            self.send_request(command)?
+        };
+        answer.await.unwrap_or_else(|_| Err(runner_unavailable()))
     }
 
     /// The first half of [`Runner::request`]: the line is queued now, in
@@ -790,6 +799,7 @@ fn spawn_child(
 ) -> ApiResult<(tokio::process::Child, i64)> {
     let (epoch, trust) = {
         let db = node.db.lock();
+        crate::execution_fences::require_open(&db, &session.id)?;
         let epoch = db.increment_epoch(&session.id)?;
         db.stale_epoch_interactions(&session.id, epoch)?;
         let trust = if mode.project_config {
@@ -912,6 +922,11 @@ fn spawn_child(
         // Its own process group, so stopping srt also stops what it sandboxes.
         .process_group(0)
         .kill_on_drop(false);
+    // Serialize the final spawn with transition acceptance. A start that waited
+    // for sandbox preparation cannot spawn behind a durable admission fence.
+    let db = node.db.lock();
+    db.require_session_available(&session.id)?;
+    crate::execution_fences::require_open(&db, &session.id)?;
     let child = command.spawn().map_err(|error| {
         ApiError::runner_unavailable(format!("Runner is not available: {error}"))
     })?;

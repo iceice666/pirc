@@ -19,7 +19,7 @@ their implementation stage begins; earlier library/pots work is reused.
 
 **U1 is implemented across Gateway, Node, Web and native Android, but is not
 accepted for activation. `canSubmit: false` remains in production.** Current
-formats: Gateway **1025**, Node **2011**, protocol **15**, client contract **2**,
+formats: Gateway **1025**, Node **2012**, protocol **15**, client contract **2**,
 Web IndexedDB **3**, Android private envelope **3**. Package/dependency versions
 and Nix hashes are unchanged. Existing session, memory-deletion and checkpoint
 ownership guarantees remain in effect.
@@ -39,6 +39,11 @@ Web and paired devices without leaking private Node session IDs or storage paths
 This does not enable workspace switching or sandbox revocation. The validation
 counts below this point in the U1 section describe that prior U1 slice, not all
 newer U2 changes.
+
+U4 has begun with an [internal Node admission fence](#u4-implementation-checkpoint-node-transition-admission-fence-2026-10-28)
+and tracked supervisor drain. Its receipts explicitly deny revocation/installation
+completion. No public workspace switch or new resource grant is enabled; Gateway
+coordination, OS enforcement, replacement binding and Web/App controls remain.
 
 Delivered U1 behavior:
 
@@ -103,7 +108,7 @@ the last verified published green CI remains tied to `303fa8f8`.
 | U1 — first Send                   | Implementation present; activation blocked on remaining acceptance                             | Ambiguous journal recovery, actual client/backend failure matrix, Android process/device and rollout/rollback proof |
 | U2 — bindings                     | Bindings, policy/memory/saved-upload provenance and Gateway/Node command admission implemented | Live-resource provenance and effect-boundary version fencing                                                        |
 | U3 — navigation/UI                | Explicitly deferred                                                                            | Necessary functional controls only until the core model is stable                                                   |
-| U4 — resource transitions         | Planned                                                                                        | Idle transitions, then active-worker revocation/acknowledgement and offline recovery                                |
+| U4 — resource transitions         | Internal Node admission fence and tracked supervisor drain; no public switch                   | Gateway coordination, OS revocation/replacement acknowledgement and offline recovery                                |
 | U5 — canonical work/collaboration | Existing primitives available; unified mapping pending                                         | Common task/attempt identities, shared notes and resource waits without overwrites                                  |
 | U6 — proactive pots               | Existing progress observation/explicit dispatch; content analysis pending                      | Separate observation/execution grants, finite budgets and quiet synchronized suggestions                            |
 
@@ -3369,3 +3374,65 @@ caches/user data stay.
 Latest remote `main` is still `303fa8f8`: Check and Android succeeded. Those CI
 results do not cover newer local architecture commits. No current remote failure
 required a repair push; this slice remains local without a version or Release.
+
+## U4 implementation checkpoint: Node transition admission fence (2026-10-28)
+
+Implemented locally after `074f2c62`. Node advances to **2012**, Gateway remains
+**1025**. Protocol 15, client contract 2, private envelope 3, packages, dependencies
+and Nix hashes are unchanged. U1 remains `canSubmit: false`.
+
+This is the Node-side admission/stop foundation of the adopted transition, not a
+completed switch. The internal authenticated Node-link routes accept a frozen
+operation/plan hash and expected local workspace/runner epoch under current owner
+and control. One active operation can fence a conversation; duplicates return the
+same receipt, conflicting intents fail, and restart does not reopen execution.
+Historical sessions acquire no synthetic fence. The source binding, files and
+history are not moved or rewritten. Deletion retains a terminal receipt.
+
+The fence is checked at command/initial-admission enqueue, after waits, at final
+Agent spawn, internal delivery RPCs, approvals, terminal creation/stream control,
+workspace panel admission, new browser/sandbox side requests, write-lease requests
+and repository-memory scope checks. Terminal creation and final Agent spawn share
+the acceptance database lock. Already waiting approvals are rechecked before new
+host/network actions, but this does not establish an atomic boundary over all
+later effects. Existing mode-removal restrictions remain; transition fencing alone
+does not prevent taking/renewing control to Stop. History/status reads and deletion
+remain reachable. A queued command refused by the fence gets a rejected receipt.
+
+Stopping is tracked independently of the HTTP caller. Concurrent retries join one
+work item; cancellation/timeout of a reply does not abandon shutdown after a
+terminal was removed from its registry. `fenced → stopping → supervisor_drained`
+records tracked runner/terminal/browser close operations; stop failure is `blocked`
+and retryable. A caller's 30-second wait limit leaves ongoing work tracked and
+reports the persisted state. Restart retains the admission fence; a later drain
+reconciles the same operation. There is no release/rollback-to-old-grants endpoint.
+
+**No revocation acknowledgement is claimed.** Every receipt keeps
+`revocationConfirmed: false` and `targetInstalled: false`. A drained supervisor is
+not proof about detached descendants, orphan processes after a hard Node crash,
+open descriptors, previously admitted host/browser/inference work or ambient path
+aliases. The Gateway coordinator must not treat this state as ready. It still
+needs canonical binding/grant validation, durable host/process reconciliation,
+actual source-policy revocation and target installation, acknowledgement ordering,
+trusted environment-change notice and necessary Web/App controls. The private
+plan hash is an identity commitment, not a grant or a complete target plan.
+
+Validation: Node library tests **468 passed, 3 ignored** after building the real
+Gateway/Node binaries; strict Clippy passed for Node and conformance all-targets.
+The **13 required process cases** passed across checkpoints, conversation creation,
+admission, command environments, execution fences, memory, project deletion and
+saved-upload origins. The new real Node-link case checks committed acceptance
+across a hard restart, duplicate/conflicting intents, control takeover, blocked
+new input, retained workspace/snapshot and deletion receipts. It consumes the
+acceptance response before restarting; it does not simulate a lost reply. The
+nonempty-history/file-preservation and canceled-drain-waiter checks are unit-level
+fixtures, and the queued-command shutdown test uses a fake runner RPC. Tests caught
+and corrected a control-route mode-availability regression before the final pass.
+No full-workspace acceptance or new OS revocation guarantee is claimed.
+
+No new Web, Flutter or Android bridge code changed, so their checks were not rerun.
+Physical Android/Keystore/live MethodChannel, Linux native revocation, local Nix and
+deployment acceptance are not claimed.
+All changes remain local; this checkpoint does not enable a public transition,
+change versions, deploy or publish a Release. Run-owned outputs are cleaned after
+verification while APKs, shared caches and user/other-agent files are preserved.

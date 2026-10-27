@@ -59,6 +59,18 @@ pub async fn require_current(
     id: &str,
     lease: (&str, i64),
 ) -> ApiResult<()> {
+    {
+        let db = node.db.lock();
+        if let Err(error) = crate::execution_fences::require_open(&db, session) {
+            db.update_command(
+                id,
+                crate::store::CommandStatus::Rejected,
+                None,
+                Some(&error.message),
+            )?;
+            return Err(error);
+        }
+    }
     let binding: Option<String> = node
         .db
         .lock()
@@ -88,6 +100,7 @@ pub async fn require_current(
         let db = node.db.lock();
         if let Err(error) = db
             .require_session_available(session)
+            .and_then(|()| crate::execution_fences::require_open(&db, session))
             .and_then(|()| db.validate_lease(session, lease.0, lease.1))
         {
             db.update_command(
@@ -216,7 +229,7 @@ mod tests {
             let conn = db.lock();
             let session = setup(&conn);
             command(&conn, &session, "old");
-            conn.execute_batch("DROP TRIGGER upload_origin_capture; DROP TRIGGER upload_origin_immutable; DROP TRIGGER upload_origin_remove; DROP TRIGGER upload_record_immutable; DROP TABLE upload_origins; DROP TRIGGER command_environment_immutable; DROP TABLE command_environments; PRAGMA user_version=2009;").unwrap();
+            conn.execute_batch("DROP TRIGGER execution_fence_identity; DROP TRIGGER execution_fence_retained; DROP TRIGGER execution_fence_session_deleted; DROP INDEX execution_fence_active; DROP TABLE execution_fences; DROP TRIGGER upload_origin_capture; DROP TRIGGER upload_origin_immutable; DROP TRIGGER upload_origin_remove; DROP TRIGGER upload_record_immutable; DROP TABLE upload_origins; DROP TRIGGER command_environment_immutable; DROP TABLE command_environments; PRAGMA user_version=2009;").unwrap();
         }
         let db = Db::open(&path).unwrap();
         let conn = db.lock();

@@ -237,6 +237,7 @@ fn claim(node: &Node, request: &Request) -> ApiResult<SessionRow> {
 
 fn local(node: &Node, request: &Request) -> ApiResult<Local> {
     let session = claim(node, request)?;
+    crate::execution_fences::require_open(&node.db.lock(), &session.id)?;
     let workspace = node.db.lock().get_workspace(&session.workspace_id)?;
     let root =
         crate::chat::session_root(&workspace, &session.id, &node.workspace_mode(&workspace)?)?;

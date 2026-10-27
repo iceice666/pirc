@@ -111,6 +111,13 @@ impl Runner {
         let mut response = Map::new();
         response.insert("type".into(), json!("write_lease_response"));
         response.insert("id".into(), json!(id));
+        if let Err(error) = crate::execution_fences::require_open(&node.db.lock(), &self.session_id)
+        {
+            response.insert("granted".into(), json!(false));
+            response.insert("error".into(), json!(error.message));
+            self.reply(Value::Object(response));
+            return Ok(());
+        }
         match message.get("path").and_then(Value::as_str) {
             Some(path) if Path::new(path).is_absolute() => {
                 let canonical =
@@ -499,6 +506,15 @@ impl Runner {
         let Some(node) = self.node() else {
             return Ok(());
         };
+        if let Err(error) = node.session_mode(&self.session_id) {
+            self.browser_fail(
+                &request_id(message).unwrap_or_default(),
+                error.status,
+                &error.code,
+                &error.message,
+            );
+            return Ok(());
+        }
         self.handle_browser_with(&node.browser, message)
     }
 
@@ -509,7 +525,7 @@ impl Runner {
         message: &Map<String, Value>,
     ) -> Result<(), String> {
         if let Some(node) = self.node()
-            && node.workspace_mode(&self.workspace).ok().as_ref() != Some(&self.mode)
+            && node.session_mode(&self.session_id).ok().as_ref() != Some(&self.mode)
         {
             return Err("Mode is unavailable or changed".into());
         }
@@ -820,6 +836,9 @@ impl Runner {
                         return Ok(());
                     }
                     {
+                        let node = runner.node().ok_or("The node is closing")?;
+                        crate::execution_fences::require_open(&node.db.lock(), &runner.session_id)
+                            .map_err(|e| e.message)?;
                         let mut inner = runner.lock();
                         inner.approved_domains.extend(missing.iter().cloned());
                         let approved: Vec<String> =
@@ -897,6 +916,9 @@ impl Runner {
                     }
                     // Already true when the agent withdrew the request after
                     // the yes: `run_on_host` then spawns nothing.
+                    let node = runner.node().ok_or("The node is closing")?;
+                    crate::execution_fences::require_open(&node.db.lock(), &runner.session_id)
+                        .map_err(|e| e.message)?;
                     let abort = side.abort.subscribe();
                     let env = runner
                         .node()

@@ -132,6 +132,7 @@ pub(crate) fn require_sendable(
     user: &str,
 ) -> ApiResult<()> {
     db.require_session_available(session)?;
+    crate::execution_fences::require_open(db, session)?;
     let(op,expected,stop):(String,Option<String>,bool)=db.query_row("SELECT operation_id,command_id,stop_requested FROM creation_initial_admissions WHERE session_id=?1 AND owner_user=?2",params![session,user],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?.ok_or_else(||ApiError::conflict("Initial admission identity is missing"))?;
     let current = creation(db, user, &op)?;
     if current.state != State::Ready || expected.as_deref() != Some(command) || stop {

@@ -63,6 +63,7 @@ pub fn scope(
     let (session, workspace) = {
         let db = node.db.lock();
         db.require_session_available(caller)?;
+        crate::execution_fences::require_open(&db, caller)?;
         let s = db.get_session(caller)?;
         let w = db.get_workspace(&s.workspace_id)?;
         if db.workspace_deletion(&w.id)?.is_some() {
