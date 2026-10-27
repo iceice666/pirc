@@ -1,5 +1,33 @@
 # Upgrades
 
+## Unreleased local checkpoint: Gateway first-message retries
+
+Gateway schema **1019** adds durable retry nonce/predecessor/command history and
+monotonic attempt numbers. Node remains **2009**, protocol **15**, client contract
+**2**, package/dependency versions and Nix hashes stay unchanged. Older Gateways
+refuse 1019. Before a future upgrade, stop old processes and take consistent full
+Gateway/Node state backups; rollback needs matching state/binaries, never an edited
+SQLite version or an old Gateway DB paired with newer attempted work.
+
+The new explicit Retry API uses the same accepted input, conversation and files.
+It requires a confirmed rejected predecessor, unchanged grants/mapping/model and
+held control, and checks Node retry support before reservation. Every new attempt
+commits before relay. Duplicate requests and owner-scoped nonce GETs only read/
+reconcile; unknown outcomes never trigger a new POST or a fresh identity.
+`messageAdmission` exposes `commandId`, `retryId`, `attemptNumber` and
+`retryEligible` for clients to order updates reliably.
+
+A retry that never reached Node can still reconcile the original operation's
+confirmed global Stop without claiming its earlier admission is known. Staging
+files remain retained until known admission or authorized deletion; the seven-day
+rule still applies only to unaccepted staging. Existing memory deletion consent,
+checkpoint isolation and ordinary session APIs are unchanged.
+
+**Web/native Android have not adopted Retry yet; production `canSubmit: false`
+remains unchanged.** Backend synthetic tests and paired direct-HTTP process proof
+are separate from actual native-client/device acceptance. No deployment, APK or
+release asset is included.
+
 ## Unreleased local checkpoint: Node rejected-admission retries
 
 Node schema **2009** adds immutable first-message attempt/predecessor identities

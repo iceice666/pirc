@@ -1965,6 +1965,84 @@ pots. No Flutter change or test, device, Nix check, APK, push, deployment or Rel
 is included. Only this run's isolated build/logs are removed after verification;
 SDKs, existing APKs, shared output and other agents' files stay intact.
 
+## U1 implementation checkpoint: Gateway durable rejected-admission retries (2026-10-27)
+
+Implemented locally over the Node retry foundation. Gateway advances to **1019**;
+Node stays **2009**, protocol 15, client contract 2, package/dependency versions
+and Nix hashes are unchanged. **`canSubmit: false` remains in effect. Web/native
+Android retry adoption and complete U1 acceptance remain open.**
+
+- Gateway advertises `canRetryFirstMessage`. An explicit
+  `POST /api/conversation-submissions/{id}/retry` supplies
+  `{retryId, previousCommandId, clientId, generation}`. It accepts no replacement
+  text/model/files. The immutable accepted intent, public and Node session IDs,
+  original command identity and promoted uploads remain unchanged.
+- An immediate transaction requires the exact current, positively rejected
+  predecessor, unchanged input hash, current device/mode/workspace/model/mapping
+  and the user's held lease. Before relay it persists a new command, nonce,
+  predecessor and strictly increasing `attemptNumber`; initial admission is 0.
+  A rejected successor can be followed by another explicit successor, while a
+  pending/unknown/accepted/stopped one cannot. Competing nonces have one winner.
+  Node capability `canRetryInitialAdmission` is required before a new reservation;
+  an older/offline Node does not create an attempted retry or lose the original.
+- `messageAdmission` includes `commandId`, `retryId`, `attemptNumber` and
+  `retryEligible` alongside its existing outcome/Stop facts. The number is tied
+  to the immutable retry row, not timestamps or a guessed ordering of UUIDs.
+  Every asynchronous response/failure carries its originating command identity;
+  a late answer for an older attempt cannot downgrade or overwrite the current one.
+- Duplicate Retry requests only reconcile the current operation; they neither
+  acquire control nor relay another POST. The owner-scoped
+  `GET /api/conversation-submissions/{id}/retries/{retryId}` gives that nonce's
+  command/predecessor/number, last known status and `isCurrent`, together with the
+  current preparation. It contains no copied prompt/file contents. Querying never
+  executes or takes control. A 404 means the nonce is not recorded at that instant,
+  not permission to invent another attempt or replay a possibly pending request.
+- Current retries query the Node's exact per-attempt receipt. A missing receipt
+  stays unknown; the predecessor's rejection cannot prove a successor failed.
+  Reservation survives Gateway restart before relay, with the same nonce/command
+  and unknown outcome. No background retry job or blind retransmission is added.
+- The original operation's global Stop is independent of an attempt receipt.
+  If a retry never reached Node, read-only reconciliation can validate the
+  creation-wide Stop against the same owner/session/input and known predecessor.
+  An ordinary Stop acknowledgement can use the same evidence. This confirms the
+  execution fence and permits explicit blank continuation while keeping earlier
+  admission unknown; it never substitutes the predecessor's receipt for the new
+  command. Later valid acceptance evidence still advances that command without
+  clearing Stop. Unrelated IDs/hashes cannot confirm it. Repeated reads send no Stop.
+- Admission success alone schedules the existing staging cleanup once. Failed or
+  unknown retries retain accepted source files; seven-day expiry remains limited
+  to unaccepted staging. Existing conversation/memory deletion and checkpoint
+  ownership are unchanged. Historical commands retain their own receipts.
+
+Validation: **320 Gateway tests pass** with no skips, including owned nonce GET,
+concurrent reservation, lost/unreceived replies, late results/failures, versioned
+attempt order, mode/model/lease/device refusal, missing-attempt Stop, restart and
+all historical migrations. Strict Gateway/conformance Clippy passes with
+`--all-targets -- -D warnings`. **Five Gateway/Node process cases pass** across
+initial admission, queued Stop, old-client compatibility and the new paired retry.
+The new case uses real Gateway/Node/Agent processes and two paired HTTP clients,
+with a deliberately missing fixture Agent executable producing a confirmed
+pre-message rejection. After repair and both hosts restarting, retry retains
+one public conversation and the original on-disk upload bytes; the actual history
+has one user message and the local fake provider receives one model call. Both
+hosts restart again; another paired device queries the same nonce/ordinal/result
+without a control lease, and a duplicate POST does not infer again. Unit proofs
+for the unreceived-retry Stop case are separate from that process acceptance.
+These are synthetic local inputs, not user data or a real Android client/device.
+
+Required next delivery: Web/native Android persist retry nonce and predecessor
+before an explicit action; adopt attempt ordering without dropping metadata or
+accepting stale callbacks; reconcile via read-only GET; retain frozen original
+files and existing Stop/delete consent; and expose only the necessary Retry/status
+controls. Retry uses the same conversation, not a new-draft workaround. Then
+complete the real client-to-Gateway/Node/Agent failure/permission matrix and Android
+process-death/private-filesystem/device checks. Generic journal reopening and final
+activation/rollback acceptance remain open. Later binding, mount, collaboration
+and bounded-pots stages stay open. No UI/Flutter change or test, browser, device,
+Nix, APK, push, deployment or Release is included in this checkpoint. Run-owned
+isolated output/logs are removed afterward; existing APKs, SDKs, caches and other
+agents' files remain.
+
 ## Design stages and later implementation gates
 
 All unchecked work is future work; no stage grants implementation authority.

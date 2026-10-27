@@ -10,7 +10,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
-async fn ready(on_disk: bool) -> (AppState, tempfile::TempDir, String) {
+pub(super) async fn ready(on_disk: bool) -> (AppState, tempfile::TempDir, String) {
     let (app, dir) = if on_disk { disk_app() } else { app() };
     model(&app);
     register(&app);
@@ -36,13 +36,13 @@ async fn ready(on_disk: bool) -> (AppState, tempfile::TempDir, String) {
         .unwrap();
     (app, dir, row.session_id)
 }
-fn control() -> Control {
+pub(super) fn control() -> Control {
     Control {
         client_id: "phone".into(),
         generation: 1,
     }
 }
-fn evidence(request: &Value, status: &str) -> Value {
+pub(super) fn evidence(request: &Value, status: &str) -> Value {
     let payload =
         json!({"type":"prompt","message":request["message"],"uploadIds":request["uploadIds"]});
     let hash = payload_hash(
@@ -50,7 +50,7 @@ fn evidence(request: &Value, status: &str) -> Value {
     );
     json!({"operationId":"placeholder","sessionId":"session-stable","state":status,"inputHash":hash,"stopRequested":false,"stopConfirmed":false,"command":{"id":request["commandId"],"sessionId":"session-stable","payloadHash":payload_hash(&payload),"payload":payload,"status":status,"result":{"success":status=="accepted"},"error":null}})
 }
-fn operation(app: &AppState) -> String {
+pub(super) fn operation(app: &AppState) -> String {
     target(&app.db.lock(), "alice", "draft-1").unwrap().creation
 }
 fn set_node(app: &AppState, result: Value, lost: bool) -> Arc<Mutex<Vec<(HttpMethod, String)>>> {
@@ -389,7 +389,7 @@ async fn migration_from_1014_preserves_pending_acceptance_and_existing_commands(
         let db = app.db.lock();
         db.receive_command("legacy-command", &session, "hash", &json!({"type":"stop"}))
             .unwrap();
-        db.execute_batch("DROP TRIGGER submission_pre_stop_cancelled; DROP TABLE conversation_submission_pending_stops; DROP TABLE conversation_submission_stop_controls; DROP TRIGGER submission_remote_cancelled; DROP TABLE conversation_submission_remote_cleanup; DROP TRIGGER submission_dispatch_cancelled; DROP TABLE conversation_submission_dispatches; PRAGMA user_version=1014;").unwrap();
+        db.execute_batch("DROP TABLE conversation_submission_retry_attempts; DROP TRIGGER submission_pre_stop_cancelled; DROP TABLE conversation_submission_pending_stops; DROP TABLE conversation_submission_stop_controls; DROP TRIGGER submission_remote_cancelled; DROP TABLE conversation_submission_remote_cleanup; DROP TRIGGER submission_dispatch_cancelled; DROP TABLE conversation_submission_dispatches; PRAGMA user_version=1014;").unwrap();
     }
     drop(app);
     let db = Db::open(&path).unwrap();

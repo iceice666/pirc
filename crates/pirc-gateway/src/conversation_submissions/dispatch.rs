@@ -1,5 +1,6 @@
-//! A first-message send is attempted once. Every later request reconciles a
-//! read-only Node receipt; neither lookup nor retry acquires/renews control.
+//! Each initial admission attempt is sent once. Known rejection permits an
+//! explicit, held-lease successor; unknown outcomes only reconcile receipts.
+mod retry;
 use super::acceptance::{require_caller, require_current, target};
 use super::*;
 use pirc_protocol::HttpMethod;
@@ -8,6 +9,10 @@ use pirc_protocol::HttpMethod;
 #[serde(rename_all = "camelCase")]
 pub(super) struct MessageAdmission {
     outcome: String,
+    command_id: Option<String>,
+    retry_id: Option<String>,
+    attempt_number: i64,
+    retry_eligible: bool,
     stop_requested: bool,
     pub(super) stop_confirmed: bool,
 }
@@ -33,6 +38,10 @@ pub(super) fn decorate(
     if let Some(record) = read(db, owner, op)? {
         row.message_admission = Some(MessageAdmission {
             outcome: record.outcome.clone(),
+            command_id: record.hash.as_ref().map(|_| record.command.clone()),
+            retry_id: retry::current_id(db, owner, op, &record.command)?,
+            attempt_number: retry::current_number(db, owner, op, &record.command)?,
+            retry_eligible: retry::eligible(&record),
             stop_requested: record.stop,
             stop_confirmed: record.confirmed,
         });
@@ -93,7 +102,7 @@ fn specification(db: &Connection, owner: &str, op: &str) -> ApiResult<Send> {
     let spec = row.submission.as_ref().ok_or_else(|| {
         ApiError::new(409, "submission_unavailable", "The submission was deleted")
     })?;
-    let(command,phase,model,thinking,uploads):(String,String,Option<String>,Option<String>,String)=db.query_row("SELECT s.command_id,a.phase,a.model_json,a.thinking,a.upload_ids_json FROM conversation_submissions s JOIN conversation_submission_acceptances a USING(owner_user,operation_id) WHERE s.owner_user=?1 AND s.operation_id=?2",params![owner,op],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?)))?;
+    let(command,phase,model,thinking,uploads):(String,String,Option<String>,Option<String>,String)=db.query_row("SELECT COALESCE(d.command_id,s.command_id),a.phase,a.model_json,a.thinking,a.upload_ids_json FROM conversation_submissions s JOIN conversation_submission_acceptances a USING(owner_user,operation_id) LEFT JOIN conversation_submission_dispatches d USING(owner_user,operation_id) WHERE s.owner_user=?1 AND s.operation_id=?2",params![owner,op],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?)))?;
     if phase != "ready" {
         return Err(ApiError::new(
             409,
@@ -123,24 +132,19 @@ fn specification(db: &Connection, owner: &str, op: &str) -> ApiResult<Send> {
         session: row.session_id,
     })
 }
-fn reserve(
+fn validated_send(
     app: &AppState,
+    db: &Connection,
     identity: &Identity,
     op: &str,
     control: &Control,
-) -> ApiResult<Option<Send>> {
-    let mut db = app.db.lock();
-    let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
-    let row = lookup(&tx, &identity.user, op)?;
-    if row.state == Phase::Cancelled || read(&tx, &identity.user, op)?.is_some() {
-        tx.commit()?;
-        return Ok(None);
-    }
-    let target = target(&tx, &identity.user, op)?;
-    require_caller(app, &tx, identity)?;
-    require_current(app, &tx, &identity.user, &row, &target)?;
-    let claimed = tx.claim_session(&row.session_id, &identity.user, false)?;
-    let expected:Option<String>=tx.query_row("SELECT node_session_id FROM conversation_submission_acceptances WHERE owner_user=?1 AND operation_id=?2",params![identity.user,op],|r|r.get(0))?;
+) -> ApiResult<Send> {
+    let row = lookup(db, &identity.user, op)?;
+    let target = target(db, &identity.user, op)?;
+    require_caller(app, db, identity)?;
+    require_current(app, db, &identity.user, &row, &target)?;
+    let claimed = db.claim_session(&row.session_id, &identity.user, false)?;
+    let expected:Option<String>=db.query_row("SELECT node_session_id FROM conversation_submission_acceptances WHERE owner_user=?1 AND operation_id=?2",params![identity.user,op],|r|r.get(0))?;
     if expected.is_none()
         || expected != claimed.pi_session_id
         || claimed.workspace_id != row.workspace_id
@@ -152,9 +156,9 @@ fn reserve(
             "The original conversation mapping is unavailable",
         ));
     }
-    tx.validate_lease(&row.session_id, &control.client_id, control.generation)?;
-    tx.validate_lease_user(&row.session_id, &identity.user)?;
-    let mut send = specification(&tx, &identity.user, op)?;
+    db.validate_lease(&row.session_id, &control.client_id, control.generation)?;
+    db.validate_lease_user(&row.session_id, &identity.user)?;
+    let mut send = specification(db, &identity.user, op)?;
     let selected: &Value = &send.request["model"];
     if !app
         .models()
@@ -172,6 +176,24 @@ fn reserve(
             "The accepted model is unavailable; the original message remains pending",
         ));
     }
+    send.request["clientId"] = json!(control.client_id);
+    send.request["generation"] = json!(control.generation);
+    Ok(send)
+}
+fn reserve(
+    app: &AppState,
+    identity: &Identity,
+    op: &str,
+    control: &Control,
+) -> ApiResult<Option<Send>> {
+    let mut db = app.db.lock();
+    let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
+    let row = lookup(&tx, &identity.user, op)?;
+    if row.state == Phase::Cancelled || read(&tx, &identity.user, op)?.is_some() {
+        tx.commit()?;
+        return Ok(None);
+    }
+    let mut send = validated_send(app, &tx, identity, op, control)?;
     let occupied: bool = tx.query_row(
         "SELECT EXISTS(SELECT 1 FROM commands WHERE id=?1)",
         [&send.command],
@@ -206,6 +228,15 @@ fn invalid_receipt() -> ApiError {
     )
 }
 fn apply(app: &AppState, identity: &Identity, op: &str, evidence: &Value) -> ApiResult<()> {
+    apply_for(app, identity, op, None, evidence)
+}
+fn apply_for(
+    app: &AppState,
+    identity: &Identity,
+    op: &str,
+    command: Option<&str>,
+    evidence: &Value,
+) -> ApiResult<()> {
     let mut db = app.db.lock();
     let tx = db.transaction_with_behavior(TransactionBehavior::Immediate)?;
     let row = lookup(&tx, &identity.user, op)?;
@@ -216,6 +247,10 @@ fn apply(app: &AppState, identity: &Identity, op: &str, evidence: &Value) -> Api
     let Some(previous) = read(&tx, &identity.user, op)? else {
         return Err(invalid_receipt());
     };
+    if command.is_some_and(|id| id != previous.command) {
+        tx.commit()?;
+        return Ok(());
+    }
     let target = target(&tx, &identity.user, op)?;
     let remote_session:Option<String>=tx.query_row("SELECT node_session_id FROM conversation_submission_acceptances WHERE owner_user=?1 AND operation_id=?2",params![identity.user,op],|r|r.get(0))?;
     if evidence["operationId"] != target.creation
@@ -312,12 +347,25 @@ fn apply(app: &AppState, identity: &Identity, op: &str, evidence: &Value) -> Api
     tx.commit()?;
     Ok(())
 }
+#[cfg(test)]
 fn failure(app: &AppState, identity: &Identity, op: &str, code: &str) -> ApiResult<()> {
+    failure_for(app, identity, op, None, code)
+}
+fn failure_for(
+    app: &AppState,
+    identity: &Identity,
+    op: &str,
+    command: Option<&str>,
+    code: &str,
+) -> ApiResult<()> {
     let db = app.db.lock();
     crate::db::atomic(&db, |tx| {
         let Some(record) = read(tx, &identity.user, op)? else {
             return Ok(());
         };
+        if command.is_some_and(|id| id != record.command) {
+            return Ok(());
+        }
         if record.admitted.is_some()
             || record.confirmed
             || record.outcome == "not_admitted"
@@ -338,13 +386,79 @@ fn failure(app: &AppState, identity: &Identity, op: &str, code: &str) -> ApiResu
     })
 }
 
+fn complete(
+    app: &AppState,
+    identity: &Identity,
+    op: &str,
+    command: &str,
+    result: ApiResult<pirc_protocol::NodeHttpResponse>,
+) -> ApiResult<()> {
+    match result {
+        Ok(remote) if remote.status < 400 => {
+            if let Err(error) = apply_for(
+                app,
+                identity,
+                op,
+                Some(command),
+                remote
+                    .body
+                    .as_ref()
+                    .and_then(|b| b.get("admission"))
+                    .unwrap_or(&Value::Null),
+            ) {
+                failure_for(app, identity, op, Some(command), error.code)?;
+            }
+        }
+        Ok(_) => failure_for(
+            app,
+            identity,
+            op,
+            Some(command),
+            "admission_receipt_unavailable",
+        )?,
+        Err(error) => failure_for(app, identity, op, Some(command), error.code)?,
+    }
+    Ok(())
+}
+async fn send_attempt(
+    app: &AppState,
+    identity: &Identity,
+    op: &str,
+    send: Send,
+    previous: Option<&str>,
+) -> ApiResult<Preparation> {
+    let target = target(&app.db.lock(), &identity.user, op)?;
+    let (url, body) = if let Some(previous) = previous {
+        (
+            format!("/api/session-creations/{}/admission/retry", target.creation),
+            json!({"previousCommandId":previous,"admission":send.request}),
+        )
+    } else {
+        (
+            format!("/api/session-creations/{}/admission", target.creation),
+            send.request,
+        )
+    };
+    let result = app
+        .relay(&target.node, identity, HttpMethod::Post, url, Some(body))
+        .await;
+    complete(app, identity, op, &send.command, result)?;
+    app.sessions_changed(Some(&identity.user));
+    lookup(&app.db.lock(), &identity.user, op)
+}
 async fn reconcile(app: &AppState, identity: &Identity, op: &str) -> ApiResult<Preparation> {
-    let (row, target, record) = {
+    let (row, target, record, retried) = {
         let db = app.db.lock();
         let row = lookup(&db, &identity.user, op)?;
         let target = target(&db, &identity.user, op)?;
         let record = read(&db, &identity.user, op)?;
-        (row, target, record)
+        let retried = record
+            .as_ref()
+            .map(|r| retry::current_id(&db, &identity.user, op, &r.command))
+            .transpose()?
+            .flatten()
+            .is_some();
+        (row, target, record, retried)
     };
     if row.state == Phase::Cancelled
         || record.is_none()
@@ -359,33 +473,47 @@ async fn reconcile(app: &AppState, identity: &Identity, op: &str) -> ApiResult<P
     if pre_stop::pending(&app.db.lock(), &identity.user, op)? {
         return pre_stop::reconcile(app, &identity.user, op).await;
     }
-    let result = app
-        .relay(
-            &target.node,
-            identity,
-            HttpMethod::Get,
-            format!("/api/session-creations/{}/admission", target.creation),
-            None,
+    let record = record.expect("checked above");
+    let url = if retried {
+        format!(
+            "/api/session-creations/{}/admission/attempts/{}",
+            target.creation, record.command
         )
+    } else {
+        format!("/api/session-creations/{}/admission", target.creation)
+    };
+    let result = app
+        .relay(&target.node, identity, HttpMethod::Get, url, None)
         .await;
-    match result {
-        Ok(remote) if remote.status < 400 => {
-            if let Err(error) = apply(
-                app,
+    if retried && result.as_ref().is_ok_and(|r| r.status == 404) {
+        // An unreceived successor has no per-attempt receipt. A separately
+        // confirmed creation-wide Stop still fences it and all late copies.
+        if let Ok(global) = app
+            .relay(
+                &target.node,
                 identity,
-                op,
-                remote
-                    .body
-                    .as_ref()
-                    .and_then(|b| b.get("admission"))
-                    .unwrap_or(&Value::Null),
-            ) {
-                failure(app, identity, op, error.code)?;
+                HttpMethod::Get,
+                format!("/api/session-creations/{}/admission", target.creation),
+                None,
+            )
+            .await
+            && global.status < 400
+        {
+            let proof = global
+                .body
+                .as_ref()
+                .and_then(|v| v.get("admission"))
+                .unwrap_or(&Value::Null);
+            if proof["command"]["id"] == record.command {
+                complete(app, identity, op, &record.command, Ok(global))?;
+                return lookup(&app.db.lock(), &identity.user, op);
+            }
+            if retry::apply_global_fence(app, identity, op, proof).unwrap_or(false) {
+                return lookup(&app.db.lock(), &identity.user, op);
             }
         }
-        Ok(_) => failure(app, identity, op, "admission_receipt_unavailable")?,
-        Err(error) => failure(app, identity, op, error.code)?,
-    };
+    }
+    complete(app, identity, op, &record.command, result)?;
     lookup(&app.db.lock(), &identity.user, op)
 }
 pub(super) fn routes() -> Router<AppState> {
@@ -395,6 +523,14 @@ pub(super) fn routes() -> Router<AppState> {
             post(dispatch),
         )
         .route("/api/conversation-submissions/{id}/receipt", get(receipt))
+        .route(
+            "/api/conversation-submissions/{id}/retry",
+            post(retry::retry),
+        )
+        .route(
+            "/api/conversation-submissions/{id}/retries/{retryId}",
+            get(retry::status),
+        )
 }
 async fn dispatch(
     State(app): State<AppState>,
@@ -414,37 +550,8 @@ async fn dispatch(
             json!({"preparation":reconcile(&app,&identity,&op).await?}),
         ));
     };
-    let target = target(&app.db.lock(), &identity.user, &op)?;
-    let remote = app
-        .relay(
-            &target.node,
-            &identity,
-            HttpMethod::Post,
-            format!("/api/session-creations/{}/admission", target.creation),
-            Some(send.request),
-        )
-        .await;
-    match remote {
-        Ok(remote) if remote.status < 400 => {
-            if let Err(error) = apply(
-                &app,
-                &identity,
-                &op,
-                remote
-                    .body
-                    .as_ref()
-                    .and_then(|b| b.get("admission"))
-                    .unwrap_or(&Value::Null),
-            ) {
-                failure(&app, &identity, &op, error.code)?;
-            }
-        }
-        Ok(_) => failure(&app, &identity, &op, "admission_receipt_unavailable")?,
-        Err(error) => failure(&app, &identity, &op, error.code)?,
-    };
-    app.sessions_changed(Some(&identity.user));
     Ok(axum::Json(
-        json!({"preparation":lookup(&app.db.lock(),&identity.user,&op)?}),
+        json!({"preparation":send_attempt(&app,&identity,&op,send,None).await?}),
     ))
 }
 async fn receipt(
@@ -475,8 +582,11 @@ pub(crate) fn observe_stop(
     let op:Option<String>=app.db.lock().query_row("SELECT operation_id FROM conversation_submissions WHERE session_id=?1 AND owner_user=?2",params![session,identity.user],|r|r.get(0)).optional()?;
     if let Some(op) = op
         && let Some(evidence) = body.get("initialAdmission")
+        && let Err(error) = apply(app, identity, &op, evidence)
+        && (error.code != "invalid_admission_receipt"
+            || !retry::apply_global_fence(app, identity, &op, evidence)?)
     {
-        apply(app, identity, &op, evidence)?;
+        return Err(error);
     }
     Ok(())
 }

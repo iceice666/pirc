@@ -107,7 +107,7 @@ async fn stale_cached_activation_cannot_prepare_accept_materialize_or_dispatch()
     }
     assert_eq!(count(&app.db.lock(), "conversation_submissions"), 0);
     prepared(&app, false);
-    for route in ["accept", "materialize", "dispatch"] {
+    for route in ["accept", "materialize", "dispatch", "retry"] {
         let (code, error) = request(
             &app,
             "POST",
@@ -181,14 +181,16 @@ async fn migration_from_1017_keeps_original_intent_and_stopping_job() {
     );
     app.db
         .lock()
-        .execute_batch("PRAGMA user_version=1017;")
+        .execute_batch(
+            "DROP TABLE conversation_submission_retry_attempts; PRAGMA user_version=1017;",
+        )
         .unwrap();
     let reopened = crate::db::Db::open(&app.config.state_dir.join("gateway.sqlite")).unwrap();
     let db = reopened.lock();
     assert_eq!(
         db.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        1018
+        crate::db::SCHEMA_VERSION
     );
     let row = super::super::lookup(&db, "alice", "draft-1").unwrap();
     assert_eq!(row.session_id, original.session_id);

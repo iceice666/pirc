@@ -182,6 +182,14 @@ ignores), strict Node/conformance Clippy and three Node-process cases pass; the
 new actual Agent journal proof contains one user message after failure/restart/
 retry. Gateway persistence and Web/Android retry adoption are the next required
 delivery; production activation and all later architecture stages remain open.
+The [Gateway retry checkpoint](unified-conversations.md#u1-implementation-checkpoint-gateway-durable-rejected-admission-retries-2026-10-27)
+adds schema 1019's durable retry/predecessor/attempt-number identity, owner-scoped
+GET and late-reply fencing over Node 2009. It retains the same conversation and
+files, never resends an unknown attempt, and reconciles global Stop even when a
+retry never reached Node. 320 Gateway tests, strict Clippy and five real backend
+process cases pass; two paired HTTP clients prove one history entry/model call
+through repair, retry and both hosts restarting. Web/native Android adoption and
+full client/device/activation acceptance remain open; new sends stay disabled.
 The [admission-aware conformance checkpoint](unified-conversations.md#g0-verification-checkpoint-admission-aware-conformance-2026-10-27)
 records local fixture/transcript repairs and 50 Agent plus five Node process
 passes; the remote Check is still failed, and full Chromium/Linux verification
