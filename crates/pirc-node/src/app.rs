@@ -150,6 +150,10 @@ pub fn routes(config: &NodeConfig) -> Vec<Route> {
             relayed_answer,
         ),
         post("/api/sessions/:id/uploads", upload),
+        get(
+            "/api/sessions/:id/uploads/:uploadId/reference",
+            crate::upload_origins::get_reference,
+        ),
     ];
     if config.chat() {
         routes.push(get("/api/assistant/prompts", read_prompts));

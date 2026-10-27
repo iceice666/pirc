@@ -273,7 +273,7 @@ fn migration_from_2005_preserves_creation_and_command_receipts() {
         let session = setup(&conn);
         conn.receive_command("legacy-command", &session, "hash", &json!({"type":"stop"}))
             .unwrap();
-        conn.execute_batch("DROP TRIGGER command_environment_immutable; DROP TABLE command_environments; DROP TABLE creation_admission_attempts; DROP TABLE creation_pre_stops; DROP TABLE creation_cancellations; DROP TABLE creation_initial_admissions; PRAGMA user_version=2005;")
+        conn.execute_batch("DROP TRIGGER upload_origin_capture; DROP TRIGGER upload_origin_immutable; DROP TRIGGER upload_origin_remove; DROP TRIGGER upload_record_immutable; DROP TABLE upload_origins; DROP TRIGGER command_environment_immutable; DROP TABLE command_environments; DROP TABLE creation_admission_attempts; DROP TABLE creation_pre_stops; DROP TABLE creation_cancellations; DROP TABLE creation_initial_admissions; PRAGMA user_version=2005;")
             .unwrap();
         session
     };

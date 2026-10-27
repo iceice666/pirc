@@ -216,7 +216,7 @@ mod tests {
             let conn = db.lock();
             let session = setup(&conn);
             command(&conn, &session, "old");
-            conn.execute_batch("DROP TRIGGER command_environment_immutable; DROP TABLE command_environments; PRAGMA user_version=2009;").unwrap();
+            conn.execute_batch("DROP TRIGGER upload_origin_capture; DROP TRIGGER upload_origin_immutable; DROP TRIGGER upload_origin_remove; DROP TRIGGER upload_record_immutable; DROP TABLE upload_origins; DROP TRIGGER command_environment_immutable; DROP TABLE command_environments; PRAGMA user_version=2009;").unwrap();
         }
         let db = Db::open(&path).unwrap();
         let conn = db.lock();

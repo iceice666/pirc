@@ -10,8 +10,9 @@ Schema **1024** consumes them in project deletion and records cleanup completion
 Schema **1025** records immutable command admission environments and checks the
 Web/Android caller's captured binding before accepting new ordinary commands.
 Node schema **2010** now persists those command origins and rechecks Gateway
-authority after local queue/startup waits. Resource provenance, full effect fences
-and supported environment transitions remain to implement. No mount, move, grant, process restart or U1 activation is enabled.
+authority after local queue/startup waits. Node schema **2011** freezes new saved
+upload origins and preserves their access scopes. Live-resource provenance, full
+effect fences and supported environment transitions remain to implement. No mount, move, grant, process restart or U1 activation is enabled.
 
 ## Identity mapping and current migration
 
@@ -274,11 +275,56 @@ No full-workspace, Linux sandbox, Nix, physical Android/Keystore/live MethodChan
 or deployment acceptance is claimed. Temporary outputs are cleaned after this
 slice; retained APKs, shared caches and user data are preserved.
 
+## Saved attachment origins checkpoint (2026-10-28)
+
+Node schema **2011** adds immutable `upload_origins` in the same transaction as
+new `uploads` rows. The snapshot records the exact upload row, scope and observed
+source Node/mode. Upload content/scope and origin updates are refused. Deleting
+the parent upload cascades its metadata; deleting origins alone is refused. A
+metadata failure rolls back the upload insert. There is no historical backfill.
+
+The scope remains the existing one: ordinary uploads require the same owner and
+source workspace; durable first-send uploads additionally require the original
+conversation. The old `creation_uploads` restriction still applies to historical
+rows. Pre-2001 uploads without a workspace retain their owner-only exception.
+Moving a conversation cannot relabel or broaden any of these scopes. New
+first-send origins retain the conversation restriction even if their transfer
+index disappears. Old records remain explicitly `legacy`, with unknown Node/mode.
+
+`GET /api/sessions/:id/uploads/:uploadId/reference` is authenticated owner-scoped
+metadata, available directly to browser or paired-device requests. Gateway checks
+the binding again after the Node reply and requires matching workspace scope.
+It maps private source session IDs to an existing owned public session, otherwise
+returns null, never a substituted current conversation or private locator. A Node
+without this route returns its existing unavailable/not-found response; Gateway
+does not fabricate provenance. Metadata alone is neither a byte download nor an
+availability proof or grant.
+
+Agent attachment consumption reuses the same ownership/deletion checks and reads
+saved bytes through the configured uploads directory with no leaf symlink follow.
+Regular-file size and SHA-256 must match. Missing/replaced data returns
+`attachment_storage_unavailable`; a known pre-admission failure is a durable
+rejected receipt for prompt/steer/follow-up. Receipt replay never sends it again.
+Workspace copies remain mutable and existing entries are not overwritten, so a
+user's later changes are preserved and are not mistaken for a saved snapshot.
+
+Conversation/project deletion retains current ownership rules. In particular,
+an ordinary workspace upload may outlive its source chat; its public source-chat
+ID then becomes null. Deleting a first-send conversation or the owning workspace
+removes its owned upload plus origin through existing cleanup. Checkpoint recovery
+and memory deletion retain their independent provenance rules.
+
+This does not capture Gateway project-membership/version or filesystem grant IDs,
+implement live-file/cache/preview provenance, provide cross-Node copies, update
+client presentation or install/revoke sandbox authority. Source workspaces are
+not reclassified as projects. Actual mount/switch transitions remain U4 work.
+
 ## Remaining U2 implementation and gates
 
-1. Persist immutable resource provenance and add pending/acknowledged transitions,
-   not just configuration. The global-memory deletion integration is complete locally;
-   source provenance for uploads and other resources remains separate work.
+1. Extend provenance beyond saved uploads/global memory to live files, previews,
+   grants and canonical project membership/version snapshots. Add pending/acknowledged
+   transitions, not just configuration. The saved-upload and global-memory deletion
+   integrations are complete locally; they do not prove live resource revocation.
 2. Extend the delivered Gateway/Node ordinary-command checks to approvals, Agent
    queues, internal deliveries and actual effect boundaries. Record acknowledged installed
    policy, not just configured revisions. Runner epoch/control stay independent.

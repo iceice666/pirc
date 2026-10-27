@@ -428,6 +428,10 @@ pub fn router(app: AppState) -> Router {
             post(routes::answer),
         )
         .route("/api/sessions/{id}/uploads", post(routes::upload))
+        .route(
+            "/api/sessions/{id}/uploads/{upload_id}/reference",
+            get(crate::upload_references::get),
+        )
         .route("/api/models", get(routes::list_models))
         .route("/api/sessions/{id}/git/{*rest}", get(routes::relay_get))
         .route("/api/sessions/{id}/files", get(routes::relay_get))
@@ -516,6 +520,7 @@ const PARAM_ROUTES: &[(&str, &str)] = &[
         "/api/sessions/{id}/interactions/{interaction_id}/answer",
     ),
     ("POST", "/api/sessions/{id}/uploads"),
+    ("GET", "/api/sessions/{id}/uploads/{upload_id}/reference"),
     ("GET", "/api/sessions/{id}/git/{*rest}"),
     ("GET", "/api/sessions/{id}/files"),
     ("GET", "/api/sessions/{id}/files/content"),

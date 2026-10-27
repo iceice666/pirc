@@ -35,6 +35,7 @@ mod routes;
 mod schedules;
 mod slots;
 mod sockets;
+mod upload_references;
 mod util;
 mod web_search;
 mod workspace_removal;

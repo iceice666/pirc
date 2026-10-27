@@ -1,5 +1,31 @@
 # Upgrades
 
+## Unreleased local checkpoint: saved attachment provenance
+
+Node schema **2011** atomically records immutable origins for new uploads. Gateway
+stays **1025**. Historical rows keep their existing workspace/owner and first-send
+conversation restrictions; migration does not infer source Node/mode or change
+attachment ownership. Existing upload deletion removes its provenance too.
+
+The new authenticated attachment-reference route exposes safe metadata directly
+through Gateway for browsers and paired devices. It does not serve bytes or grant
+access. Older Nodes may return not found; that is not permission to infer metadata
+or retry on another Node. The updated Gateway checks source workspace and current
+binding after the reply, and does not expose private Node paths/session IDs.
+
+When the Agent consumes an attachment, the stored file must match its saved size
+and SHA-256 and cannot be a symlink. Missing/changed bytes return
+`attachment_storage_unavailable`. A rejected input stays rejected on receipt
+replay; repair storage before making a separate explicit new attempt. Existing
+workspace copies preserve later user edits and remain distinct from saved bytes.
+
+Older Node binaries refuse schema 2011. Before eventual deployment, back up
+consistent state and retain the matching binary/state pair. Never decrement the
+schema version or delete provenance metadata to downgrade. No Gateway migration,
+protocol, client contract, package version, dependency lock or Nix hash changes.
+This local checkpoint does not enable first Send, mounts, workspace switching or
+new grants. Physical Android and deployment/rollback acceptance remain open.
+
 ## Unreleased local checkpoint: Node command authority rechecks
 
 Node schema **2010** adds immutable command-origin metadata. Gateway stays **1025**.

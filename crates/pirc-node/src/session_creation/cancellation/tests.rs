@@ -236,7 +236,7 @@ fn migration_from_2006_preserves_existing_creation_and_receipts() {
     setup(&db.lock());
     let original = super::super::reserve(&mut db.lock(), "alice", &input()).unwrap();
     db.lock()
-        .execute_batch("DROP TRIGGER command_environment_immutable; DROP TABLE command_environments; DROP TABLE creation_admission_attempts; DROP TABLE creation_pre_stops; DROP TABLE creation_cancellations; PRAGMA user_version=2006;")
+        .execute_batch("DROP TRIGGER upload_origin_capture; DROP TRIGGER upload_origin_immutable; DROP TRIGGER upload_origin_remove; DROP TRIGGER upload_record_immutable; DROP TABLE upload_origins; DROP TRIGGER command_environment_immutable; DROP TABLE command_environments; DROP TABLE creation_admission_attempts; DROP TABLE creation_pre_stops; DROP TABLE creation_cancellations; PRAGMA user_version=2006;")
         .unwrap();
     drop(db);
     let db = Db::open(&path).unwrap();

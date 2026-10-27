@@ -519,3 +519,99 @@ async fn local_control_takeover_during_authority_roundtrip_never_sends_rpc() {
     runner.exit(Some(0), None);
     f.node.close().await;
 }
+
+#[tokio::test]
+async fn corrupted_saved_attachment_is_rejected_before_admission_and_stays_deduplicated() {
+    let f = Fixture::new().await;
+    let (runner, mut lines) = register(&f);
+    let lease = f
+        .node
+        .db
+        .lock()
+        .acquire_lease(&f.current, "phone", false, 60_000)
+        .unwrap();
+    let upload = crate::store::UploadRow {
+        id: "saved-image".into(),
+        owner_user: "alice".into(),
+        mime_type: "image/png".into(),
+        byte_size: 4,
+        storage_name: "saved-image.bin".into(),
+        sha256: crate::util::sha256_hex(b"test"),
+        kind: crate::store::UploadKind::Image,
+        filename: Some("saved.png".into()),
+        workspace_id: Some("repo".into()),
+        session_id: Some(f.current.clone()),
+    };
+    f.node.db.lock().create_upload(&upload).unwrap();
+    let source = f.node.config.uploads_dir.join(&upload.storage_name);
+    std::fs::write(&source, b"evil").unwrap();
+    for (id, payload) in [
+        (
+            "bad-prompt",
+            CommandPayload::Prompt {
+                message: "read image".into(),
+                upload_ids: Some(vec![upload.id.clone()]),
+            },
+        ),
+        (
+            "bad-steer",
+            CommandPayload::Steer {
+                message: "read image".into(),
+                upload_ids: Some(vec![upload.id.clone()]),
+            },
+        ),
+        (
+            "bad-follow-up",
+            CommandPayload::FollowUp {
+                message: "read image".into(),
+                upload_ids: Some(vec![upload.id.clone()]),
+            },
+        ),
+    ] {
+        receive(&f, id, &payload);
+        let error = f
+            .node
+            .runners
+            .dispatch(
+                &f.current,
+                id,
+                &payload,
+                "alice",
+                ("phone", lease.generation),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(error.code, "attachment_storage_unavailable");
+        assert_eq!(
+            f.node.db.lock().get_command(id).unwrap().status,
+            CommandStatus::Rejected
+        );
+        assert!(lines.try_recv().is_err());
+        // Repairing storage cannot turn a duplicate request into a new send.
+        std::fs::write(&source, b"test").unwrap();
+        let body = serde_json::to_value(&payload).unwrap();
+        let (receipt, duplicate) = f
+            .node
+            .db
+            .lock()
+            .receive_command(id, &f.current, &crate::util::payload_hash(&body), &body)
+            .unwrap();
+        assert!(duplicate);
+        assert_eq!(receipt.status, CommandStatus::Rejected);
+        assert!(lines.try_recv().is_err());
+        std::fs::write(&source, b"evil").unwrap();
+    }
+    let runs: i64 = f
+        .node
+        .db
+        .lock()
+        .query_row(
+            "SELECT COUNT(*) FROM runs WHERE session_id=?",
+            [&f.current],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(runs, 0);
+    runner.exit(Some(0), None);
+    f.node.close().await;
+}

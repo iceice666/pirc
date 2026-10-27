@@ -575,11 +575,20 @@ impl RunnerManager {
                 return Err(error);
             }
         }
+        // These inputs have not reached the Agent when construction fails.
+        // Persist a final rejection so receipt queries cannot mistake a failed
+        // saved attachment check for a message still waiting to be delivered.
+        let input_not_queued = matches!(
+            payload,
+            CommandPayload::Prompt { .. }
+                | CommandPayload::Steer { .. }
+                | CommandPayload::FollowUp { .. }
+        );
         let built = build_rpc(&node, &runner, session_id, payload, user);
         let (rpc, run_id) = match built {
             Ok(built) => built,
             Err(Failure::Api(error)) => {
-                if initial.is_some() {
+                if input_not_queued {
                     node.db.lock().update_command(
                         command_id,
                         CommandStatus::Rejected,
@@ -590,7 +599,7 @@ impl RunnerManager {
                 return Err(error);
             }
             Err(Failure::Other(message)) => {
-                if initial.is_some() {
+                if input_not_queued {
                     node.db.lock().update_command(
                         command_id,
                         CommandStatus::Rejected,
@@ -1212,29 +1221,8 @@ fn uploads(
     session_id: &str,
 ) -> ApiResult<Vec<crate::store::UploadRow>> {
     let db = node.db.lock();
-    let workspace_id = db.get_session(session_id)?.workspace_id;
     ids.iter()
-        .map(|id| {
-            let upload = db.get_upload(id)?;
-            if upload.owner_user != user {
-                return Err(ApiError::forbidden("Upload belongs to another user"));
-            }
-            if upload
-                .workspace_id
-                .as_ref()
-                .is_some_and(|uploaded| *uploaded != workspace_id)
-            {
-                return Err(ApiError::forbidden("Upload belongs to another workspace"));
-            }
-            let other_creation: bool = db.query_row(
-                "SELECT EXISTS(SELECT 1 FROM creation_uploads WHERE upload_id=?1 AND session_id!=?2)",
-                rusqlite::params![id,session_id],|r|r.get(0),
-            )?;
-            if other_creation {
-                return Err(ApiError::forbidden("First-send attachment belongs to another conversation"));
-            }
-            Ok(upload)
-        })
+        .map(|id| crate::upload_origins::authorize(&db, session_id, user, id))
         .collect()
 }
 
@@ -1253,9 +1241,7 @@ fn image_contents(
         if upload.kind != UploadKind::Image {
             continue;
         }
-        let file = node.config.uploads_dir.join(&upload.storage_name);
-        let bytes = std::fs::read(&file)
-            .map_err(|error| Failure::Other(format!("{}: {error}", file.display())))?;
+        let bytes = crate::upload_origins::read_verified(&node.config.uploads_dir, &upload)?;
         use base64::Engine;
         let data = base64::engine::general_purpose::STANDARD.encode(bytes);
         images.push(json!({ "type": "image", "data": data, "mimeType": upload.mime_type }));
@@ -1302,6 +1288,7 @@ fn file_attachments(
             .filter(|name| !name.is_empty())
             .unwrap_or(&upload.id);
         let dest_name = format!("{}-{}", upload.id, basename(name));
+        let bytes = crate::upload_origins::read_verified(&node.config.uploads_dir, &upload)?;
         // An existing entry (copied for an earlier prompt) is kept.
         match crate::private_dir::create_new(&dest_dir, &dest_name) {
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
@@ -1311,12 +1298,11 @@ fn file_attachments(
                 )));
             }
             Ok(mut dest) => {
-                let source = node.config.uploads_dir.join(&upload.storage_name);
-                let copied = std::fs::File::open(&source)
-                    .and_then(|mut source| std::io::copy(&mut source, &mut dest));
-                if let Err(error) = copied {
+                if let Err(error) = std::io::Write::write_all(&mut dest, &bytes) {
                     crate::private_dir::remove(&dest_dir, &dest_name);
-                    return Err(Failure::Other(format!("{}: {error}", source.display())));
+                    return Err(Failure::Other(format!(
+                        "Saved attachment could not be copied: {error}"
+                    )));
                 }
             }
         }
@@ -1374,6 +1360,42 @@ mod tests {
             uploads(&f.node, &["legacy".into()], "alice", &other.id).unwrap(),
             [legacy]
         );
+        f.node.close().await;
+    }
+
+    #[tokio::test]
+    async fn saved_file_replay_preserves_later_edits_and_rejects_corrupted_sources() {
+        let f = crate::workspace_memory::tests::Fixture::new().await;
+        let upload = crate::store::UploadRow {
+            id: "file".into(),
+            owner_user: "alice".into(),
+            mime_type: "text/plain".into(),
+            byte_size: 4,
+            storage_name: "saved.bin".into(),
+            sha256: crate::util::sha256_hex(b"test"),
+            kind: UploadKind::File,
+            filename: Some("notes.txt".into()),
+            workspace_id: Some("repo".into()),
+            session_id: Some(f.current.clone()),
+        };
+        f.node.db.lock().create_upload(&upload).unwrap();
+        let source = f.node.config.uploads_dir.join("saved.bin");
+        std::fs::write(&source, b"test").unwrap();
+        let first = file_attachments(&f.node, &["file".into()], "alice", &f.current)
+            .unwrap_or_else(|_| panic!("valid saved attachment must materialize"));
+        let workspace = f.node.db.lock().get_workspace("repo").unwrap();
+        let root = crate::chat::session_root(&workspace, &f.current, &f.mode).unwrap();
+        let copy = root.join(&first[0]);
+        std::fs::write(&copy, b"later user edit").unwrap();
+        assert_eq!(
+            file_attachments(&f.node, &["file".into()], "alice", &f.current)
+                .unwrap_or_else(|_| panic!("valid saved attachment must materialize")),
+            first
+        );
+        assert_eq!(std::fs::read(&copy).unwrap(), b"later user edit");
+        std::fs::write(&source, b"evil").unwrap();
+        assert!(file_attachments(&f.node, &["file".into()], "alice", &f.current).is_err());
+        assert_eq!(std::fs::read(&copy).unwrap(), b"later user edit");
         f.node.close().await;
     }
 

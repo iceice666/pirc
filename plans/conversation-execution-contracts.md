@@ -11,7 +11,7 @@ This document records
 target behavior and future acceptance cases; it does not implement or verify it.
 The user subsequently authorized staged implementation; first-send persistence and
 Web/native Android recovery are now implemented but remain gated. See the
-[current progress snapshot](unified-conversations.md#current-progress-and-next-delivery-2026-10-27)
+[current progress snapshot](unified-conversations.md#current-progress-and-next-delivery-2026-10-28)
 for delivered code, evidence and open acceptance. The
 [U2 compatibility binding baseline](conversation-binding-migration.md) now persists
 relationship versions, explicit project membership and configured policy snapshots.
@@ -613,6 +613,12 @@ not a retry of a canceled UI dialog.
   exports/backups are not falsely claimed erased.
 
 ## 6. Separate saved content from live file references
+
+Implementation checkpoint: [saved attachment origins](conversation-binding-migration.md#saved-attachment-origins-checkpoint-2026-10-28)
+now preserves new upload identity/scope and legacy restrictions, provides direct
+authenticated metadata and validates saved bytes before Agent consumption (Node
+schema 2011). This covers saved uploads only; live-file/cache/grant provenance,
+client presentation and the full open/download flow below remain target behavior.
 
 ### Content identity and lifetime
 

@@ -48,6 +48,20 @@ async fn creation_attachment_survives_process_crash_and_does_not_revive_after_de
     assert_eq!(receipt["upload"]["sha256"], hash);
     let retry = link.request("retry-lost-response", transfer.clone()).await;
     assert_eq!(retry["data"]["body"]["creationAttachment"], receipt);
+    let upload_id = receipt["upload"]["id"].as_str().unwrap();
+    let reference_request = json!({"method":"GET","url":format!("/api/sessions/{session}/uploads/{upload_id}/reference"),"user":USER});
+    let reference = link
+        .request("saved-reference", reference_request.clone())
+        .await;
+    assert_eq!(reference["data"]["status"], 200, "{reference}");
+    assert_eq!(
+        reference["data"]["body"]["reference"]["scope"],
+        "conversation"
+    );
+    assert_eq!(
+        reference["data"]["body"]["reference"]["provenance"],
+        "recorded"
+    );
     node.restart(true);
     drop(link);
     let mut link = register(&gateway).await;
@@ -55,6 +69,11 @@ async fn creation_attachment_survives_process_crash_and_does_not_revive_after_de
     let recovered = link.request("after-restart", lookup.clone()).await;
     assert_eq!(recovered["data"]["status"], 200, "{recovered}");
     assert_eq!(recovered["data"]["body"]["creationAttachment"], receipt);
+    assert_eq!(
+        link.request("saved-reference-after-crash", reference_request.clone())
+            .await["data"]["body"],
+        reference["data"]["body"]
+    );
     let same_creation = link.request("same-creation", create.clone()).await;
     assert_eq!(
         same_creation["data"]["body"]["creation"]["sessionId"],
@@ -73,6 +92,12 @@ async fn creation_attachment_survives_process_crash_and_does_not_revive_after_de
         )
         .await;
     assert_eq!(deleted["data"]["status"], 204, "{deleted}");
+    assert!(
+        link.request("deleted-reference", reference_request).await["data"]["status"]
+            .as_u64()
+            .unwrap()
+            >= 400
+    );
     let status = link.request("deleted-status", lookup).await;
     assert_eq!(status["data"]["status"], 200);
     let tombstone = status["data"]["body"]["creationAttachment"].clone();

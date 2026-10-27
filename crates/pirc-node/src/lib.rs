@@ -77,6 +77,7 @@ pub mod streams;
 pub mod terminals;
 #[cfg(test)]
 mod test_support;
+pub mod upload_origins;
 pub mod util;
 pub mod write_broker;
 

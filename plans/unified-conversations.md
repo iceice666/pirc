@@ -19,7 +19,7 @@ their implementation stage begins; earlier library/pots work is reused.
 
 **U1 is implemented across Gateway, Node, Web and native Android, but is not
 accepted for activation. `canSubmit: false` remains in production.** Current
-formats: Gateway **1025**, Node **2010**, protocol **15**, client contract **2**,
+formats: Gateway **1025**, Node **2011**, protocol **15**, client contract **2**,
 Web IndexedDB **3**, Android private envelope **3**. Package/dependency versions
 and Nix hashes are unchanged. Existing session, memory-deletion and checkpoint
 ownership guarantees remain in effect.
@@ -28,16 +28,17 @@ ownership guarantees remain in effect.
 now persists legacy binding revisions, explicit project membership and configured
 policy history, frozen global-memory origins/project cleanup receipts, and ordinary
 Web/Android command admission environments with Node authority rechecks after
-queue/startup waits (updated 2026-10-28). This preserves
-current associations. Resource provenance and authority-fenced transitions remain
-pending; Node enforcement is explicitly not tracked. U2 development does not enable U1 or clear its device/rollout gates.
+queue/startup waits, plus frozen saved-upload origins (updated 2026-10-28). This
+preserves current associations. Live-resource provenance and authority-fenced
+transitions remain pending; Node enforcement is explicitly not tracked. U2 development does not enable U1 or clear its device/rollout gates.
 
-Latest U2 delivery: [Node command authority](#u2-implementation-checkpoint-node-command-authority-2026-10-28)
-rechecks the captured intent after local queue/startup waits. It does not yet install
-or revoke sandbox policy. Accepted
-receipts retain their origin; repeated requests cannot dispatch again. Node effect
-fences and sandbox revocation remain open. The validation counts below this point
-in the U1 section describe that prior U1 slice, not all newer U2 changes.
+Latest U2 delivery: [saved attachment origins](#u2-implementation-checkpoint-saved-attachment-origins-2026-10-28)
+freezes new upload identity/scope, preserves historical access rules and checks
+saved bytes before Agent use. It also exposes authenticated metadata directly to
+Web and paired devices without leaking private Node session IDs or storage paths.
+This does not enable workspace switching or sandbox revocation. The validation
+counts below this point in the U1 section describe that prior U1 slice, not all
+newer U2 changes.
 
 Delivered U1 behavior:
 
@@ -97,14 +98,14 @@ not the full permission/Stop/delete matrix or Android OS/device acceptance.
 Live-client tests are explicitly run and ignored by the default suite;
 the last verified published green CI remains tied to `303fa8f8`.
 
-| Stage                             | Current status                                                               | Next deliverable                                                                                                    |
-| --------------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| U1 — first Send                   | Implementation present; activation blocked on remaining acceptance           | Ambiguous journal recovery, actual client/backend failure matrix, Android process/device and rollout/rollback proof |
-| U2 — bindings                     | Bindings, policy/memory provenance and Gateway command admission implemented | Resource provenance and Node/effect-boundary version fencing                                                        |
-| U3 — navigation/UI                | Explicitly deferred                                                          | Necessary functional controls only until the core model is stable                                                   |
-| U4 — resource transitions         | Planned                                                                      | Idle transitions, then active-worker revocation/acknowledgement and offline recovery                                |
-| U5 — canonical work/collaboration | Existing primitives available; unified mapping pending                       | Common task/attempt identities, shared notes and resource waits without overwrites                                  |
-| U6 — proactive pots               | Existing progress observation/explicit dispatch; content analysis pending    | Separate observation/execution grants, finite budgets and quiet synchronized suggestions                            |
+| Stage                             | Current status                                                                                 | Next deliverable                                                                                                    |
+| --------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| U1 — first Send                   | Implementation present; activation blocked on remaining acceptance                             | Ambiguous journal recovery, actual client/backend failure matrix, Android process/device and rollout/rollback proof |
+| U2 — bindings                     | Bindings, policy/memory/saved-upload provenance and Gateway/Node command admission implemented | Live-resource provenance and effect-boundary version fencing                                                        |
+| U3 — navigation/UI                | Explicitly deferred                                                                            | Necessary functional controls only until the core model is stable                                                   |
+| U4 — resource transitions         | Planned                                                                                        | Idle transitions, then active-worker revocation/acknowledgement and offline recovery                                |
+| U5 — canonical work/collaboration | Existing primitives available; unified mapping pending                                         | Common task/attempt identities, shared notes and resource waits without overwrites                                  |
+| U6 — proactive pots               | Existing progress observation/explicit dispatch; content analysis pending                      | Separate observation/execution grants, finite budgets and quiet synchronized suggestions                            |
 
 Immediate U1 queue:
 
@@ -3317,3 +3318,54 @@ Remote CI was checked again: `origin/main` is `303fa8f8`, with Check and Android
 both successful. Those results do not cover these local-only commits. There was
 no failed current remote run to repair/push; no push, deployment or Release was
 performed for this slice.
+
+## U2 implementation checkpoint: saved attachment origins (2026-10-28)
+
+Implemented locally after `c1a9553a`. Node advances to **2011**; Gateway remains
+**1025**. Protocol 15, client contract 2, private envelope 3, package/dependency
+versions and Nix hashes are unchanged. Production `canSubmit: false` remains.
+
+- New uploads atomically capture their original owner, workspace/session, Node,
+  mode, content hash/size and existing scope. Updates cannot silently retarget the
+  saved object. Historical origins are not inferred from current associations.
+- Ordinary workspace restrictions, pre-2001 owner-only exceptions and first-send
+  conversation restrictions remain. First-send scope survives removal of its
+  transfer index. Existing conversation/project deletion cascades owned metadata;
+  an ordinary workspace upload retains its existing lifetime after source-chat
+  deletion. A moved chat gains no attachment rights from retaining its text.
+- `GET /api/sessions/:id/uploads/:uploadId/reference` provides authorized saved
+  metadata through Gateway for browser and paired-device requests. Private Node
+  session IDs are mapped to owned public IDs, or omitted after source deletion;
+  storage names/paths are never exposed. Gateway rechecks the current binding.
+- Agent attachment reads reject symlinks, size/hash mismatches and missing saved
+  files instead of using replacement bytes. A workspace materialization is a
+  mutable copy: reusing it preserves later user edits. Rejected prompt/steer/
+  follow-up inputs persist a final receipt and cannot be revived by a duplicate
+  command, even if storage is repaired afterwards.
+
+This is the saved-upload subset of resource provenance. Metadata success does not
+assert that bytes are still available; this route does not serve them. Live files,
+preview/cache references, canonical project membership/version and grant origins,
+cross-Node copies, client presentation and actual policy installation/revocation
+remain open. SQL fixture moves test immutable origins, not a supported switch API.
+No new frontend/Flutter/native-bridge integration is claimed in this slice.
+
+Validation: **461 Node tests passed, 3 intentionally ignored**, **387 Gateway
+tests**, strict Node/Gateway/conformance Clippy, Rust formatting and changed-plan
+formatting pass. **13 process integration cases** cover ordinary/first-send
+attachments, paired-device metadata, hard Gateway/Node restarts, public origin
+mapping after source deletion, admission, command environments, project deletion,
+memory and native checkpoints. The five admission/creation/upload-flow cases were
+rerun with the final receipt fix and passed. Unit checks also cover same-length
+content substitution, symlinks, migration, atomic capture failure, immutable scope,
+transfer-index loss, preservation of later workspace edits and duplicate rejected
+input receipts. The workspace reassignment test is an internal SQL fixture, not
+an exposed transition. No new frontend code changed, so Flutter/JVM checks were
+not rerun. No full workspace, Linux sandbox, physical Android/Keystore/live
+MethodChannel or deployment acceptance is claimed. Local Nix validation remains
+waived. Run-owned outputs are removed after validation; retained APKs/shared
+caches/user data stay.
+
+Latest remote `main` is still `303fa8f8`: Check and Android succeeded. Those CI
+results do not cover newer local architecture commits. No current remote failure
+required a repair push; this slice remains local without a version or Release.
