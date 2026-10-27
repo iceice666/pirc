@@ -145,6 +145,19 @@ expression: t.into_value()
   {
     "body": {
       "session": {
+        "binding": {
+          "execution": {
+            "generation": 1,
+            "modeId": "directory",
+            "nodeId": "test",
+            "workspaceId": "test:ws"
+          },
+          "membership": {
+            "legacyWorkspaceId": "test:ws",
+            "revision": 1
+          },
+          "version": 1
+        },
         "createdAt": "<epoch-ms>",
         "id": "session_<uuid:2>",
         "name": "New session",

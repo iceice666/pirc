@@ -19,10 +19,16 @@ their implementation stage begins; earlier library/pots work is reused.
 
 **U1 is implemented across Gateway, Node, Web and native Android, but is not
 accepted for activation. `canSubmit: false` remains in production.** Current
-formats: Gateway **1020**, Node **2009**, protocol **15**, client contract **2**,
+formats: Gateway **1021**, Node **2009**, protocol **15**, client contract **2**,
 Web IndexedDB **3**, Android private envelope **3**. Package/dependency versions
 and Nix hashes are unchanged. Existing session, memory-deletion and checkpoint
 ownership guarantees remain in effect.
+
+**U2 has started:** [the binding migration baseline](conversation-binding-migration.md)
+now persists separate legacy membership/execution revisions and carries them in
+Web/native Android session models. This preserves current associations; explicit
+project membership, policy provenance and authority-fenced transitions are still
+pending. U2 development does not enable U1 or clear its device/rollout gates.
 
 Delivered U1 behavior:
 
@@ -47,7 +53,7 @@ Delivered U1 behavior:
   including version negotiation, independent Gateway access and minimal bilingual
   status/actions. New navigation and visual redesign are deferred.
 
-Latest slice: [capabilities bound to the checked Node connection](#u1-implementation-checkpoint-node-capabilities-and-connection-fencing-2026-10-27)
+Latest U1 slice: [capabilities bound to the checked Node connection](#u1-implementation-checkpoint-node-capabilities-and-connection-fencing-2026-10-27)
 fixes a compatibility gap after intent acceptance: materialization and first
 admission now recheck capabilities, and allocation/uploads/admission/retry cannot
 reuse that proof on a replacement Node connection. Authority and control are
@@ -74,22 +80,22 @@ rerun for this fixture-only slice.
 
 The earlier marker repair retains **79 Web tests**, clean Svelte checks and
 **63 native JVM cases**; [editor snapshots](#u1-implementation-checkpoint-editor-attachments-survive-source-cleanup-2026-10-27)
-retain 26 focused Flutter cases. This slice changes Gateway compatibility checks
-and recovery error translations; schemas, protocol and client contract are unchanged.
+retain 26 focused Flutter cases. That U1 slice changed Gateway compatibility checks
+and recovery error translations without changing schemas, protocol or client contract.
 The backend [nonce retirement](#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27)
 slice retains 329 Gateway tests and five process cases. These are bounded proofs,
 not the full permission/Stop/delete matrix or Android OS/device acceptance.
 Live-client tests are explicitly run and ignored by the default suite;
 the last verified published green CI remains tied to `303fa8f8`.
 
-| Stage                             | Current status                                                            | Next deliverable                                                                                                    |
-| --------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| U1 — first Send                   | Implementation present; activation blocked on remaining acceptance        | Ambiguous journal recovery, actual client/backend failure matrix, Android process/device and rollout/rollback proof |
-| U2 — bindings                     | Planned; existing identity/mode model preserved                           | Versioned conversation/project/environment mapping and compatible migration                                         |
-| U3 — navigation/UI                | Explicitly deferred                                                       | Necessary functional controls only until the core model is stable                                                   |
-| U4 — resource transitions         | Planned                                                                   | Idle transitions, then active-worker revocation/acknowledgement and offline recovery                                |
-| U5 — canonical work/collaboration | Existing primitives available; unified mapping pending                    | Common task/attempt identities, shared notes and resource waits without overwrites                                  |
-| U6 — proactive pots               | Existing progress observation/explicit dispatch; content analysis pending | Separate observation/execution grants, finite budgets and quiet synchronized suggestions                            |
+| Stage                             | Current status                                                                  | Next deliverable                                                                                                    |
+| --------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| U1 — first Send                   | Implementation present; activation blocked on remaining acceptance              | Ambiguous journal recovery, actual client/backend failure matrix, Android process/device and rollout/rollback proof |
+| U2 — bindings                     | Legacy binding versions implemented; explicit membership/policy mapping pending | Explicit project membership, policy provenance and version-fenced commands                                          |
+| U3 — navigation/UI                | Explicitly deferred                                                             | Necessary functional controls only until the core model is stable                                                   |
+| U4 — resource transitions         | Planned                                                                         | Idle transitions, then active-worker revocation/acknowledgement and offline recovery                                |
+| U5 — canonical work/collaboration | Existing primitives available; unified mapping pending                          | Common task/attempt identities, shared notes and resource waits without overwrites                                  |
+| U6 — proactive pots               | Existing progress observation/explicit dispatch; content analysis pending       | Separate observation/execution grants, finite budgets and quiet synchronized suggestions                            |
 
 Immediate U1 queue:
 
@@ -107,7 +113,8 @@ Immediate U1 queue:
    an explicit live-client acceptance gate, before enabling the new path.
    Published `303fa8f8` passed remote Check (including Linux native checkpoints and
    Nix) and Android; this does not certify the newer local client checkpoints.
-   Local Nix verification remains waived. Then continue U2, U4, U5 and U6.
+   Local Nix verification remains waived. U2 development proceeds while these U1
+   activation gates stay open, followed by U4, U5 and U6.
 
 The dated checkpoints later in this file preserve what was delivered and tested
 at that time. Historical “local only”, “next slice” and incomplete-adoption notes
@@ -2682,6 +2689,47 @@ Production `canSubmit: false` remains. The remaining compatibility/permission
 matrix, device/process/Keystore/MethodChannel, rollout/rollback and full CI gates
 are still open. U2/U4/U5/U6 remain the subsequent authorized stages; UI redesign is
 deferred. This checkpoint is local-only and preserves memory/checkpoint ownership.
+
+## U2 implementation checkpoint: durable legacy binding versions (2026-10-27)
+
+Gateway schema **1021** now stores identity-only `conversation_bindings` for every
+existing and newly created session. Membership revision and execution generation
+are separate from runner epoch and device control. First-send acceptance, initial
+Node mapping, ordinary creation and checkpoint continuation use the same atomic
+adapter; no additional conversation is created. Session lists and snapshots expose
+one consistent binding while private Node IDs/paths and ownership stay private.
+
+Web retains/validates the binding in its ordinary API model. Native Android now
+retains it in its Session model and serializes it to the existing Flutter bridge;
+it previously discarded unknown session fields. Missing bindings remain compatible
+with older Gateways. Unknown binding versions or conflicting scopes do not silently
+become legacy data. This adds no new folder grants or switch operation.
+
+See the [migration/field inventory](conversation-binding-migration.md) for the
+explicit old-to-new mapping and remaining U2 work. In particular, legacy workspace
+membership is not yet a normalized project relationship; mutable same-ID mode
+policy is not covered by these identity revisions. New memory write-time project
+provenance and old-client effect fences remain prerequisites for project moves.
+
+Validation: **343 Gateway tests**, **29 Web API/binding cases**, **4 Kotlin core
+binding cases**, clean Svelte checks and strict Gateway Clippy. All **five explicit
+Web/native live-client tests**, **three native checkpoint cases** and the old-client
+contract pass. The live-client verifier checks that lists/snapshots agree and the
+binding stays at its original generation after interrupted allocation and host
+restart. Kotlin compilation treats warnings as errors; no Flutter UI was changed.
+
+Broader affected session/device/memory/schedule conformance has **19 passing cases**
+and **one existing macOS snapshot mismatch** in `node_panels_state`: three memory
+threshold counts are 53/153/153 versus the Linux golden's 42/142/142. An isolated
+Gateway built from the preceding commit `cc04774c`, with the unchanged Node,
+produces an identical complete response after removing the new binding object.
+Only the intentional binding additions were recorded in 13 API snapshots; the
+three unrelated counter expectations were not changed. This does not clear a full
+Linux/deployment acceptance gate. The original snapshot mismatch remains recorded.
+
+U1's activation and Android OS/device gates remain open; no APK, release, push or
+local Nix validation is part of this slice. Run-owned build/test outputs are removed
+after checks; shared SDK/caches, existing APKs and other work remain untouched.
 
 ## Design stages and later implementation gates
 

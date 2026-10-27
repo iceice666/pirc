@@ -318,7 +318,7 @@ async fn schema_1019_migration_preserves_original_input_and_reserved_retry() {
     app.db
         .lock()
         .execute_batch(
-            "DROP TABLE conversation_submission_retry_retirements; PRAGMA user_version=1019;",
+            "DROP TABLE conversation_submission_retry_retirements; DROP TRIGGER IF EXISTS conversation_binding_insert; DROP TRIGGER IF EXISTS conversation_binding_mapping; DROP TRIGGER IF EXISTS conversation_binding_mode; DROP TABLE IF EXISTS conversation_bindings; PRAGMA user_version=1019;",
         )
         .unwrap();
     let db = Db::open(&app.config.state_dir.join("gateway.sqlite")).unwrap();
@@ -337,6 +337,6 @@ async fn schema_1019_migration_preserves_original_input_and_reserved_retry() {
     assert_eq!(
         conn.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))
             .unwrap(),
-        1020
+        crate::db::SCHEMA_VERSION
     );
 }

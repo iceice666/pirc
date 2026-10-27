@@ -41,7 +41,7 @@ pub(crate) use sql_text_enum;
 /// numbered 1 to 19; the Rust line starts far above them, at
 /// [`FIRST_SCHEMA_VERSION`], so a TS-era database is recognized and refused
 /// rather than misread.
-pub const SCHEMA_VERSION: i64 = 1020;
+pub const SCHEMA_VERSION: i64 = 1021;
 /// The first Rust schema; later ones are reached through [`MIGRATIONS`].
 const FIRST_SCHEMA_VERSION: i64 = 1000;
 const SCHEMA: &str = concat!(
@@ -55,7 +55,8 @@ const SCHEMA: &str = concat!(
     include_str!("conversation_submissions/cancellation.sql"),
     include_str!("conversation_submissions/pre_stop.sql"),
     include_str!("conversation_submissions/retries.sql"),
-    include_str!("conversation_submissions/retry_retirements.sql")
+    include_str!("conversation_submissions/retry_retirements.sql"),
+    include_str!("conversation_bindings/schema.sql")
 );
 /// Each migration takes a database from the version before it to its own;
 /// [`SCHEMA`] assembles the newest whole schema, including calendar tables.
@@ -136,6 +137,7 @@ const MIGRATIONS: &[(i64, &str)] = &[
     (1018, "SELECT 1;"),
     (1019, include_str!("conversation_submissions/retries.sql")),
     (1020, include_str!("conversation_submissions/retry_retirements.sql")),
+    (1021, include_str!("conversation_bindings/schema.sql")),
 ];
 
 /// Placeholder name of a new session until the agent's title replaces it.
@@ -424,6 +426,7 @@ impl Workspace {
 #[serde(rename_all = "camelCase")]
 pub struct Session {
     pub id: String,
+    pub binding: crate::conversation_bindings::Binding,
     pub workspace_id: String,
     pub node_id: Option<String>,
     pub name: String,
@@ -451,6 +454,7 @@ impl Session {
         Ok(Self {
             id: row.get("id")?,
             workspace_id: row.get("workspace_id")?,
+            binding: crate::conversation_bindings::Binding::from_row(row)?,
             node_id: row.get("node_id")?,
             owner_user: row.get("owner_user")?,
             name: row.get("name")?,
@@ -914,7 +918,10 @@ pub struct RecoveredStartup {
     pub unknown_commands: usize,
 }
 
-const SESSION_SELECT: &str = "SELECT * FROM sessions";
+const SESSION_SELECT: &str = "SELECT sessions.*, b.membership_revision, b.legacy_workspace_id,
+ b.generation AS binding_generation, b.execution_workspace_id, b.node_id AS binding_node_id,
+ b.mode_id AS binding_mode_id FROM sessions
+ JOIN conversation_bindings b ON b.session_id=sessions.id";
 
 impl Store for Connection {
     fn assistant_node(&self) -> ApiResult<Option<String>> {
@@ -1325,7 +1332,7 @@ impl Store for Connection {
         atomic(self, |tx| {
             let existing: Option<Session> = tx
                 .query_row(
-                    "SELECT * FROM sessions WHERE node_id=? AND pi_session_id=?",
+                    &format!("{SESSION_SELECT} WHERE sessions.node_id=? AND pi_session_id=?"),
                     params![node_id, remote_session_id],
                     Session::from_row,
                 )
@@ -1371,7 +1378,7 @@ impl Store for Connection {
                 ],
             )?;
             tx.query_row(
-                "SELECT * FROM sessions WHERE id=?",
+                &format!("{SESSION_SELECT} WHERE sessions.id=?"),
                 [session_id],
                 Session::from_row,
             )

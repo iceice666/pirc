@@ -21,8 +21,7 @@ fn migration_1009_adds_empty_disabled_pots_without_changing_existing_state() {
             )],
         )
         .unwrap();
-        conn.create_session("work:repo", "node://work/s", "work", "s", "alice")
-            .unwrap();
+        conn.execute("INSERT INTO sessions(id,workspace_id,private_session_path,name,node_id,pi_session_id,owner_user,created_at,updated_at) VALUES('old','work:repo','node://work/s','Old','work','s','alice',1,1)", []).unwrap();
         conn.execute("INSERT INTO workspace_removals (workspace_id,owner_user,removed_at) VALUES ('work:repo','alice',1)", []).unwrap();
     }
     for _ in 0..2 {

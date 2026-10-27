@@ -594,13 +594,11 @@ fn migration_preserves_1013_preparations_and_existing_sessions() {
     ))
     .unwrap();
     super::super::tests::setup(&db);
-    let old = db
-        .create_session("node:repo", "node://node/old", "node", "old", "alice")
-        .unwrap();
+    db.execute("INSERT INTO sessions(id,workspace_id,private_session_path,name,node_id,pi_session_id,owner_user,created_at,updated_at) VALUES('old','node:repo','node://node/old','Old','node','old','alice',1,1)", []).unwrap();
     drop(db);
     let db = Db::open(&path).unwrap();
     reserve(&mut db.lock(), "alice", &input()).unwrap();
-    assert_eq!(db.lock().get_session(&old.id).unwrap().id, old.id);
+    assert_eq!(db.lock().get_session("old").unwrap().id, "old");
     assert!(!lookup(&db.lock(), "alice", "draft-1").unwrap().accepted);
     assert_eq!(count(&db.lock(), "conversation_submission_acceptances"), 0);
 }

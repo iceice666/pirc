@@ -345,12 +345,10 @@ fn migration_from_1011_preserves_sessions_and_installs_cleanup_triggers() {
         ))
         .unwrap();
     setup(&prior);
-    let original = prior
-        .create_session("node:repo", "node://node/old", "node", "old", "alice")
-        .unwrap();
+    prior.execute("INSERT INTO sessions(id,workspace_id,private_session_path,name,node_id,pi_session_id,owner_user,created_at,updated_at) VALUES('old','node:repo','node://node/old','Old','node','old','alice',1,1)", []).unwrap();
     drop(prior);
     let db = Db::open(&path).unwrap();
-    assert_eq!(db.lock().get_session(&original.id).unwrap().id, original.id);
+    assert_eq!(db.lock().get_session("old").unwrap().id, "old");
     assert_eq!(
         db.lock()
             .query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))

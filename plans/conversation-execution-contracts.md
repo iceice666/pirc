@@ -12,9 +12,11 @@ target behavior and future acceptance cases; it does not implement or verify it.
 The user subsequently authorized staged implementation; first-send persistence and
 Web/native Android recovery are now implemented but remain gated. See the
 [current progress snapshot](unified-conversations.md#current-progress-and-next-delivery-2026-10-27)
-for delivered code, evidence and open acceptance. The seven sections below remain
-target contracts; their cases are not automatically verified by that first-send
-work. App authentication/topology and Flutter Web remain separate decisions.
+for delivered code, evidence and open acceptance. The
+[U2 compatibility binding baseline](conversation-binding-migration.md) now persists
+relationship versions; it does not implement authority-changing transitions.
+The seven sections below remain target contracts; their cases are not automatically
+verified by first-send or binding-baseline work. App authentication/topology and Flutter Web remain separate decisions.
 The 2026-10-27 publication request covers accumulated commits and plan progress,
 not deployment or release. The [integrated architecture review](unified-architecture-review.md)
 retains the original design review and remaining gates.

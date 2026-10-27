@@ -426,8 +426,7 @@ fn migration_from_1008_preserves_workspace_and_history() {
             )],
         )
         .unwrap();
-        conn.create_session("work:repo", "node://work/s", "work", "s", "u")
-            .unwrap();
+        conn.execute("INSERT INTO sessions(id,workspace_id,private_session_path,name,node_id,pi_session_id,owner_user,created_at,updated_at) VALUES('old','work:repo','node://work/s','Old','work','s','u',1,1)", []).unwrap();
         conn.execute_batch("DROP TABLE workspace_removals;")
             .unwrap();
     }

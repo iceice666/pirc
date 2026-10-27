@@ -96,8 +96,17 @@ export interface NodeSummary {
   modes?: string[];
 }
 
+/** Identity versions, not grants or the runner/control generation. Version 1
+ * preserves the existing workspace association until explicit transitions land. */
+export interface ConversationBinding {
+  version: 1;
+  membership: { revision: number; legacyWorkspaceId: string };
+  execution: { generation: number; workspaceId: string; nodeId: string | null; modeId: string };
+}
+
 export interface SessionSummary {
   id: string;
+  binding?: ConversationBinding;
   workspaceId: string;
   name: string;
   lastActivityAt: string;

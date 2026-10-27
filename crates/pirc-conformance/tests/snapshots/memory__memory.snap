@@ -57,6 +57,19 @@ expression: t.into_value()
   {
     "body": {
       "session": {
+        "binding": {
+          "execution": {
+            "generation": 1,
+            "modeId": "chat",
+            "nodeId": "test",
+            "workspaceId": "test:chat"
+          },
+          "membership": {
+            "legacyWorkspaceId": "test:chat",
+            "revision": 1
+          },
+          "version": 1
+        },
         "createdAt": "<epoch-ms>",
         "id": "session_<uuid:1>",
         "name": "New session",
@@ -95,6 +108,19 @@ expression: t.into_value()
   {
     "body": {
       "session": {
+        "binding": {
+          "execution": {
+            "generation": 1,
+            "modeId": "chat",
+            "nodeId": "test",
+            "workspaceId": "test:chat"
+          },
+          "membership": {
+            "legacyWorkspaceId": "test:chat",
+            "revision": 1
+          },
+          "version": 1
+        },
         "createdAt": "<epoch-ms>",
         "id": "session_<uuid:2>",
         "name": "New session",
@@ -964,6 +990,19 @@ expression: t.into_value()
         }
       ],
       "session": {
+        "binding": {
+          "execution": {
+            "generation": 1,
+            "modeId": "chat",
+            "nodeId": "test",
+            "workspaceId": "test:chat"
+          },
+          "membership": {
+            "legacyWorkspaceId": "test:chat",
+            "revision": 1
+          },
+          "version": 1
+        },
         "createdAt": "<epoch-ms>",
         "id": "session_<uuid:1>",
         "name": "New session",
@@ -1010,6 +1049,19 @@ expression: t.into_value()
         }
       ],
       "session": {
+        "binding": {
+          "execution": {
+            "generation": 1,
+            "modeId": "chat",
+            "nodeId": "test",
+            "workspaceId": "test:chat"
+          },
+          "membership": {
+            "legacyWorkspaceId": "test:chat",
+            "revision": 1
+          },
+          "version": 1
+        },
         "createdAt": "<epoch-ms>",
         "id": "session_<uuid:2>",
         "name": "New session",
@@ -2691,6 +2743,19 @@ expression: t.into_value()
   {
     "body": {
       "session": {
+        "binding": {
+          "execution": {
+            "generation": 1,
+            "modeId": "directory",
+            "nodeId": "dev",
+            "workspaceId": "dev:repo"
+          },
+          "membership": {
+            "legacyWorkspaceId": "dev:repo",
+            "revision": 1
+          },
+          "version": 1
+        },
         "createdAt": "<epoch-ms>",
         "id": "session_<uuid:3>",
         "name": "New session",

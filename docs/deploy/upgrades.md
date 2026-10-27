@@ -1,5 +1,27 @@
 # Upgrades
 
+## Unreleased local checkpoint: conversation binding identities
+
+Gateway schema **1021** adds identity-only conversation bindings and backfills them
+atomically from existing session/workspace mappings. Public conversation IDs,
+private Node IDs, histories, ownership, memory provenance and checkpoint isolation
+are preserved. Membership revision and execution generation are separate from
+runner epochs and control leases. Inconsistent historical workspace references
+refuse migration with the original state preserved, rather than dropping history.
+
+Session lists/snapshots include an additive `binding.version: 1` descriptor. Web
+and native Android preserve it; older server responses without it remain readable.
+The descriptor represents the legacy association, not Node acknowledgement of new
+sandbox policy. No workspace move, mount grant, command replay or U1 activation is
+introduced. Node schema **2009**, protocol **15**, first-send client contract **2**,
+private draft envelope **3**, package/dependency versions and Nix hashes are unchanged.
+
+Older Gateway binaries refuse schema 1021. Deployment remains unperformed: take a
+consistent full state backup and stop older Gateway processes before a later
+upgrade. Rollback needs the matching binary/state pair; do not edit the version or
+delete bindings to downgrade. Android OS/device and actual rolling-deployment
+acceptance remain open. Production **`canSubmit: false`** remains in place.
+
 ## Unreleased local checkpoint: first-send Node connection fencing
 
 Gateway now rechecks reliable-first-send capabilities before materialization and

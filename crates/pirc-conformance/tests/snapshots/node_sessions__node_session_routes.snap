@@ -6,6 +6,19 @@ expression: t.into_value()
   {
     "body": {
       "session": {
+        "binding": {
+          "execution": {
+            "generation": 1,
+            "modeId": "directory",
+            "nodeId": "test",
+            "workspaceId": "test:test"
+          },
+          "membership": {
+            "legacyWorkspaceId": "test:test",
+            "revision": 1
+          },
+          "version": 1
+        },
         "createdAt": "<epoch-ms>",
         "id": "session_<uuid:1>",
         "name": "New session",
@@ -31,6 +44,19 @@ expression: t.into_value()
   {
     "body": {
       "session": {
+        "binding": {
+          "execution": {
+            "generation": 1,
+            "modeId": "directory",
+            "nodeId": "test",
+            "workspaceId": "test:test"
+          },
+          "membership": {
+            "legacyWorkspaceId": "test:test",
+            "revision": 1
+          },
+          "version": 1
+        },
         "createdAt": "<epoch-ms>",
         "id": "session_<uuid:1>",
         "name": "First name",
@@ -84,6 +110,19 @@ expression: t.into_value()
   {
     "body": {
       "session": {
+        "binding": {
+          "execution": {
+            "generation": 1,
+            "modeId": "directory",
+            "nodeId": "test",
+            "workspaceId": "test:test"
+          },
+          "membership": {
+            "legacyWorkspaceId": "test:test",
+            "revision": 1
+          },
+          "version": 1
+        },
         "createdAt": "<epoch-ms>",
         "id": "session_<uuid:1>",
         "name": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
@@ -137,6 +176,19 @@ expression: t.into_value()
   {
     "body": {
       "session": {
+        "binding": {
+          "execution": {
+            "generation": 1,
+            "modeId": "directory",
+            "nodeId": "test",
+            "workspaceId": "test:test"
+          },
+          "membership": {
+            "legacyWorkspaceId": "test:test",
+            "revision": 1
+          },
+          "version": 1
+        },
         "createdAt": "<epoch-ms>",
         "id": "session_<uuid:1>",
         "name": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
@@ -162,6 +214,19 @@ expression: t.into_value()
   {
     "body": {
       "session": {
+        "binding": {
+          "execution": {
+            "generation": 1,
+            "modeId": "directory",
+            "nodeId": "test",
+            "workspaceId": "test:test"
+          },
+          "membership": {
+            "legacyWorkspaceId": "test:test",
+            "revision": 1
+          },
+          "version": 1
+        },
         "createdAt": "<epoch-ms>",
         "id": "session_<uuid:1>",
         "name": "Second name",
@@ -187,6 +252,19 @@ expression: t.into_value()
   {
     "body": {
       "session": {
+        "binding": {
+          "execution": {
+            "generation": 1,
+            "modeId": "directory",
+            "nodeId": "test",
+            "workspaceId": "test:test"
+          },
+          "membership": {
+            "legacyWorkspaceId": "test:test",
+            "revision": 1
+          },
+          "version": 1
+        },
         "createdAt": "<epoch-ms>",
         "id": "session_<uuid:1>",
         "name": "Second name",
@@ -225,6 +303,19 @@ expression: t.into_value()
   },
   {
     "observed": {
+      "binding": {
+        "execution": {
+          "generation": 1,
+          "modeId": "directory",
+          "nodeId": "test",
+          "workspaceId": "test:test"
+        },
+        "membership": {
+          "legacyWorkspaceId": "test:test",
+          "revision": 1
+        },
+        "version": 1
+      },
       "createdAt": "<epoch-ms>",
       "id": "session_<uuid:1>",
       "name": "Second name",

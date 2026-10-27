@@ -70,6 +70,7 @@ pub async fn verify(cluster: &Cluster, operations: &[Value]) -> Vec<String> {
     }
     assert_eq!(cluster.llm.requests().len(), operations.len());
     let mut commands = Vec::new();
+    let mut bindings = std::collections::HashMap::new();
     for operation in operations {
         let id = operation["id"].as_str().unwrap();
         let session = operation["session"].as_str().unwrap();
@@ -101,6 +102,20 @@ pub async fn verify(cluster: &Cluster, operations: &[Value]) -> Vec<String> {
             )
             .await;
         assert_eq!(history.status, 200, "{}", history.body);
+        let public = &history.body["session"];
+        let binding = &public["binding"];
+        assert_eq!(binding["version"], 1);
+        assert_eq!(binding["membership"]["revision"], 1);
+        assert_eq!(
+            binding["membership"]["legacyWorkspaceId"],
+            public["workspaceId"]
+        );
+        assert_eq!(binding["execution"]["generation"], 1);
+        assert_eq!(binding["execution"]["workspaceId"], public["workspaceId"]);
+        assert_eq!(binding["execution"]["nodeId"], public["nodeId"]);
+        assert_eq!(binding["execution"]["modeId"], "chat");
+        assert!(public.get("piSessionId").is_none());
+        bindings.insert(session.to_owned(), binding.clone());
         let expected = format!("First message {id}");
         assert_eq!(
             cluster
@@ -140,6 +155,12 @@ pub async fn verify(cluster: &Cluster, operations: &[Value]) -> Vec<String> {
         sessions.body["sessions"].as_array().unwrap().len(),
         operations.len()
     );
+    for session in sessions.body["sessions"].as_array().unwrap() {
+        assert_eq!(
+            Some(&session["binding"]),
+            bindings.get(session["id"].as_str().unwrap())
+        );
+    }
     let mut files = fs::read_dir(cluster.dir.path().join("node-state/uploads"))
         .unwrap()
         .map(|entry| fs::read(entry.unwrap().path()).unwrap())

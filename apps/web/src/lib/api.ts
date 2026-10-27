@@ -1,3 +1,4 @@
+import { conversationBinding } from './conversation-binding';
 import { tr } from './i18n.svelte';
 import {
   interleave,
@@ -67,7 +68,9 @@ const iso = (value: unknown) =>
   new Date(typeof value === 'number' ? value : Date.now()).toISOString();
 
 function sessionSummary(raw: any): SessionSummary {
+  const binding = conversationBinding(raw.binding, raw.workspaceId);
   return {
+    ...(binding ? { binding } : {}),
     id: raw.id,
     workspaceId: raw.workspaceId,
     name: raw.name,

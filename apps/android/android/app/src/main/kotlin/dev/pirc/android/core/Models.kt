@@ -18,7 +18,10 @@ data class Session(
     val writeLease: Boolean = false,
     /** What started it other than the user: a scheduled run or a delegated task. */
     val origin: SessionOrigin? = null,
+    /** Durable environment identity; independent of runner/control generations. */
+    val binding: ConversationBinding? = null,
 ) {
+    init { binding?.validate(workspaceId) }
     val pinned get() = pinnedAt != null
     val settled get() = settledAt != null
 

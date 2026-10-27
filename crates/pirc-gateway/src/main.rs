@@ -10,6 +10,7 @@ mod auth;
 mod backends;
 mod calendar;
 mod checkpoints;
+mod conversation_bindings;
 mod conversation_submissions;
 mod db;
 mod delegations;
