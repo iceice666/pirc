@@ -68,6 +68,7 @@ pub struct Services {
     pub inference: InferenceServer,
     pub runners: RunnerManager,
     pub(crate) pots: crate::pots::Pots,
+    pub(crate) incarnation: String,
     pub(crate) execution_drains: Arc<crate::execution_fences::Drains>,
     // panels
     pub terminals: Terminals,
@@ -296,6 +297,7 @@ impl Services {
             runners: RunnerManager::new(weak.clone()),
             pots: crate::pots::Pots::default(),
             execution_drains: Arc::default(),
+            incarnation: crate::util::uuid(),
             terminals: Terminals::new(weak.clone()),
             streams: Streams::new(weak.clone()),
             mirror: MemoryMirror::new(weak.clone()),

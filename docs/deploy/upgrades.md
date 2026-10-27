@@ -1,5 +1,36 @@
 # Upgrades
 
+## Unreleased local checkpoint: durable sandbox launch evidence
+
+Node schema **2013** records each runner launch before spawning it, keyed by
+session, workspace, runner epoch and Node process incarnation. Only a failed
+spawn establishes `not_started`; missing observation never establishes that a
+sandbox stopped. Existing sessions with earlier runner epochs receive an explicit
+`legacy_untracked` entry. Migration does not fence ordinary sessions or change
+conversation history, checkpoints, memory origins or attachment access.
+
+On native Linux, a captured identity includes boot ID, observer PID namespace,
+sandbox namespace, PID and process start time. Reconciliation runs only inside an
+accepted transition fence, with at most 64 identities per drain and four checks
+at once. Repeating a drain continues the saved work. A fresh pidfd must be validated
+against the original identity before signaling. Another boot/PID view, inaccessible
+identity, an untracked backend or a launch without captured identity stays
+unconfirmed. A wrapper exit or an empty live-runner map is not enough.
+
+Internal transition receipts expose counts in `sandboxProcesses` and continue to
+report `revocationConfirmed: false`, `targetInstalled: false`. This journal covers
+recorded runner launches, not terminals, approved host commands, browser effects
+or complete workspace revocation. The gap between spawning and durable identity
+capture still needs a guarded launch handshake. Linux runtime acceptance and
+macOS descendant containment also remain open. No workspace-switch UI is enabled.
+
+The journal retains minimal launch evidence across conversation deletion; it holds
+no conversation text, file content, model output or credentials. Do not remove
+rows to make a transition appear complete. Older Node binaries refuse schema
+2013; eventual rollback requires a consistent matching binary/state backup.
+Gateway schema 1025, protocol 15, client contract 2, package versions, dependency
+locks and Nix hashes are unchanged. This checkpoint stays local.
+
 ## Unreleased local checkpoint: transition admission fences
 
 Node schema **2012** adds immutable execution-fence identities and durable stop

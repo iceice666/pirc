@@ -8,7 +8,7 @@ use serde_json::json;
 #[tokio::test(flavor = "multi_thread")]
 async fn transition_cancels_source_inference_while_peer_finishes_and_context_survives() {
     let server = FakeGateway::bind().await;
-    let Some(node) = LoneNode::start_with(
+    let Some(mut node) = LoneNode::start_with(
         server.port(),
         NodeOptions {
             agent_core_only: true,
@@ -89,6 +89,16 @@ async fn transition_cancels_source_inference_while_peer_finishes_and_context_sur
         drain["data"]["body"]["transition"]["revocationConfirmed"],
         false
     );
+    let evidence = drain["data"]["body"]["transition"]["sandboxProcesses"].clone();
+    assert_eq!(evidence["launches"], 1, "{drain}");
+    assert_eq!(
+        evidence["unresolved"], 1,
+        "the fixture uses an untracked wrapper: {drain}"
+    );
+    assert_eq!(
+        evidence["terminated"], 0,
+        "wrapper exit is not kernel proof"
+    );
     let after = gw.ask("GET", &format!("{base}/snapshot"), None).await;
     assert_eq!(after["data"]["status"], 200, "{after}");
     assert!(
@@ -107,7 +117,7 @@ async fn transition_cancels_source_inference_while_peer_finishes_and_context_sur
         "{peer}"
     );
     assert_eq!(
-        std::fs::read_to_string(original).unwrap(),
+        std::fs::read_to_string(&original).unwrap(),
         "user's later edit\n"
     );
     assert!(
@@ -119,5 +129,49 @@ async fn transition_cancels_source_inference_while_peer_finishes_and_context_sur
     assert!(
         !gw.link.skipped.iter().any(|f| f["type"] == "model_start"),
         "No automatic inference retry after fencing"
+    );
+    node.restart(true);
+    drop(gw);
+    let mut gw = Gateway::new(server.accept().await);
+    gw.link.recv().await;
+    gw.link
+        .send(&registered(models("fake", "fake-model", "low"), json!({})))
+        .await;
+    let receipt = gw
+        .ask(
+            "GET",
+            &format!("{base}/execution-fences/move-with-inference"),
+            None,
+        )
+        .await;
+    assert_eq!(receipt["data"]["status"], 200, "{receipt}");
+    assert_eq!(
+        receipt["data"]["body"]["transition"]["sandboxProcesses"],
+        evidence
+    );
+    let retry = gw
+        .ask(
+            "POST",
+            &format!("{base}/execution-fences/move-with-inference/drain"),
+            Some(json!({})),
+        )
+        .await;
+    assert_eq!(
+        retry["data"]["body"]["transition"]["sandboxProcesses"],
+        evidence
+    );
+    assert_eq!(
+        retry["data"]["body"]["transition"]["revocationConfirmed"],
+        false
+    );
+    let after_restart = gw.ask("GET", &format!("{base}/snapshot"), None).await;
+    assert!(
+        after_restart["data"]["body"]["history"]
+            .to_string()
+            .contains("Keep my original question")
+    );
+    assert_eq!(
+        std::fs::read_to_string(&original).unwrap(),
+        "user's later edit\n"
     );
 }

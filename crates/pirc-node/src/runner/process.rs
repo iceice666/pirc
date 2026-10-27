@@ -79,6 +79,7 @@ pub struct Runner {
     pub(super) prepared: Prepared,
     persistence: Option<crate::persistence::Lease>,
     inference: Option<crate::inference::Lease>,
+    launch: Option<crate::process_journal::Launch>,
     stdin: mpsc::UnboundedSender<Outbound>,
     pub(super) inner: Mutex<Inner>,
     /// Held while one agent line is handled, and while a snapshot reads the
@@ -250,6 +251,7 @@ impl Runner {
             prepared,
             persistence: None,
             inference: None,
+            launch: None,
             stdin,
             inner: Mutex::default(),
             view: Mutex::default(),
@@ -492,8 +494,18 @@ impl Runner {
         for dialog in dialogs {
             self.withdraw(&dialog);
         }
+        let process_snapshot = self.prepared.process_snapshot();
         self.prepared.cleanup();
         if let Some(node) = self.node() {
+            if let Some(launch) = &self.launch
+                && let Err(error) =
+                    crate::process_journal::observe(&node.db.lock(), launch, &process_snapshot)
+            {
+                crate::log::error(&format!(
+                    "cannot save sandbox exit evidence: {}",
+                    error.message
+                ));
+            }
             if let Some(capture) = &node.checkpoints {
                 capture.seal(self.session_id.clone(), self.epoch, None, true);
             }
@@ -812,7 +824,7 @@ fn spawn_child(
     mode: &pirc_protocol::Mode,
     prepared: &Prepared,
     ledger: Option<&WorkspaceLedger>,
-) -> ApiResult<(tokio::process::Child, i64)> {
+) -> ApiResult<(tokio::process::Child, i64, crate::process_journal::Launch)> {
     let (epoch, trust) = {
         let db = node.db.lock();
         crate::execution_fences::require_open(&db, &session.id)?;
@@ -943,13 +955,24 @@ fn spawn_child(
     let db = node.db.lock();
     db.require_session_available(&session.id)?;
     crate::execution_fences::require_open(&db, &session.id)?;
-    let child = command.spawn().map_err(|error| {
-        ApiError::runner_unavailable(format!("Runner is not available: {error}"))
-    })?;
+    let launch =
+        crate::process_journal::reserve(&db, &session.id, &workspace.id, epoch, &node.incarnation)?;
+    let child = match command.spawn() {
+        Ok(child) => child,
+        Err(error) => {
+            // A durable reservation is required before spawn. Only an actual
+            // spawn error establishes that no process started in this attempt.
+            crate::process_journal::not_started(&db, &launch)?;
+            return Err(ApiError::runner_unavailable(format!(
+                "Runner is not available: {error}"
+            )));
+        }
+    };
+    drop(db);
     if let Some(pid) = child.id() {
         prepared.process_spawned(pid);
     }
-    Ok((child, epoch))
+    Ok((child, epoch, launch))
 }
 
 pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
@@ -977,7 +1000,7 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
     } else {
         None
     };
-    let (mut child, epoch) = match spawn_child(
+    let (mut child, epoch, launch) = match spawn_child(
         node,
         &session,
         &workspace,
@@ -1003,6 +1026,7 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
         pid,
         prepared,
         persistence,
+        launch: Some(launch),
         inference: node
             .inference
             .runner(&session.id, &workspace.id, epoch, &mode),
@@ -1012,6 +1036,7 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
         reaped: AtomicBool::new(false),
         exited,
     });
+    tokio::spawn(observe_process_scope(runner.clone()));
     if let Some(stdin) = child.stdin.take() {
         tokio::spawn(write_stdin(stdin, stdin_rx));
     }
@@ -1092,6 +1117,29 @@ pub(super) fn spawn(node: &Node, spawn: Spawn) -> ApiResult<Arc<Runner>> {
     let errors = stderr.map(|stderr| tokio::spawn(read_stderr(runner.clone(), stderr)));
     tokio::spawn(wait_exit(runner.clone(), child, reading, errors));
     Ok(runner)
+}
+
+async fn observe_process_scope(runner: Arc<Runner>) {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(6);
+    loop {
+        let snapshot = runner.prepared.process_snapshot();
+        if snapshot.state != crate::sandbox::processes::State::Observing
+            || tokio::time::Instant::now() >= deadline
+            || !runner.alive()
+        {
+            if let (Some(node), Some(launch)) = (runner.node(), &runner.launch)
+                && let Err(error) =
+                    crate::process_journal::observe(&node.db.lock(), launch, &snapshot)
+            {
+                crate::log::error(&format!(
+                    "cannot save sandbox launch evidence: {}",
+                    error.message
+                ));
+            }
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
 }
 
 async fn write_stdin(
@@ -1222,6 +1270,7 @@ mod memory_concurrency_tests {
             ),
             persistence: None,
             inference: None,
+            launch: None,
             stdin: mpsc::unbounded_channel().0,
             inner: Mutex::default(),
             view: Mutex::default(),

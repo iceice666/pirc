@@ -69,7 +69,7 @@ presets remain configuration work; App sign-in and Flutter Web stay deferred.
 The architecture documents can be published as a planning baseline; this is not
 approval to implement every unchecked stage.
 
-## Current implementation status (2026-10-27)
+## Current implementation status (2026-10-28)
 
 The published baseline is `303fa8f8`, including the user-authorized CI repairs.
 Its remote Check and Android workflows both passed. Local work adds Gateway
@@ -88,12 +88,12 @@ Release. The most recent pull/rebase had no upstream conflicts.
 | U1 — reliable first Send                       | Gateway/Node durable intents, original files, admission/Stop/delete fences, explicit rejected-message retries and Gateway nonce retirement; Web/private Android drafts and recovery controls are implemented | Live-client failure/local-write matrix, Android process/device and rollout/rollback gates                           |
 | U2 — conversation/project/environment bindings | Durable bindings/membership/policy histories, frozen memory origins and cleanup receipts; captured command intent with Gateway/Node rechecks; frozen saved-upload origins                                    | Live-resource provenance, effect-boundary fencing and acknowledged transitions                                      |
 | U3 — unified navigation/UI                     | Deferred by the user                                                                                                                                                                                         | Revisit after core contracts; current clients receive necessary functional controls only                            |
-| U4 — mount/workspace transitions               | Node admission fence, runner-scoped inference retirement, tracked supervisor drain and Linux pidfd scope primitive; native acceptance pending, transitions disabled                                          | Gateway coordinator, OS revocation proof, replacement policy/acknowledgement and project resources                  |
+| U4 — mount/workspace transitions               | Node admission fence, scoped inference retirement, Linux pidfd scope and durable launch journal/reconciliation; native acceptance pending, transitions disabled                                              | Gateway coordinator, OS revocation proof, replacement policy/acknowledgement and project resources                  |
 | U5 — canonical tasks and collaboration         | Existing pots/task/team/goal/todo foundations remain                                                                                                                                                         | Map common task/attempt identities, shared notes and structured waits; preserve other writers and memory provenance |
 | U6 — bounded proactive pots                    | Progress-only observation and explicit dispatch exist                                                                                                                                                        | Scoped content observation, finite budgets, quiet suggestions and synchronized notification/decision lifecycle      |
 
 **The new U1 flow is still gated by `canSubmit: false`.** Pushing its code does
-not enable it. Current formats are Gateway schema **1025**, Node schema **2012**,
+not enable it. Current formats are Gateway schema **1025**, Node schema **2013**,
 protocol **15**, client recovery contract **2**, and Web IndexedDB/native private
 envelope **3**. Existing ordinary session APIs remain available. Unaccepted
 Gateway attachment staging expires after **seven days**; accepted attachments and
@@ -124,6 +124,9 @@ revocation or install a new environment; no public switch is enabled. See the
 Runner-scoped inference capabilities now enforce the admission boundary and cancel
 only the affected session; late provider replies cannot re-enter its relay. See the
 [inference checkpoint](unified-conversations.md#u4-implementation-checkpoint-runner-scoped-inference-retirement-2026-10-28).
+Node schema 2013 adds durable launch reservations and bounded restart reconciliation
+of captured Linux identities. Old or missing process evidence remains unresolved;
+see the [launch journal checkpoint](unified-conversations.md#u4-implementation-checkpoint-durable-sandbox-launch-journal-2026-10-28).
 Resource grants, project moves and full effect fences remain open. U1 still needs device/deployment acceptance
 before activation. Detailed validation and the previously reproduced macOS snapshot
 limitation are recorded in the checkpoints; no full Linux/device acceptance is claimed.

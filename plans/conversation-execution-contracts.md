@@ -317,6 +317,10 @@ It blocks new admitted work without releasing the old binding after timeout or
 restart. Its receipts explicitly report that OS revocation and target installation
 are unconfirmed. The enforcement/alias/descriptor requirements below remain open;
 no public transition or complete revocation proof is supplied by this checkpoint.
+Node schema 2013 extends this with a [durable sandbox launch journal](unified-conversations.md#u4-implementation-checkpoint-durable-sandbox-launch-journal-2026-10-28)
+and bounded saved-identity reconciliation. Missing historical/capture evidence
+remains unresolved across restart. The spawn-to-capture crash gap, non-runner
+effects and target installation are still open; process counts do not grant access.
 
 - Resolve and validate path components, containment and aliases at the trusted
   boundary. String-prefix checks or one-time symlink canonicalization are not

@@ -83,7 +83,16 @@ async fn retires_detached_writers_without_touching_peer_or_later_user_edits() {
     state(&b, State::Running).await;
     exists(&root.join("a.ready")).await;
     exists(&root.join("b.ready")).await;
-    a.terminate_processes();
+    let saved = a
+        .process_snapshot()
+        .identity
+        .expect("durable kernel identity");
+    // A later Node incarnation has no original pidfd. Re-open solely from the
+    // frozen kernel identity; peer B and user files must still be untouched.
+    assert_eq!(
+        pirc_node::sandbox::linux::processes::retire_saved(&saved).await,
+        State::Terminated
+    );
     assert_eq!(
         a.wait_processes(Duration::from_secs(8)).await,
         State::Terminated
@@ -107,6 +116,18 @@ async fn retires_detached_writers_without_touching_peer_or_later_user_edits() {
         State::Running,
         "old teardown must not kill the peer"
     );
+    let mut changed_boot = saved.clone();
+    changed_boot.boot_id = "00000000-0000-0000-0000-000000000000".into();
+    assert_eq!(
+        pirc_node::sandbox::linux::processes::retire_saved(&changed_boot).await,
+        State::Unconfirmed
+    );
+    assert_eq!(
+        pirc_node::sandbox::linux::processes::retire_saved(&saved).await,
+        State::Terminated
+    );
+    assert_eq!(b.process_scope_state(), State::Running);
+
     b.terminate_processes();
     assert_eq!(
         b.wait_processes(Duration::from_secs(8)).await,

@@ -26,6 +26,7 @@ fn register(f: &Fixture) -> (Arc<Runner>, mpsc::UnboundedReceiver<Outbound>) {
         ),
         persistence: None,
         inference: None,
+        launch: None,
         stdin,
         inner: Mutex::default(),
         view: Mutex::default(),

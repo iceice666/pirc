@@ -7,8 +7,12 @@ struct FakeHandle {
     dead: AtomicBool,
     unavailable: AtomicBool,
     signals: AtomicUsize,
+    identity: Option<Identity>,
 }
 impl Handle for FakeHandle {
+    fn identity(&self) -> Option<Identity> {
+        self.identity.clone()
+    }
     fn exited(&self) -> io::Result<bool> {
         if self.unavailable.load(Ordering::SeqCst) {
             return Err(io::Error::other("unavailable"));
@@ -194,5 +198,35 @@ async fn final_cleanup_releases_observation_but_does_not_claim_uncaptured_exit()
     assert_eq!(scope.state(), State::Unconfirmed);
     assert!(scope.inner.lock().unwrap().reader.is_none());
     assert!(scope.inner.lock().unwrap().wrapper.is_none());
+    assert_eq!(kernel.namespace.signals.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn journal_snapshot_keeps_identity_after_exit_and_cleanup_releases_the_handle() {
+    let saved = Identity {
+        boot_id: "11111111-2222-3333-4444-555555555555".into(),
+        observer_namespace: 10,
+        namespace: 77,
+        pid: 22,
+        start_ticks: 100,
+    };
+    let (mut scope, _, mut writer) = fixture();
+    let kernel = Arc::new(FakeKernel {
+        namespace: Arc::new(FakeHandle {
+            identity: Some(saved.clone()),
+            ..Default::default()
+        }),
+        ..Default::default()
+    });
+    scope.kernel = kernel.clone();
+    writer.write_all(CHILD).unwrap();
+    scope.spawned(7);
+    assert_eq!(scope.snapshot().identity, Some(saved.clone()));
+    kernel.namespace.dead.store(true, Ordering::SeqCst);
+    scope.cleanup();
+    assert_eq!(scope.snapshot().state, State::Terminated);
+    assert_eq!(scope.snapshot().identity, Some(saved));
+    assert!(scope.inner.lock().unwrap().namespace.is_none());
+    assert!(scope.inner.lock().unwrap().reader.is_none());
     assert_eq!(kernel.namespace.signals.load(Ordering::SeqCst), 0);
 }

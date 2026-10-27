@@ -148,7 +148,11 @@ fn migration_does_not_invent_historical_transition_fences() {
         let db = Db::open(&path).unwrap();
         let db = db.lock();
         let (session, _, _) = setup(&db);
-        db.execute_batch(include_str!("remove_schema.sql")).unwrap();
+        db.execute_batch(concat!(
+            include_str!("../process_journal/remove_schema.sql"),
+            include_str!("remove_schema.sql")
+        ))
+        .unwrap();
         db.execute_batch("PRAGMA user_version=2011;").unwrap();
         session
     };

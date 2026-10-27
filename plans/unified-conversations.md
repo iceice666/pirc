@@ -19,7 +19,7 @@ their implementation stage begins; earlier library/pots work is reused.
 
 **U1 is implemented across Gateway, Node, Web and native Android, but is not
 accepted for activation. `canSubmit: false` remains in production.** Current
-formats: Gateway **1025**, Node **2012**, protocol **15**, client contract **2**,
+formats: Gateway **1025**, Node **2013**, protocol **15**, client contract **2**,
 Web IndexedDB **3**, Android private envelope **3**. Package/dependency versions
 and Nix hashes are unchanged. Existing session, memory-deletion and checkpoint
 ownership guarantees remain in effect.
@@ -41,7 +41,7 @@ counts below this point in the U1 section describe that prior U1 slice, not all
 newer U2 changes.
 
 U4 has begun with an [internal Node admission fence](#u4-implementation-checkpoint-node-transition-admission-fence-2026-10-28)
-and tracked supervisor drain, followed by [runner-scoped inference retirement](#u4-implementation-checkpoint-runner-scoped-inference-retirement-2026-10-28). Its receipts explicitly deny revocation/installation
+and tracked supervisor drain, followed by [runner-scoped inference retirement](#u4-implementation-checkpoint-runner-scoped-inference-retirement-2026-10-28). Linux process scopes now have a [durable launch journal and bounded restart reconciliation](#u4-implementation-checkpoint-durable-sandbox-launch-journal-2026-10-28). Its receipts explicitly deny revocation/installation
 completion. No public workspace switch or new resource grant is enabled; Gateway
 coordination, OS enforcement, replacement binding and Web/App controls remain.
 
@@ -3542,3 +3542,66 @@ native CI job with missing bubblewrap treated as failure. This local macOS run
 cannot execute it. The isolated Linux module cross-compile checks the actual source
 and tests with a seccomp mapping stub; it is not a full Linux Node build or a kernel
 runtime test. No user browser, emulator, device, live provider or Nix run is needed.
+
+## U4 implementation checkpoint: durable sandbox launch journal (2026-10-28)
+
+Node schema advances to **2013** after `a7363981`; Gateway **1025**, protocol
+**15**, client contract **2**, private recovery envelope **3**, package versions,
+dependency locks and Nix hashes are unchanged. No frontend files change.
+
+Every real runner spawn reserves durable evidence under the same Node admission
+lock as the final environment/fence check. The identity includes launch ID,
+session, workspace, epoch and a fresh Node incarnation. A failed spawn alone may
+be `not_started`. Late observers cannot overwrite a terminal result or replace a
+captured kernel identity, including after another epoch or session starts. The
+journal is retained after session deletion and contains only process metadata.
+Old epochs become `legacy_untracked` on migration; ordinary sessions remain usable.
+
+Captured native Linux evidence retains boot ID, observer PID namespace, namespace
+init PID/start time and sandbox namespace. Restart reconciliation runs only for
+an accepted transition fence. It pins a fresh pidfd and validates boot/view,
+start time, namespace and namespace-init role before signaling. A reused PID is
+not signaled; inaccessible/foreign-boot evidence remains unconfirmed. A kill
+request never substitutes for observed termination. Process snapshots retain the
+captured identity after handle cleanup so final exit evidence can be persisted.
+
+Each drain processes at most 64 identities with concurrency four, using a pending
+index and oldest-observation ordering. Retries continue later batches even after
+supervisor drain; an unresolved early batch cannot starve later launches. A
+missing identity is kept unresolved, not converted from an absent supervisor into
+success. Internal receipts include `sandboxProcesses` counts while both
+`revocationConfirmed` and `targetInstalled` remain false. No public transition
+coordinator or workspace switch is enabled.
+
+Remaining U4 requirements: guarded startup must close the spawn-to-durable-capture
+crash gap; actual Linux kernel acceptance, macOS containment, panel terminals,
+approved host commands, browser/other effects and aliases need full revocation
+proof. Target installation/acknowledgement, Gateway coordination and necessary
+Web/Android controls still follow. U1 activation, remaining U2 live resources,
+U5 task/collaboration and U6 proactive pots are not complete. UI redesign stays
+deferred. Missing historical proof must not be used to approve a switch.
+
+Local validation: **489 Node library tests passed, 3 existing tests ignored**.
+The nine added unit cases cover durable reservations, explicit legacy uncertainty,
+parallel observer/epoch isolation, terminal monotonicity, bounded history paging,
+non-starvation of later launches, snapshot identity lifetime and kernel identity
+parsing/validation. Existing migration fixtures reconstruct the old schema before
+upgrade; ordinary session availability and deletion provenance remain unchanged.
+
+**16 required process cases** passed: checkpoints (3), conversation admission (2),
+creation (2), execution-fence restart (1), inference retirement (1), memory (1),
+node-link side channels (5) and project deletion (1). The inference case now hard
+restarts a real Node after draining: unresolved evidence persists, retries never
+claim revocation, original context/later user edits survive and the peer's work
+completes. Its synthetic sandbox is deliberately untracked; it cannot prove
+native Linux process retirement.
+
+Strict Node/conformance all-target Clippy, Rust formatting, changed-document
+Prettier and diff checks passed. Linux-only process module/test cross-target
+Clippy also passed using an isolated toolchain and a seccomp mapping stub. That
+is not a full Linux Node build or native kernel runtime pass. The Linux acceptance
+test now exercises reopening a saved identity, boot mismatch refusal, peer
+isolation and preserved later user edits; it remains unexecuted on this macOS
+host. No Flutter changes, emulator/device, live provider, user browser or local Nix
+verification were needed. Work remains local; the isolated build, compiler copy
+and test artifacts are removed after validation, preserving APKs and shared caches.

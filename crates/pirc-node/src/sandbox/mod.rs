@@ -283,6 +283,16 @@ impl Prepared {
             .map_or(processes::State::Unsupported, |p| p.state())
     }
 
+    pub fn process_snapshot(&self) -> processes::Snapshot {
+        self.processes.as_ref().map_or(
+            processes::Snapshot {
+                state: processes::State::Unsupported,
+                identity: None,
+            },
+            |p| p.snapshot(),
+        )
+    }
+
     pub async fn wait_processes(&self, timeout: std::time::Duration) -> processes::State {
         let deadline = tokio::time::Instant::now() + timeout;
         loop {

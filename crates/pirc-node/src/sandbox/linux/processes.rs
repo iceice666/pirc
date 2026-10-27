@@ -1,7 +1,8 @@
 //! A trusted bubblewrap status pipe identifies the sandbox's PID namespace init.
 //! A pidfd pins its identity: no numeric PID is signaled after capture. Missing,
 //! late or inconsistent evidence stays unconfirmed, even when the wrapper exits.
-//! No durable/restart or host-process revocation claim is made by this module.
+//! The runner journals captured identities separately. Host-process revocation
+//! and complete environment transitions remain outside this scope.
 
 use std::io::{self, PipeReader, Read};
 use std::sync::{Arc, Mutex};
@@ -11,7 +12,7 @@ use command_fds::{CommandFdExt as _, FdMapping};
 use serde::Deserialize;
 use tokio::task::AbortHandle;
 
-use crate::sandbox::processes::{ProcessScope, State};
+use crate::sandbox::processes::{Identity, ProcessScope, Snapshot, State};
 
 mod kernel;
 #[cfg(test)]
@@ -23,6 +24,9 @@ const MAX_RECORD: usize = 8192;
 trait Handle: Send + Sync {
     fn exited(&self) -> io::Result<bool>;
     fn kill(&self) -> io::Result<()>;
+    fn identity(&self) -> Option<Identity> {
+        None
+    }
 }
 trait Kernel: Send + Sync {
     fn wrapper(&self, pid: u32) -> io::Result<Arc<dyn Handle>>;
@@ -47,6 +51,7 @@ struct Inner {
     bytes: Vec<u8>,
     wrapper: Option<(u32, Arc<dyn Handle>)>,
     namespace: Option<Arc<dyn Handle>>,
+    identity: Option<Identity>,
     state: State,
     retiring: bool,
     spawned: bool,
@@ -58,6 +63,7 @@ impl Default for Inner {
             bytes: Vec::new(),
             wrapper: None,
             namespace: None,
+            identity: None,
             state: State::Observing,
             retiring: false,
             spawned: false,
@@ -144,6 +150,7 @@ fn refresh(inner: &mut Inner, kernel: &dyn Kernel) {
                     .and_then(|(pid, wrapper)| kernel.capture(*pid, wrapper.as_ref(), &child));
                 match captured {
                     Ok(handle) => {
+                        inner.identity = handle.identity();
                         inner.namespace = Some(handle);
                         inner.state = State::Running;
                         if inner.retiring {
@@ -233,6 +240,14 @@ impl ProcessScope for Scope {
         refresh(&mut inner, self.kernel.as_ref());
         inner.state
     }
+    fn snapshot(&self) -> Snapshot {
+        let mut inner = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        refresh(&mut inner, self.kernel.as_ref());
+        Snapshot {
+            state: inner.state,
+            identity: inner.identity.clone(),
+        }
+    }
     fn cleanup(&self) {
         {
             let mut inner = self.inner.lock().unwrap_or_else(|p| p.into_inner());
@@ -266,5 +281,30 @@ impl Drop for Scope {
         {
             observer.abort();
         }
+    }
+}
+
+/// Only called by trusted transition reconciliation, never by agent-supplied PIDs.
+#[doc(hidden)]
+pub async fn retire_saved(identity: &Identity) -> State {
+    let handle = match kernel::reopen(identity) {
+        Ok(Some(handle)) => handle,
+        Ok(None) => return State::Terminated,
+        Err(_) => return State::Unconfirmed,
+    };
+    if handle.kill().is_err() && !handle.exited().unwrap_or(false) {
+        return State::Unconfirmed;
+    }
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(2);
+    loop {
+        match handle.exited() {
+            Ok(true) => return State::Terminated,
+            Err(_) => return State::Unconfirmed,
+            Ok(false) => {}
+        }
+        if tokio::time::Instant::now() >= deadline {
+            return State::Unconfirmed;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }

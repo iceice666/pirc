@@ -63,6 +63,7 @@ pub(crate) struct Receipt {
     pub updated_at: i64,
     pub revocation_confirmed: bool,
     pub target_installed: bool,
+    pub sandbox_processes: crate::process_journal::Summary,
 }
 fn valid_id(s: &str) -> bool {
     !s.is_empty()
@@ -119,6 +120,7 @@ fn receipt(db: &Connection, owner: &str, session: &str, op: &str) -> ApiResult<O
             updated_at,
             revocation_confirmed: false,
             target_installed: false,
+            sandbox_processes: crate::process_journal::summary(db, session)?,
         })
     })
     .transpose()
@@ -196,7 +198,7 @@ pub(crate) async fn drain(node: &Node, owner: &str, session: &str, op: &str) -> 
         } else {
             let saved = receipt(&node.db.lock(), owner, session, op)?
                 .ok_or_else(|| ApiError::not_found("Transition not found"))?;
-            if matches!(saved.state.as_str(), "deleted" | "supervisor_drained") {
+            if saved.state == "deleted" {
                 return Ok(saved);
             }
             let node = node.clone();
@@ -215,6 +217,7 @@ pub(crate) async fn drain(node: &Node, owner: &str, session: &str, op: &str) -> 
                 }
                 let stopped = async {
                     node.runners.stop_session(&session).await?;
+                    crate::process_journal::retire_saved(&node, &session).await?;
                     node.terminals.dispose_session(&session).await;
                     node.browser.close_session(&session).await;
                     Ok::<(), ApiError>(())

@@ -65,6 +65,7 @@ pub mod panels;
 pub mod persistence;
 pub mod pots;
 pub mod private_dir;
+mod process_journal;
 pub mod project_files;
 pub mod recap;
 pub mod repo;
