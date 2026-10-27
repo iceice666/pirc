@@ -37,5 +37,34 @@ class NativeFirstSendTest {
             catch (error: ApiException) { assertEquals("account_changed", error.code) }
         } finally { server.close(); parent.deleteRecursively() }
     }
+    @Test fun openEditorReturnsAccountBoundBytesWithoutNetworkingOrCreatingAnotherDraft() = runTest {
+        val parent = Files.createTempDirectory("pirc-native-first-").toFile()
+        val server = MockWebServer()
+        server.start()
+        try {
+            val api = PircApi(Pairing(server.url("/").toString().trimEnd('/'), "fixture-token"))
+            val access = NativeFirstSend(File(parent, "drafts"), { expected -> requirePairingStamp(expected, "pair-a"); api }, { expected -> requirePairingStamp(expected, "pair-a") })
+            server.enqueue(MockResponse.Builder().body("""{"version":1,"clientContract":2,"requiredClientContract":2,"ownerUser":"alice","canFenceAccount":true,"canSubmit":false}""").build())
+            access.capabilities("pair-a")
+            val saved = obj(access.drafts("pair-a", "alice", mapOf("action" to "put", "operationId" to "op", "record" to mapOf(
+                "workspaceId" to "node:repo", "message" to "Original", "files" to listOf(mapOf("id" to "f1", "name" to "note.txt", "mimeType" to "text/plain", "byteSize" to 5)),
+            ), "files" to listOf(mapOf("id" to "f1", "bytes" to "hello".toByteArray())))))
+            val snapshot = obj(access.drafts("pair-a", "alice", mapOf("action" to "open", "operationId" to "op")))
+            assertEquals(saved, snapshot["record"])
+            val files = snapshot["files"] as List<*>
+            assertArrayEquals("hello".toByteArray(), obj(files.single())["bytes"] as ByteArray)
+            access.drafts("pair-a", "alice", mapOf("action" to "delete", "operationId" to "op", "expectedRevision" to saved["revision"]))
+            access.drafts("pair-a", "alice", mapOf("action" to "recover", "operationId" to "copy", "sourceOperationId" to "op", "record" to saved, "files" to files))
+            assertNull(access.drafts("pair-a", "alice", mapOf("action" to "open", "operationId" to "op")))
+            val restored = obj(access.drafts("pair-a", "alice", mapOf("action" to "open", "operationId" to "copy")))
+            assertArrayEquals("hello".toByteArray(), obj((restored["files"] as List<*>).single())["bytes"] as ByteArray)
+            assertEquals(1, (access.drafts("pair-a", "alice", mapOf("action" to "list")) as List<*>).size)
+            for ((stamp, owner) in listOf("pair-b" to "alice", "pair-a" to "bob")) {
+                try { access.drafts(stamp, owner, mapOf("action" to "open", "operationId" to "copy")); fail("must isolate accounts") }
+                catch (error: ApiException) { assertEquals("account_changed", error.code) }
+            }
+            assertEquals(1, server.requestCount)
+        } finally { server.close(); parent.deleteRecursively() }
+    }
     private fun obj(value: Any?): Map<*, *> = value as Map<*, *>
 }

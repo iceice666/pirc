@@ -96,6 +96,18 @@ internal class FirstSendDraftStore(private val root: File) {
     fun get(scope: String, id: String): JsonObject? = locked(scope) { account ->
         operation(account, id, false)?.let { dir -> visible(read(dir, scope, id))?.let { checked(it, scope, id) } }
     }
+    /** Capture one editor revision and its bytes before another writer can clean the source.
+     * Bytes live only with the open editor; no new persistent draft or retention deadline. */
+    fun openEditor(scope: String, id: String): Pair<JsonObject, Map<String, ByteArray>>? = locked(scope) { account ->
+        val dir = operation(account, id, false) ?: return@locked null
+        val row = visible(read(dir, scope, id)) ?: return@locked null
+        val bytes = if (row["frozen"]?.jsonPrimitive?.booleanOrNull == true) emptyMap() else
+            row["files"]?.jsonArray.orEmpty().associate { raw ->
+                val fileId = raw.jsonObject.getValue("id").jsonPrimitive.content
+                fileId to attachmentAt(dir, row, fileId).second
+            }
+        row to bytes
+    }
     private fun atomicWrite(directory: File, name: String, bytes: ByteArray) {
         val target = File(directory, name)
         check(!Files.isSymbolicLink(target.toPath()))
@@ -147,6 +159,7 @@ internal class FirstSendDraftStore(private val root: File) {
             if (content != null) {
                 require(content.size in 1..MAX_ATTACHMENT)
                 hash = digest(content); size = content.size.toLong()
+                require(file["sha256"] == null || file["sha256"] == JsonPrimitive(hash)) { "Attachment bytes do not match the saved digest" }
                 require(file["byteSize"]?.jsonPrimitive?.longOrNull == size)
                 val blob = File(dir, "blob-$hash")
                 if (!blob.exists()) atomicWrite(dir, blob.name, content)

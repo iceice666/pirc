@@ -22,6 +22,7 @@ class FirstPort {
   Completer<void>? entered, release;
   final records = <String, Json>{};
   final bytes = <String, Uint8List>{};
+  final submittedBytes = <String, Uint8List>{};
   String key(Json args) => '${args['ownerUser']}:${args['operationId']}';
   Json clone(Json row) => obj(jsonDecode(jsonEncode(row)));
   Future<dynamic> call(String method, Json args) async {
@@ -56,6 +57,21 @@ class FirstPort {
               .toList();
         case 'get':
           return row == null ? null : clone(row);
+        case 'open':
+          if (row == null) return null;
+          return {
+            'record': clone(row),
+            'files': [
+              if (row['frozen'] != true)
+                for (final f in rows(row['files']))
+                  {
+                    'id': f['id'],
+                    'bytes':
+                        bytes['$k:${f['id']}'] ??
+                        (throw StateError('missing original bytes')),
+                  },
+            ],
+          };
         case 'put':
           if (full) {
             throw PlatformException(code: 'STORAGE', message: 'disk full');
@@ -133,6 +149,7 @@ class FirstPort {
             throw StateError('stale delete');
           }
           records.remove(k);
+          bytes.removeWhere((key, _) => key.startsWith('$k:'));
           return null;
       }
     }
@@ -153,6 +170,9 @@ class FirstPort {
     final k = key(args), row = records[k];
     if (method == 'firstSendSubmit') {
       if (row == null) throw StateError('missing draft');
+      submittedBytes.addAll(
+        Map.fromEntries(bytes.entries.where((e) => e.key.startsWith('$k:'))),
+      );
       row['frozen'] = true;
       row['prepareAttempted'] = true;
       row['revision']++;
@@ -266,7 +286,8 @@ void main() {
       expect(c.sessionId, startsWith('public-'));
       expect(c.draft, '');
       expect(c.firstSend.current, isNull);
-      expect(p.bytes.values.single, [65, 66]);
+      expect(p.submittedBytes.values.single, [65, 66]);
+      expect(p.bytes, isEmpty);
       await dispose(c, g);
     },
   );
@@ -700,6 +721,105 @@ void main() {
         unorderedEquals(['Peer copy', 'Local two']),
       );
       expect(primary['message'], 'Peer main');
+      expect(g.calls.where((call) => call.$1 == 'firstSendSubmit'), isEmpty);
+      await dispose(c, g);
+    },
+  );
+  test(
+    'a reopened editor keeps original bytes after peer cleanup before the first conflict save',
+    () async {
+      final (c, g, p) = await setup();
+      await c.create('w');
+      c.editDraft('Original');
+      await c.attach();
+      await c.flushDraft();
+      final original = c.firstSend.current!;
+      final op = original['operationId'];
+      await c.create('w');
+      await c.firstSend.resume(original);
+      // The other window completes or discards the source and removes its bytes.
+      p.records.remove('alice:$op');
+      p.bytes.removeWhere((key, _) => key.startsWith('alice:$op:'));
+      c.editDraft('Unsent after cleanup');
+      await c.flushDraft();
+      final copy = c.firstSend.saved.singleWhere(
+        (r) => r['recoveredFrom'] == op,
+      );
+      expect(copy['message'], 'Unsent after cleanup');
+      expect(copy['frozen'], false);
+      expect(copy['preparation'], isNull);
+      expect(p.records['alice:$op'], isNull);
+      final file = rows(copy['files']).single;
+      expect(p.bytes['alice:${copy['operationId']}:${file['id']}'], [65, 66]);
+      expect(g.calls.where((call) => call.$1 == 'firstSendSubmit'), isEmpty);
+      await c.create('w');
+      await c.firstSend.resume(copy);
+      expect(c.draft, 'Unsent after cleanup');
+      expect(c.attachments.single['draftBytes'], [65, 66]);
+      await dispose(c, g);
+    },
+  );
+  test(
+    'opening a draft with missing bytes preserves the current editor and refuses an incomplete copy',
+    () async {
+      final (c, g, p) = await setup();
+      await c.create('w');
+      c.editDraft('Broken saved draft');
+      await c.attach();
+      await c.flushDraft();
+      final broken = c.firstSend.current!;
+      await c.create('w');
+      c.editDraft('Keep current input');
+      await c.attach();
+      await c.flushDraft();
+      final current = c.firstSend.current!['operationId'];
+      p.bytes.removeWhere(
+        (key, _) => key.startsWith('alice:${broken['operationId']}:'),
+      );
+      await expectLater(c.firstSend.resume(broken), throwsStateError);
+      expect(c.firstSend.current!['operationId'], current);
+      expect(c.draft, 'Keep current input');
+      expect(c.attachments.single['draftBytes'], [65, 66]);
+      expect(
+        p.records.values.where((r) => r['recoveredFrom'] != null),
+        isEmpty,
+      );
+      expect(g.calls.where((call) => call.$1 == 'firstSendSubmit'), isEmpty);
+      await dispose(c, g);
+    },
+  );
+  test(
+    'a delayed editor snapshot cannot replace newer navigation or its input',
+    () async {
+      final (c, g, p) = await setup();
+      await c.create('w');
+      c.editDraft('Old saved draft');
+      await c.attach();
+      await c.flushDraft();
+      final original = c.firstSend.current!;
+      await c.create('w');
+      final opened = Completer<void>(), release = Completer<void>();
+      g.handler = (method, args) async {
+        final result = await p.call(method, args);
+        if (method == 'firstSendDrafts' &&
+            args['action'] == 'open' &&
+            args['operationId'] == original['operationId']) {
+          opened.complete();
+          await release.future;
+        }
+        return result;
+      };
+      final older = c.firstSend.resume(original);
+      await opened.future;
+      await c.create('w');
+      c.editDraft('New selection');
+      await c.flushDraft();
+      final newer = c.firstSend.current!['operationId'];
+      release.complete();
+      await older;
+      expect(c.firstSend.current!['operationId'], newer);
+      expect(c.draft, 'New selection');
+      expect(c.attachments, isEmpty);
       expect(g.calls.where((call) => call.$1 == 'firstSendSubmit'), isEmpty);
       await dispose(c, g);
     },

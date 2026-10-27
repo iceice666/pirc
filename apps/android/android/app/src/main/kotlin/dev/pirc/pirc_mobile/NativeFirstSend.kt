@@ -57,6 +57,11 @@ internal class NativeFirstSend(
             when (args["action"]) {
                 "list" -> store.list(captured.scope).map { it.wire() }
                 "get" -> store.get(captured.scope, requireNotNull(id)).wire()
+                "open" -> store.openEditor(captured.scope, requireNotNull(id))?.let { (row, bytes) ->
+                    mapOf("record" to row.wire(), "files" to bytes.map { (fileId, content) ->
+                        mapOf("id" to fileId, "bytes" to content)
+                    })
+                }
                 "put" -> {
                     val supplied = args["record"].json() as? JsonObject ?: error("Missing draft record")
                     require(!supplied.flag("frozen") && !supplied.flag("prepareAttempted") && supplied.preparation() == null) {

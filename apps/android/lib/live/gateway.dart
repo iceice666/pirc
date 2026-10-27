@@ -861,6 +861,18 @@ class LiveController extends ChangeNotifier {
         creationAccount != _accountRevision) {
       return;
     }
+    var originalFiles = <String, Uint8List>{};
+    if (recovered != null) {
+      final snapshot = await firstSend.openEditor(recovered);
+      if (_disposed ||
+          creationIntent != _navigationIntent ||
+          creationAccount != _accountRevision ||
+          !firstSend.owns(snapshot.$1)) {
+        return;
+      }
+      recovered = snapshot.$1;
+      originalFiles = snapshot.$2;
+    }
     discardDraftSession();
     final navigation = ++_navigationIntent, account = _accountRevision;
     await gateway.call('unwatch');
@@ -903,7 +915,7 @@ class LiveController extends ChangeNotifier {
     sessionNavigationRevision++;
     sessionVisible = true;
     if (recovered != null) {
-      firstSend.restore(recovered);
+      firstSend.restore(recovered, originalFiles);
     } else if (firstSend.enabled) {
       // Reserve before awaiting I/O: failed persistence must not expose legacy Send.
       await firstSend.reserve();

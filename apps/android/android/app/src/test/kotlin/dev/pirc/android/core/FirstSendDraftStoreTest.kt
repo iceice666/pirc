@@ -155,4 +155,60 @@ class FirstSendDraftStoreTest {
         } finally {executor.shutdownNow()}
     }
 
+    @Test fun editorSnapshotSurvivesCleanupBeforeAnyRecoveryCopyExists() = fixture { parent, store, scope ->
+        val original = store.put(scope, "alice", "op", null, value(files = JsonArray(listOf(attachment()))), mapOf("f1" to "hello".toByteArray()))
+        val (snapshot, bytes) = store.openEditor(scope, "op")!!
+        assertEquals(original, snapshot)
+        store.remove(scope, "op", 1)
+        assertFalse(parent.walkTopDown().any { it.name.startsWith("blob-") })
+        val copy = store.recover(scope, "alice", "op", "copy", null, JsonObject(snapshot + ("message" to JsonPrimitive("Unsent"))), bytes)
+        assertEquals("Unsent", copy["message"]?.jsonPrimitive?.content)
+        assertNull(store.get(scope, "op"))
+        assertArrayEquals("hello".toByteArray(), FirstSendDraftStore(File(parent, "drafts")).attachment(scope, "copy", "f1").second)
+        assertNull(copy["preparation"])
+        assertEquals(false, copy["prepareAttempted"]?.jsonPrimitive?.boolean)
+    }
+    @Test fun openingAnEditorAndCleaningItsSourceCannotReturnPartialOrMixedBytes() = fixture { parent, store, scope ->
+        val executor = Executors.newFixedThreadPool(2)
+        try {
+            repeat(12) { n ->
+                val id = "op$n"
+                val original = store.put(scope, "alice", id, null, value(files = JsonArray(listOf(attachment()))), mapOf("f1" to "hello".toByteArray()))
+                val start = java.util.concurrent.CountDownLatch(1)
+                val reader = executor.submit(Callable { start.await(); FirstSendDraftStore(File(parent, "drafts")).openEditor(scope, id) })
+                val cleaner = executor.submit(Callable { start.await(); store.remove(scope, id, 1) })
+                start.countDown()
+                val captured = reader.get(5, java.util.concurrent.TimeUnit.SECONDS)
+                cleaner.get(5, java.util.concurrent.TimeUnit.SECONDS)
+                if (captured != null) {
+                    assertEquals(original, captured.first)
+                    assertArrayEquals("hello".toByteArray(), captured.second.getValue("f1"))
+                    store.recover(scope, "alice", id, "copy$n", null, captured.first, captured.second)
+                    assertArrayEquals("hello".toByteArray(), store.attachment(scope, "copy$n", "f1").second)
+                }
+                assertNull(store.openEditor(scope, id))
+            }
+        } finally { executor.shutdownNow() }
+    }
+    @Test fun editorSnapshotsRefuseMissingCorruptAndCrossAccountFilesAndSkipFrozenInput() = fixture { parent, store, scope ->
+        val row = store.put(scope, "alice", "op", null, value(files = JsonArray(listOf(attachment()))), mapOf("f1" to "hello".toByteArray()))
+        assertNull(store.openEditor(FirstSendDraftStore.scope("https://example.test", "bob"), "op"))
+        val blob = parent.walkTopDown().single { it.name.startsWith("blob-") }
+        blob.writeText("wrong")
+        refused { store.openEditor(scope, "op") }
+        blob.delete()
+        refused { store.openEditor(scope, "op") }
+        assertEquals(row, store.get(scope, "op"))
+        store.update(scope, "alice", "op") { JsonObject(it + ("frozen" to JsonPrimitive(true))) }
+        assertTrue(store.openEditor(scope, "op")!!.second.isEmpty())
+        assertEquals(1, store.list(scope).size)
+    }
+    @Test fun recoveryRejectsChangedBytesUnderAnOriginalAttachmentDigest() = fixture { _, store, scope ->
+        val row = store.put(scope, "alice", "op", null, value(files = JsonArray(listOf(attachment()))), mapOf("f1" to "hello".toByteArray()))
+        store.remove(scope, "op", 1)
+        refused { store.recover(scope, "alice", "op", "copy", null, row, mapOf("f1" to "wrong".toByteArray())) }
+        assertNull(store.get(scope, "copy"))
+        assertNull(store.get(scope, "op"))
+    }
+
 }

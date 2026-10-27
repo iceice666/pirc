@@ -489,3 +489,29 @@ it.each(['pots', 'calendar', 'schedules', 'workspace', 'conversation'])(
     store.fail = false;
   },
 );
+
+it('reopening retains original Blobs when a peer removes the source before any conflict copy saves', async () => {
+  await app.createSession('node:repo');
+  app.setDraft('Original');
+  await app.uploadFiles([
+    new NodeFile(['original bytes'], 'note.txt', { type: 'text/plain' }) as File,
+  ]);
+  await app.createSession('node:repo');
+  const original = app.firstRecoveries.find((row) => row.message === 'Original')!;
+  await app.resumeFirst(original);
+  await store.update(original.scope, original.operationId, () => undefined);
+  app.setDraft('Unsent after cleanup');
+  await app.continueFirst();
+  const copy = (await store.list(original.scope)).find(
+    (row) => row.recoveredFrom === original.operationId,
+  )!;
+  expect(copy.message).toBe('Unsent after cleanup');
+  expect(copy.frozen).toBe(false);
+  expect(copy.preparation).toBeUndefined();
+  expect(await copy.files[0]!.blob!.text()).toBe('original bytes');
+  expect(await store.get(original.scope, original.operationId)).toBeUndefined();
+  expect(remote.calls).toEqual([]);
+  await app.resumeFirst(copy);
+  expect(app.draft).toBe('Unsent after cleanup');
+  expect(remote.calls).toEqual([]);
+});

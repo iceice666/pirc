@@ -487,6 +487,43 @@ class FirstSendState {
         : _bound(obj(result), row['pairingStamp'] as String);
   }
 
+  /// Read one revision with its verified bytes while native storage holds its lock.
+  /// Keep bytes in this editor, just like newly picked files, until save/navigation.
+  Future<(Json, Map<String, Uint8List>)> openEditor(Json row) async {
+    final result = obj(
+      await c.gateway.call('firstSendDrafts', {
+        ..._args(row),
+        'action': 'open',
+      }),
+    );
+    final stored = obj(result['record']);
+    if (stored['scope'] != row['scope'] ||
+        stored['ownerUser'] != row['ownerUser'] ||
+        stored['operationId'] != row['operationId'] ||
+        stored['revision'] is! int) {
+      throw StateError(tr('Local draft save failed. Your message is kept.'));
+    }
+    final bytes = <String, Uint8List>{};
+    for (final file in rows(result['files'])) {
+      final id = file['id'], content = file['bytes'];
+      if (id is! String || content is! Uint8List || bytes.containsKey(id)) {
+        throw StateError(
+          tr('The original attachment is missing from local storage.'),
+        );
+      }
+      bytes[id] = content.asUnmodifiableView();
+    }
+    final files = rows(stored['files']);
+    if (stored['frozen'] != true &&
+        (bytes.length != files.length ||
+            files.any((f) => bytes[f['id']]?.length != f['byteSize']))) {
+      throw StateError(
+        tr('The original attachment is missing from local storage.'),
+      );
+    }
+    return (_bound(stored, row['pairingStamp'] as String), bytes);
+  }
+
   Future<void> _forget(Json row, int epoch) async {
     await c.gateway.call('firstSendDrafts', {
       ..._args(row),
@@ -796,9 +833,10 @@ class FirstSendState {
     c.changed();
   }
 
-  void restore(Json row) {
+  void restore(Json row, Map<String, Uint8List> originalFiles) {
     _editor = _FirstSendEditor();
     current = row;
+    _revisions[_key(row)] = row['revision'] as int;
     c.draft = '${row['message'] ?? ''}';
     c.state = {
       ...c.state,
@@ -815,6 +853,8 @@ class FirstSendState {
             'size': f['byteSize'],
             'sha256': f['sha256'],
             'nativeStored': true,
+            if (originalFiles[f['id']] != null)
+              'draftBytes': originalFiles[f['id']],
             'kind': '${f['mimeType']}'.startsWith('image/') ? 'image' : 'file',
           },
         )

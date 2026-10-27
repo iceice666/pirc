@@ -72,14 +72,16 @@ approval to implement every unchecked stage.
 ## Current implementation status (2026-10-27)
 
 The published baseline is `303fa8f8`, including the user-authorized CI repairs.
-Its remote Check and Android workflows both passed. Local work adds Gateway retry-nonce retirement (`9b5c776b`) and its Web/native
-recovery action; full live-client acceptance and activation remain open.
+Its remote Check and Android workflows both passed. Local work adds Gateway
+retry-nonce retirement (`9b5c776b`), Web/native retry recovery (`c41e4e8a`) and
+open-editor attachment protection. Full live-client acceptance and activation
+remain open.
 Subsequent work defaults to local commits, with no deployment, version change or
 Release. The most recent pull/rebase had no upstream conflicts.
 
 | Area                                           | Current state                                                                                                                                                                                                | Remaining delivery                                                                                                   |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
-| U1 — reliable first Send                       | Gateway/Node durable intents, original files, admission/Stop/delete fences, explicit rejected-message retries and Gateway nonce retirement; Web/private Android drafts and recovery controls are implemented | Conflict-copy/file cleanup races, full live-client failure matrix, Android process/device and rollout/rollback gates |
+| U1 — reliable first Send                       | Gateway/Node durable intents, original files, admission/Stop/delete fences, explicit rejected-message retries and Gateway nonce retirement; Web/private Android drafts and recovery controls are implemented | Live-client failure/local-write matrix, Android process/device and rollout/rollback gates |
 | U2 — conversation/project/environment bindings | Existing workspace, session and mode identities are retained                                                                                                                                                 | Inventory and implement separate membership/binding versions, migrate existing sessions and preserve links/authority |
 | U3 — unified navigation/UI                     | Deferred by the user                                                                                                                                                                                         | Revisit after core contracts; current clients receive necessary functional controls only                             |
 | U4 — mount/workspace transitions               | Design accepted; actual unified transitions not implemented                                                                                                                                                  | Idle then running-worker revocation, Node acknowledgement, offline/interrupted reconciliation and project resources  |
@@ -95,6 +97,13 @@ private drafts are not subject to that deadline. See [upgrade and rollback
 notes](../docs/deploy/upgrades.md).
 
 Latest completed U1 slices and their recorded evidence:
+
+- [Editor attachment snapshots](unified-conversations.md#u1-implementation-checkpoint-editor-attachments-survive-source-cleanup-2026-10-27):
+  reopening an editable Android draft atomically reads its verified files before
+  another window can clean the source; unsent recovery preserves those bytes.
+  Failed opening keeps the current editor, and delayed opening cannot replace new
+  navigation. 51 Web, 62 native JVM and 26 focused Flutter cases pass; two dedicated
+  browser pages preserve separate copies/Blob bytes after cleanup and restart.
 
 - [Gateway nonce retirement](unified-conversations.md#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27):
   schema 1020 atomically fences an unreserved client nonce against delayed POSTs,
@@ -126,9 +135,9 @@ Latest completed U1 slices and their recorded evidence:
 
 Next, close U1's remaining gates in this order:
 
-1. Finish remaining local journal repair and conflict-copy versus source-file
-   cleanup races. The pre-POST nonce recovery now exists in both clients; unknown
-   commands still remain query-only and original files must remain available.
+1. Verify post-response local-journal write failures and reopening in the actual
+   client/backend matrix. Interrupted retry recovery and open-editor source-cleanup
+   protection have focused proofs; uncertain commands remain query-only.
 2. Exercise actual Web and native clients against Gateway/Node/Agent through
    lost replies, both-host/client restarts, competing devices, revoked permissions,
    Stop/delete and mixed-version cases. Verify Android MethodChannel/private files

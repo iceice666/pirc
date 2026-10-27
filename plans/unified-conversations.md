@@ -4,7 +4,7 @@
 
 Status: adopted architecture baseline with an authorized staged implementation
 covering first Send, environment bindings, resource transitions, canonical tasks/
-collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local Gateway/client retry-recovery
+collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-recovery and editor-snapshot
 checkpoints are summarized below (2026-10-27). UI redesign/navigation reorganization remains deferred;
 Web/Android changes are limited to necessary functional integration. Use only
 focused simple Flutter checks when Flutter changes.
@@ -44,9 +44,11 @@ Delivered U1 behavior:
   including version negotiation, independent Gateway access and minimal bilingual
   status/actions. New navigation and visual redesign are deferred.
 
-Latest client slice: **76 Web, 57 native JVM and 23 focused Flutter tests** pass
-for [interrupted retry recovery](#u1-implementation-checkpoint-web-and-native-interrupted-retry-recovery-2026-10-27),
-with clean targeted checks and a dedicated two-page/browser-restart storage proof.
+Latest client slice: **51 Web, 62 native JVM and 26 focused Flutter tests** pass
+for [editor attachment snapshots](#u1-implementation-checkpoint-editor-attachments-survive-source-cleanup-2026-10-27),
+with clean targeted analysis and a dedicated two-page/browser-restart storage proof.
+The preceding [interrupted retry recovery](#u1-implementation-checkpoint-web-and-native-interrupted-retry-recovery-2026-10-27)
+slice retains its 76 Web, 57 native JVM and 23 Flutter case evidence.
 The backend [nonce retirement](#u1-implementation-checkpoint-gateway-retirement-of-an-unreserved-retry-2026-10-27)
 slice passed 329 Gateway tests, strict Clippy and five process cases. Earlier
 checkpoints retain Node, migration, source-file and mixed-version evidence.
@@ -64,10 +66,10 @@ live-client/backend acceptance; published CI remains tied to `303fa8f8`.
 
 Immediate U1 queue:
 
-1. Finish the unsent-editor copy versus source-file cleanup race and remaining
-   local-journal repair cases. Matching permanent retry retirement now resolves a
-   pre-POST crash in Web/native recovery; missing receipts, generic errors and
-   uncertain reserved commands still cannot authorize a new attempt.
+1. Exercise post-response local-journal write failures and reopening through the
+   actual client/backend matrix. Unreceived retry retirement and open-editor
+   attachment snapshots now have focused proofs; missing receipts, generic errors
+   and uncertain reserved commands still cannot authorize a new attempt.
 2. Connect real Web/native clients to Gateway/Node/Agent for interrupted sends,
    lost replies, restart, device competition, revocation, Stop/delete and mixed
    versions. Native JVM and mocked MethodChannel tests do not replace Android
@@ -2308,6 +2310,68 @@ U4 mount revocation, U5 tasks/collaboration and U6 bounded proactive pots remain
 open. Existing memory and checkpoint contracts are untouched. No APK, push,
 deployment, Release or local Nix validation. Clean only this run's isolated
 Flutter/JVM/browser artifacts; preserve SDKs, shared caches, existing APKs and data.
+
+## U1 implementation checkpoint: editor attachments survive source cleanup (2026-10-27)
+
+Fixed locally on top of `c41e4e8a`. Gateway 1020, Node 2009, protocol 15,
+client contract 2, Web IndexedDB 3 and Android private envelope 3 are unchanged.
+**`canSubmit: false` remains; this does not clear live-client/device acceptance.**
+
+The reproduced failure was an Android draft reopened from native storage: its
+editor held only attachment metadata. If another window completed/discarded the
+source and removed its bytes before conflict recovery, the unsent editor could
+not save an independent copy. The new regression fails on the old implementation
+with `missing original bytes`.
+
+- Native `firstSendDrafts/open` captures the record and every editable attachment
+  under the existing account/file lock, verifying each size/digest. Cleanup either
+  precedes the read (no snapshot) or follows a complete read. Missing/corrupt bytes
+  refuse opening, before the current editor/navigation is cleared. No partial
+  draft is published, source revision changed, HTTP request made, grant acquired
+  or message sent. Pairing/account checks surround the operation as before.
+- Flutter keeps the snapshot's bytes with the selected editor, like newly picked
+  files; list/get/pending frozen records stay metadata-only. The snapshot does not
+  create a persistent duplicate or new retention policy. Existing 16-file/8 MiB
+  per-file limits remain; selected-editor memory use includes these bytes. Saving
+  normally avoids resupplying stored bytes; conflict recovery can supply them even
+  after the source's metadata and files are deleted. The independent private copy
+  must be reviewed and explicitly sent. Its bytes survive later reopening.
+- Native writes reject bytes that disagree with an already supplied digest. The
+  stale original operation cannot be resurrected, and peer edits to an existing
+  recovery copy still cause a separate copy rather than overwrite. Delayed opening
+  cannot replace a newer navigation/account selection or its input.
+- Web already holds Blob references independently of the source record. Added a
+  production-controller regression; no Web runtime behavior was changed. Source
+  deletion cannot invalidate that editor's unsent attachment reference.
+
+Validation: **51 Web cases** in `first-send.test.ts` and
+`first-send-app.svelte.test.ts`; **62 native JVM cases** in the five FirstSend
+store/API/receipt/native-flow test classes (Kotlin compile with `-Werror`);
+**26 focused Flutter cases** in `first_send_test.dart` and
+`first_send_recovery_test.dart`, plus clean targeted Dart analysis. Native proofs
+include actual competing file locks, cleanup before any copy, reopening the saved
+copy, corrupt/missing files, mismatched bytes, owner/pairing isolation, frozen
+metadata-only reads and no HTTP beyond initial capability authentication. The
+Flutter test port now actually removes local bytes on source deletion; submitted
+bytes are checked separately. It also covers failed-open input preservation and
+late-open/new-navigation competition.
+
+A separate dedicated Headless Shell runs production `FirstSend` and IndexedDB in
+two pages with no transport available. Peer source cleanup and peer editing of the
+first copy preserve both independent drafts and exact Blob content after browser
+restart. Its fresh run-owned profile never uses or closes everyday Chrome.
+Native JVM proofs use actual core/submission sources and unchanged extracted pure
+bridge helpers, not Android OS/Keystore or a live MethodChannel. Flutter uses a fake
+port; the browser proof does not connect to actual Gateway/Node/Agent.
+
+Remaining: actual clients against Gateway/Node/Agent for the interruption,
+post-response local-write/reopening, permission, Stop/delete and mixed-version
+matrix; Android process death/private-files/device (including large attachment
+memory pressure) and rollout/rollback gates. A killed editor before its local
+write commits is not claimed durable by an in-memory snapshot. U2/U4/U5/U6 remain
+open. Memory provenance and checkpoint restore guarantees are unchanged. No APK,
+emulator, deployment, Release, push or local Nix check. Remove only this run's
+isolated Flutter/JVM/browser output; preserve shared caches, SDKs, APKs and data.
 
 ## Design stages and later implementation gates
 
