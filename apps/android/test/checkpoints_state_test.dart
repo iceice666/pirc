@@ -18,6 +18,7 @@ class _RecordingController extends LiveController {
     String id, {
     bool reveal = true,
     bool keepComposer = false,
+    bool skipFirst = false,
   }) async {
     openedSessions.add(id);
   }
