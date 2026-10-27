@@ -9,8 +9,9 @@ Schema **1023** captures new global-memory version/proposal write-time origins.
 Schema **1024** consumes them in project deletion and records cleanup completion.
 Schema **1025** records immutable command admission environments and checks the
 Web/Android caller's captured binding before accepting new ordinary commands.
-Resource provenance, full effect fences and supported environment transitions
-remain to implement. No mount, move, grant, process restart or U1 activation is enabled.
+Node schema **2010** now persists those command origins and rechecks Gateway
+authority after local queue/startup waits. Resource provenance, full effect fences
+and supported environment transitions remain to implement. No mount, move, grant, process restart or U1 activation is enabled.
 
 ## Identity mapping and current migration
 
@@ -105,8 +106,8 @@ from schema 1021. No new UI or Flutter bridge operation is claimed in this slice
 
 **Boundary:** configured policy versions still are not installed/acknowledged
 sandbox versions. Project files and mutable external rules/mounts are not yet
-snapshotted. No general expected-version command precondition or
-old-client authority fence is installed. U4 must provide real Node revocation and
+snapshotted. Later checkpoints below add ordinary-command version preconditions and Node
+rechecks. They are not installed-policy acknowledgements. U4 must provide real Node revocation and
 acknowledgement before a project/environment transition can be exposed.
 
 ## Memory write-time source snapshots (schema 1023)
@@ -196,7 +197,8 @@ Stop deliberately does not require an up-to-date visible binding, still requires
 current control/ownership, and uses the current routing captured by Gateway.
 Stop duplicates remain read-only. A deleting conversation cannot admit new commands.
 
-**Boundary:** this is a Gateway admission precondition. Node payloads, protocol 15,
+**Original checkpoint boundary (extended by the Node checkpoint below):** this
+is a Gateway admission precondition. Node payloads, protocol 15,
 runner queues, approvals, background tasks, tools, already-open descriptors and
 sandbox effects do not yet carry/enforce the binding generation. In particular,
 this does not fence a policy change after admission but before Node execution.
@@ -214,13 +216,71 @@ existing MockWebServer dependency instead of JDK-only HttpServer, so they compil
 under Android Gradle as well as standalone JVM checks. OS/device/Keystore and live
 MethodChannel acceptance, full workspace tests and local Nix are not claimed.
 
+## Node command authority checkpoint (2026-10-28)
+
+Gateway schema stays **1025**; Node advances to **2010**. For a new versioned
+ordinary command, Gateway probes the exact Node connection using a read-only
+capability request, then rechecks ownership/control/binding before dispatch.
+Unsupported or replaced Nodes are rejected without sending the command. The
+forwarded `commandEnvironment` is Gateway's captured binding, not a client-selected
+Node destination. Reconnect does not transfer the probe to another connection.
+
+Node records that origin atomically with its command receipt. Historical commands
+stay unattributed; duplicate requests never backfill or replace their original
+binding. Origins cannot be updated and are deleted with their command. Migration
+and restart preserve this rule; metadata failure rolls back the new reservation.
+
+After waiting for the local command gate and again after runner startup, Node asks
+Gateway's authenticated `command.authority` operation to validate the recorded
+command, session ownership/availability, environment and current device control.
+Gateway accepts only pending `dispatched`/`outcome_unknown` receipts with matching
+origins; this read-only check never redispatches them. Node also rechecks its own
+lease after that reply, so a concurrent local takeover cannot use an older answer.
+Branch changes recheck after idle/shutdown waits before mutating the session file.
+An unknown/unavailable/malformed authority response rejects dispatch. A stale
+binding has its specific rejection; Web/Flutter explain upgrade/unavailable cases
+in English and Traditional Chinese, retain input, and do not auto-retry.
+
+**Compatibility and limits:** Stop bypasses the probe and origin checks while
+retaining existing ownership/control checks. Old clients at an unchanged generation
+still use the legacy path; first-send/internal schedule/pots paths without this
+sidecar retain their own existing admission rules. No policy is inferred for them.
+New version-aware clients require a Node supporting this capability; upgrade Node
+before using the matching clients. A Gateway transport timeout still leaves an
+unknown receipt to query, never permission to replay the action.
+
+These are point-in-time checks, not a lease spanning the later effect. They do not
+fence an authority change after the last reply, queued Agent work, running tools,
+approvals, existing descriptors or a branch restart after the disk mutation. They
+do not install/revoke sandbox access, change runner epoch or prove Node policy
+acknowledgement. `enforcement: not_tracked`, `canSubmit: false`, protocol **15** and
+client contract **2** remain. Workspace transitions and new grants remain disabled.
+
+Validation: **453 Node tests passed, 3 intentionally ignored**; **386 Gateway
+tests**; **10 process integration cases** covering real Web/paired-device routes,
+a policy change held between Gateway and Node, restart/receipt reconciliation,
+legacy first-send compatibility, memory, project deletion, Node link and native
+checkpoints. **54 focused Web tests**, Svelte checks, **7 focused Flutter tests**,
+changed-file Flutter analysis and strict Node/Gateway/conformance Clippy pass.
+Node migration/rollback, immutable origins, capability/connection replacement,
+local control takeover during the authority reply and unavailable authority are
+covered. Android native bridge code was unchanged and its JVM suite was not rerun.
+
+One unrestricted-parallel local run hit the existing macOS terminal-size test
+(`SIZE-30x100` instead of `SIZE-40x120`). Terminal code/tests are unchanged; that
+case passed alone, and all 453 Node cases passed with four test threads. This is
+recorded as an intermittent local PTY test observation, not a fixed terminal bug.
+No full-workspace, Linux sandbox, Nix, physical Android/Keystore/live MethodChannel
+or deployment acceptance is claimed. Temporary outputs are cleaned after this
+slice; retained APKs, shared caches and user data are preserved.
+
 ## Remaining U2 implementation and gates
 
 1. Persist immutable resource provenance and add pending/acknowledged transitions,
    not just configuration. The global-memory deletion integration is complete locally;
    source provenance for uploads and other resources remains separate work.
-2. Extend the delivered ordinary-command Gateway admission check to Node dispatch,
-   approvals, task queues and actual effect boundaries. Record acknowledged installed
+2. Extend the delivered Gateway/Node ordinary-command checks to approvals, Agent
+   queues, internal deliveries and actual effect boundaries. Record acknowledged installed
    policy, not just configured revisions. Runner epoch/control stay independent.
 3. Implement joining/moving/departure only with U4 revocation of actual project
    resources, retaining original conversation context and protecting other writers.

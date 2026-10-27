@@ -2555,5 +2555,7 @@
   "node_connection_changed": "The Node reconnected. Check the saved result before continuing.",
   "first_send_unsupported": "This Node does not support reliable first Send. Upgrade it before continuing.",
   "The conversation environment changed; refresh it before starting this action": "The conversation environment changed; refresh it before starting this action",
-  "Refresh or update this client before starting work in a changed conversation environment": "Refresh or update this client before starting work in a changed conversation environment"
+  "Refresh or update this client before starting work in a changed conversation environment": "Refresh or update this client before starting work in a changed conversation environment",
+  "Upgrade this Node before sending versioned conversation commands": "Upgrade this Node before sending versioned conversation commands",
+  "The command's current authority could not be confirmed; it was not sent to the agent": "The command's current authority could not be confirmed; it was not sent to the agent"
 }

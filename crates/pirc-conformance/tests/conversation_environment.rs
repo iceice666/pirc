@@ -173,3 +173,88 @@ async fn browser_and_paired_device_keep_intent_across_policy_changes() {
         "settings, rejections and receipt queries never infer"
     );
 }
+
+#[path = "conversation_environment_support/gate.rs"]
+mod gate;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn policy_change_after_gateway_admission_prevents_node_dispatch_and_survives_restart() {
+    let Some(mut cluster) = Cluster::start_with(GatewayOptions {
+        without_node: true,
+        ..Default::default()
+    })
+    .await
+    else {
+        return;
+    };
+    let mut gate = gate::Gate::start(cluster.port).await;
+    cluster
+        .connect_node_via(
+            gate.port,
+            pirc_conformance::NodeOptions {
+                chat_node: true,
+                agent_core_only: true,
+                ..Default::default()
+            },
+        )
+        .await;
+    let api = cluster.api();
+    let headers = browser_headers();
+    let created = api
+        .send(
+            "POST",
+            "/api/sessions",
+            &headers,
+            Some(json!({"workspaceId":CHATS_WORKSPACE_ID})),
+        )
+        .await;
+    assert_eq!(created.status, 201, "{}", created.body);
+    let id = created.body["session"]["id"].as_str().unwrap();
+    let base = format!("/api/sessions/{id}");
+    let acquired = api
+        .send(
+            "POST",
+            &format!("{base}/control/acquire"),
+            &headers,
+            Some(json!({"clientId":"web"})),
+        )
+        .await;
+    let request = json!({"commandId":"held-old-environment","clientId":"web","generation":acquired.body["lease"]["generation"],"expectedBinding":created.body["session"]["binding"],"payload":{"type":"prompt","message":"must never reach the model"}});
+    let path = format!("{base}/commands");
+    let send = api.send("POST", &path, &headers, Some(request.clone()));
+    tokio::pin!(send);
+    tokio::select! {result=&mut send=>panic!("command should be held: {}",result.body),()=gate.held()=>{}}
+    let changed = api
+        .send(
+            "PATCH",
+            &format!("/api/workspaces/{CHATS_WORKSPACE_ID}/capabilities"),
+            &headers,
+            Some(json!({"capabilities":{"web_search":false}})),
+        )
+        .await;
+    assert_eq!(changed.status, 200, "{}", changed.body);
+    gate.release();
+    let rejected = send.await;
+    assert_eq!(rejected.status, 409, "{}", rejected.body);
+    assert_eq!(rejected.body["error"]["code"], "stale_environment");
+    let receipt_path = format!("{base}/commands/held-old-environment");
+    let receipt = api.send("GET", &receipt_path, &headers, None).await;
+    assert_eq!(
+        receipt.body["command"]["status"], "rejected",
+        "{}",
+        receipt.body
+    );
+    assert!(cluster.llm.requests().is_empty());
+    // Node's rejected command origin is durable; a Gateway receipt query is never a re-send.
+    cluster.restart_node(true).await;
+    let receipt = cluster
+        .api()
+        .send("GET", &receipt_path, &headers, None)
+        .await;
+    assert_eq!(
+        receipt.body["command"]["status"], "rejected",
+        "{}",
+        receipt.body
+    );
+    assert!(cluster.llm.requests().is_empty());
+}

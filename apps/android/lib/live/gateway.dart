@@ -1985,6 +1985,16 @@ class LiveController extends ChangeNotifier {
               'Refresh or update this client before starting work in a changed conversation environment',
             );
           }
+          if (code == 'command_environment_unsupported') {
+            return tr(
+              "Upgrade this Node before sending versioned conversation commands",
+            );
+          }
+          if (code == 'command_authority_unavailable') {
+            return tr(
+              "The command's current authority could not be confirmed; it was not sent to the agent",
+            );
+          }
           return '狀態已改變，請重新載入後再操作。';
         case 'NETWORK':
           return '連線或裝置操作失敗，請確認連線後重試。';

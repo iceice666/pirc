@@ -506,6 +506,12 @@ export const api = {
             return tr(
               'Refresh or update this client before starting work in a changed conversation environment',
             );
+          if (body?.error?.code === 'command_environment_unsupported')
+            return tr('Upgrade this Node before sending versioned conversation commands');
+          if (body?.error?.code === 'command_authority_unavailable')
+            return tr(
+              "The command's current authority could not be confirmed; it was not sent to the agent",
+            );
           return body?.error?.message ?? tr('Request failed ({0})', [status]);
         },
       },

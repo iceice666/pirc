@@ -479,6 +479,10 @@ impl RunnerManager {
                 user,
             )?;
         }
+        if !matches!(payload, CommandPayload::Stop) {
+            crate::command_environment::require_current(&node, session_id, command_id, lease)
+                .await?;
+        }
         let runner = if matches!(payload, CommandPayload::Stop) {
             self.get(session_id)
                 .filter(|runner| runner.alive())
@@ -487,9 +491,13 @@ impl RunnerManager {
             self.ensure(session_id).await?
         };
         node.db.lock().require_session_available(session_id)?;
+        if !matches!(payload, CommandPayload::Stop) {
+            crate::command_environment::require_current(&node, session_id, command_id, lease)
+                .await?;
+        }
         let runner = match payload {
             CommandPayload::EditMessage { entry_id, message } => self
-                .change_branch(&node, runner, entry_id, Some(message), lease)
+                .change_branch(&node, runner, entry_id, Some(message), lease, command_id)
                 .await
                 .inspect_err(|error| {
                     let _ = node.db.lock().update_command(
@@ -500,7 +508,7 @@ impl RunnerManager {
                     );
                 })?,
             CommandPayload::SwitchBranch { entry_id } => self
-                .change_branch(&node, runner, entry_id, None, lease)
+                .change_branch(&node, runner, entry_id, None, lease, command_id)
                 .await
                 .inspect_err(|error| {
                     let _ = node.db.lock().update_command(
@@ -719,6 +727,7 @@ impl RunnerManager {
         entry_id: &str,
         message: Option<&str>,
         lease: (&str, i64),
+        command_id: &str,
     ) -> ApiResult<Arc<Runner>> {
         let session_id = runner.session_id.clone();
         let busy = || {
@@ -780,6 +789,7 @@ impl RunnerManager {
                 "The chat process has not stopped yet; retry branch change",
             ));
         }
+        crate::command_environment::require_current(node, &session_id, command_id, lease).await?;
         let dir = std::path::Path::new(&session.private_session_path);
         {
             let db = node.db.lock();

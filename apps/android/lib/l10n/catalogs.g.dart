@@ -3392,6 +3392,8 @@ const englishMessages = <String, String>{
   "first_send_unsupported": "This Node does not support reliable first Send. Upgrade it before continuing.",
   "The conversation environment changed; refresh it before starting this action": "The conversation environment changed; refresh it before starting this action",
   "Refresh or update this client before starting work in a changed conversation environment": "Refresh or update this client before starting work in a changed conversation environment",
+  "Upgrade this Node before sending versioned conversation commands": "Upgrade this Node before sending versioned conversation commands",
+  "The command's current authority could not be confirmed; it was not sent to the agent": "The command's current authority could not be confirmed; it was not sent to the agent",
 };
 const traditionalChineseMessages = <String, String>{
   "無法確認最新狀態，請重試": "無法確認最新狀態，請重試",
@@ -6267,4 +6269,6 @@ const traditionalChineseMessages = <String, String>{
   "first_send_unsupported": "此 Node 不支援可靠的首次送出流程。請先更新 Node 再繼續。",
   "The conversation environment changed; refresh it before starting this action": "對話的執行環境已變更，請重新載入後再執行此操作。",
   "Refresh or update this client before starting work in a changed conversation environment": "對話的執行環境已變更，請重新載入或更新用戶端後再開始工作。",
+  "Upgrade this Node before sending versioned conversation commands": "請先升級此 Node，再傳送帶有執行環境版本的對話操作。",
+  "The command's current authority could not be confirmed; it was not sent to the agent": "無法確認這項操作目前的權限，因此尚未傳送給 Agent。請重新載入後再操作。",
 };

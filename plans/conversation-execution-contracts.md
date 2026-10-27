@@ -16,7 +16,8 @@ for delivered code, evidence and open acceptance. The
 [U2 compatibility binding baseline](conversation-binding-migration.md) now persists
 relationship versions, explicit project membership and configured policy snapshots.
 Ordinary Web/Android commands also carry captured versions checked at Gateway
-admission (schema 1025). This does not fence changes after admission or enforce
+admission (schema 1025), with Node queue/startup rechecks (schema 2010). These
+point-in-time checks do not fence all later effects or enforce
 Node queues, approvals or tool effects. Its environment read model explicitly
 reports enforcement as not tracked; it does
 not implement authority-changing transitions.

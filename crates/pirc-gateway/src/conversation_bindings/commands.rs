@@ -79,5 +79,94 @@ pub fn receive(
     })
 }
 
+/// A Node rechecks after its local command queue/startup waits. This is a
+/// read-only, point-in-time authority check, not an installed sandbox policy.
+pub fn authorize(
+    conn: &Connection,
+    session: &Session,
+    user: &str,
+    command_id: &str,
+    expected: &Binding,
+    client_id: &str,
+    generation: i64,
+) -> ApiResult<Value> {
+    atomic(conn, |tx| {
+        let current = tx.claim_session(&session.id, user, false)?;
+        let command = tx.get_command(command_id)?;
+        if command.session_id != current.id {
+            return Err(ApiError::not_found("Command not found"));
+        }
+        tx.validate_lease(&current.id, client_id, generation)?;
+        tx.validate_lease_user(&current.id, user)?;
+        if current.binding != *expected {
+            return Err(changed(&current.binding));
+        }
+        let origin: Option<String> = tx
+            .query_row(
+                "SELECT binding_json FROM command_environments WHERE command_id=?",
+                [command_id],
+                |r| r.get(0),
+            )
+            .optional()?;
+        let origin: Binding = serde_json::from_str(&origin.ok_or_else(|| {
+            ApiError::new(
+                409,
+                "environment_required",
+                "Command has no recorded environment",
+            )
+        })?)
+        .map_err(|_| ApiError::internal())?;
+        if origin != *expected
+            || !matches!(command.status.as_str(), "dispatched" | "outcome_unknown")
+        {
+            return Err(ApiError::new(
+                409,
+                "command_not_dispatchable",
+                "This command is no longer pending dispatch",
+            ));
+        }
+        Ok(json!({"commandId":command_id,"binding":origin}))
+    })
+}
+
+/// An additive, connection-scoped probe: an older Node must not silently ignore
+/// the new command envelope. No command is sent by this probe.
+pub(crate) async fn supported(
+    app: &crate::app::AppState,
+    node: &str,
+    user: &str,
+) -> ApiResult<crate::nodes::NodeConnection> {
+    let connection = app.nodes.connection(node)?;
+    let remote = app
+        .nodes
+        .request_on(
+            node,
+            connection,
+            pirc_protocol::NodeHttpRequest {
+                method: pirc_protocol::HttpMethod::Get,
+                url: "/api/command-environments/capabilities".into(),
+                user: user.into(),
+                payload: None,
+                body_base64: None,
+                content_type: None,
+            },
+        )
+        .await?;
+    if remote.status != 200
+        || remote
+            .body
+            .as_ref()
+            .is_none_or(|body| body["version"] != 1 || body["rechecksCommandEnvironment"] != true)
+    {
+        return Err(ApiError::new(
+            409,
+            "command_environment_unsupported",
+            "Upgrade this Node before sending versioned conversation commands",
+        ));
+    }
+    app.nodes.require_connection(node, connection)?;
+    Ok(connection)
+}
+
 #[cfg(test)]
 mod tests;

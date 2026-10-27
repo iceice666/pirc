@@ -1,5 +1,32 @@
 # Upgrades
 
+## Unreleased local checkpoint: Node command authority rechecks
+
+Node schema **2010** adds immutable command-origin metadata. Gateway stays **1025**.
+Migrations do not assign current environments to historical commands. Updated
+Web/Android commands require the new Node capability; Gateway checks it on the
+same connection used for dispatch and revalidates control/environment afterwards.
+Upgrade Node before using the matching clients. Older Nodes produce a clear
+upgrade-required rejection; clients retain their input rather than retrying.
+
+Node consults Gateway after its local queue/startup waits and before branch-file
+mutation, checking the saved origin and current control. Missing authority or a
+changed environment rejects the command without sending that RPC. Rejected
+receipts and their origins survive restart. Stop keeps the existing control checks
+without requiring this round trip. Legacy commands at unchanged generation 1 and
+internal deliveries retain their existing admission rules.
+
+This extends the Gateway-only checkpoint below; it is still **not full revocation**.
+There is no atomic lease over future Agent effects, sandbox installation acknowledgement,
+or fencing of queued tools/approvals. `enforcement: not_tracked` and production
+`canSubmit: false` remain. No mount/workspace switching or new grant is enabled.
+
+Older Node binaries refuse schema 2010. Back up consistent state and retain the
+matching binary/state pair before eventual deployment; do not edit schema versions
+or drop metadata to downgrade. Protocol 15, client contract 2, package versions,
+dependency locks and Nix hashes are unchanged. This is local-only work, with Android
+OS/device and deployment acceptance still outstanding.
+
 ## Unreleased local checkpoint: captured command environments
 
 Gateway schema **1025** stores an immutable environment binding with newly admitted
@@ -15,7 +42,7 @@ boundary: deploy matching Web/Android clients before changing such environments.
 An updated client must refresh then initiate the action again; no automatic intent
 upgrade or resend. Stop remains available under current ownership and control.
 
-This is **Gateway admission only**: Node queues/approvals/tools and running sandbox
+At this earlier checkpoint this was **Gateway admission only** (extended above): Node queues/approvals/tools and running sandbox
 resources are not yet fenced by these versions, including a change between admission
 and Node execution. Environment reads still report `enforcement: not_tracked`.
 No workspace switching, new grants or first-send activation is exposed.

@@ -50,6 +50,7 @@ pub mod browser;
 pub mod chat;
 pub mod checkpoints;
 pub mod cli;
+pub mod command_environment;
 pub mod error;
 pub mod events;
 pub mod inference;

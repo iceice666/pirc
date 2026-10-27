@@ -408,3 +408,24 @@ it('stops the settings sequence on a stale environment without retrying the prom
   await expect(api.command('session', input)).rejects.toThrow('environment changed');
   expect(fetch).toHaveBeenCalledTimes(1);
 });
+
+for (const [code, message] of [
+  [
+    'command_environment_unsupported',
+    'Upgrade this Node before sending versioned conversation commands',
+  ],
+  [
+    'command_authority_unavailable',
+    "The command's current authority could not be confirmed; it was not sent to the agent",
+  ],
+]) {
+  it(`explains ${code} without retrying or continuing the prompt sequence`, async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: { code, message: 'fallback' } }), { status: 409 }),
+    );
+    vi.stubGlobal('fetch', fetch);
+    await expect(api.command('session', input)).rejects.toThrow(message);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+}

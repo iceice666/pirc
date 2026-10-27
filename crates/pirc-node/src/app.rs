@@ -132,6 +132,10 @@ pub fn routes(config: &NodeConfig) -> Vec<Route> {
             "/api/sessions/:id/commands/:commandId",
             crate::session_creation::admission::command_status,
         ),
+        get(
+            "/api/command-environments/capabilities",
+            crate::command_environment::capabilities,
+        ),
         post("/api/sessions/:id/commands", command),
         get("/api/sessions/:id/control", control),
         post("/api/sessions/:id/control/acquire", acquire),
@@ -1415,6 +1419,16 @@ async fn command(node: Node, request: Request) -> ApiResult<Response> {
         tx.validate_lease(&session.id, &client_id, generation)?;
         let (row, duplicate) =
             tx.receive_command(&command_id, &session.id, &payload_hash(&stored), &stored)?;
+        crate::command_environment::record(
+            &tx,
+            &command_id,
+            if matches!(payload, CommandPayload::Stop) {
+                None
+            } else {
+                map.get("commandEnvironment")
+            },
+            duplicate,
+        )?;
         let initial_stop = !duplicate
             && matches!(payload, CommandPayload::Stop)
             && crate::session_creation::admission::request_stop(&tx, &session.id, &request.user)?;

@@ -15,11 +15,11 @@ local-commit default. This does not enable the new flow, deploy it, change versi
 or create a Release. Undecided numerical settings still need confirmation when
 their implementation stage begins; earlier library/pots work is reused.
 
-## Current progress and next delivery (2026-10-27)
+## Current progress and next delivery (2026-10-28)
 
 **U1 is implemented across Gateway, Node, Web and native Android, but is not
 accepted for activation. `canSubmit: false` remains in production.** Current
-formats: Gateway **1025**, Node **2009**, protocol **15**, client contract **2**,
+formats: Gateway **1025**, Node **2010**, protocol **15**, client contract **2**,
 Web IndexedDB **3**, Android private envelope **3**. Package/dependency versions
 and Nix hashes are unchanged. Existing session, memory-deletion and checkpoint
 ownership guarantees remain in effect.
@@ -27,12 +27,14 @@ ownership guarantees remain in effect.
 **U2 has started:** [the binding migration baseline](conversation-binding-migration.md)
 now persists legacy binding revisions, explicit project membership and configured
 policy history, frozen global-memory origins/project cleanup receipts, and ordinary
-Web/Android command admission environments (updated 2026-10-28). This preserves
+Web/Android command admission environments with Node authority rechecks after
+queue/startup waits (updated 2026-10-28). This preserves
 current associations. Resource provenance and authority-fenced transitions remain
 pending; Node enforcement is explicitly not tracked. U2 development does not enable U1 or clear its device/rollout gates.
 
-Latest U2 delivery: [captured command admission](#u2-implementation-checkpoint-captured-command-admission-2026-10-28)
-checks the caller's visible environment without upgrading queued intent. Accepted
+Latest U2 delivery: [Node command authority](#u2-implementation-checkpoint-node-command-authority-2026-10-28)
+rechecks the captured intent after local queue/startup waits. It does not yet install
+or revoke sandbox policy. Accepted
 receipts retain their origin; repeated requests cannot dispatch again. Node effect
 fences and sandbox revocation remain open. The validation counts below this point
 in the U1 section describe that prior U1 slice, not all newer U2 changes.
@@ -3259,3 +3261,59 @@ or pots user-precedence rule is not needed.
 Bring only unresolved behavior or consequential tradeoffs back to the user.
 Engineering details should be completed by the implementer within the approved
 requirements. Confirmed context retention and live-switch warning behavior stand.
+
+## U2 implementation checkpoint: Node command authority (2026-10-28)
+
+Implemented locally after `d12ed151`. Node advances to schema **2010**; Gateway
+stays **1025**. Protocol 15, client recovery contract 2, private envelope 3,
+package versions, dependency locks and Nix hashes are unchanged. Production
+`canSubmit: false` remains. [Binding inventory](conversation-binding-migration.md#node-command-authority-checkpoint-2026-10-28)
+and [upgrade notes](../docs/deploy/upgrades.md) record compatibility and rollback.
+
+- Gateway probes support on the exact Node connection and rechecks ownership,
+  control and the original binding before dispatch. Older Nodes fail explicitly;
+  a replaced connection cannot inherit the probe result. No mutation is sent by
+  the capability check.
+- Node stores the immutable Gateway-provided command origin with its receipt.
+  Duplicate/restart recovery never substitutes today's environment or retries
+  execution. Historical origins remain absent; metadata failure rolls back the
+  receipt and command deletion cascades its origin.
+- Node rechecks Gateway authority after waiting for its local command gate,
+  after runner startup, and before branch-file mutation after shutdown waits.
+  The read-only callback verifies session/command ownership, recorded binding,
+  current control and pending status. Node also rejects local takeover during
+  the reply. Stale or unconfirmed authority leaves a durable rejected receipt.
+- Web and Flutter distinguish upgrade-required and authority-unavailable errors
+  in both languages, preserve input and stop model/thinking/prompt sequences.
+  Stop retains existing control checks without the new probe. Legacy unchanged
+  generation-1 clients and first-send/internal deliveries retain existing rules.
+
+These are point-in-time command checks, **not completed effect revocation**. A
+change after the final response, a branch restart after its disk edit, queued
+Agent work, approvals, running tools and open descriptors remain outside this
+fence. U4 must still install/revoke resource access and obtain acknowledgement;
+`enforcement: not_tracked` remains accurate. No workspace switching or grant is
+exposed. Full resource provenance and task/internal-delivery integration remain.
+
+Validation: **453 Node tests passed, 3 intentionally ignored**; **386 Gateway
+tests**; **10 process integration cases** covering real Web/paired-device routes,
+a policy change held between Gateway and Node, restart/receipt reconciliation,
+legacy first-send compatibility, memory, project deletion, Node link and native
+checkpoints. **54 focused Web tests**, Svelte checks, **7 focused Flutter tests**,
+changed-file Flutter analysis and strict Node/Gateway/conformance Clippy pass.
+Node migration/rollback, immutable origins, capability/connection replacement,
+local control takeover during the authority reply and unavailable authority are
+covered. Android native bridge code was unchanged and its JVM suite was not rerun.
+
+One unrestricted-parallel local run hit the existing macOS terminal-size test
+(`SIZE-30x100` instead of `SIZE-40x120`). Terminal code/tests are unchanged; that
+case passed alone, and all 453 Node cases passed with four test threads. This is
+recorded as an intermittent local PTY test observation, not a fixed terminal bug.
+No full-workspace, Linux sandbox, Nix, physical Android/Keystore/live MethodChannel
+or deployment acceptance is claimed. Temporary outputs are cleaned after this
+slice; retained APKs, shared caches and user data are preserved.
+
+Remote CI was checked again: `origin/main` is `303fa8f8`, with Check and Android
+both successful. Those results do not cover these local-only commits. There was
+no failed current remote run to repair/push; no push, deployment or Release was
+performed for this slice.

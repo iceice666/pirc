@@ -1254,26 +1254,84 @@ pub async fn command(
         )?;
         return Err(ApiError::new(503, "node_offline", "Node is offline").into());
     }
-    app.db
-        .lock()
-        .update_command(&input.command_id, "dispatched", None, None)?;
-    // What the node reads, with the bounded payload; other keys are dropped.
-    let forwarded = Some(json!({
+    let versioned = input.expected_binding.is_some() && payload["type"] != "stop";
+    let connection = if versioned {
+        match crate::conversation_bindings::commands::supported(
+            &app,
+            &claimed.node_id,
+            &identity.user,
+        )
+        .await
+        {
+            Ok(connection) => Some(connection),
+            Err(error) => {
+                app.db.lock().update_command(
+                    &input.command_id,
+                    "rejected",
+                    None,
+                    Some(&error.message),
+                )?;
+                return Err(error.into());
+            }
+        }
+    } else {
+        None
+    };
+    let ready = atomic(&app.db.lock(), |tx| {
+        let current = tx.claim_session(session_id, &identity.user, false)?;
+        tx.validate_lease(session_id, &input.client_id, input.generation as i64)?;
+        tx.validate_lease_user(session_id, &identity.user)?;
+        if current.binding != claimed.session.binding {
+            return Err(ApiError::new(
+                409,
+                "stale_environment",
+                "The conversation environment changed; refresh it before starting this action",
+            ));
+        }
+        tx.update_command(&input.command_id, "dispatched", None, None)
+    });
+    if let Err(error) = ready {
+        app.db
+            .lock()
+            .update_command(&input.command_id, "rejected", None, Some(&error.message))?;
+        return Err(error.into());
+    }
+    let mut forwarded = json!({
         "commandId": input.command_id,
         "clientId": input.client_id,
         "generation": input.generation,
         "payload": payload,
-    }));
-    match app
-        .relay(
+    });
+    if versioned {
+        forwarded["commandEnvironment"] =
+            serde_json::to_value(&claimed.session.binding).map_err(|_| ApiError::internal())?;
+    }
+    let remote = if let Some(connection) = connection {
+        app.nodes
+            .request_on(
+                &claimed.node_id,
+                connection,
+                pirc_protocol::NodeHttpRequest {
+                    method: HttpMethod::Post,
+                    url: node_url(&claimed, "/commands"),
+                    user: identity.user.clone(),
+                    payload: Some(forwarded),
+                    body_base64: None,
+                    content_type: None,
+                },
+            )
+            .await
+    } else {
+        app.relay(
             &claimed.node_id,
             &identity,
             HttpMethod::Post,
             node_url(&claimed, "/commands"),
-            forwarded,
+            Some(forwarded),
         )
         .await
-    {
+    };
+    match remote {
         Err(error) => {
             app.db.lock().update_command(
                 &input.command_id,

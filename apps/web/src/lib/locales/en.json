@@ -1417,5 +1417,7 @@
   "Proposals recorded in this project are deleted. For unknown origins, choose whether to keep or delete each proposal; keeping does not approve it.": "Proposals recorded in this project are deleted. For unknown origins, choose whether to keep or delete each proposal; keeping does not approve it.",
   "What to do with this proposal": "What to do with this proposal",
   "The conversation environment changed; refresh it before starting this action": "The conversation environment changed; refresh it before starting this action",
-  "Refresh or update this client before starting work in a changed conversation environment": "Refresh or update this client before starting work in a changed conversation environment"
+  "Refresh or update this client before starting work in a changed conversation environment": "Refresh or update this client before starting work in a changed conversation environment",
+  "Upgrade this Node before sending versioned conversation commands": "Upgrade this Node before sending versioned conversation commands",
+  "The command's current authority could not be confirmed; it was not sent to the agent": "The command's current authority could not be confirmed; it was not sent to the agent"
 }

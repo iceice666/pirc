@@ -1417,5 +1417,7 @@
   "Proposals recorded in this project are deleted. For unknown origins, choose whether to keep or delete each proposal; keeping does not approve it.": "記錄為此專案來源的提案會被刪除。來源不明的提案請逐項選擇保留或刪除；保留不代表核准。",
   "What to do with this proposal": "如何處理此提案",
   "The conversation environment changed; refresh it before starting this action": "對話的執行環境已變更，請重新載入後再執行此操作。",
-  "Refresh or update this client before starting work in a changed conversation environment": "對話的執行環境已變更，請重新載入或更新用戶端後再開始工作。"
+  "Refresh or update this client before starting work in a changed conversation environment": "對話的執行環境已變更，請重新載入或更新用戶端後再開始工作。",
+  "Upgrade this Node before sending versioned conversation commands": "請先升級此 Node，再傳送帶有執行環境版本的對話操作。",
+  "The command's current authority could not be confirmed; it was not sent to the agent": "無法確認這項操作目前的權限，因此尚未傳送給 Agent。請重新載入後再操作。"
 }

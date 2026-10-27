@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pirc_mobile/live/gateway.dart';
+import 'package:pirc_mobile/l10n/app_i18n.dart';
 import 'live_test.dart' show FakeGateway;
 
 Json binding(int generation) => {
@@ -24,6 +25,79 @@ LiveController controller(FakeGateway g) => LiveController(g)
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  tearDown(() => AppI18n.instance.setLanguage('en'));
+  test(
+    'known authority failures retain input and explain the next step in both languages',
+    () async {
+      for (final language in ['en', 'zh-TW']) {
+        AppI18n.instance.setLanguage(language);
+        final g = FakeGateway();
+        final live = controller(g)..draft = 'keep my message';
+        addTearDown(live.dispose);
+        var commands = 0;
+        g.handler = (method, args) async {
+          if (method != 'command') return g.normal(method, args);
+          commands++;
+          throw PlatformException(
+            code: 'HTTP_409',
+            details: {'code': 'command_environment_unsupported'},
+          );
+        };
+        expect(
+          await live.sendCommand(
+            {'type': 'prompt', 'message': live.draft},
+            before: [
+              {'type': 'set_thinking', 'level': 'high'},
+            ],
+          ),
+          isFalse,
+        );
+        expect(commands, 1);
+        expect(live.unknownCommand, isFalse);
+        expect(live.draft, 'keep my message');
+        expect(
+          live.actionError,
+          language == 'en'
+              ? "Upgrade this Node before sending versioned conversation commands"
+              : "請先升級此 Node，再傳送帶有執行環境版本的對話操作。",
+        );
+      }
+      for (final language in ['en', 'zh-TW']) {
+        AppI18n.instance.setLanguage(language);
+        final g = FakeGateway();
+        final live = controller(g)..draft = 'keep my message';
+        addTearDown(live.dispose);
+        var commands = 0;
+        g.handler = (method, args) async {
+          if (method != 'command') return g.normal(method, args);
+          commands++;
+          throw PlatformException(
+            code: 'HTTP_409',
+            details: {'code': 'command_authority_unavailable'},
+          );
+        };
+        expect(
+          await live.sendCommand(
+            {'type': 'prompt', 'message': live.draft},
+            before: [
+              {'type': 'set_thinking', 'level': 'high'},
+            ],
+          ),
+          isFalse,
+        );
+        expect(commands, 1);
+        expect(live.unknownCommand, isFalse);
+        expect(live.draft, 'keep my message');
+        expect(
+          live.actionError,
+          language == 'en'
+              ? "The command's current authority could not be confirmed; it was not sent to the agent"
+              : "無法確認這項操作目前的權限，因此尚未傳送給 Agent。請重新載入後再操作。",
+        );
+      }
+    },
+  );
+
   test(
     'settings and prompt retain the visible binding when a newer snapshot arrives',
     () async {

@@ -382,3 +382,311 @@ fn deleting_session_cannot_admit_new_work_or_replay_old_receipts() {
     assert!(conn.get_command("new").is_err());
     assert!(conn.get_command("stop").is_err());
 }
+
+fn held(conn: &Connection, session: &Session, client: &str, generation: i64) {
+    conn.mirror_lease(
+        &session.id,
+        &crate::db::Lease {
+            client_id: client.into(),
+            generation,
+            expires_at: crate::util::now_ms() + 60_000,
+        },
+        "alice",
+        false,
+    )
+    .unwrap();
+}
+
+#[test]
+fn node_authority_rechecks_policy_and_control_without_replaying_a_receipt() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let session = setup(&conn);
+    held(&conn, &session, "phone", 1);
+    receive(
+        &conn,
+        &session,
+        "alice",
+        "cmd",
+        &prompt(),
+        Some(&session.binding),
+    )
+    .unwrap();
+    assert_eq!(
+        authorize(
+            &conn,
+            &session,
+            "alice",
+            "cmd",
+            &session.binding,
+            "phone",
+            1
+        )
+        .unwrap_err()
+        .code,
+        "command_not_dispatchable"
+    );
+    conn.update_command("cmd", "dispatched", None, None)
+        .unwrap();
+    assert_eq!(
+        authorize(
+            &conn,
+            &session,
+            "alice",
+            "cmd",
+            &session.binding,
+            "phone",
+            1
+        )
+        .unwrap()["binding"],
+        json!(session.binding)
+    );
+    held(&conn, &session, "web", 2);
+    assert!(
+        authorize(
+            &conn,
+            &session,
+            "alice",
+            "cmd",
+            &session.binding,
+            "phone",
+            1
+        )
+        .is_err()
+    );
+    change(&conn);
+    assert_eq!(
+        authorize(&conn, &session, "alice", "cmd", &session.binding, "web", 2)
+            .unwrap_err()
+            .code,
+        "stale_environment"
+    );
+    assert_eq!(conn.get_command("cmd").unwrap().status, "dispatched");
+}
+
+#[test]
+fn node_authority_refuses_terminal_foreign_deleted_and_unattributed_commands() {
+    let db = Db::memory();
+    let conn = db.lock();
+    let session = setup(&conn);
+    held(&conn, &session, "phone", 1);
+    receive(
+        &conn,
+        &session,
+        "alice",
+        "cmd",
+        &prompt(),
+        Some(&session.binding),
+    )
+    .unwrap();
+    for status in ["rejected", "accepted"] {
+        conn.update_command("cmd", status, None, None).unwrap();
+        assert_eq!(
+            authorize(
+                &conn,
+                &session,
+                "alice",
+                "cmd",
+                &session.binding,
+                "phone",
+                1
+            )
+            .unwrap_err()
+            .code,
+            "command_not_dispatchable"
+        );
+    }
+    conn.update_command("cmd", "outcome_unknown", None, None)
+        .unwrap();
+    assert!(
+        authorize(
+            &conn,
+            &session,
+            "alice",
+            "cmd",
+            &session.binding,
+            "phone",
+            1
+        )
+        .is_ok()
+    );
+    assert!(
+        authorize(
+            &conn,
+            &session,
+            "mallory",
+            "cmd",
+            &session.binding,
+            "phone",
+            1
+        )
+        .is_err()
+    );
+    let other = conn
+        .create_session("node:repo", "node://node/other", "node", "other", "alice")
+        .unwrap();
+    assert_eq!(
+        authorize(&conn, &other, "alice", "cmd", &other.binding, "phone", 1)
+            .unwrap_err()
+            .status,
+        404
+    );
+    conn.receive_command("old", &session.id, &payload_hash(&prompt()), &prompt())
+        .unwrap();
+    conn.update_command("old", "dispatched", None, None)
+        .unwrap();
+    assert_eq!(
+        authorize(
+            &conn,
+            &session,
+            "alice",
+            "old",
+            &session.binding,
+            "phone",
+            1
+        )
+        .unwrap_err()
+        .code,
+        "environment_required"
+    );
+    conn.begin_session_deletion(&session.id, "alice").unwrap();
+    assert!(
+        authorize(
+            &conn,
+            &session,
+            "alice",
+            "cmd",
+            &session.binding,
+            "phone",
+            1
+        )
+        .is_err()
+    );
+}
+
+fn probe_app() -> (crate::app::AppState, tempfile::TempDir) {
+    let dir = tempfile::tempdir().unwrap();
+    let state = dir.path().join("state");
+    let env = pirc_config::Env::new(
+        [
+            (
+                "PIRC_NODE_TOKENS",
+                r#"{"node":"0123456789abcdef0123456789abcdef"}"#,
+            ),
+            ("PIRC_TRUSTED_PROXIES", "127.0.0.1"),
+            ("PIRC_ALLOWED_ORIGINS", "https://a.example"),
+            ("PIRC_ALLOWED_HOSTS", "a.example"),
+            ("PIRC_ALLOWED_USERS", "alice"),
+            ("PIRC_STATE_DIR", state.to_str().unwrap()),
+            ("PIRC_CONFIG_DIR", dir.path().to_str().unwrap()),
+            ("PIRC_TIMEZONE", "UTC"),
+            ("HOME", "/home/test"),
+        ],
+        "/work",
+    );
+    let backends =
+        pirc_providers::backends::BackendService::open(&state, crate::app::empty_models()).unwrap();
+    let app = crate::app::App::new(
+        pirc_config::GatewayConfig::load(&env).unwrap(),
+        std::sync::Arc::new(Db::memory()),
+        backends,
+        crate::app::test_modes(),
+    );
+    (app, dir)
+}
+fn probe_node() -> crate::nodes::ConnectedNode {
+    crate::nodes::ConnectedNode {
+        id: "node".into(),
+        role: pirc_protocol::NodeRole::Node,
+        modes: vec![ModeId::new("directory").unwrap()],
+        workspaces: vec![],
+        connected_at: 0,
+        last_seen_at: 0,
+        added: Default::default(),
+    }
+}
+fn probe_reply() -> pirc_protocol::NodeHttpResponse {
+    pirc_protocol::NodeHttpResponse {
+        status: 200,
+        body: Some(json!({"version":1,"rechecksCommandEnvironment":true})),
+    }
+}
+#[tokio::test]
+async fn capability_probe_is_read_only_and_refuses_old_or_incompatible_nodes() {
+    let (app, _dir) = probe_app();
+    assert!(supported(&app, "node", "alice").await.is_err());
+    for (status, body) in [
+        (404, None),
+        (200, Some(json!({}))),
+        (
+            200,
+            Some(json!({"version":2,"rechecksCommandEnvironment":true})),
+        ),
+        (
+            200,
+            Some(json!({"version":1,"rechecksCommandEnvironment":false})),
+        ),
+    ] {
+        app.nodes.set_test_node(probe_node(), move |request| {
+            assert_eq!(request.method, pirc_protocol::HttpMethod::Get);
+            assert_eq!(request.url, "/api/command-environments/capabilities");
+            assert_eq!(request.user, "alice");
+            assert!(request.payload.is_none());
+            Ok(pirc_protocol::NodeHttpResponse {
+                status,
+                body: body.clone(),
+            })
+        });
+        assert_eq!(
+            supported(&app, "node", "alice").await.unwrap_err().code,
+            "command_environment_unsupported"
+        );
+    }
+    app.nodes.set_test_node(probe_node(), |_| Ok(probe_reply()));
+    assert!(supported(&app, "node", "alice").await.is_ok());
+    let count: i64 = app
+        .db
+        .lock()
+        .query_row("SELECT count(*) FROM commands", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 0);
+}
+#[tokio::test]
+async fn capability_probe_cannot_authorize_a_replacement_connection() {
+    let (app, _dir) = probe_app();
+    let weak = std::sync::Arc::downgrade(&app);
+    app.nodes.set_test_node(probe_node(), move |_| {
+        weak.upgrade()
+            .unwrap()
+            .nodes
+            .set_test_node(probe_node(), |_| Ok(probe_reply()));
+        Ok(probe_reply())
+    });
+    assert_eq!(
+        supported(&app, "node", "alice").await.unwrap_err().code,
+        "node_connection_changed"
+    );
+    let captured = supported(&app, "node", "alice").await.unwrap();
+    app.nodes.set_test_node(probe_node(), |_| {
+        panic!("stale connection must never dispatch")
+    });
+    assert_eq!(
+        app.nodes
+            .request_on(
+                "node",
+                captured,
+                pirc_protocol::NodeHttpRequest {
+                    method: pirc_protocol::HttpMethod::Post,
+                    url: "/commands".into(),
+                    user: "alice".into(),
+                    payload: None,
+                    body_base64: None,
+                    content_type: None,
+                }
+            )
+            .await
+            .unwrap_err()
+            .code,
+        "node_connection_changed"
+    );
+}

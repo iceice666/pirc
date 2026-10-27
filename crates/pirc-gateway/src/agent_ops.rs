@@ -41,10 +41,38 @@ enum Parsed {
     Web(web_search::Op),
     WorkspaceMirror(String),
     HistoryAuthority,
+    CommandAuthority(CommandAuthority),
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CommandAuthority {
+    command_id: String,
+    binding: crate::conversation_bindings::Binding,
+    client_id: String,
+    generation: i64,
 }
 
 /// `None`: no such operation; `Some(Err)`: invalid arguments.
 fn parse(op: &str, args: &Value) -> Option<Result<Parsed, ()>> {
+    if op == "command.authority" {
+        return Some(
+            serde_json::from_value::<CommandAuthority>(args.clone())
+                .map_err(|_| ())
+                .and_then(|value| {
+                    if value.command_id.is_empty()
+                        || value.command_id.len() > 200
+                        || value.client_id.is_empty()
+                        || value.client_id.len() > 200
+                        || value.generation < 1
+                    {
+                        Err(())
+                    } else {
+                        Ok(Parsed::CommandAuthority(value))
+                    }
+                }),
+        );
+    }
     if op == "history.authority" {
         return Some(
             args.as_object()
@@ -169,6 +197,15 @@ pub async fn run(
             user,
         };
         match parsed {
+            Parsed::CommandAuthority(input) => crate::conversation_bindings::commands::authorize(
+                &app.db.lock(),
+                &context.session,
+                &context.user,
+                &input.command_id,
+                &input.binding,
+                &input.client_id,
+                input.generation,
+            ),
             Parsed::HistoryAuthority => Ok(json!({"owner":context.user})),
             Parsed::WorkspaceMirror(key) => {
                 if !context.mode.workspace_memory || !context.mode.repository {

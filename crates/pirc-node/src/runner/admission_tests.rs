@@ -320,3 +320,202 @@ async fn stop_during_initial_configuration_permanently_prevents_the_prompt_from_
     runner.exit(Some(0), None);
     f.node.close().await;
 }
+
+#[tokio::test]
+async fn command_environment_is_rechecked_after_ensure_without_sending_stale_rpc() {
+    let f = Fixture::new().await;
+    let (runner, mut lines) = register(&f);
+    let lease = f
+        .node
+        .db
+        .lock()
+        .acquire_lease(&f.current, "phone", false, 60_000)
+        .unwrap();
+    let payload = CommandPayload::SetThinking {
+        level: "high".into(),
+    };
+    receive(&f, "versioned", &payload);
+    let binding = json!({"version":1,"execution":{"generation":7}});
+    crate::command_environment::record(&f.node.db.lock(), "versioned", Some(&binding), false)
+        .unwrap();
+    let mut link = f.node.link.open();
+    f.node.link.set_registered(link.id);
+    f.node.agent_gateway.connect();
+    let dispatch = {
+        let node = f.node.clone();
+        let session = f.current.clone();
+        tokio::spawn(async move {
+            node.runners
+                .dispatch(
+                    &session,
+                    "versioned",
+                    &payload,
+                    "alice",
+                    ("phone", lease.generation),
+                )
+                .await
+        })
+    };
+    for index in 0..2 {
+        let text = tokio::time::timeout(Duration::from_secs(2), link.recv())
+            .await
+            .unwrap()
+            .unwrap();
+        link.written(&text);
+        let request: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(request["type"], "agent_request");
+        assert_eq!(request["op"], "command.authority");
+        assert_eq!(request["args"]["binding"], binding);
+        let (status, body) = if index == 0 {
+            (
+                200,
+                json!({"result":{"commandId":"versioned","binding":binding}}),
+            )
+        } else {
+            (
+                409,
+                json!({"error":{"code":"stale_environment","message":"changed"}}),
+            )
+        };
+        f.node
+            .agent_gateway
+            .receive(request["requestId"].as_str().unwrap(), status, Some(body));
+    }
+    assert_eq!(
+        dispatch.await.unwrap().unwrap_err().code,
+        "stale_environment"
+    );
+    assert!(lines.try_recv().is_err());
+    assert_eq!(
+        f.node.db.lock().get_command("versioned").unwrap().status,
+        CommandStatus::Rejected
+    );
+    // Retrying the original receipt cannot turn it into newly admitted work.
+    let raw = serde_json::to_value(CommandPayload::SetThinking {
+        level: "high".into(),
+    })
+    .unwrap();
+    assert!(
+        f.node
+            .db
+            .lock()
+            .receive_command(
+                "versioned",
+                &f.current,
+                &crate::util::payload_hash(&raw),
+                &raw
+            )
+            .unwrap()
+            .1
+    );
+    runner.exit(Some(0), None);
+    f.node.close().await;
+}
+
+#[tokio::test]
+async fn unavailable_authority_rejects_before_start_without_sending_rpc() {
+    let f = Fixture::new().await;
+    let (runner, mut lines) = register(&f);
+    let lease = f
+        .node
+        .db
+        .lock()
+        .acquire_lease(&f.current, "phone", false, 60_000)
+        .unwrap();
+    let payload = CommandPayload::SetThinking {
+        level: "high".into(),
+    };
+    receive(&f, "offline", &payload);
+    crate::command_environment::record(
+        &f.node.db.lock(),
+        "offline",
+        Some(&json!({"version":1})),
+        false,
+    )
+    .unwrap();
+    let error = f
+        .node
+        .runners
+        .dispatch(
+            &f.current,
+            "offline",
+            &payload,
+            "alice",
+            ("phone", lease.generation),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.code, "command_authority_unavailable");
+    assert!(lines.try_recv().is_err());
+    assert_eq!(
+        f.node.db.lock().get_command("offline").unwrap().status,
+        CommandStatus::Rejected
+    );
+    runner.exit(Some(0), None);
+    f.node.close().await;
+}
+
+#[tokio::test]
+async fn local_control_takeover_during_authority_roundtrip_never_sends_rpc() {
+    let f = Fixture::new().await;
+    let (runner, mut lines) = register(&f);
+    let lease = f
+        .node
+        .db
+        .lock()
+        .acquire_lease(&f.current, "phone", false, 60_000)
+        .unwrap();
+    let payload = CommandPayload::SetThinking {
+        level: "high".into(),
+    };
+    receive(&f, "takeover", &payload);
+    let binding = json!({"version":1,"execution":{"generation":7}});
+    crate::command_environment::record(&f.node.db.lock(), "takeover", Some(&binding), false)
+        .unwrap();
+    let mut link = f.node.link.open();
+    f.node.link.set_registered(link.id);
+    f.node.agent_gateway.connect();
+    let dispatch = {
+        let node = f.node.clone();
+        let session = f.current.clone();
+        tokio::spawn(async move {
+            node.runners
+                .dispatch(
+                    &session,
+                    "takeover",
+                    &payload,
+                    "alice",
+                    ("phone", lease.generation),
+                )
+                .await
+        })
+    };
+    let text = tokio::time::timeout(Duration::from_secs(2), link.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    link.written(&text);
+    let request: Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(request["op"], "command.authority");
+    // A takeover already reached Node, but the earlier Gateway reply is still in flight.
+    let newer = f
+        .node
+        .db
+        .lock()
+        .acquire_lease(&f.current, "web", true, 60_000)
+        .unwrap();
+    assert!(newer.generation > lease.generation);
+    f.node.agent_gateway.receive(
+        request["requestId"].as_str().unwrap(),
+        200,
+        Some(json!({"result":{"commandId":"takeover","binding":binding}})),
+    );
+    assert!(dispatch.await.unwrap().is_err());
+    assert!(lines.try_recv().is_err());
+    assert_eq!(
+        f.node.db.lock().get_command("takeover").unwrap().status,
+        CommandStatus::Rejected
+    );
+    runner.exit(Some(0), None);
+    f.node.close().await;
+}
