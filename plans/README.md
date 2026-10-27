@@ -74,7 +74,8 @@ approval to implement every unchecked stage.
 The published baseline is `303fa8f8`, including the user-authorized CI repairs.
 Its remote Check and Android workflows both passed. Local work adds Gateway
 retry-nonce retirement (`9b5c776b`), Web/native retry recovery (`c41e4e8a`) and
-open-editor attachment protection and initial live Web/native interruption acceptance.
+open-editor attachment protection, live Web/native interruption acceptance and
+mapped Web/native takeover/Stop/deletion races.
 Full live-client acceptance and activation
 remain open.
 Subsequent work defaults to local commits, with no deployment, version change or
@@ -98,6 +99,14 @@ private drafts are not subject to that deadline. See [upgrade and rollback
 notes](../docs/deploy/upgrades.md).
 
 Latest completed U1 slices and their recorded evidence:
+
+- [Mixed Web/native control races](unified-conversations.md#u1-implementation-checkpoint-delayed-web-dispatch-versus-native-takeover-2026-10-27):
+  a held real Web dispatch loses control to a paired native client. Explicit
+  takeover followed by Stop, confirmed deletion or Send cannot revive old work
+  or duplicate admission. JVM/browser and both-host restart preserve identities;
+  both clients reconcile with GETs, and deletion cleanup completes. Three live
+  process tests pass (the new three-case race plus the prior two native and three
+  Web fault cases); no product behavior or rollout changed.
 
 - [Paired native process acceptance](unified-conversations.md#u1-implementation-checkpoint-paired-native-process-recovery-and-revocation-2026-10-27):
   actual Kotlin engine/file journal and two real device tokens pass discarded
@@ -152,9 +161,10 @@ Latest completed U1 slices and their recorded evidence:
 
 Next, close U1's remaining gates in this order:
 
-1. Extend the now-passing initial Web/native process proofs through simultaneous
-   device mutations, broader permission changes, Stop/delete, interrupted
-   allocation and mixed versions. Initial native device revocation passes.
+1. Extend live-client acceptance to interrupted/unallocated or offline Node work,
+   Stop/deletion in that state, mixed versions and reverse-direction client races.
+   Initial native revocation and mapped Web-dispatch/native-takeover races pass;
+   broader permission changes remain open.
 2. Verify Android MethodChannel, OS private storage/Keystore, process death and
    attachment memory pressure; request a physical device when that step is ready.
 3. Complete activation/rollback and the affected full CI/conformance gates before

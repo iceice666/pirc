@@ -8,6 +8,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
+import { runClientRaces } from './first-send-races.mjs';
 import { requireTestBrowserExecutable } from '../apps/android/tool/parity/test_browser.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -35,6 +36,18 @@ const publish = async (name, value) => {
   await writeFile(temporary, JSON.stringify(value));
   await rename(temporary, path.join(directory, name + '.json'));
 };
+const marker = async (name) => {
+  const deadline = Date.now() + 60000;
+  while (true) {
+    try {
+      return JSON.parse(await readFile(path.join(directory, name + '.json'), 'utf8'));
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    assert(Date.now() < deadline, 'Timed out waiting for ' + name);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+  }
+};
 const cleanup = async () => {
   const closing = context;
   context = undefined;
@@ -56,6 +69,15 @@ async function proxy(req, res) {
     if (req.headers[key]) headers[key] = req.headers[key];
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
+  if (
+    config.mode === 'competition' &&
+    req.method === 'POST' &&
+    /\/race-(stop|delete|admit)\/dispatch$/.test(req.url)
+  ) {
+    const id = req.url.split('/')[3];
+    await publish('held-' + id, JSON.parse(Buffer.concat(chunks)));
+    await marker('release-' + id);
+  }
   const reply = await new Promise((resolve, reject) => {
     const outgoing = http.request(
       new URL(req.url, config.gateway),
@@ -154,135 +176,152 @@ try {
   const options = { executablePath: requireTestBrowserExecutable(), headless: true };
   const profile = path.join(directory, 'profile');
   context = await chromium.launchPersistentContext(profile, options);
-  const editor = await page();
-  const pending = [];
-  for (const id of ['transport-replay', 'reply-loss', 'local-write-loss']) {
-    const result = await editor.evaluate(
-      async ({ id, workspace }) => {
-        const blob = new Blob(['Original bytes for ' + id], { type: 'text/plain' });
-        await window.flow.save(window.scope, 'test@example.com', id, {
-          workspaceId: workspace,
-          message: 'First message ' + id,
-          model: { provider: 'fake', id: 'fake-model' },
-          thinking: 'low',
-          files: [
-            {
-              id: 'original-file',
-              name: 'notes.txt',
-              mimeType: blob.type,
-              byteSize: blob.size,
-              blob,
-            },
-          ],
-        });
-        let failedCommit = false;
-        if (id === 'local-write-loss') {
-          const update = window.drafts.update.bind(window.drafts);
-          window.drafts.update = (scope, key, change) =>
-            update(scope, key, (before) => {
-              const after = change(before);
-              // Real IndexedDB transaction abort, after a real admitted response.
-              if (key === id && (failedCommit || after?.preparation?.state === 'admitted')) {
-                failedCommit = true;
-                throw new DOMException('Injected full local journal', 'QuotaExceededError');
-              }
-              return after;
-            });
-        }
-        let error;
-        try {
-          await window.flow.run(window.scope, id);
-        } catch (failure) {
-          error = String(failure);
-        }
-        const row = await window.drafts.get(window.scope, id);
-        if (id === 'transport-replay' && !error) {
-          if (row.preparation?.state !== 'admitted')
-            throw new Error('Replay did not reconcile its original command');
-        } else {
-          if (!error) throw new Error('Expected interrupted outcome for ' + id);
-          if (row.preparation?.state !== 'ready' || !row.uncertain || !row.frozen)
-            throw new Error(
-              'Lost response must retain frozen, uncertain original: ' + JSON.stringify(row),
-            );
-        }
-        return {
-          id,
-          session: row.preparation.sessionId,
-          bytes: await row.files[0].blob.text(),
-          failedCommit,
-        };
+  if (config.mode === 'competition') {
+    await runClientRaces({
+      page,
+      publish,
+      marker,
+      traffic,
+      workspace: config.workspace,
+      close: async () => {
+        await context.close();
+        context = undefined;
       },
-      { id, workspace: config.workspace },
-    );
-    pending.push(result);
-  }
-  assert.equal(lostReply, true);
-  assert.equal(replayResponse, true);
-  assert.equal(pending[2].failedCommit, true);
-  assert.equal(capabilityOverrides, 3);
-  for (const op of pending) assert.equal(op.bytes, 'Original bytes for ' + op.id);
-  await context.close();
-  context = undefined;
-  await publish('before-restart', { operations: pending, traffic });
-  const deadline = Date.now() + 60000;
-  while (true) {
-    try {
-      await readFile(path.join(directory, 'hosts-restarted.json'));
-      break;
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
-    if (Date.now() >= deadline) throw new Error('Timed out waiting for fixture host restart');
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  const boundary = traffic.length;
-  const dispatches = (id) =>
-    traffic.filter(
-      (request) => request.path === '/api/conversation-submissions/' + id + '/dispatch',
-    ).length;
-  const before = new Map(pending.map((op) => [op.id, dispatches(op.id)]));
-  assert.equal(before.get('reply-loss'), 1);
-  assert.equal(before.get('local-write-loss'), 1);
-  assert(before.get('transport-replay') >= 1);
-  context = await chromium.launchPersistentContext(profile, options);
-  const first = await page(),
-    second = await page();
-  for (const op of pending) {
-    for (const p of [first, second]) {
-      assert.equal(
-        await p.evaluate(
-          async (id) => (await window.drafts.get(window.scope, id)).preparation.sessionId,
-          op.id,
-        ),
-        op.session,
-      );
-    }
-    const receipts = await Promise.all(
-      [first, second].map((p) =>
-        p.evaluate(async (id) => {
-          const row = await window.flow.check(window.scope, id);
+      reopen: async () => {
+        context = await chromium.launchPersistentContext(profile, options);
+      },
+    });
+  } else {
+    const editor = await page();
+    const pending = [];
+    for (const id of ['transport-replay', 'reply-loss', 'local-write-loss']) {
+      const result = await editor.evaluate(
+        async ({ id, workspace }) => {
+          const blob = new Blob(['Original bytes for ' + id], { type: 'text/plain' });
+          await window.flow.save(window.scope, 'test@example.com', id, {
+            workspaceId: workspace,
+            message: 'First message ' + id,
+            model: { provider: 'fake', id: 'fake-model' },
+            thinking: 'low',
+            files: [
+              {
+                id: 'original-file',
+                name: 'notes.txt',
+                mimeType: blob.type,
+                byteSize: blob.size,
+                blob,
+              },
+            ],
+          });
+          let failedCommit = false;
+          if (id === 'local-write-loss') {
+            const update = window.drafts.update.bind(window.drafts);
+            window.drafts.update = (scope, key, change) =>
+              update(scope, key, (before) => {
+                const after = change(before);
+                // Real IndexedDB transaction abort, after a real admitted response.
+                if (key === id && (failedCommit || after?.preparation?.state === 'admitted')) {
+                  failedCommit = true;
+                  throw new DOMException('Injected full local journal', 'QuotaExceededError');
+                }
+                return after;
+              });
+          }
+          let error;
+          try {
+            await window.flow.run(window.scope, id);
+          } catch (failure) {
+            error = String(failure);
+          }
+          const row = await window.drafts.get(window.scope, id);
+          if (id === 'transport-replay' && !error) {
+            if (row.preparation?.state !== 'admitted')
+              throw new Error('Replay did not reconcile its original command');
+          } else {
+            if (!error) throw new Error('Expected interrupted outcome for ' + id);
+            if (row.preparation?.state !== 'ready' || !row.uncertain || !row.frozen)
+              throw new Error(
+                'Lost response must retain frozen, uncertain original: ' + JSON.stringify(row),
+              );
+          }
           return {
+            id,
             session: row.preparation.sessionId,
-            state: row.preparation.state,
             bytes: await row.files[0].blob.text(),
+            failedCommit,
           };
-        }, op.id),
-      ),
+        },
+        { id, workspace: config.workspace },
+      );
+      pending.push(result);
+    }
+    assert.equal(lostReply, true);
+    assert.equal(replayResponse, true);
+    assert.equal(pending[2].failedCommit, true);
+    assert.equal(capabilityOverrides, 3);
+    for (const op of pending) assert.equal(op.bytes, 'Original bytes for ' + op.id);
+    await context.close();
+    context = undefined;
+    await publish('before-restart', { operations: pending, traffic });
+    const deadline = Date.now() + 60000;
+    while (true) {
+      try {
+        await readFile(path.join(directory, 'hosts-restarted.json'));
+        break;
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+      if (Date.now() >= deadline) throw new Error('Timed out waiting for fixture host restart');
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    const boundary = traffic.length;
+    const dispatches = (id) =>
+      traffic.filter(
+        (request) => request.path === '/api/conversation-submissions/' + id + '/dispatch',
+      ).length;
+    const before = new Map(pending.map((op) => [op.id, dispatches(op.id)]));
+    assert.equal(before.get('reply-loss'), 1);
+    assert.equal(before.get('local-write-loss'), 1);
+    assert(before.get('transport-replay') >= 1);
+    context = await chromium.launchPersistentContext(profile, options);
+    const first = await page(),
+      second = await page();
+    for (const op of pending) {
+      for (const p of [first, second]) {
+        assert.equal(
+          await p.evaluate(
+            async (id) => (await window.drafts.get(window.scope, id)).preparation.sessionId,
+            op.id,
+          ),
+          op.session,
+        );
+      }
+      const receipts = await Promise.all(
+        [first, second].map((p) =>
+          p.evaluate(async (id) => {
+            const row = await window.flow.check(window.scope, id);
+            return {
+              session: row.preparation.sessionId,
+              state: row.preparation.state,
+              bytes: await row.files[0].blob.text(),
+            };
+          }, op.id),
+        ),
+      );
+      for (const receipt of receipts)
+        assert.deepEqual(receipt, { session: op.session, state: 'admitted', bytes: op.bytes });
+      await first.evaluate((id) => window.flow.run(window.scope, id), op.id);
+    }
+    assert(
+      traffic.slice(boundary).every((request) => request.method === 'GET'),
+      'Reopening/reconciliation must never resend',
     );
-    for (const receipt of receipts)
-      assert.deepEqual(receipt, { session: op.session, state: 'admitted', bytes: op.bytes });
-    await first.evaluate((id) => window.flow.run(window.scope, id), op.id);
+    for (const op of pending) assert.equal(dispatches(op.id), before.get(op.id));
+    await publish('result', { operations: pending, traffic, readOnlyAfterRestart: true });
+    console.log(
+      'PASS: real Web/IndexedDB + Gateway/Node/Agent; transport replay, lost reply and aborted local receipt; two-tab GET-only reconciliation after all hosts restart.',
+    );
   }
-  assert(
-    traffic.slice(boundary).every((request) => request.method === 'GET'),
-    'Reopening/reconciliation must never resend',
-  );
-  for (const op of pending) assert.equal(dispatches(op.id), before.get(op.id));
-  await publish('result', { operations: pending, traffic, readOnlyAfterRestart: true });
-  console.log(
-    'PASS: real Web/IndexedDB + Gateway/Node/Agent; transport replay, lost reply and aborted local receipt; two-tab GET-only reconciliation after all hosts restart.',
-  );
 } catch (error) {
   console.error('Fixture HTTP trace:', JSON.stringify(traffic));
   throw error;

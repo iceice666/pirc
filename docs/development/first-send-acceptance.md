@@ -73,7 +73,7 @@ python3 scripts/prepare-native-first-send.py --out "$first_send_run/native"
 PIRC_NATIVE_FIRST_SEND_RUNTIME="$first_send_run/native/runtime.json" \
   PIRC_CONFORMANCE_BIN_DIR="$CARGO_TARGET_DIR/debug" \
   cargo test --locked -p pirc-conformance --test conversation_native_client \
-  -- --ignored --nocapture
+  native_reopens_lost_receipts -- --ignored --nocapture
 ```
 
 Use `--java /absolute/path/to/java` and `--sdk /absolute/path/to/android-sdk` when
@@ -112,8 +112,51 @@ results. Every recovery/revocation-phase native request is GET-only.
 
 This is native Kotlin/JVM process and real backend evidence, **not Android OS,
 Keystore, MethodChannel, emulator or physical-device acceptance**. The model and
-sandbox launcher remain conformance fakes. It does not close simultaneous device
-mutation, Stop/delete, interrupted allocation or mixed-version gates.
+sandbox launcher remain conformance fakes. The mapped cross-client mutation cases
+below have separate evidence; this test alone does not cover those cases or
+interrupted allocation/mixed versions.
+
+## Web dispatch held across native takeover, Stop and deletion
+
+After preparing both the dedicated browser and native runtime above, run:
+
+```sh
+PIRC_NATIVE_FIRST_SEND_RUNTIME="$first_send_run/native/runtime.json" \
+  PIRC_CONFORMANCE_BIN_DIR="$CARGO_TARGET_DIR/debug" \
+  cargo test --locked -p pirc-conformance --test conversation_native_client \
+  native_takeover_stop -- --ignored --nocapture
+```
+
+The Web helper runs the production engine/IndexedDB and pauses a real outbound
+first-message dispatch after Web has acquired control. A separate JVM process
+uses a real paired token to discover/adopt the pending conversation. Native Send
+must receive 409 without dispatching or silently taking control. Only the explicit
+native Take control action obtains a newer lease. Then it performs one of:
+
+- Stop, followed by a duplicate Stop that must only query. The delayed Web dispatch
+  resolves to stopped; neither client may admit the original input.
+- Delete: first require the accepted-message confirmation, then explicitly confirm
+  deletion. The delayed Web dispatch cannot execute; both clients clear the
+  deleted input/files on reconciliation, and its session is no longer visible.
+- Send the same immutable first input after takeover. The delayed Web dispatch
+  resolves to the original admitted command, with one user entry/model request.
+
+Stop keeps the original files; confirmed deletion removes that conversation's
+Node uploads. Gateway staging cleanup is a separate durable job, scanned every
+60 seconds and immediately at startup: `cleanupPending` is allowed before restart,
+not proof that execution can resume. After both backend hosts restart, the fixture
+waits for actual cleanup completion and verifies the staging directory is gone.
+The browser profile and JVM are reopened. Both clients use GET-only checks and
+retain identical session/state/command identities; the stopped and admitted
+inputs keep exact Web Blob and Node upload bytes. No native copy of another
+client's private attachment is fabricated.
+
+This uses the production client engines and real HTTP/lease/admission/deletion
+paths with fixture-only scheduling. It is **not the full application UI or Android
+OS/device**. The three mapped-workspace cases do not cover the reverse direction
+(native in-flight send versus Web takeover), an offline/unallocated Node or mixed
+protocol versions. The older backend-only tests cover parts of those contracts;
+they are not substituted for client acceptance.
 
 ## Cleanup and remaining gates
 

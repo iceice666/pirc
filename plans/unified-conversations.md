@@ -4,7 +4,7 @@
 
 Status: adopted architecture baseline with an authorized staged implementation
 covering first Send, environment bindings, resource transitions, canonical tasks/
-collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-recovery, editor-snapshot and live Web/native acceptance
+collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-recovery, editor-snapshot and live Web/native fault/control-race acceptance
 checkpoints are summarized below (2026-10-27). UI redesign/navigation reorganization remains deferred;
 Web/Android changes are limited to necessary functional integration. Use only
 focused simple Flutter checks when Flutter changes.
@@ -47,15 +47,19 @@ Delivered U1 behavior:
   including version negotiation, independent Gateway access and minimal bilingual
   status/actions. New navigation and visual redesign are deferred.
 
-Latest slice: [paired native process acceptance](#u1-implementation-checkpoint-paired-native-process-recovery-and-revocation-2026-10-27)
-passes with actual Kotlin journals/HTTP and two real device credentials against
-Gateway/Node/Agent. Discarded replies and refused local receipt writes survive a
-complete JVM and host restart; both clients query the same admitted commands.
-Revoking one device blocks its lookup/new Send without losing local input, while
-the other still has access. Each original keeps one session, user entry and model
-request and exact file bytes. The [Web three-case process acceptance](#u1-implementation-checkpoint-live-web-reconciliation-and-durable-uncertainty-2026-10-27)
-also passes after sharing process/journal assertions; strict targeted Clippy and
-Kotlin warnings-as-errors compilation pass. See [repeatable acceptance commands](../docs/development/first-send-acceptance.md).
+Latest slice: [delayed Web dispatch versus native takeover](#u1-implementation-checkpoint-delayed-web-dispatch-versus-native-takeover-2026-10-27)
+passes all three mapped-session cases: native Send without control is rejected;
+explicit takeover followed by Stop, confirmed deletion or Send fences the held
+Web request or resolves it to the same original admission. Exactly one model
+request is made across these three inputs. Browser/JVM and both-host restart keep
+session/command identities and exact retained attachment bytes; deleted staging
+cleanup completes, and both clients only GET results after restart.
+
+All **three explicit live-client process tests** pass: the new three-case race,
+[paired native interruption/revocation](#u1-implementation-checkpoint-paired-native-process-recovery-and-revocation-2026-10-27)
+(two fault cases) and [Web interruption](#u1-implementation-checkpoint-live-web-reconciliation-and-durable-uncertainty-2026-10-27)
+(three fault cases). Strict targeted Clippy, warnings-as-errors Kotlin compilation
+and formatting checks pass. See [repeatable commands](../docs/development/first-send-acceptance.md).
 
 The earlier marker repair retains **79 Web tests**, clean Svelte checks and
 **63 native JVM cases**; [editor snapshots](#u1-implementation-checkpoint-editor-attachments-survive-source-cleanup-2026-10-27)
@@ -77,10 +81,11 @@ published CI remains tied to `303fa8f8` and was rechecked green this round.
 
 Immediate U1 queue:
 
-1. Extend actual Web/native acceptance through simultaneous device mutations,
-   broader permission changes, Stop/delete, interrupted allocation and mixed
-   versions. Initial interruption/restart and native device-revocation proofs now
-   pass; they do not close the full matrix.
+1. Extend actual client acceptance to interrupted/unallocated or offline Node
+   work, its Stop/deletion lifecycle, mixed versions and reverse-direction races
+   (native in-flight send versus Web takeover). Initial interruption/restart,
+   native revocation and mapped Web-dispatch/native-takeover proofs now pass;
+   broader permission changes and the full matrix remain open.
 2. Verify actual Android process death, OS private files/Keystore, MethodChannel
    and attachment memory pressure; ask for a physical device when ready.
 3. Finish activation/rollback and affected full CI/conformance checks, including
@@ -2498,6 +2503,61 @@ default and JVM execution is not an Android device pass. No Flutter/full Flutter
 suite, emulator, device, APK or local Nix verification. U2/U4/U5/U6 remain open.
 Keep this slice local and remove its isolated target/JVM/log outputs after the
 owned processes exit; preserve SDKs, caches, APKs and user state.
+
+## U1 implementation checkpoint: delayed Web dispatch versus native takeover (2026-10-27)
+
+Implemented locally after `df7b76c8`. Test/documentation changes only: production
+behavior, storage/protocol/package versions, Nix hashes, memory provenance and
+checkpoint isolation stay unchanged. **`canSubmit: false`** remains in production.
+
+Extended the real-client harness with Web/native control races. Production Web
+`FirstSend`/IndexedDB reaches a mapped conversation and acquires its control lease;
+the loopback fixture holds that actual dispatch request before it reaches Gateway.
+A separate JVM running the actual native engine discovers/adopts the pending
+conversation using a real paired device token and independent local journal.
+Native Send without Take control must receive 409 and emit no dispatch. Explicit
+Take control obtains a newer generation. Three original operations then diverge:
+
+1. Native Stop is confirmed and a duplicate Stop emits GETs only. Releasing the
+   stale Web dispatch still leaves the same original input stopped, with no user
+   entry or model request. Original Web files and Node uploads remain intact.
+2. Native Cancel first requires accepted-message deletion confirmation; only the
+   confirmed action deletes. Releasing the stale Web dispatch cannot admit input.
+   Reconciliation clears the deleted content/files on both clients, the session
+   becomes unavailable, and its Node uploads are removed.
+3. Native Send after explicit takeover admits the same immutable input. The
+   delayed Web dispatch resolves to that existing command, with exactly one user
+   history entry and one model request, not another execution or upload.
+
+The browser profile closes and the JVM terminates, both backend hosts crash and
+restart, then fresh clients reopen their journals. Both use only GETs and keep
+identical session/state/command IDs. Retained Web Blob and Node upload bytes are
+verified. Native adoption retains metadata without inventing copies of the other
+client's private attachments. The deleted Gateway staging directory is absent
+once cleanup is confirmed.
+
+The initial harness asserted full cleanup within 15 seconds, which was incorrect:
+Gateway staging is swept every 60 seconds and immediately at startup, independently
+of Node cleanup. The test now permits that honest pending state before restart,
+then waits for and verifies actual completion after startup. No production repair
+was necessary; tombstones fence execution throughout cleanup.
+
+Validation: **three explicit process tests pass**, comprising this three-case
+mixed-client test, the previous two-case native interruption/revocation test and
+the three-case Web interruption test. Strict Clippy for both Rust test targets,
+Kotlin compilation with warnings as errors and Rust/JavaScript/docs formatting
+checks pass. Both live-client test targets remain opt-in/ignored by default; a
+normal CI pass does not imply they ran. The [acceptance guide](../docs/development/first-send-acceptance.md)
+now separates native-only and mixed browser/native commands.
+
+Remaining: unallocated/offline Node and interrupted mapping with actual clients,
+reverse-direction races, broader permission changes and mixed versions; Android
+OS/Keystore/MethodChannel/process-death, real device and attachment pressure;
+activation/rollback plus explicit live-client CI. The harness's fake provider and
+sandbox launcher are not provider/sandbox-isolation proof. No Flutter/full Flutter
+suite, emulator, device, APK or local Nix validation. U2/U4/U5/U6 remain open.
+Commit locally only and remove this run's owned target/JVM/browser/log files;
+preserve SDKs, caches, APKs, user data and other agents' work.
 
 ## Design stages and later implementation gates
 

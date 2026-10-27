@@ -27,15 +27,16 @@ object NativeFirstSendLive {
         pending.writeText(value.json().toString())
         Files.move(pending.toPath(), File(root, "$name.json").toPath(), StandardCopyOption.ATOMIC_MOVE)
     }
-    private suspend fun marker(root: File, name: String) {
+    private suspend fun marker(root: File, name: String): JsonObject {
         val deadline = System.nanoTime() + 60_000_000_000L
         while (!File(root, "$name.json").isFile) {
             check(System.nanoTime() < deadline) { "Timed out waiting for $name" }
             delay(30)
         }
+        return PircJson.parseToJsonElement(File(root, "$name.json").readText()).jsonObject
     }
     @JvmStatic fun main(args: Array<String>) = runBlocking {
-        require(args.size == 2 && args[1] in setOf("send", "recover"))
+        require(args.size == 2 && args[1] in setOf("send", "recover", "compete", "compete-recover"))
         val config = PircJson.parseToJsonElement(File(args[0]).readText()).jsonObject
         val gateway = config.getValue("gateway").jsonPrimitive.content
         require(URI(gateway).host == "127.0.0.1")
@@ -95,6 +96,10 @@ object NativeFirstSendLive {
         try {
             val primary = connection(config.getValue("token").jsonPrimitive.content, directory)
             primary.capabilities(stamp)
+            if (args[1].startsWith("compete")) {
+                compete(args[1], root, primary, PircApi(Pairing(gateway, config.getValue("token").jsonPrimitive.content), client), calls)
+                return@runBlocking
+            }
             val secondDirectory = File(root, "secondary")
             val secondary = connection(config.getValue("secondToken").jsonPrimitive.content, secondDirectory)
             secondary.capabilities(stamp)
@@ -164,4 +169,56 @@ object NativeFirstSendLive {
             client.dispatcher.executorService.shutdown()
         }
     }
+    private suspend fun compete(phase: String, root: File, native: NativeFirstSend, api: PircApi, calls: MutableList<Map<String, Any>>) {
+        val expected = linkedMapOf("race-stop" to "stopped", "race-delete" to "cancelled", "race-admit" to "admitted")
+        val results = mutableListOf<Map<String, Any?>>()
+        for ((id, state) in expected) {
+            if (phase == "compete") {
+                val held = marker(root, "held-$id")
+                val found = FirstSendApi(api).request("GET", "/api/conversation-submissions/$id", owner)!!.jsonObject.getValue("preparation").jsonObject
+                val session = found.getValue("sessionId").jsonPrimitive.content
+                val adopted = native.adopt(stamp, owner, session)
+                check(preparation(adopted)["state"] == "ready")
+                check(preparation(adopted)["operationId"] == id)
+                try {
+                    native.submit(stamp, owner, id, null, "native-competitor")
+                    error("A competing client must not silently take Web control")
+                } catch (error: ApiException) { check(error.status == 409) }
+                check(calls.none { it["path"] == "/api/conversation-submissions/$id/dispatch" })
+                val generation = native.takeControl(stamp, owner, id, "native-competitor")
+                check(generation > held.getValue("generation").jsonPrimitive.long)
+                when (id) {
+                    "race-stop" -> {
+                        val stopped = native.stop(stamp, owner, id, "native-competitor")
+                        check(obj(preparation(stopped)["messageAdmission"])["stopConfirmed"] == true)
+                        val boundary = calls.size
+                        native.stop(stamp, owner, id, "native-competitor")
+                        check(calls.drop(boundary).all { it["method"] == "GET" })
+                    }
+                    "race-delete" -> {
+                        try { native.cancel(stamp, owner, id); error("Accepted deletion requires confirmation") }
+                        catch (error: ApiException) { check(error.status == 409 && error.code == "confirmation_required") }
+                        check(preparation(native.check(stamp, owner, id))["state"] == "ready")
+                        native.cancel(stamp, owner, id, deleteAccepted = true)
+                    }
+                    "race-admit" -> native.submit(stamp, owner, id, null, "native-competitor")
+                }
+            }
+            val result = native.check(stamp, owner, id)
+            val prep = preparation(result)
+            check(prep["state"] == state) { "Unexpected state for $id: ${prep["state"]}" }
+            if (id == "race-delete") {
+                check(obj(result)["message"] == "" && (obj(result)["files"] as List<*>).isEmpty())
+            } else check(obj(result)["message"] == "First message $id")
+            if (id == "race-stop") check(obj(prep["messageAdmission"])["stopConfirmed"] == true)
+            val summary = mapOf("id" to id, "session" to prep["sessionId"], "state" to state,
+                "command" to (prep["messageAdmission"] as? Map<*, *>)?.get("commandId"))
+            results += summary
+            if (phase == "compete") publish(root, "release-$id", summary)
+        }
+        check(!File(root, "primary").walkTopDown().any { it.name.startsWith("blob-") })
+        if (phase == "compete-recover") check(calls.all { it["method"] == "GET" })
+        publish(root, if (phase == "compete") "native-races-done" else "native-race-result", mapOf("operations" to results, "calls" to calls))
+    }
+
 }
