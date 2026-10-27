@@ -39,9 +39,10 @@ jobs:
 
       # The Azure mirror can throttle browser/ffmpeg dependencies for many
       # minutes. Use Ubuntu's upstream archive with the same signed packages.
+      # Newer runner images use a mirror+file source pointing at apt-mirrors.txt.
       - name: Use Ubuntu archive for browser dependencies
         run: |
-          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+          for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
             if [ -f "$source" ]; then
               sudo sed -E -i 's|https?://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
             fi
