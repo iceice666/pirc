@@ -65,6 +65,7 @@ pub(crate) struct Receipt {
     pub target_installed: bool,
     pub sandbox_processes: crate::process_journal::Summary,
     pub host_commands: crate::host_commands::Summary,
+    pub terminals: crate::terminals::journal::Summary,
 }
 fn valid_id(s: &str) -> bool {
     !s.is_empty()
@@ -123,6 +124,7 @@ fn receipt(db: &Connection, owner: &str, session: &str, op: &str) -> ApiResult<O
             target_installed: false,
             sandbox_processes: crate::process_journal::summary(db, session)?,
             host_commands: crate::host_commands::summary(db, session)?,
+            terminals: crate::terminals::journal::summary(db, session)?,
         })
     })
     .transpose()
@@ -220,7 +222,7 @@ pub(crate) async fn drain(node: &Node, owner: &str, session: &str, op: &str) -> 
                 let stopped = async {
                     node.runners.stop_session(&session).await?;
                     crate::process_journal::retire_saved(&node, &session).await?;
-                    node.terminals.dispose_session(&session).await;
+                    node.terminals.dispose_session(&session).await?;
                     node.browser.close_session(&session).await;
                     Ok::<(), ApiError>(())
                 }
@@ -231,6 +233,8 @@ pub(crate) async fn drain(node: &Node, owner: &str, session: &str, op: &str) -> 
                         "blocked",
                         Some(if error.code == "host_stop_unconfirmed" {
                             "host_stop_unconfirmed"
+                        } else if error.code == "terminal_stop_unconfirmed" {
+                            "terminal_stop_unconfirmed"
                         } else {
                             "supervisor_stop_unconfirmed"
                         }),

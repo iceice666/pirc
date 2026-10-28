@@ -328,6 +328,12 @@ remain open; process counts do not grant access.
 now retain the original controller/connection/binding through queued and partial PTY
 writes, rejecting after takeover or an accepted fence. This does not recall bytes
 already delivered or prove termination of terminal descendants.
+The [terminal-supervision checkpoint](unified-conversations.md#u4-implementation-checkpoint-durable-terminal-supervision-2026-10-28)
+retains launch/outcome evidence after panel close, cancellation and restart. Unknown
+shell observations block disposal/deletion and appear in drain receipts; a saved
+direct-shell exit still does not establish detached-descendant containment or full
+revocation. Closing hides UI immediately but retains live quota until settlement.
+
 Node schema 2015 adds [approved host-command supervision](unified-conversations.md#u4-implementation-checkpoint-supervised-host-commands-2026-10-28):
 spawn authority is rechecked at the effect boundary, Stop/drain joins the
 independent observer, and interruption/storage failure preserves unresolved

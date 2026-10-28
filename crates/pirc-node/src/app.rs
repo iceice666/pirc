@@ -903,7 +903,7 @@ impl Drop for DeletionEntry {
 
 async fn remove_session(node: &Node, session: &SessionRow, workspace: &Workspace) -> ApiResult<()> {
     node.runners.stop_session(&session.id).await?;
-    node.terminals.dispose_session(&session.id).await;
+    node.terminals.dispose_session(&session.id).await?;
     node.browser.close_session(&session.id).await;
     let mode = node.workspace_mode(workspace)?;
     // Both paths are allocated by the node, never supplied by the caller.

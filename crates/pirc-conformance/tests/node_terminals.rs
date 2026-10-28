@@ -479,7 +479,21 @@ async fn node_terminals() {
         "POST /api/sessions/:id/terminals/nope/close",
         &s.post("/terminals/nope/close", lease(&s)).await,
     );
-    let created = s.post("/terminals", lease(&s)).await;
+    let created = tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let created = s.post("/terminals", lease(&s)).await;
+            if created.status != 409 {
+                break created;
+            }
+            assert_eq!(
+                created.body["error"]["message"],
+                "At most 4 terminals per session"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("closed shell releases its capacity");
     ids.learn(&created);
     t.response(
         "open again after closing one",

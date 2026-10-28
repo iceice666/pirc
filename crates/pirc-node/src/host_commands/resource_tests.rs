@@ -198,6 +198,8 @@ fn migration_does_not_invent_ranges_for_legacy_commands() {
         let db = Db::open(&file).unwrap();
         let db = db.lock();
         record(&db, "legacy", "running", None);
+        db.execute_batch(include_str!("../terminals/remove_journal.sql"))
+            .unwrap();
         db.execute_batch(include_str!("remove_resources.sql"))
             .unwrap();
         db.execute_batch("PRAGMA user_version=2015").unwrap();

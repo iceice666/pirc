@@ -30,6 +30,7 @@ fn open(terminals: &Terminals, session: &str, cols: f64, rows: f64) -> ApiResult
         Environment {
             vars: env(),
             binding: None,
+            journal: None,
         },
     )
 }
@@ -109,9 +110,9 @@ fn decodes_utf8_streams_as_text_decoder() {
 #[test]
 fn scrollback_drops_whole_chunks_but_never_the_last() {
     let (pty, _) = mpsc::unbounded_channel();
-    let (_, exited) = watch::channel(false);
+    let (_, exited) = watch::channel(None);
     let entry = Entry {
-        pid: None,
+        record: None,
         binding: None,
         stopping: watch::channel(false).0,
         state: Mutex::new(EntryState {
@@ -273,7 +274,8 @@ async fn limits_and_closing() {
     // Another session still has room.
     let other = open(&terminals, "t", 80.0, 24.0).unwrap();
 
-    // Closing tells listeners at once (no exit code) and frees the slot.
+    // Closing tells listeners immediately; the quota frees only after settling.
+    let first_entry = terminals.lookup("s", &first.id).unwrap();
     terminals.close("s", &first.id).unwrap();
     assert_eq!(exit_of(&mut events).await, None);
     assert_eq!(
@@ -281,6 +283,7 @@ async fn limits_and_closing() {
         Some(ApiError::not_found("Terminal not found"))
     );
     assert_eq!(terminals.list("s").len(), 3);
+    supervision::settle(vec![first_entry]).await.unwrap();
     open(&terminals, "s", 80.0, 24.0).unwrap();
 
     // An exited terminal does not count, and the next open drops it.
@@ -293,9 +296,10 @@ async fn limits_and_closing() {
 
     tokio::time::timeout(Duration::from_secs(10), terminals.dispose_session("s"))
         .await
-        .expect("the shells exit on SIGHUP");
+        .expect("the shells exit on SIGHUP")
+        .unwrap();
     assert!(terminals.list("s").is_empty());
-    terminals.shutdown();
+    terminals.shutdown().await;
     assert!(terminals.list("t").is_empty());
     assert_eq!(
         open(&terminals, "t", 80.0, 24.0).err(),

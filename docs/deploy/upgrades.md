@@ -1,8 +1,36 @@
 # Upgrades
 
+## Unreleased local checkpoint: terminal supervision
+
+Node schema **2017** adds a minimal retained panel-terminal journal. Preserve a
+matching binary/state backup; older binaries reject this schema, and rewriting
+its version or deleting evidence is not a rollback or reconciliation method.
+Gateway remains 1025 and protocol/client/private envelope stay 15/2/3; there are
+no package, dependency or Nix hash changes.
+
+A close request hides the panel immediately, but the closing shell retains its
+quota until its observer records the result. At the four-per-session limit,
+wait for that settlement before opening another terminal. Stop signaling and
+reaping share one observer, so a delayed signal is not sent after its child has
+already been reaped. Shutdown joins bounded observers instead of discarding them.
+
+Interrupted prior launches or failed result persistence can produce
+`terminal_stop_unconfirmed`. Session deletion keeps its files, and environment
+transition drain reports `blocked`; a new Node with no live terminal entries does
+not erase this uncertainty. No automatic replay, saved-PID signaling or manual
+force-clear is supported. Saved records retain only original session/workspace,
+root, Node incarnation and outcome/times, not terminal input/output or credentials.
+They remain after session deletion for reconciliation.
+
+`terminals.observersSettled` covers the direct shell, not every detached or
+foreground job or writable file descriptor. Old terminals have no inventory;
+`historyComplete`, `revocationConfirmed` and `targetInstalled` remain false, and
+public switching remains disabled. See the
+[implementation checkpoint](../../plans/unified-conversations.md#u4-implementation-checkpoint-durable-terminal-supervision-2026-10-28).
+
 ## Unreleased local checkpoint: memory cutover admission
 
-No new schema or wire format: Node stays **2016**. Cold repository-memory
+That checkpoint introduced no new schema or wire format (Node **2016**). Cold repository-memory
 initialization now refuses unresolved local host-command ranges, including its
 own session's jobs and orphaned owners, and retains admission through the durable
 journal append. Pre-cutover legacy tail repair also retains admission; checked

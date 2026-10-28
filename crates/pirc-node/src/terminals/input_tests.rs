@@ -102,6 +102,7 @@ async fn cleanup(f: &Fixture) {
         f.node.terminals.dispose_session(&f.current),
     )
     .await
+    .unwrap()
     .unwrap();
     f.node.close().await;
 }
@@ -184,7 +185,7 @@ async fn queued_input_observes_fence_without_stopping_peer_terminal() {
             .code,
         "environment_transition_pending"
     );
-    f.node.terminals.dispose_session(&peer.id).await;
+    f.node.terminals.dispose_session(&peer.id).await.unwrap();
     cleanup(&f).await;
 }
 
@@ -252,11 +253,11 @@ async fn partial_write_rechecks_after_backpressure_and_does_not_send_the_tail() 
         let (master, slave) = pty::open(24, 80).unwrap();
         let mut reader = slave.raw_reader().unwrap();
         let (pty, _) = mpsc::unbounded_channel();
-        let (_, exited) = watch::channel(false);
+        let (_, exited) = watch::channel(None);
         let cwd = root(&f);
         let binding = Binding::capture(&f.node, &f.node.db.lock(), &f.current, &cwd).unwrap();
         let entry = Arc::new(Entry {
-            pid: None,
+            record: None,
             binding: Some(binding),
             stopping: watch::channel(false).0,
             state: Mutex::new(EntryState {

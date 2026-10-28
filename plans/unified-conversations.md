@@ -134,7 +134,7 @@ Immediate U1 queue:
 The dated checkpoints later in this file preserve what was delivered and tested
 at that time. Historical “local only”, “next slice” and incomplete-adoption notes
 are superseded by this snapshot where they conflict; unchecked acceptance gates
-remain open. The [work queue](README.md#current-implementation-status-2026-10-27)
+remain open. The [work queue](README.md#current-implementation-status-2026-10-28)
 provides the compact cross-plan view.
 
 ## Agreed direction and priority
@@ -3936,3 +3936,64 @@ Linux kernel revocation or Android device acceptance.
 Work remains local. All validation processes completed, and this checkpoint's
 isolated build/log directory (about **2.6 GiB**) was removed. APKs, shared caches,
 user data and other agents' work were preserved.
+
+## U4 implementation checkpoint: durable terminal supervision (2026-10-28)
+
+Node schema **2017** now reserves a minimal terminal launch record before opening
+and spawning a panel shell. It retains the original session, workspace, execution
+root and Node incarnation plus state/timestamps; it contains no typed commands,
+output, credentials or reusable numeric PID. Origin fields and terminal outcomes
+cannot be rewritten, and records survive session deletion. Older schemas migrate
+without inventing historical terminal coverage.
+
+Closing a panel still hides it immediately and stops queued input. Its entry and
+independent observer now remain tracked until settlement, including after a
+canceled disposal request. Closing shells continue to occupy the existing live
+quota until their outcome is saved. A sole observer owns signaling and reaping:
+when stop wins it sends HUP, retains the unreaped child during the two-second
+grace, sends KILL, then performs a bounded wait. Natural exit never schedules a
+later numeric signal. Node shutdown requests all stops before its bounded join;
+mode replacement logs unknown outcomes, while deletion and transition drain
+propagate `terminal_stop_unconfirmed` before removing session files.
+
+A failed reservation cannot spawn. A failed post-spawn update still transfers the
+child to its observer and requests shutdown. Failed waiting or outcome storage,
+missing observers and saved `launching`/`running`/`unconfirmed` records cannot be
+converted into successful disposal by an empty live registry or a Node restart.
+Receipts include `terminals` launch/not-started/settled/unresolved counts. A
+successful direct-shell observation is retained across restart and duplicate
+transition requests without replaying the shell. No force-clear or automatic
+replay is introduced; durable restart reconciliation remains a later U4 gate.
+
+This is direct-shell supervision, **not complete terminal containment**. Foreground
+jobs in other process groups, detached descendants and old open descriptors still
+need platform-specific retirement/containment. Pre-2017 processes are not
+inventoried, so `historyComplete: false`, `revocationConfirmed: false` and
+`targetInstalled: false` remain unchanged. Human terminals do not gain new
+Agent-write leases from this journal. Public switching and U1 activation remain
+disabled; installation/coordinator controls, live resource grants and U5/U6
+remain open. Gateway stays 1025; protocol/client/private envelope stay 15/2/3.
+No frontend, package version, dependency or Nix hash changes are included.
+
+Local validation: **541 Node library tests passed** (four subprocess helper tests
+are top-level ignored and invoked by their parent cases). Eight new focused
+cases cover canceled disposal after manual close, HUP-resistant shell shutdown,
+pre-spawn reservation failure, spawn failure, natural exit, post-spawn journal
+failure, failed outcome storage, missing live entries, preserved files on blocked
+deletion, immutable restart evidence and the 2016→2017 migration. Existing tests
+retain takeover/fence/mode-change input checks and peer terminal independence.
+
+**22 required real-process cases** passed with rebuilt Node/Gateway binaries:
+checkpoints (3), conversation admission (2), creation (2), execution fences (3),
+host commands (1), inference (1), memory (1), Node-link side channels (5), terminals
+(2), project deletion (1) and streams (1). The new case exercises close→drain→hard
+restart and crash-before-stop, including duplicate acceptance, retained receipts
+and deletion refusal. Its initial assertion was corrected to the existing close
+API's 204 status; no API success status changed. Strict Node/conformance
+all-target Clippy passed after giving a test's database guard an explicit lexical
+scope before shutdown. Rust fmt, changed-document Prettier and diff checks passed.
+
+These are local macOS process/PTY tests, not Linux kernel containment or Android
+device acceptance. No Flutter source changed, and no browser/emulator, live
+provider or Nix verification was used. The isolated target/log directory is
+removed after validation; shared caches and APKs are retained.

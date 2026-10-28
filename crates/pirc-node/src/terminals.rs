@@ -17,7 +17,11 @@
 //! `output` to its listeners), one writes it (input and resizes, in order),
 //! input is rechecked against its original connection/controller and terminal
 //! environment at each nonblocking write or resize; closing cancels the writer.
-//! One task waits for the shell: then, 50 ms later (to drain what the PTY still
+//! A durable launch record precedes spawn. One observer signals and reaps the
+//! shell, retaining its identity until the final signal; panel closure cannot
+//! abandon that observer. The recorded outcome is only direct-shell evidence,
+//! not containment of detached jobs or all foreground process groups. Then,
+//! 50 ms later (to drain what the PTY still
 //! holds), the PTY closes and listeners get `exit`. Output reaches
 //! listeners while the terminal's lock is held, so an attach sees each byte
 //! either in its replay or as output, never both nor neither; exits reach
@@ -29,8 +33,6 @@ use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::Duration;
 
 use indexmap::IndexMap;
-use nix::sys::signal::Signal;
-use pirc_agent::tools::bash::kill_group;
 use serde::Serialize;
 use tokio::sync::{mpsc, watch};
 
@@ -39,7 +41,9 @@ use crate::services::WeakNode;
 use crate::store::Store;
 
 mod input;
+pub(crate) mod journal;
 pub(crate) mod pty;
+mod supervision;
 pub(crate) use input::Control;
 use input::{Authority, Binding};
 
@@ -98,13 +102,13 @@ struct Registry {
 }
 
 struct Entry {
-    pid: Option<u32>,
+    record: Option<journal::Record>,
     binding: Option<Binding>,
     stopping: watch::Sender<bool>,
     state: Mutex<EntryState>,
     pty: mpsc::UnboundedSender<PtyCommand>,
-    /// True once the shell exited.
-    exited: watch::Receiver<bool>,
+    /// Published only after the observer records its durable outcome.
+    exited: watch::Receiver<Option<ApiResult<()>>>,
 }
 
 struct EntryState {
@@ -127,9 +131,10 @@ enum Action {
     Resize { rows: f64, cols: f64 },
 }
 
-struct Environment {
+struct Environment<'a> {
     vars: BTreeMap<String, String>,
     binding: Option<Binding>,
+    journal: Option<(&'a crate::services::Node, &'a rusqlite::Connection)>,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -192,7 +197,10 @@ impl Terminals {
         let entries: Vec<Arc<Entry>> = self.registry().terminals.values().cloned().collect();
         entries
             .iter()
-            .map(|entry| entry.state().info.clone())
+            .filter_map(|entry| {
+                let state = entry.state();
+                (!state.closing).then(|| state.info.clone())
+            })
             .filter(|info| info.session_id == session_id)
             .collect()
     }
@@ -235,6 +243,7 @@ impl Terminals {
             Environment {
                 vars: env,
                 binding: Some(binding),
+                journal: Some((&node, &db)),
             },
         )
     }
@@ -247,11 +256,12 @@ impl Terminals {
         cols: f64,
         rows: f64,
         shell: &str,
-        environment: Environment,
+        environment: Environment<'_>,
     ) -> ApiResult<TerminalInfo> {
         let Environment {
             vars: mut env,
             binding,
+            journal,
         } = environment;
         let mut registry = self.registry();
         if registry.closing {
@@ -284,25 +294,49 @@ impl Terminals {
         env.insert("COLORTERM".into(), "truecolor".into());
         env.insert("PIRC_TERMINAL".into(), "1".into());
 
-        let (pty, slave) = pty::open(rows, cols).map_err(|error| {
-            crate::log::error(&format!("terminal: no PTY: {error}"));
-            ApiError::internal()
-        })?;
-        // Through /bin/sh and exec: spawned directly, some shells (fish,
-        // zsh) come up without the PTY as their controlling terminal and
-        // lose job control. It is a session leader (Bun's `detached`), so a
-        // hangup to the group reaches its jobs too.
-        let child = pty::spawn(slave, shell, cwd, &env).map_err(|error| {
-            ApiError::new(
-                500,
-                "runner_unavailable",
-                format!(
-                    "Could not start shell: {}",
-                    pirc_agent::tools::js::fs_error(&error, "posix_spawn", Some("/bin/sh"))
-                ),
-            )
-        })?;
-        let (exited_tx, exited) = watch::channel(false);
+        let record = journal
+            .map(|(node, db)| {
+                let workspace = &binding.as_ref().ok_or_else(ApiError::internal)?.workspace;
+                journal::Record::reserve(node, db, session_id, workspace, cwd)
+            })
+            .transpose()?;
+        let launched = (|| {
+            let (pty, slave) = pty::open(rows, cols).map_err(|error| {
+                crate::log::error(&format!("terminal: no PTY: {error}"));
+                ApiError::internal()
+            })?;
+            // Through /bin/sh and exec: spawned directly, some shells (fish,
+            // zsh) come up without the PTY as their controlling terminal and
+            // lose job control. It is a session leader (Bun's `detached`), so a
+            // hangup to the group reaches its jobs too.
+            let child = pty::spawn(slave, shell, cwd, &env).map_err(|error| {
+                ApiError::new(
+                    500,
+                    "runner_unavailable",
+                    format!(
+                        "Could not start shell: {}",
+                        pirc_agent::tools::js::fs_error(&error, "posix_spawn", Some("/bin/sh"))
+                    ),
+                )
+            })?;
+            Ok::<_, ApiError>((pty, child))
+        })();
+        let (pty, child) = match launched {
+            Ok(pair) => pair,
+            Err(error) => {
+                if let (Some(record), Some((_, db))) = (&record, journal) {
+                    record.finish(db, "not_started")?;
+                }
+                return Err(error);
+            }
+        };
+        // Once spawn succeeds, the observer must own the child even if the
+        // journal update fails. A request error cannot drop supervision.
+        let running = match (&record, journal) {
+            (Some(record), Some((_, db))) => record.finish(db, "running"),
+            _ => Ok(()),
+        };
+        let (exited_tx, exited) = watch::channel(None);
         let (commands, receiver) = mpsc::unbounded_channel();
         let info = TerminalInfo {
             id: id.clone(),
@@ -316,7 +350,7 @@ impl Terminals {
             exited: false,
         };
         let entry = Arc::new(Entry {
-            pid: child.id(),
+            record,
             binding,
             stopping: watch::channel(false).0,
             state: Mutex::new(EntryState {
@@ -330,6 +364,9 @@ impl Terminals {
             pty: commands,
             exited,
         });
+        if running.is_err() {
+            kill(&entry);
+        }
         registry.terminals.insert(id, entry.clone());
         drop(registry);
         run(
@@ -341,6 +378,7 @@ impl Terminals {
             receiver,
             exited_tx,
         );
+        running?;
         Ok(info)
     }
 
@@ -348,7 +386,10 @@ impl Terminals {
         self.registry()
             .terminals
             .get(id)
-            .filter(|entry| entry.state().info.session_id == session_id)
+            .filter(|entry| {
+                let state = entry.state();
+                !state.closing && state.info.session_id == session_id
+            })
             .cloned()
             .ok_or_else(|| ApiError::not_found("Terminal not found"))
     }
@@ -369,6 +410,9 @@ impl Terminals {
             registry.next_listener
         };
         let mut state = entry.state();
+        if state.closing {
+            return Err(ApiError::not_found("Terminal is closed"));
+        }
         state.listeners.push((listener_id, listener));
         // Decoded on its own (TS): a split code point at its start is
         // dropped as U+FFFD, not mangled.
@@ -476,25 +520,19 @@ impl Terminals {
     /// 404 `not_found` "Terminal not found".
     pub fn close(&self, session_id: &str, terminal_id: &str) -> ApiResult<()> {
         let entry = self.lookup(session_id, terminal_id)?;
-        self.registry().terminals.shift_remove(terminal_id);
         kill(&entry);
         Ok(())
     }
 
     /// Close every terminal of a session; the entries closed.
     fn close_session(&self, session_id: &str) -> Vec<Arc<Entry>> {
-        let entries: Vec<Arc<Entry>> = {
-            let mut registry = self.registry();
-            let ids: Vec<String> = registry
-                .terminals
-                .iter()
-                .filter(|(_, entry)| entry.state().info.session_id == session_id)
-                .map(|(id, _)| id.clone())
-                .collect();
-            ids.iter()
-                .filter_map(|id| registry.terminals.shift_remove(id))
-                .collect()
-        };
+        let entries: Vec<Arc<Entry>> = self
+            .registry()
+            .terminals
+            .values()
+            .filter(|entry| entry.state().info.session_id == session_id)
+            .cloned()
+            .collect();
         for entry in &entries {
             kill(entry);
         }
@@ -503,54 +541,42 @@ impl Terminals {
 
     /// Close a session's terminals and wait for their processes to exit
     /// (chat deletion, before its files go).
-    pub async fn dispose_session(&self, session_id: &str) {
-        for entry in self.close_session(session_id) {
-            let mut exited = entry.exited.clone();
-            let _ = exited.wait_for(|exited| *exited).await;
+    pub async fn dispose_session(&self, session_id: &str) -> ApiResult<()> {
+        supervision::settle(self.close_session(session_id)).await?;
+        if let Some(node) = self.node.upgrade() {
+            journal::require_settled(&node.db.lock(), session_id)?;
         }
+        Ok(())
     }
 
-    /// Node shutdown: refuse new terminals, kill every one, wait for none.
-    pub fn shutdown(&self) {
-        let entries: Vec<Arc<Entry>> = {
+    /// Refuse new terminals, request all stops, and join bounded observers.
+    pub async fn shutdown(&self) {
+        let entries = {
             let mut registry = self.registry();
             registry.closing = true;
-            registry
-                .terminals
-                .drain(..)
-                .map(|(_, entry)| entry)
-                .collect()
+            registry.terminals.values().cloned().collect::<Vec<_>>()
         };
         for entry in &entries {
             kill(entry);
         }
+        if let Err(error) = supervision::settle(entries).await {
+            crate::log::error(&format!("terminal shutdown: {}", error.code));
+        }
     }
 }
 
-/// Tell listeners the terminal ended, then SIGHUP its process group and
-/// SIGKILL it 2 s later unless it exited (the exit handler closes the PTY).
+/// Hide the panel and cancel queued input; only its observer signals/reaps the
+/// child. Retain the entry so a canceled close/deletion cannot lose observation.
 fn kill(entry: &Arc<Entry>) {
-    let (listeners, exited) = {
+    let listeners = {
         let mut state = entry.state();
         state.closing = true;
         entry.stopping.send_replace(true);
-        (std::mem::take(&mut state.listeners), state.info.exited)
+        std::mem::take(&mut state.listeners)
     };
     for (_, listener) in listeners {
         listener(&TerminalEvent::Exit(None));
     }
-    if exited {
-        return;
-    }
-    kill_group(entry.pid, Signal::SIGHUP);
-    let pid = entry.pid;
-    let mut exited = entry.exited.clone();
-    tokio::spawn(async move {
-        tokio::select! {
-            () = tokio::time::sleep(KILL_GRACE) => kill_group(pid, Signal::SIGKILL),
-            _ = exited.wait_for(|exited| *exited) => {}
-        }
-    });
 }
 
 /// Append output to the scrollback (whole chunks dropped from the front
@@ -577,10 +603,10 @@ fn run(
     node: WeakNode,
     registry: Weak<Mutex<Registry>>,
     entry: Arc<Entry>,
-    mut child: Box<dyn process_wrap::tokio::ChildWrapper>,
+    child: Box<dyn process_wrap::tokio::ChildWrapper>,
     pty: pty::Master,
     mut commands: mpsc::UnboundedReceiver<PtyCommand>,
-    exited: watch::Sender<bool>,
+    exited: watch::Sender<Option<ApiResult<()>>>,
 ) {
     let reader = Arc::new(pty);
     let writer = reader.clone();
@@ -595,6 +621,7 @@ fn run(
         })
     };
     let writing = {
+        let node = node.clone();
         let entry = entry.clone();
         let mut stopping = entry.stopping.subscribe();
         tokio::spawn(async move {
@@ -613,17 +640,37 @@ fn run(
         })
     };
     tokio::spawn(async move {
-        let code = match child.wait().await {
-            // A signal's death is `null` (TS: `signalCode`).
-            Ok(status) => status.code(),
-            Err(_) => None,
-        };
+        let observed = supervision::observe(child, entry.stopping.subscribe()).await;
+        let code = observed.as_ref().ok().and_then(|status| status.code());
+        let mut result = observed.map(|_| ());
+        if let Some(record) = &entry.record {
+            result = node
+                .upgrade()
+                .ok_or_else(journal::unresolved)
+                .and_then(|node| {
+                    record
+                        .finish(
+                            &node.db.lock(),
+                            if result.is_ok() {
+                                "settled"
+                            } else {
+                                "unconfirmed"
+                            },
+                        )
+                        .map_err(|_| journal::unresolved())?;
+                    result
+                });
+        }
         {
             let mut state = entry.state();
-            state.info.exited = true;
+            // Unknown outcomes never free the live quota or imply an exit.
+            state.info.exited = result.is_ok();
             state.info.exit_code = code;
+            if result.is_err() {
+                state.closing = true;
+            }
         }
-        let _ = exited.send(true);
+        exited.send_replace(Some(result));
         // Drain what the PTY still holds, then close it and tell listeners.
         tokio::time::sleep(DRAIN).await;
         reading.abort();
@@ -723,3 +770,7 @@ mod tests;
 #[cfg(test)]
 #[path = "terminals/input_tests.rs"]
 mod input_tests;
+
+#[cfg(test)]
+#[path = "terminals/supervision_tests.rs"]
+mod supervision_tests;

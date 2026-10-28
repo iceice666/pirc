@@ -1,3 +1,7 @@
+DROP TRIGGER terminal_runs_identity;
+DROP TRIGGER terminal_runs_terminal;
+DROP TRIGGER terminal_runs_retained;
+DROP TABLE terminal_runs;
 -- Tests only: reconstruct pre-2016 schema.
 DROP TRIGGER host_resources_immutable;
 DROP TRIGGER host_resources_retained;

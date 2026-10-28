@@ -303,3 +303,137 @@ async fn terminal_stream_reports_the_fence_while_a_peer_remains_interactive() {
         .await;
     assert_eq!(peer_removed["data"]["status"], 204, "{peer_removed}");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn terminal_observation_survives_restart_and_an_unknown_shell_blocks_deletion() {
+    for settle_before_crash in [true, false] {
+        let gateway = FakeGateway::bind().await;
+        let Some(mut node) = LoneNode::start_with(
+            gateway.port(),
+            NodeOptions {
+                chat_node: true,
+                agent_core_only: true,
+                env: vec![
+                    ("PIRC_BROWSER", "false".into()),
+                    ("PIRC_TERMINAL_SHELL", "/bin/sh".into()),
+                ],
+            },
+        ) else {
+            return;
+        };
+        let mut link = register(&gateway).await;
+        let created = link
+            .request(
+                "create",
+                req("POST", "/api/sessions", json!({"workspaceId":"chats"})),
+            )
+            .await;
+        assert_eq!(created["data"]["status"], 201, "{created}");
+        let session = created["data"]["body"]["session"]["id"].as_str().unwrap();
+        let epoch = created["data"]["body"]["session"]["runnerEpoch"].clone();
+        let base = format!("/api/sessions/{session}");
+        let acquired = link
+            .request(
+                "control",
+                req(
+                    "POST",
+                    &format!("{base}/control/acquire"),
+                    json!({"clientId":"phone"}),
+                ),
+            )
+            .await;
+        let generation = acquired["data"]["body"]["lease"]["generation"].clone();
+        assert!(generation.is_number(), "{acquired}");
+        let lease = json!({"clientId":"phone","generation":generation});
+        let terminal = link
+            .request(
+                "terminal",
+                req("POST", &format!("{base}/terminals"), lease.clone()),
+            )
+            .await;
+        assert_eq!(terminal["data"]["status"], 201, "{terminal}");
+        let terminal = terminal["data"]["body"]["terminal"]["id"].as_str().unwrap();
+        if settle_before_crash {
+            let closed = link
+                .request(
+                    "manual-close",
+                    req(
+                        "POST",
+                        &format!("{base}/terminals/{terminal}/close"),
+                        lease.clone(),
+                    ),
+                )
+                .await;
+            assert_eq!(closed["data"]["status"], 204, "{closed}");
+        }
+        let path = format!("{base}/execution-fences/terminal-reboot");
+        let acceptance = req(
+            "POST",
+            &format!("{base}/execution-fences"),
+            json!({"intent":{
+            "operationId":"terminal-reboot","planHash":"b".repeat(64),"expectedWorkspaceId":"chats","expectedRunnerEpoch":epoch},
+            "clientId":"phone","generation":generation}),
+        );
+        let accepted = link.request("accept", acceptance.clone()).await;
+        assert_eq!(accepted["data"]["status"], 200, "{accepted}");
+        if settle_before_crash {
+            let drained = link
+                .request("drain", req("POST", &format!("{path}/drain"), json!({})))
+                .await;
+            assert_eq!(
+                drained["data"]["body"]["transition"]["state"], "supervisor_drained",
+                "{drained}"
+            );
+            assert_eq!(
+                drained["data"]["body"]["transition"]["terminals"]["observersSettled"],
+                1
+            );
+        }
+        node.restart(true);
+        drop(link);
+        let mut link = register(&gateway).await;
+        let replay = link.request("replayed-acceptance", acceptance).await;
+        assert_eq!(replay["data"]["status"], 200, "{replay}");
+        let drained = link
+            .request(
+                "restart-drain",
+                req("POST", &format!("{path}/drain"), json!({})),
+            )
+            .await;
+        assert_eq!(drained["data"]["status"], 200, "{drained}");
+        let result = &drained["data"]["body"]["transition"];
+        assert_eq!(result["revocationConfirmed"], false);
+        assert_eq!(result["targetInstalled"], false);
+        assert_eq!(result["terminals"]["historyComplete"], false);
+        assert_eq!(result["terminals"]["launches"], 1);
+        if settle_before_crash {
+            assert_eq!(result["state"], "supervisor_drained");
+            assert_eq!(result["terminals"]["unresolved"], 0);
+            assert_eq!(result["terminals"]["observersSettled"], 1);
+        } else {
+            assert_eq!(result["state"], "blocked");
+            assert_eq!(result["errorCode"], "terminal_stop_unconfirmed");
+            assert_eq!(result["terminals"]["unresolved"], 1);
+        }
+        let deleted = link
+            .request("delete", req("DELETE", &base, Value::Null))
+            .await;
+        if settle_before_crash {
+            assert_eq!(deleted["data"]["status"], 204, "{deleted}");
+        } else {
+            assert_eq!(deleted["data"]["status"], 503, "{deleted}");
+            assert_eq!(
+                deleted["data"]["body"]["error"]["code"],
+                "terminal_stop_unconfirmed"
+            );
+        }
+        let receipt = link
+            .request("retained", req("GET", &path, Value::Null))
+            .await;
+        assert_eq!(receipt["data"]["status"], 200, "{receipt}");
+        assert_eq!(
+            receipt["data"]["body"]["transition"]["terminals"],
+            result["terminals"]
+        );
+    }
+}

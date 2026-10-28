@@ -211,7 +211,9 @@ impl Services {
         };
         for id in sessions {
             let _ = self.runners.stop_session(&id).await;
-            self.terminals.dispose_session(&id).await;
+            if let Err(error) = self.terminals.dispose_session(&id).await {
+                crate::log::error(&format!("terminal mode change: {}", error.code));
+            }
         }
     }
 
@@ -357,7 +359,7 @@ impl Services {
         self.inference.close().await;
         self.terminate.send_replace(true);
         // Fastify's `onClose`.
-        self.terminals.shutdown();
+        self.terminals.shutdown().await;
         self.runners.shutdown().await;
         self.host_commands.shutdown().await;
         self.browser.shutdown().await;

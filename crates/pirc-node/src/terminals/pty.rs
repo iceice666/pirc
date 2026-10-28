@@ -129,6 +129,7 @@ pub fn spawn(
         .arg(shell)
         .arg(&slave.path)
         .current_dir(cwd)
+        .kill_on_drop(true)
         .env_clear()
         .envs(env)
         .stdin(slave.fd.try_clone()?)

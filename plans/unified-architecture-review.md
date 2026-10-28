@@ -26,7 +26,7 @@ requested a pull/rebase and push of accumulated code plus updated plan progress.
 First-send persistence, original attachments, Stop/delete/retry recovery and
 Web/native Android adoption are implemented through `578f759a`; activation stays
 off until the remaining client/process/device and rollout gates pass. Follow the
-[current snapshot](unified-conversations.md#current-progress-and-next-delivery-2026-10-27)
+[current snapshot](unified-conversations.md#current-progress-and-next-delivery-2026-10-28)
 for evidence and the open U1–U6 queue. This does not mark the broader contracts
 below implemented, or authorize deployment, a Release, Flutter Web or a UI reset.
 

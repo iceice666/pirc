@@ -36,7 +36,7 @@ impl Authority {
 }
 
 pub(super) struct Binding {
-    workspace: String,
+    pub(super) workspace: String,
     path: String,
     mode: Mode,
 }
