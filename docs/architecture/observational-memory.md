@@ -19,6 +19,25 @@ standalone and child writers before explicitly running
 cutover without waiting on another runner's lifecycle lock. Retry after those
 writers have stopped. This does not automatically activate any deployed ledger.
 
+Cold cutover also checks the Node's durable approved-host-command resource
+inventory, including the caller's own commands and owners whose session/runner
+has disappeared. Overlapping unresolved ranges, unknown legacy ranges and
+inventory failures refuse initialization; a known independent range does not.
+Legacy writer preparation holds the same exclusion while repairing an incomplete
+tail. Checked append refuses an unrepaired tail (`journal_repair_required`) rather
+than changing bytes before its admission check. The final writer check holds Node
+admission until the journal append and sync complete, preventing a new host launch between that check and the commit. The
+admission guard is released before the final journal read; runner checks remain
+nonblocking. Host approval encountering a busy runner reports
+`host_admission_busy` and does not reserve or spawn a command.
+
+An acknowledged immutable cutover job remains committed on retry even if new
+work has since started; it is not applied again. Unknown responses still retain
+the original job for reconciliation. The `--writers-stopped` requirement remains:
+this inventory cannot prove that untracked old processes, arbitrary detached
+host children or writers on another Node have stopped. Memory source ownership,
+deletions, clear/forget rules and checkpoint recovery isolation are unchanged.
+
 Routine context requests no longer capture all history boundaries. Only an
 explicit clear preparation requests `includeBoundaries`; cold cutover captures
 its boundaries on the host. Control metadata reads authorized session headers,

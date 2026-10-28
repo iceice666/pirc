@@ -711,6 +711,27 @@ fn next_job(view: &View, state: &Snapshot, catchup: bool) -> ApiResult<Value> {
     }
     Ok(Value::Null)
 }
+/// Caller holds Node admission. Runner checks stay nonblocking to avoid the
+/// two-memory-call lifecycle lock inversion; pending host evidence is independent
+/// of live runner/session membership and includes the caller's own host jobs.
+fn cold_writers_stopped(node: &Node, db: &rusqlite::Connection, s: &Scope) -> ApiResult<()> {
+    crate::host_commands::resources::require_available(db, Path::new(&s.root), None)?;
+    crate::host_commands::resources::require_available(db, &ledger(node, s), None)?;
+    for workspace in db.list_workspaces()? {
+        let (key, root) = pirc_agent::features::memory::workspace::resolve_workspace_from_files(
+            &workspace.canonical_path,
+        );
+        if key == s.key && root == s.root {
+            for row in db.workspace_sessions(&workspace.id)? {
+                if row.id != s.caller && node.runners.may_be_alive(&row.id) {
+                    return Err(unavailable("workspace_writers_active"));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 fn mutation(view: &View, args: &Value, state: &Snapshot, action: &str) -> ApiResult<Value> {
     let node = &view.node;
     let s = &view.scope;
@@ -749,21 +770,7 @@ fn mutation(view: &View, args: &Value, state: &Snapshot, action: &str) -> ApiRes
                     "Cold cutover requires all old writers stopped",
                 ));
             }
-            let workspaces = node.db.lock().list_workspaces()?;
-            for workspace in workspaces {
-                let (key, root) =
-                    pirc_agent::features::memory::workspace::resolve_workspace_from_files(
-                        &workspace.canonical_path,
-                    );
-                if key == s.key && root == s.root {
-                    let sessions = node.db.lock().workspace_sessions(&workspace.id)?;
-                    for row in sessions {
-                        if row.id != s.caller && node.runners.may_be_alive(&row.id) {
-                            return Err(unavailable("workspace_writers_active"));
-                        }
-                    }
-                }
-            }
+            cold_writers_stopped(node, &node.db.lock(), s)?;
 
             if state.control.is_some() {
                 return Err(unavailable("workspace_already_active"));
@@ -930,9 +937,17 @@ fn mutation(view: &View, args: &Value, state: &Snapshot, action: &str) -> ApiRes
     let new = journal::append_checked(&ledger(node, s), &frame, state, || {
         view.verify_sources(true).map_err(|e| e.code.into_owned())?;
         if action == "cold" {
+            // No own-session exemption: the caller may have a detached or
+            // independently supervised host job despite having stopped Agent.
+            let admission = node.db.lock();
+            cold_writers_stopped(node, &admission, s).map_err(|e| e.code.into_owned())?;
             format_fence(&ledger(node, s))?;
+            // Held through journal append + fsync, preventing a fresh host
+            // reservation between the last writer check and durable cutover.
+            Ok(Some(admission))
+        } else {
+            Ok(None)
         }
-        Ok(())
     })
     .map_err(err)?;
     Ok(json!({"committed":true,"control":public_control(view,&new)?}))
@@ -1066,6 +1081,17 @@ pub fn open_writer(node: &Node, s: &Scope, args: &Value, recover_only: bool) -> 
             Err(unavailable("workspace_cold_cutover_required"))
         };
     }
+    // Opening a legacy writer may repair/truncate an incomplete tail before
+    // execute("workspace.cold") runs. Protect that effect too, not just the later
+    // frame append. Journal locks are nonblocking, so contention refuses opening
+    // rather than waiting on a checked writer holding journal before admission.
+    let _admission = if !active {
+        let admission = node.db.lock();
+        cold_writers_stopped(node, &admission, s)?;
+        Some(admission)
+    } else {
+        None
+    };
     if !path.parent().is_some_and(Path::is_dir) {
         std::fs::create_dir_all(
             path.parent()

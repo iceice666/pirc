@@ -335,11 +335,13 @@ pub fn read(path: &Path) -> Result<Snapshot, String> {
 pub fn append(path: &Path, frame: &Commit, expected: &Snapshot) -> Result<Snapshot, String> {
     append_checked(path, frame, expected, || Ok(()))
 }
-pub fn append_checked(
+/// The check may return an admission guard. Keep it until the append and fsync
+/// finish, then release it before reacquiring the journal for the final read.
+pub fn append_checked<G>(
     path: &Path,
     frame: &Commit,
     expected: &Snapshot,
-    check: impl FnOnce() -> Result<(), String>,
+    check: impl FnOnce() -> Result<G, String>,
 ) -> Result<Snapshot, String> {
     if !validate(frame) {
         return Err("invalid_workspace_commit".into());
@@ -350,7 +352,8 @@ pub fn append_checked(
         .mode(0o700)
         .create(path.parent().ok_or("unsafe_journal_path")?)
         .map_err(|_| "workspace_directory_unavailable")?;
-    let writer = Journal::at_path(path, validate_values)?;
+    let writer = Journal::at_path_without_repair(path, validate_values)?;
+    let mut admission = None;
     writer.transaction(|raw| {
         let current = parse(raw)?;
         if let Some(old) = current.jobs.get(&frame.job_id) {
@@ -359,7 +362,7 @@ pub fn append_checked(
             }
             return Ok(((), Vec::new()));
         }
-        check()?;
+        admission = Some(check()?);
         if current.hash != expected.hash {
             return Err("workspace_stale".into());
         }
@@ -370,6 +373,9 @@ pub fn append_checked(
         delta.push(b'\n');
         Ok(((), delta))
     })?;
+    // Do not hold an admission lock while reacquiring this journal: another
+    // checked writer may already hold the journal and be waiting for admission.
+    drop(admission);
     // Re-read under the same OS mutex and synchronize before acknowledging.
     parse(&writer.snapshot()?)
 }
@@ -540,5 +546,128 @@ mod outcome_tests {
         ] {
             assert!(!mutation_rejected(code), "{code}");
         }
+    }
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+    use std::{
+        cell::Cell,
+        sync::{Mutex, MutexGuard},
+    };
+
+    struct Admission<'a> {
+        _lock: MutexGuard<'a, ()>,
+        path: &'a Path,
+        expected_job: &'a str,
+        dropped: &'a Cell<bool>,
+    }
+    impl Drop for Admission<'_> {
+        fn drop(&mut self) {
+            // The file must already contain the durable commit at release.
+            assert!(
+                read(self.path)
+                    .unwrap()
+                    .jobs
+                    .contains_key(self.expected_job)
+            );
+            // Admission must not be released from inside the journal lock.
+            Journal::at_path(self.path, validate_values)
+                .unwrap()
+                .snapshot()
+                .unwrap();
+            self.dropped.set(true);
+        }
+    }
+    #[test]
+    fn admission_survives_append_and_is_released_before_the_final_read() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("workspace.jsonl");
+        let state = read(&path).unwrap();
+        let mut cold = frame(&state, "cold_guarded");
+        cold.cutover = Some(vec![]);
+        let lock = Mutex::new(());
+        let dropped = Cell::new(false);
+        let result = append_checked(&path, &cold, &state, || {
+            let guard = lock.lock().unwrap();
+            assert!(lock.try_lock().is_err());
+            Ok(Admission {
+                _lock: guard,
+                path: &path,
+                expected_job: "cold_guarded",
+                dropped: &dropped,
+            })
+        })
+        .unwrap();
+        assert!(dropped.get());
+        assert!(lock.try_lock().is_ok());
+        assert!(result.jobs.contains_key("cold_guarded"));
+        // A lost ACK replays its immutable receipt even if new work is active;
+        // it does not perform another cutover or reacquire fresh authority.
+        let result = append_checked(&path, &cold, &state, || -> Result<(), String> {
+            panic!("a committed immutable frame must not be reapplied");
+        })
+        .unwrap();
+        assert_eq!(result.jobs.len(), 1);
+    }
+    #[test]
+    fn checked_append_never_repairs_bytes_before_its_admission_check() {
+        for complete in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("workspace.jsonl");
+            let state = parse(b"").unwrap();
+            let mut cold = frame(&state, "cold");
+            cold.cutover = Some(vec![]);
+            let mut raw = serde_json::to_vec(&cold).unwrap();
+            if !complete {
+                raw.truncate(raw.len() / 2);
+            }
+            std::fs::write(&path, &raw).unwrap();
+            let result = append_checked(&path, &cold, &state, || -> Result<(), String> {
+                panic!("must reject an unrepaired journal before entering commit checks");
+            });
+            assert_eq!(result.unwrap_err(), "journal_repair_required");
+            assert_eq!(std::fs::read(&path).unwrap(), raw);
+            assert!(!std::fs::read_dir(dir.path()).unwrap().any(|entry| {
+                entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .contains(".incomplete-")
+            }));
+            // Explicit authorized repair is still supported, followed by append.
+            Journal::at_path(&path, validate_values).unwrap();
+            let repaired = read(&path).unwrap();
+            assert!(append(&path, &cold, &repaired).is_ok());
+        }
+    }
+
+    #[test]
+    fn stale_cas_releases_admission_without_writing_another_frame() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("workspace.jsonl");
+        let empty = read(&path).unwrap();
+        let mut cold = frame(&empty, "existing");
+        cold.cutover = Some(vec![]);
+        let current = append(&path, &cold, &empty).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        let mut clear = frame(&current, "stale");
+        clear.clear = true;
+        clear.clear_cutoffs = Some(vec![]);
+        let lock = Mutex::new(());
+        let dropped = Cell::new(false);
+        let result = append_checked(&path, &clear, &empty, || {
+            Ok(Admission {
+                _lock: lock.lock().unwrap(),
+                path: &path,
+                expected_job: "existing",
+                dropped: &dropped,
+            })
+        });
+        assert_eq!(result.unwrap_err(), "workspace_stale");
+        assert!(dropped.get());
+        assert!(lock.try_lock().is_ok());
+        assert_eq!(std::fs::read(path).unwrap(), bytes);
     }
 }

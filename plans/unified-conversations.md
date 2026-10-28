@@ -3870,3 +3870,69 @@ No Flutter source, device/emulator, user browser, live provider or local Nix
 validation was involved. This work stays local. The isolated build/log directory
 (about **2.2 GiB**) was removed after all processes completed; existing APKs,
 shared caches and user/other-agent files are preserved.
+
+## U4 implementation checkpoint: memory cutover host exclusion (2026-10-28)
+
+After `24abaea1`, repository-memory cold cutover uses the durable host write
+inventory rather than treating an empty runner map as proof of no writers. It
+checks both the repository root and ledger path, without an own-session exemption.
+Pending original ranges block even if their session/workspace was deleted; a
+legacy command with no range or an inventory error also blocks. Known disjoint
+ranges remain independent. No automatic activation or new administrative bypass
+is added; `--writers-stopped` still requires the operator to stop older external
+writers.
+
+The production pre-cutover writer-open can repair an incomplete legacy tail, so
+it also checks and holds admission through that repair. The later checked append
+uses a no-repair journal open: a complete frame missing a newline or an incomplete
+tail returns `journal_repair_required` without changing the original bytes or
+creating an incomplete-tail backup. Repair stays an explicit writer-open operation
+under the cold-cutover exclusion checks. This closes the separate pre-admission
+repair window; ordinary read-only legacy access still does not opt into repair.
+
+The preliminary check is repeated under Node admission at the journal commit
+boundary. `workspace_journal::append_checked` can retain the check's guard until
+the actual append, file sync and directory sync finish. It drops the guard before
+reacquiring the journal for final readback, and also releases it on failed CAS or
+other errors. Exact durable jobs still replay their existing receipt without
+reinitializing memory. Source permission/fingerprint checks and unknown-outcome
+reconciliation remain in force.
+
+The review also found an existing DB/runner lock inversion: memory holds its
+runner lifecycle lock before DB access, while approved host startup previously
+waited for that lifecycle lock while holding DB. Host startup now attempts that
+lock without waiting; contention returns `host_admission_busy` before any launch
+reservation or spawn. A later request can proceed after state work finishes.
+Peer liveness checks remain nonblocking, preserving the earlier concurrent-cold
+cutover fix.
+
+This closes admission against recorded local host ranges during the cutover
+commit; it does not contain detached host children, inventory pre-journal
+processes, or exclude writers on other Nodes. Those need the remaining U4 process
+and resource enforcement. Existing source-memory deletion, independent memory
+blocks and checkpoints' isolated recovery rules are unchanged. Schema remains
+Node 2016 / Gateway 1025, protocol/client/envelope 15/2/3. Public environment
+switching and U1 activation stay disabled; U2/U4/U5/U6 still have open gates.
+
+Final local validation: **13 base/workspace journal tests** and **533 Node library
+tests passed**; four subprocess helpers remain top-level ignored and are invoked
+by their parent tests. New cases exercise admission lifetime through durable
+append and before journal readback, failed CAS release, exact immutable retries,
+no implicit tail/newline repair, own/orphan/legacy/ledger-path host conflicts,
+independent ranges, missing inventory, safe retry after settlement, preserved
+legacy bytes before explicit repair, and host approval under a held memory
+lifecycle lock. Existing concurrent memory cutover, source deletion, large
+histories and checkpoint isolation tests remain green.
+
+The final rebuilt binaries passed **21 required real-process cases**: checkpoints
+(3), conversation admission (2), creation (2), execution fences (2), host commands
+(1), inference retirement (1), memory (1), Node-link side channels (5), terminals
+(2), project deletion (1) and streams (1). Strict Agent/Node/conformance all-target
+Clippy, Rust fmt, changed-document Prettier, local document links and diff checks
+passed. No Flutter source, device/emulator, user browser, live provider or local
+Nix verification was involved. These macOS fixture tests do not establish native
+Linux kernel revocation or Android device acceptance.
+
+Work remains local. All validation processes completed, and this checkpoint's
+isolated build/log directory (about **2.6 GiB**) was removed. APKs, shared caches,
+user data and other agents' work were preserved.

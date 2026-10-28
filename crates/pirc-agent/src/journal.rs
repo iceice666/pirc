@@ -192,24 +192,48 @@ impl Journal {
         path: &Path,
         validate: impl Fn(&[Value]) -> Result<(), String>,
     ) -> Result<Self, String> {
+        Self::at_path_mode(path, validate, true)
+    }
+    /// Open for a checked append without silently repairing someone else's tail.
+    /// Repair remains a separate, explicitly authorized writer-open operation.
+    pub fn at_path_without_repair(
+        path: &Path,
+        validate: impl Fn(&[Value]) -> Result<(), String>,
+    ) -> Result<Self, String> {
+        Self::at_path_mode(path, validate, false)
+    }
+    fn at_path_mode(
+        path: &Path,
+        validate: impl Fn(&[Value]) -> Result<(), String>,
+        repair: bool,
+    ) -> Result<Self, String> {
         use std::os::unix::fs::OpenOptionsExt;
         let parent = std::fs::OpenOptions::new()
             .read(true)
             .custom_flags(nix::libc::O_DIRECTORY | nix::libc::O_NOFOLLOW)
             .open(path.parent().ok_or("unsafe_journal_path")?)
             .map_err(|_| "unsafe_journal_path")?;
-        Self::open(
+        Self::open_mode(
             parent,
             path.file_name()
                 .and_then(|n| n.to_str())
                 .ok_or("unsafe_journal_path")?,
             validate,
+            repair,
         )
     }
     pub fn open(
         parent: File,
         name: &str,
         validate: impl Fn(&[Value]) -> Result<(), String>,
+    ) -> Result<Self, String> {
+        Self::open_mode(parent, name, validate, true)
+    }
+    fn open_mode(
+        parent: File,
+        name: &str,
+        validate: impl Fn(&[Value]) -> Result<(), String>,
+        repair: bool,
     ) -> Result<Self, String> {
         if name.contains('/') || name == "." || name == ".." || name.is_empty() {
             return Err("unsafe_journal_path".into());
@@ -233,6 +257,9 @@ impl Journal {
         legacy(&parent, &format!("{fence_name}.recovery"), false)?;
         let raw = read(&parent, name)?;
         let parsed = parse(&raw)?;
+        if !repair && (parsed.incomplete || parsed.needs_newline) {
+            return Err("journal_repair_required".into());
+        }
         validate(&parsed.values)?;
         if parsed.incomplete {
             let evidence = format!("{name}.incomplete-{}", crate::random_hex(8));

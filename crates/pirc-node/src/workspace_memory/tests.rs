@@ -1629,3 +1629,146 @@ async fn control_identity_checks_reject_replaced_headers_and_source_symlinks() {
     );
     f.node.close().await;
 }
+
+fn pending_host(f: &Fixture, state: &str, owner: &str, path: Option<&Path>) {
+    let db = f.node.db.lock();
+    db.execute("INSERT INTO host_command_runs VALUES('host-cutover',?1,'original-workspace',0,'previous-node','request',?2,1,1)", rusqlite::params![owner,state]).unwrap();
+    if let Some(path) = path {
+        crate::host_commands::resources::record(
+            &db,
+            "host-cutover",
+            &[path.to_string_lossy().into_owned()],
+        )
+        .unwrap();
+    }
+}
+#[tokio::test]
+async fn cold_cutover_refuses_own_or_orphan_host_ranges_without_altering_memory() {
+    for (state, orphan, direct_ledger) in [
+        ("launching", false, false),
+        ("running", true, false),
+        ("unconfirmed", true, true),
+    ] {
+        let f = Fixture::new().await;
+        let path = ledger(&f.node, &f.scope);
+        let root = Path::new(&f.scope.root);
+        pending_host(
+            &f,
+            state,
+            if orphan {
+                "deleted-session"
+            } else {
+                &f.current
+            },
+            Some(if direct_ledger { &path } else { root }),
+        );
+        let before = std::fs::read(&path).ok();
+        assert!(!f.node.runners.may_be_alive(&f.current));
+        assert_eq!(
+            f.mutate("workspace.cold", json!({})).unwrap_err().code,
+            "host_write_pending"
+        );
+        assert_eq!(std::fs::read(&path).ok(), before);
+        assert!(!path.with_extension("lock").exists());
+        assert!(snapshot(&f.node, &f.scope).unwrap().control.is_none());
+        f.node.close().await;
+    }
+}
+#[tokio::test]
+async fn cold_cutover_waits_for_settlement_and_keeps_idempotent_receipts() {
+    let f = Fixture::new().await;
+    pending_host(&f, "running", &f.current, Some(Path::new(&f.scope.root)));
+    let args = json!({"jobId":"cold_host_retry","writersStopped":true});
+    let captured = f.view();
+    assert_eq!(
+        execute(&captured, "workspace.cold", &args)
+            .unwrap_err()
+            .code,
+        "host_write_pending"
+    );
+    f.node
+        .db
+        .lock()
+        .execute(
+            "UPDATE host_command_runs SET state='settled' WHERE id='host-cutover'",
+            [],
+        )
+        .unwrap();
+    let committed = execute(&captured, "workspace.cold", &args).unwrap();
+    assert_eq!(committed["committed"], true);
+    let before = std::fs::read(ledger(&f.node, &f.scope)).unwrap();
+    // Another pending legacy effect after commit does not turn retry into a new
+    // initialization or negate a previously committed immutable job.
+    f.node.db.lock().execute("INSERT INTO host_command_runs VALUES('later','deleted-session','removed-workspace',0,'previous-node','later','running',1,1)",[]).unwrap();
+    assert_eq!(
+        execute(&f.view(), "workspace.cold", &args).unwrap()["committed"],
+        true
+    );
+    assert_eq!(std::fs::read(ledger(&f.node, &f.scope)).unwrap(), before);
+    f.node.close().await;
+}
+#[tokio::test]
+async fn cold_cutover_allows_disjoint_known_hosts_but_not_missing_inventory() {
+    let f = Fixture::new().await;
+    pending_host(
+        &f,
+        "running",
+        "unrelated-owner",
+        Some(&f.dir.join("other-project")),
+    );
+    assert_eq!(
+        f.mutate("workspace.cold", json!({})).unwrap()["committed"],
+        true
+    );
+    f.node.close().await;
+    let f = Fixture::new().await;
+    pending_host(&f, "running", "legacy-owner", None);
+    assert_eq!(
+        f.mutate("workspace.cold", json!({})).unwrap_err().code,
+        "host_write_pending"
+    );
+    assert!(snapshot(&f.node, &f.scope).unwrap().control.is_none());
+    f.node.close().await;
+    let f = Fixture::new().await;
+    f.node
+        .db
+        .lock()
+        .execute_batch(include_str!("../host_commands/remove_resources.sql"))
+        .unwrap();
+    assert!(f.mutate("workspace.cold", json!({})).is_err());
+    assert!(snapshot(&f.node, &f.scope).unwrap().control.is_none());
+    f.node.close().await;
+}
+
+#[tokio::test]
+async fn cold_writer_open_cannot_repair_a_tail_while_a_known_host_is_pending() {
+    let f = Fixture::new().await;
+    let path = ledger(&f.node, &f.scope);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let raw = b"{\"type\":\"cleared\",\"at\":1}\n{\"type\":";
+    std::fs::write(&path, raw).unwrap();
+    pending_host(&f, "running", &f.current, Some(Path::new(&f.scope.root)));
+    // Ordinary legacy reads do not opt into repair or activation.
+    open_writer(&f.node, &f.scope, &json!({}), true).unwrap();
+    assert_eq!(std::fs::read(&path).unwrap(), raw);
+    assert_eq!(
+        open_writer(&f.node, &f.scope, &json!({"writersStopped":true}), false)
+            .unwrap_err()
+            .code,
+        "host_write_pending"
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), raw);
+    f.node
+        .db
+        .lock()
+        .execute(
+            "UPDATE host_command_runs SET state='settled' WHERE id='host-cutover'",
+            [],
+        )
+        .unwrap();
+    open_writer(&f.node, &f.scope, &json!({"writersStopped":true}), false).unwrap();
+    assert!(journal::read(&path).unwrap().control.is_none());
+    assert_ne!(std::fs::read(&path).unwrap(), raw);
+    f.mutate("workspace.cold", json!({})).unwrap();
+    f.node.close().await;
+}

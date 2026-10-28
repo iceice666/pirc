@@ -1,5 +1,20 @@
 # Upgrades
 
+## Unreleased local checkpoint: memory cutover admission
+
+No new schema or wire format: Node stays **2016**. Cold repository-memory
+initialization now refuses unresolved local host-command ranges, including its
+own session's jobs and orphaned owners, and retains admission through the durable
+journal append. Pre-cutover legacy tail repair also retains admission; checked
+append never repairs implicitly. `journal_repair_required` requires the explicit
+writer-open/recovery path after stopping writers. Host startup does not wait on a
+busy memory lifecycle lock while
+holding DB; it returns `host_admission_busy` before spawning. Retry after that
+state operation finishes. The operator must still stop untracked/other-Node
+writers and explicitly request cutover. No ledger is activated by deployment.
+See [memory activation](../architecture/observational-memory.md#activation-status-and-large-histories)
+and the [implementation checkpoint](../../plans/unified-conversations.md#u4-implementation-checkpoint-memory-cutover-host-exclusion-2026-10-28).
+
 ## Unreleased local checkpoint: host write-resource retention
 
 Node schema **2016** adds immutable resource snapshots to the approved host-command

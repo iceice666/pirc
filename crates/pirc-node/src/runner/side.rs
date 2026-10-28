@@ -990,7 +990,19 @@ impl Runner {
         if installed != self.mode {
             return Err(ApiError::conflict("The approved execution mode changed"));
         }
-        let inner = self.lock();
+        // Memory operations hold this lifecycle lock before taking DB admission.
+        // Never wait in the opposite order; no journal entry or spawn exists yet.
+        let inner = match self.inner.try_lock() {
+            Ok(inner) => inner,
+            Err(std::sync::TryLockError::Poisoned(inner)) => inner.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                return Err(ApiError::new(
+                    409,
+                    "host_admission_busy",
+                    "The agent is updating its state; retry the host command after it finishes",
+                ));
+            }
+        };
         if !self.side_live(&inner, side) {
             return Err(ApiError::conflict("The host command was withdrawn"));
         }

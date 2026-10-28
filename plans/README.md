@@ -133,6 +133,7 @@ and a one-time permission record; missing evidence refuses startup. See the
 Panel terminals now recheck their original binding/controller at each actual write and resize; see the [terminal checkpoint](unified-conversations.md#u4-implementation-checkpoint-fenced-terminal-input-2026-10-28).
 Node schema 2015 journals approved host commands and joins their Node-owned supervision on Stop/deletion/transition drain. Unknown prior observations remain unresolved; see the [host-command checkpoint](unified-conversations.md#u4-implementation-checkpoint-supervised-host-commands-2026-10-28).
 Node schema 2016 retains approved host-command write ranges across Agent settlement and restart. Unknown legacy ranges block writes instead of inventing availability; see the [resource-retention checkpoint](unified-conversations.md#u4-implementation-checkpoint-host-write-resource-retention-2026-10-28).
+Memory cold cutover now holds Node admission through its checked durable append and excludes unresolved local host ranges; host approval avoids the memory lifecycle-lock inversion. See the [cutover checkpoint](unified-conversations.md#u4-implementation-checkpoint-memory-cutover-host-exclusion-2026-10-28).
 Resource grants, project moves and full effect fences remain open. U1 still needs device/deployment acceptance
 before activation. Detailed validation and the previously reproduced macOS snapshot
 limitation are recorded in the checkpoints; no full Linux/device acceptance is claimed.

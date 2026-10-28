@@ -165,3 +165,55 @@ async fn runner_stop_cancels_approved_commands_before_agent_exit() {
     runner.exit(Some(0), None);
     f.node.close().await;
 }
+
+#[tokio::test]
+async fn host_admission_cannot_deadlock_against_memory_lifecycle_lock() {
+    let f = Fixture::new().await;
+    let row = f.node.db.lock().get_session(&f.current).unwrap();
+    let runner = super::memory_concurrency_tests::register(&f, row);
+    let request = side(&runner);
+    let (send, receive) = std::sync::mpsc::channel();
+    let worker = runner.clone();
+    let runtime = tokio::runtime::Handle::current();
+    let lifecycle = runner.lock();
+    let thread = std::thread::spawn(move || {
+        let _runtime = runtime.enter();
+        let result = worker
+            .start_host(
+                &request,
+                "true",
+                &worker.workspace.canonical_path,
+                Duration::from_secs(5),
+            )
+            .map(drop)
+            .map_err(|e| e.code.into_owned());
+        send.send(result).unwrap();
+    });
+    let result = receive.recv_timeout(Duration::from_secs(3));
+    // Always release/join before asserting, so a regression reports a failure
+    // instead of leaving a blocked thread or preventing fixture cleanup.
+    drop(lifecycle);
+    thread.join().unwrap();
+    assert_eq!(result.unwrap(), Err("host_admission_busy".into()));
+    assert_eq!(
+        f.node
+            .db
+            .lock()
+            .query_row("SELECT count(*) FROM host_command_runs", [], |r| r
+                .get::<_, i64>(0))
+            .unwrap(),
+        0
+    );
+    let request = side(&runner);
+    let ticket = runner
+        .start_host(
+            &request,
+            "printf retry",
+            &runner.workspace.canonical_path,
+            Duration::from_secs(5),
+        )
+        .unwrap();
+    assert_eq!(ticket.result().await.unwrap()["output"], "retry");
+    runner.exit(Some(0), None);
+    f.node.close().await;
+}
