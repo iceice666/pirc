@@ -4113,5 +4113,8 @@ across checkpoints (3), conversation admission (2), creation (2), execution
 fences (3), host commands (1), inference (1), memory (1), Node-link side channels
 (5), terminals (2), project deletion (1) and streams (1). Rust fmt, changed-document
 Prettier, local document targets and diff checks passed. No dependencies, schemas,
-package versions or Nix hashes changed. Build/log cleanup follows final upstream
-integration; APKs, shared caches and user data are retained.
+package versions or Nix hashes changed. The authorized `git pull --rebase origin main` found no upstream changes or
+conflicts after implementation commit `00a72a16`. The completed isolated build/log
+directory (about 2.0 GiB) was removed; APKs, shared caches and user data were
+retained. This batch is ready for publication and remote CI; the green `c50af1b0`
+baseline remains separate evidence until those jobs finish.

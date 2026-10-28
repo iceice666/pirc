@@ -75,8 +75,11 @@ The published baseline is `c50af1b0` (2026-10-28), containing the accumulated U1
 recovery/client acceptance, U2 provenance and U4 supervision checkpoints below.
 All five remote jobs passed: full Check, native Linux sandbox/checkpoints, Nix,
 executable sizes and Android. This verifies that revision, not later local work.
-The next local slice adds foreground browser command admission at the actual CDP
-write boundary. Its evidence and remaining limits are in the
+Commit `00a72a16` adds foreground browser command admission at the actual CDP
+write boundary. The authorized `git pull --rebase origin main` found no upstream
+change or conflict; the local validation and cleanup are complete. This batch is
+ready for publication and its own remote CI; the previous green baseline does
+not prove this new revision. Its evidence and remaining limits are in the
 [browser-effect checkpoint](unified-conversations.md#u4-implementation-checkpoint-foreground-browser-effect-admission-2026-10-28).
 Subsequent work remains local by default: no push, deployment, version change,
 Release or activation is implied by a completed slice.

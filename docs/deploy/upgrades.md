@@ -1,6 +1,6 @@
 # Upgrades
 
-## Unreleased local checkpoint: foreground browser admission
+## Unreleased checkpoint: foreground browser admission
 
 Browser actions now retain the original controller or Agent epoch/cancellation
 identity through queued work and CDP writes. A takeover, disconnected viewer,
