@@ -21,7 +21,6 @@
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use pirc_agent::tools::js::string_of;
@@ -52,7 +51,7 @@ enum Connection {
         input: UnboundedSender<Map<String, Value>>,
         target: BrowserTarget,
         /// False once detached: late answers are not sent.
-        open: Arc<AtomicBool>,
+        open: Arc<Mutex<bool>>,
         detach: Option<Detach>,
     },
 }
@@ -67,14 +66,14 @@ enum Target {
     Browser {
         input: UnboundedSender<Map<String, Value>>,
         target: BrowserTarget,
-        open: Arc<AtomicBool>,
+        open: Arc<Mutex<bool>>,
     },
 }
 
 /// One worker per viewer preserves input order across awaited CDP actions.
 /// Closing the viewer discards queued actions; observational log reads bypass it.
 fn browser_input_queue<F, Fut>(
-    open: Arc<AtomicBool>,
+    open: Arc<Mutex<bool>>,
     mut execute: F,
 ) -> UnboundedSender<Map<String, Value>>
 where
@@ -84,7 +83,7 @@ where
     let (sender, mut receiver) = unbounded_channel();
     tokio::spawn(async move {
         while let Some(message) = receiver.recv().await {
-            if !open.load(Ordering::Acquire) {
+            if !*open.lock().unwrap_or_else(|p| p.into_inner()) {
                 break;
             }
             execute(message).await;
@@ -299,7 +298,7 @@ impl Streams {
             frame(&link, &id, value);
         });
         let detach = node.browser.attach(&session.id, sink);
-        let open = Arc::new(AtomicBool::new(true));
+        let open = Arc::new(Mutex::new(true));
         let weak = self.node.clone();
         let worker_open = open.clone();
         let worker_target = target.clone();
@@ -323,8 +322,21 @@ impl Streams {
                     );
                     return;
                 }
-                let answer = node.browser.input(target, Value::Object(message)).await;
-                if !open.load(Ordering::Acquire) {
+                let caller = crate::browser::effects::Caller::Viewer {
+                    client: message
+                        .get("clientId")
+                        .filter(|v| !v.is_null())
+                        .map(string_of)
+                        .unwrap_or_default(),
+                    generation: crate::panels::js_number(message.get("generation")) as i64,
+                    open: open.clone(),
+                };
+                let answer = crate::browser::effects::from(
+                    caller,
+                    node.browser.input(target, Value::Object(message)),
+                )
+                .await;
+                if !*open.lock().unwrap_or_else(|p| p.into_inner()) {
                     return;
                 }
                 match answer {
@@ -443,8 +455,13 @@ impl Streams {
                 let link = node.link.clone();
                 let id = stream_id.to_owned();
                 tokio::spawn(async move {
-                    let answer = browser.input(target, Value::Object(message)).await;
-                    if !open.load(Ordering::Acquire) {
+                    let caller = crate::browser::effects::Caller::Observer { open: open.clone() };
+                    let answer = crate::browser::effects::from(
+                        caller,
+                        browser.input(target, Value::Object(message)),
+                    )
+                    .await;
+                    if !*open.lock().unwrap_or_else(|p| p.into_inner()) {
                         return;
                     }
                     match answer {
@@ -476,7 +493,7 @@ impl Streams {
                 }
             }
             Connection::Browser { open, detach, .. } => {
-                open.store(false, Ordering::Release);
+                *open.lock().unwrap_or_else(|p| p.into_inner()) = false;
                 if let Some(detach) = detach {
                     detach();
                 }
@@ -508,7 +525,7 @@ mod tests {
 
     #[tokio::test]
     async fn browser_actions_stay_ordered_while_first_action_waits() {
-        let open = Arc::new(AtomicBool::new(true));
+        let open = Arc::new(Mutex::new(true));
         let gate = Arc::new(Semaphore::new(0));
         let (seen, mut events) = mpsc::unbounded_channel();
         let queue = browser_input_queue(open, {
@@ -543,7 +560,7 @@ mod tests {
 
     #[tokio::test]
     async fn closed_viewer_discards_actions_queued_behind_in_flight_input() {
-        let open = Arc::new(AtomicBool::new(true));
+        let open = Arc::new(Mutex::new(true));
         let gate = Arc::new(Semaphore::new(0));
         let (seen, mut events) = mpsc::unbounded_channel();
         let queue = browser_input_queue(open.clone(), {
@@ -564,7 +581,7 @@ mod tests {
             .send(json!({"n":2}).as_object().unwrap().clone())
             .unwrap();
         assert_eq!(events.recv().await, Some(json!(1)));
-        open.store(false, Ordering::Release);
+        *open.lock().unwrap_or_else(|p| p.into_inner()) = false;
         gate.add_permits(1);
         drop(queue);
         assert_eq!(events.recv().await, None);

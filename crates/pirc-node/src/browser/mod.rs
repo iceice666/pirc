@@ -22,6 +22,7 @@
 //! `pirc_config::node`.
 
 pub mod assets;
+pub(crate) mod effects;
 pub mod engine;
 pub mod hosts;
 pub(crate) mod journal;

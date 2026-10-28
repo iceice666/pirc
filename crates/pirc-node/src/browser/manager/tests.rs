@@ -1910,3 +1910,46 @@ async fn failed_initial_page_cleanup_is_not_forgotten_by_a_later_close() {
     context.crash();
     f.manager.shutdown().await;
 }
+
+#[tokio::test]
+async fn foreground_authority_survives_spawn_and_is_rechecked_after_shared_launch() {
+    for abortable in [false, true] {
+        let (fixture, open, started) = gated_manager();
+        let manager = fixture.manager.clone();
+        let allowed = Arc::new(Mutex::new(true));
+        let guard = crate::browser::effects::Guard::new({
+            let allowed = allowed.clone();
+            move |effect| {
+                let allowed = allowed.lock().unwrap();
+                if !*allowed {
+                    return Err(ApiError::new(
+                        409,
+                        "lost_control",
+                        "revoked while launching",
+                    ));
+                }
+                effect();
+                Ok(())
+            }
+        });
+        let request = tokio::spawn(crate::browser::effects::scope(guard, async move {
+            if abortable {
+                let (_send, recv) = watch::channel(false);
+                manager
+                    .handle_with_abort(target("source", "w"), "snapshot".into(), json!({}), recv)
+                    .await
+            } else {
+                manager
+                    .handle(target("source", "w"), "snapshot".into(), json!({}))
+                    .await
+            }
+        }));
+        started.await.unwrap();
+        *allowed.lock().unwrap() = false;
+        let context = FakeContext::new();
+        open.send(context.clone()).ok().unwrap();
+        assert_eq!(request.await.unwrap().unwrap_err().code, "lost_control");
+        assert_eq!(context.stats(), (0, 1));
+        fixture.manager.shutdown().await;
+    }
+}

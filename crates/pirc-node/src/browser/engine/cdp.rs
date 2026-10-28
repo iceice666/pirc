@@ -26,6 +26,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+use crate::browser::effects;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::unix::pipe;
@@ -133,19 +134,79 @@ struct State {
     closed: bool,
 }
 
+struct Outgoing {
+    id: u64,
+    bytes: Vec<u8>,
+    authority: Option<effects::Guard>,
+}
+
 /// The browser-wide connection.
 pub struct Connection {
-    outgoing: mpsc::UnboundedSender<Vec<u8>>,
+    outgoing: mpsc::UnboundedSender<Outgoing>,
     state: Arc<Mutex<State>>,
     next: AtomicU64,
     closed: watch::Receiver<bool>,
+}
+
+fn outgoing(id: u64, value: Value) -> Outgoing {
+    let mut bytes = value.to_string().into_bytes();
+    bytes.push(0);
+    Outgoing {
+        id,
+        bytes,
+        authority: effects::current(),
+    }
+}
+enum WriteError {
+    Denied(crate::error::ApiError),
+    Pipe,
+}
+async fn write_command(commands: &mut pipe::Sender, message: &Outgoing) -> Result<(), WriteError> {
+    loop {
+        if let Some(guard) = &message.authority {
+            guard.run(|| ()).map_err(WriteError::Denied)?;
+        }
+        // No admission lock crosses readiness waits. Recheck also when a full
+        // pipe never becomes writable, so a revoked pending request can settle.
+        match tokio::time::timeout(std::time::Duration::from_millis(50), commands.writable()).await
+        {
+            Err(_) => continue,
+            Ok(Err(_)) => return Err(WriteError::Pipe),
+            Ok(Ok(())) => {}
+        }
+        let effect = || commands.try_write(&message.bytes);
+        let written = match &message.authority {
+            Some(guard) => guard.run(effect).map_err(WriteError::Denied)?,
+            None => effect(),
+        };
+        match written {
+            Ok(0) => return Err(WriteError::Pipe),
+            Ok(n) => {
+                // First accepted byte is the command's admission boundary.
+                // Finish this already-admitted frame, including its delimiter:
+                // abandoning a partial frame would corrupt every peer session.
+                // It may finish after a fence; drain still must observe its end.
+                commands
+                    .write_all(&message.bytes[n..])
+                    .await
+                    .map_err(|_| WriteError::Pipe)?;
+                return Ok(());
+            }
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::Interrupted
+                ) => {}
+            Err(_) => return Err(WriteError::Pipe),
+        }
+    }
 }
 
 impl Connection {
     /// Speak CDP over the browser's pipe ends: `commands` is its fd 3 (we
     /// write), `replies` its fd 4 (we read).
     pub fn new(commands: pipe::Sender, replies: pipe::Receiver) -> Arc<Self> {
-        let (outgoing, mut queue) = mpsc::unbounded_channel::<Vec<u8>>();
+        let (outgoing, mut queue) = mpsc::unbounded_channel::<Outgoing>();
         let state: Arc<Mutex<State>> = Arc::default();
         let (closed_tx, closed) = watch::channel(false);
         let closed_tx = Arc::new(closed_tx);
@@ -154,10 +215,23 @@ impl Connection {
             let closed_tx = closed_tx.clone();
             let mut commands = commands;
             tokio::spawn(async move {
-                while let Some(mut message) = queue.recv().await {
-                    message.push(0);
-                    if commands.write_all(&message).await.is_err() {
-                        break;
+                while let Some(message) = queue.recv().await {
+                    match write_command(&mut commands, &message).await {
+                        Ok(()) => {}
+                        Err(WriteError::Denied(error)) => {
+                            let pending = state.lock().unwrap().pending.remove(&message.id);
+                            if let Some(pending) = pending {
+                                let session = pending.session.clone();
+                                pending.resolve(
+                                    Err(CdpError::new(format!(
+                                        "Browser authority refused: {}",
+                                        error.message
+                                    ))),
+                                    session,
+                                );
+                            }
+                        }
+                        Err(WriteError::Pipe) => break,
                     }
                 }
                 close(&state, &closed_tx);
@@ -250,11 +324,7 @@ impl Connection {
         if let Some(session) = session {
             message["sessionId"] = json!(session.as_ref());
         }
-        if self
-            .outgoing
-            .send(message.to_string().into_bytes())
-            .is_err()
-        {
+        if self.outgoing.send(outgoing(id, message)).is_err() {
             self.state.lock().unwrap().pending.remove(&id);
             return Err(CdpError::closed());
         }
@@ -274,7 +344,7 @@ impl Connection {
         if let Some(session) = session {
             message["sessionId"] = json!(session.as_ref());
         }
-        let _ = self.outgoing.send(message.to_string().into_bytes());
+        let _ = self.outgoing.send(outgoing(id, message));
     }
 
     fn fail_on_crash(&self, session: &Arc<str>) {
@@ -486,15 +556,15 @@ impl std::fmt::Debug for Session {
 /// A fake browser for unit tests: a [`Connection`] whose commands it
 /// reads and to which it sends replies and events.
 #[cfg(test)]
-pub(super) struct Fake {
-    pub(super) connection: Arc<Connection>,
+pub(crate) struct Fake {
+    pub(crate) connection: Arc<Connection>,
     commands: BufReader<pipe::Receiver>,
     replies: pipe::Sender,
 }
 
 #[cfg(test)]
 impl Fake {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let (commands_tx, commands_rx) = pipe::pipe().unwrap();
         let (replies_tx, replies_rx) = pipe::pipe().unwrap();
         Self {
@@ -504,8 +574,18 @@ impl Fake {
         }
     }
 
+    /// Observe actual pipe bytes without consuming a partial JSON frame.
+    pub(crate) async fn wait_for_command_prefix(&mut self) {
+        let bytes =
+            tokio::time::timeout(std::time::Duration::from_secs(5), self.commands.fill_buf())
+                .await
+                .unwrap()
+                .unwrap();
+        assert!(!bytes.is_empty());
+    }
+
     /// The next command the connection wrote (failing after 5 s).
-    pub(super) async fn command(&mut self) -> Value {
+    pub(crate) async fn command(&mut self) -> Value {
         let mut buffer = Vec::new();
         let read = self.commands.read_until(0, &mut buffer);
         tokio::time::timeout(std::time::Duration::from_secs(5), read)
@@ -516,7 +596,7 @@ impl Fake {
         serde_json::from_slice(&buffer).unwrap()
     }
 
-    pub(super) async fn send(&mut self, message: Value) {
+    pub(crate) async fn send(&mut self, message: Value) {
         let mut bytes = message.to_string().into_bytes();
         bytes.push(0);
         self.replies.write_all(&bytes).await.unwrap();
@@ -528,6 +608,127 @@ mod tests {
     use std::time::Duration;
 
     use super::*;
+
+    #[tokio::test]
+    async fn revoked_queued_commands_preserve_started_frames_and_peer_messages() {
+        let mut fake = Fake::new();
+        let browser = fake.connection.browser();
+        let first = tokio::spawn(async move {
+            browser
+                .call("started", json!({"padding":"x".repeat(2_000_000)}))
+                .await
+        });
+        // A prefix is on the pipe, while the oversized frame is still writing.
+        assert!(!fake.commands.fill_buf().await.unwrap().is_empty());
+        let allowed = Arc::new(Mutex::new(true));
+        let guard = effects::Guard::new({
+            let allowed = allowed.clone();
+            move |effect| {
+                let allowed = allowed.lock().unwrap();
+                if !*allowed {
+                    return Err(crate::error::ApiError::conflict("revoked"));
+                }
+                effect();
+                Ok(())
+            }
+        });
+        let browser = fake.connection.browser();
+        let denied = tokio::spawn(effects::scope(guard.clone(), async move {
+            browser.call("must-not-run", json!({})).await
+        }));
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while fake.connection.state.lock().unwrap().pending.len() < 2 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        *allowed.lock().unwrap() = false;
+        let peer = fake.connection.session("peer");
+        let peer = tokio::spawn(async move { peer.call("peer-command", json!({})).await });
+        let first_command = fake.command().await;
+        assert_eq!(first_command["method"], "started");
+        assert_eq!(
+            first_command["params"]["padding"].as_str().unwrap().len(),
+            2_000_000
+        );
+        let next = fake.command().await;
+        assert_eq!(next["method"], "peer-command");
+        assert_eq!(next["sessionId"], "peer");
+        assert!(
+            denied
+                .await
+                .unwrap()
+                .unwrap_err()
+                .message
+                .contains("revoked")
+        );
+        assert!(!fake.connection.is_closed());
+        *allowed.lock().unwrap() = true;
+        assert!(
+            guard
+                .run(|| panic!("a revoked request cannot revive"))
+                .is_err()
+        );
+        fake.send(json!({"id":first_command["id"],"result":{}}))
+            .await;
+        fake.send(json!({"id":next["id"],"result":{},"sessionId":"peer"}))
+            .await;
+        first.await.unwrap().unwrap();
+        peer.await.unwrap().unwrap();
+    }
+
+    #[tokio::test]
+    async fn permission_is_rechecked_while_waiting_for_a_full_pipe() {
+        let (mut writer, _reader) = pipe::pipe().unwrap();
+        let bytes = [b'x'; 4096];
+        writer.writable().await.unwrap();
+        let mut filled = 0;
+        loop {
+            match writer.try_write(&bytes) {
+                Ok(n) => filled += n,
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
+                Err(error) => panic!("{error}"),
+            }
+        }
+        assert!(filled > 0, "the fixture must fill the actual pipe");
+        let allowed = Arc::new(Mutex::new(true));
+        let checked = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let guard = effects::Guard::new({
+            let allowed = allowed.clone();
+            let checked = checked.clone();
+            move |effect| {
+                let allowed = allowed.lock().unwrap();
+                checked.fetch_add(1, Ordering::SeqCst);
+                if !*allowed {
+                    return Err(crate::error::ApiError::conflict("revoked"));
+                }
+                effect();
+                Ok(())
+            }
+        });
+        let message = Outgoing {
+            id: 1,
+            bytes: b"new-command\0".to_vec(),
+            authority: Some(guard),
+        };
+        let task = tokio::spawn(async move { write_command(&mut writer, &message).await });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while checked.load(Ordering::SeqCst) == 0 {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        *allowed.lock().unwrap() = false;
+        assert!(matches!(
+            tokio::time::timeout(Duration::from_secs(2), task)
+                .await
+                .unwrap()
+                .unwrap(),
+            Err(WriteError::Denied(_))
+        ));
+    }
 
     async fn settled<T>(task: &mut tokio::task::JoinHandle<T>) -> Option<T> {
         tokio::time::timeout(Duration::from_secs(2), task)

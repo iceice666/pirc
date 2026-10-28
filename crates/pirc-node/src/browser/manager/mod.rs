@@ -109,7 +109,12 @@ impl BrowserService for BrowserManager {
         args: Value,
     ) -> BoxFuture<'_, ApiResult<Value>> {
         let signal = Signal::new();
-        let task = tokio::spawn(self.inner.clone().handle(target, op, args, signal.clone()));
+        let task = tokio::spawn(super::effects::inherit(self.inner.clone().handle(
+            target,
+            op,
+            args,
+            signal.clone(),
+        )));
         let abort = AbortOnDrop(signal);
         Box::pin(async move {
             let result = task.await;
@@ -126,7 +131,12 @@ impl BrowserService for BrowserManager {
         mut abort: watch::Receiver<bool>,
     ) -> BoxFuture<'_, ApiResult<Value>> {
         let signal = Signal::new();
-        let mut task = tokio::spawn(self.inner.clone().handle(target, op, args, signal.clone()));
+        let mut task = tokio::spawn(super::effects::inherit(self.inner.clone().handle(
+            target,
+            op,
+            args,
+            signal.clone(),
+        )));
         let abort_on_drop = AbortOnDrop(signal.clone());
         Box::pin(async move {
             let result = tokio::select! {
@@ -786,6 +796,7 @@ impl Inner {
         created: &mut Option<Arc<Tab>>,
     ) -> OpResult<Arc<Tab>> {
         let context = wait_launch(launch).await.map_err(could_not_start)?;
+        super::effects::check()?;
         let (tab, owned) = {
             let mut state = self.lock();
             // closeSession fences work accepted earlier as well as later
@@ -832,6 +843,7 @@ impl Inner {
 
     /// `newPage(tab)`.
     async fn new_page(self: &Arc<Self>, tab: &Arc<Tab>) -> OpResult<PageRef> {
+        super::effects::check()?;
         if tab.closed() || self.session_closing(tab.session()) {
             return Err(closing_error().into());
         }

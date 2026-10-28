@@ -4,10 +4,10 @@
 
 Status: adopted architecture baseline with an authorized staged implementation
 covering first Send, environment bindings, resource transitions, canonical tasks/
-collaboration and bounded pots. The last completed remote CI baseline is `303fa8f8`.
-The 2026-10-28 publication batch includes subsequent retry recovery, native blob
-cleanup, live Web/native acceptance, U2 provenance and U4 supervision checkpoints
-summarized below. CI for this batch must be verified independently.
+collaboration and bounded pots. The published baseline is `c50af1b0` (2026-10-28),
+including U1 recovery/native acceptance, U2 provenance and U4 supervision. Its full
+Check, native Linux sandbox/checkpoints, Nix, size and Android jobs all passed.
+Subsequent local changes are recorded below with their own narrower evidence.
 UI redesign/navigation reorganization remains deferred;
 Web/Android changes are limited to necessary functional integration. Use only
 focused simple Flutter checks when Flutter changes.
@@ -104,7 +104,8 @@ The backend [nonce retirement](#u1-implementation-checkpoint-gateway-retirement-
 slice retains 329 Gateway tests and five process cases. These are bounded proofs,
 not the full permission/Stop/delete matrix or Android OS/device acceptance.
 Live-client tests are explicitly run and ignored by the default suite;
-the last verified published green CI remains tied to `303fa8f8`.
+the later published green CI is `c50af1b0`; the explicit live-client fault
+scenarios above remain separately recorded evidence, not implied by default CI.
 
 | Stage                             | Current status                                                                                 | Next deliverable                                                                                                    |
 | --------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
@@ -4052,3 +4053,65 @@ not real-browser acceptance. Rust fmt, changed-document Prettier, local document
 targets and diff checks passed. No dependency, package version or Nix hash changed.
 The isolated build/log directory is removed after final validation; APKs, shared
 caches, user data and other agents' work are retained.
+
+## U4 implementation checkpoint: foreground browser effect admission (2026-10-28)
+
+Foreground browser requests now carry their original caller to the CDP pipe:
+Agent requests retain runner epoch and the exact cancellation sender; viewer
+requests retain controller/generation and a synchronized connection-open flag.
+Missing authority is rejected before reserving a browser group. Observational
+log-image access cannot authorize mutations. A stale agent cannot close a newer
+request's group; authorized close targets the captured group and releases its own
+operation hold before waiting, avoiding self-deadlock.
+
+The tracked service scopes the engine call before it is constructed, and the
+manager explicitly carries that scope into its spawned foreground task. Admission
+is rechecked after launch/serialization/control waits, while changing foreground
+handoff/active-tab state, and at the actual first nonblocking CDP pipe write, under the Node DB, mode/recovery overlay and relevant
+caller/group locks. No such lock crosses an async readiness or reply wait. A
+full pipe is rechecked periodically even without readiness. Lease takeover,
+viewer disconnect, old runner epochs, cancellation, changed binding/mode and an
+accepted transition fence refuse commands that have not begun writing. Denial
+is sticky for that request, and its original API error reaches the caller even
+when an engine helper would otherwise swallow it. No request is automatically
+replayed.
+
+A CDP JSON frame is indivisible at the protocol level. Its first accepted byte is
+the admission boundary; an already-started frame must finish with its delimiter
+or the shared pipe would corrupt unrelated conversations. Its effect may complete
+after fence acceptance, so draining still must observe completion. Later commands
+from the same multi-step operation are independently checked. A rejected queued
+command resolves only its pending reply/echo, leaving peer sessions connected.
+This does not roll back already-performed actions or recall delivered bytes.
+
+This slice fences foreground requests, **not every browser resource**. Shared
+context setup, asynchronous page/network/worker activity, screencast helpers and
+recording/file effects still require their own resource ownership and retirement
+contracts. They deliberately do not inherit one viewer's authority for the whole
+shared context. Full OS/descriptor containment, Gateway transition coordination,
+replacement policy acknowledgement and Web/App transition controls remain open.
+The public switch and U1 activation stay disabled; schema/protocol versions and
+revocation/installation completion flags do not change.
+
+Local validation: **557 Node library tests passed** (four subprocess helpers are
+invoked by their parent tests and remain top-level ignored). Seven new cases
+cover pending shared launch with both agent entry points, missing authority,
+observer/mutation separation, stale close, cancellation/epoch/control/binding
+changes, and real CDP pipes with backpressure. A real Node-store lease takeover
+is injected both behind a partially written frame and between the first and
+second commands of one request: stale bytes never reach the fake peer, a full
+started frame remains intact, and another CDP session continues. Existing memory,
+large-history, checkpoint, terminal and source-deletion regressions also pass.
+These are local synthetic-engine/real-pipe tests; no user Chrome, device/emulator
+or local Nix verification is involved. They do not claim new real-browser or
+native Linux acceptance for this slice.
+
+The final browser-only rerun passed **89 tests** after the synchronous handoff
+and active-tab guards were added. Strict all-target Clippy for Node/conformance
+passed. Rebuilt Node/Gateway binaries passed **22 required real-process cases**
+across checkpoints (3), conversation admission (2), creation (2), execution
+fences (3), host commands (1), inference (1), memory (1), Node-link side channels
+(5), terminals (2), project deletion (1) and streams (1). Rust fmt, changed-document
+Prettier, local document targets and diff checks passed. No dependencies, schemas,
+package versions or Nix hashes changed. Build/log cleanup follows final upstream
+integration; APKs, shared caches and user data are retained.

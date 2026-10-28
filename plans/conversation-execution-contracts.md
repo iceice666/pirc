@@ -29,6 +29,8 @@ retains the original design review and remaining gates.
 
 The [browser-supervision checkpoint](unified-conversations.md#u4-implementation-checkpoint-durable-browser-supervision-2026-10-28) adds retained close outcomes and deletion/drain blocking in Node schema 2018. This does not fulfill per-effect browser revocation or replacement-policy installation.
 
+The [foreground browser-effect checkpoint](unified-conversations.md#u4-implementation-checkpoint-foreground-browser-effect-admission-2026-10-28) checks captured actor/binding authority at the first CDP pipe write. Already-started frames finish for protocol integrity; shared background resources and complete revocation remain unverified.
+
 The main plan owns domain lifetimes, retained context (decision A), revocation,
 checkpoints and migration. This document refines those contracts. Names below
 are logical concepts, not finalized API fields, database schemas or Rust types.

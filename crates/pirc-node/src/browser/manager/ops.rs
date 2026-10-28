@@ -92,6 +92,7 @@ impl Inner {
         signal: Signal,
     ) -> ApiResult<Value> {
         self.require()?;
+        crate::browser::effects::check()?;
         if op == "close" {
             self.close_session(&target.session_id).await?;
             return Ok(json!({ "closed": true }));
@@ -101,6 +102,7 @@ impl Inner {
             .tab(&target, op != "status")
             .await
             .map_err(OpError::into_api)?;
+        crate::browser::effects::check()?;
         if self.session_closing(&target.session_id) {
             return Err(closing_error());
         }
@@ -114,7 +116,9 @@ impl Inner {
         match op.as_str() {
             "handoff" => {
                 let reason = str_arg(arg(&args, "reason"), "reason", 2_000)?.to_owned();
-                self.set_mode(&tab, Mode::User, Some(reason.clone()));
+                crate::browser::effects::run(|| {
+                    self.set_mode(&tab, Mode::User, Some(reason.clone()))
+                })?;
                 self.log(
                     &tab,
                     "agent",
@@ -132,7 +136,7 @@ impl Inner {
             }
             "release" => {
                 if tab.lock().mode == Mode::User {
-                    self.set_mode(&tab, Mode::Agent, None);
+                    crate::browser::effects::run(|| self.set_mode(&tab, Mode::Agent, None))?;
                     self.log(&tab, "agent", "Took back control", None);
                 }
                 return Ok(self.view(Some(&tab)));
@@ -141,6 +145,7 @@ impl Inner {
             _ => {}
         }
         let _busy = tab.busy.lock().await;
+        crate::browser::effects::check()?;
         if self.session_closing(&target.session_id) {
             return Err(closing_error());
         }
@@ -154,6 +159,7 @@ impl Inner {
         }
         let wait = int_arg(arg(&args, "waitMs"), AGENT_WAIT_MS, 0, 30 * 60_000);
         self.wait_for_agent_mode(&tab, &signal, wait).await?;
+        crate::browser::effects::check()?;
         self.run(&tab, &op, &args).await
     }
 
@@ -460,7 +466,9 @@ impl Inner {
                             .into());
                         };
                         if action == "select" {
-                            tab.lock().active = Some(chosen.clone());
+                            crate::browser::effects::run(|| {
+                                tab.lock().active = Some(chosen.clone())
+                            })?;
                             let _ = chosen.bring_to_front().await;
                             self.sync_screencast(tab);
                         } else {

@@ -35,6 +35,7 @@ impl Inner {
         target: BrowserTarget,
         message: Value,
     ) -> ApiResult<Option<Value>> {
+        crate::browser::effects::check()?;
         if message.get("type").and_then(Value::as_str) == Some("log_image") {
             let index = int_arg(arg(&message, "index"), -1, -1, MAX_SAFE_INTEGER);
             return Ok(Some(self.log_image(&target.session_id, index)));
@@ -52,6 +53,7 @@ impl Inner {
         let kind_str = kind.and_then(Value::as_str);
         let creates = matches!(kind_str, Some("takeover" | "navigate"));
         let tab = self.tab(target, creates).await.map_err(OpError::into_api)?;
+        crate::browser::effects::check()?;
         if self.session_closing(&target.session_id) {
             return Err(closing_error());
         }
@@ -65,14 +67,14 @@ impl Inner {
         match kind_str {
             Some("takeover") => {
                 if tab.lock().mode != Mode::User {
-                    self.set_mode(&tab, Mode::User, None);
+                    crate::browser::effects::run(|| self.set_mode(&tab, Mode::User, None))?;
                     self.log(&tab, "user", "User took control", None);
                 }
                 return Ok(None);
             }
             Some("release") => {
                 if tab.lock().mode == Mode::User {
-                    self.set_mode(&tab, Mode::Agent, None);
+                    crate::browser::effects::run(|| self.set_mode(&tab, Mode::Agent, None))?;
                     let jpeg = self.thumbnail(tab.active()).await;
                     self.log(&tab, "user", "User returned control", jpeg);
                 }
@@ -128,7 +130,7 @@ impl Inner {
                     .then(|| tab.lock().pages.get(index as usize).cloned())
                     .flatten();
                 if let Some(chosen) = chosen {
-                    tab.lock().active = Some(chosen);
+                    crate::browser::effects::run(|| tab.lock().active = Some(chosen))?;
                     self.sync_screencast(&tab);
                     self.emit_state(&tab);
                 }

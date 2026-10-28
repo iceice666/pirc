@@ -1,5 +1,22 @@
 # Upgrades
 
+## Unreleased local checkpoint: foreground browser admission
+
+Browser actions now retain the original controller or Agent epoch/cancellation
+identity through queued work and CDP writes. A takeover, disconnected viewer,
+transition fence or changed environment can reject a later command in an action.
+The original authority error is returned; the request is not automatically replayed.
+An action may already have performed earlier commands, which are not rolled back.
+A frame already started on the shared CDP pipe finishes intact; only later frames
+are refused. Other conversations continue using that pipe.
+
+This is foreground command admission, not complete browser process, background
+network/worker, screencast or recording retirement. Existing uncertain-close
+handling still applies. Public workspace switching and U1 activation remain
+closed. No schema, dependency, package version or Nix hash changes are included
+(Node 2018 / Gateway 1025 / protocol-client-envelope 15/2/3). See the
+[implementation evidence and remaining limits](../../plans/unified-conversations.md#u4-implementation-checkpoint-foreground-browser-effect-admission-2026-10-28).
+
 ## Unreleased checkpoint: browser supervision
 
 Node schema **2018** retains browser group identity and close observations.

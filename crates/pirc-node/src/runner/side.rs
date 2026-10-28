@@ -597,7 +597,15 @@ impl Runner {
         let entry = abort.clone();
         let mut inner = self.lock();
         let task = tokio::spawn(async move {
-            let answer = browser.handle_with_abort(target, op, args, aborted).await;
+            let caller = crate::browser::effects::Caller::Agent {
+                epoch: runner.epoch,
+                abort: entry.clone(),
+            };
+            let answer = crate::browser::effects::from(
+                caller,
+                browser.handle_with_abort(target, op, args, aborted),
+            )
+            .await;
             match answer {
                 Ok(result) => runner.reply(
                     json!({ "type": "browser_response", "id": request, "ok": true, "result": result }),
