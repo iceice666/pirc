@@ -93,7 +93,7 @@ impl Inner {
     ) -> ApiResult<Value> {
         self.require()?;
         if op == "close" {
-            self.close_session(&target.session_id).await;
+            self.close_session(&target.session_id).await?;
             return Ok(json!({ "closed": true }));
         }
         let _lease = self.begin_operation(&target.session_id)?;

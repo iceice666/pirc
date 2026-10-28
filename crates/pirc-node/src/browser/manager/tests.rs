@@ -37,6 +37,9 @@ struct FakePage {
     url: Mutex<String>,
     subscribers: Mutex<Vec<mpsc::UnboundedSender<PageEvent>>>,
     closed: AtomicBool,
+    fail_close: AtomicBool,
+    close_delay: Mutex<Duration>,
+    close_popup: Mutex<Option<Arc<FakePage>>>,
     shows_actions: AtomicBool,
     /// The screencast's frame sink while it runs.
     cast: Mutex<Option<CastSink>>,
@@ -181,6 +184,15 @@ impl PageApi for FakePage {
     }
     fn close(&self) -> BoxFuture<'_, engine::Result<()>> {
         Box::pin(async {
+            let delay = *self.close_delay.lock().unwrap();
+            tokio::time::sleep(delay).await;
+            if self.fail_close.load(Ordering::SeqCst) {
+                return fake_error();
+            }
+            let popup = self.close_popup.lock().unwrap().take();
+            if let Some(popup) = popup {
+                self.emit(|| PageEvent::Popup(popup.clone()));
+            }
             if !self.closed.swap(true, Ordering::SeqCst) {
                 self.emit(|| PageEvent::Closed);
             }
@@ -199,6 +211,8 @@ struct FakeContext {
     created: Mutex<Vec<Arc<FakePage>>>,
     new_page_calls: AtomicUsize,
     close_calls: AtomicUsize,
+    fail_close: AtomicBool,
+    fail_page: AtomicBool,
     gone: Mutex<Option<watch::Sender<bool>>>,
     /// The next `new_page` waits for this.
     page_gate: Mutex<Option<oneshot::Receiver<()>>>,
@@ -242,6 +256,9 @@ impl ContextApi for FakeContext {
                 let _ = gate.await;
             }
             self.new_page_calls.fetch_add(1, Ordering::SeqCst);
+            if self.fail_page.load(Ordering::SeqCst) {
+                return fake_error();
+            }
             let page = FakePage::new("about:blank");
             self.created.lock().unwrap().push(page.clone());
             Ok(page as PageRef)
@@ -256,7 +273,9 @@ impl ContextApi for FakeContext {
     fn close(&self) -> BoxFuture<'_, ()> {
         Box::pin(async {
             self.close_calls.fetch_add(1, Ordering::SeqCst);
-            self.crash();
+            if !self.fail_close.load(Ordering::SeqCst) {
+                self.crash();
+            }
         })
     }
 }
@@ -410,7 +429,7 @@ async fn drains_a_pending_launch_before_closing_and_never_creates_a_late_tab() {
 
     let fake = FakeContext::new();
     let _ = open.send(fake.clone());
-    closing.await.unwrap();
+    closing.await.unwrap().unwrap();
     let error = request.await.unwrap().unwrap_err();
     assert_eq!((error.status, &*error.code), (409, "conflict"));
     assert_eq!(error.message, "The browser session is closing");
@@ -446,7 +465,7 @@ async fn an_abandoned_request_still_drains_with_its_launch() {
     assert!(!closing.is_finished());
     let fake = FakeContext::new();
     let _ = open.send(fake.clone());
-    closing.await.unwrap();
+    closing.await.unwrap().unwrap();
     assert_eq!(fake.stats(), (0, 1));
     manager.shutdown().await;
 }
@@ -519,10 +538,10 @@ async fn keeps_a_shared_workspace_context_alive_for_another_pending_session() {
     assert_eq!(kept["active"], true);
     assert_eq!(kept["mode"], "user");
     assert_eq!(kept["handoff"], "keep me");
-    closing.await.unwrap();
+    closing.await.unwrap().unwrap();
     assert_eq!(fake.stats().1, 0);
 
-    manager.close_session("active-session").await;
+    manager.close_session("active-session").await.unwrap();
     assert_eq!(fake.stats().1, 1);
     assert_eq!(fixture.launcher.calls.load(Ordering::SeqCst), 1);
     manager.shutdown().await;
@@ -546,7 +565,7 @@ async fn cancels_control_waits_when_a_session_closes_or_the_manager_shuts_down()
     settle().await;
     let closing = manager.close_session("waiting-session");
     assert_eq!(code(wait.await.unwrap()), "conflict");
-    closing.await;
+    closing.await.unwrap();
     assert_eq!(closed_context.stats().1, 1);
     manager.shutdown().await;
 
@@ -1570,18 +1589,17 @@ async fn concurrent_closes_share_one_closing() {
     );
     tokio::time::advance(Duration::from_secs(10)).await;
     running.await.unwrap().unwrap();
-    first.await.unwrap();
-    second.await.unwrap();
+    first.await.unwrap().unwrap();
+    second.await.unwrap().unwrap();
     assert_eq!(context.stats().1, 1);
     assert!(manager.inner.lock().closures.is_empty());
     manager.shutdown().await;
 }
 
-/// Parity with TS: after Chromium went away, the agents waiting for the
-/// user are woken as if control came back; a queued operation then opens a
-/// page in a relaunched browser.
+/// A crash wakes the waiter with a closed tab. A fresh request may reopen a
+/// tracked tab, but an old queued request cannot revive an unregistered tab.
 #[tokio::test]
-async fn a_crash_wakes_the_agents_waiting_for_the_user() {
+async fn a_crash_wakes_waiters_without_reviving_an_untracked_tab() {
     let contexts = Arc::new(Mutex::new(Vec::<Arc<FakeContext>>::new()));
     let fixture = manager_with(settings, {
         let contexts = contexts.clone();
@@ -1606,7 +1624,12 @@ async fn a_crash_wakes_the_agents_waiting_for_the_user() {
     assert_eq!(status["agentWaiting"], true);
     let first = contexts.lock().unwrap()[0].clone();
     first.crash();
-    let summary = queued.await.unwrap().unwrap();
+    assert_eq!(queued.await.unwrap().unwrap_err().code, "conflict");
+    assert_eq!(fixture.launcher.calls.load(Ordering::SeqCst), 1);
+    let summary = manager
+        .handle(target, "snapshot".into(), json!({}))
+        .await
+        .unwrap();
     assert_eq!(summary["snapshot"], "- generic [ref=e1]");
     assert_eq!(fixture.launcher.calls.load(Ordering::SeqCst), 2);
     manager.shutdown().await;
@@ -1778,4 +1801,112 @@ async fn a_dropped_tabs_empty_state_goes_out_last() {
     );
     detach();
     manager.shutdown().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_failed_page_close_stays_unconfirmed_and_does_not_close_a_peer_context() {
+    let context = FakeContext::new();
+    let f = ready(&context);
+    for session in ["s", "peer"] {
+        f.manager
+            .handle(target(session, "w"), "release".into(), json!({}))
+            .await
+            .unwrap();
+    }
+    context.page(0).fail_close.store(true, Ordering::SeqCst);
+    let error = f.manager.close_session("s").await.unwrap_err();
+    assert_eq!(error.code, "browser_stop_unconfirmed");
+    assert_eq!(context.stats().1, 0);
+    assert!(!context.page(1).is_closed());
+    assert!(
+        f.manager
+            .handle(target("s", "w"), "release".into(), json!({}))
+            .await
+            .is_err()
+    );
+    f.manager
+        .handle(target("peer", "w"), "status".into(), json!({}))
+        .await
+        .unwrap();
+    assert_eq!(
+        f.manager.close_session("s").await.unwrap_err().code,
+        "browser_stop_unconfirmed"
+    );
+    f.manager.close_session("peer").await.unwrap();
+    f.manager.shutdown().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn context_close_without_a_closed_event_is_not_success() {
+    let context = FakeContext::new();
+    let f = ready(&context);
+    f.manager
+        .handle(target("s", "w"), "release".into(), json!({}))
+        .await
+        .unwrap();
+    context.fail_close.store(true, Ordering::SeqCst);
+    assert_eq!(
+        f.manager.close_session("s").await.unwrap_err().code,
+        "browser_stop_unconfirmed"
+    );
+    assert_eq!(
+        f.manager.close_session("s").await.unwrap_err().code,
+        "browser_stop_unconfirmed"
+    );
+    context.crash();
+    f.manager.shutdown().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_popup_queued_before_page_close_is_drained_with_its_origin() {
+    for fails in [false, true] {
+        let context = FakeContext::new();
+        let f = ready(&context);
+        for session in ["s", "peer"] {
+            f.manager
+                .handle(target(session, "w"), "release".into(), json!({}))
+                .await
+                .unwrap();
+        }
+        let popup = FakePage::new("https://example.com/late-popup");
+        *popup.close_delay.lock().unwrap() = Duration::from_secs(1);
+        popup.fail_close.store(fails, Ordering::SeqCst);
+        *context.page(0).close_popup.lock().unwrap() = Some(popup.clone());
+        let manager = f.manager.clone();
+        let closing = tokio::spawn(async move { manager.close_session("s").await });
+        settle().await;
+        assert!(!closing.is_finished());
+        tokio::time::advance(Duration::from_secs(1)).await;
+        let result = closing.await.unwrap();
+        if fails {
+            assert_eq!(result.unwrap_err().code, "browser_stop_unconfirmed");
+        } else {
+            result.unwrap();
+            assert!(popup.is_closed());
+        }
+        assert!(!context.page(1).is_closed());
+        assert_eq!(context.stats().1, 0);
+        f.manager.close_session("peer").await.unwrap();
+        f.manager.shutdown().await;
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn failed_initial_page_cleanup_is_not_forgotten_by_a_later_close() {
+    let context = FakeContext::new();
+    context.fail_page.store(true, Ordering::SeqCst);
+    context.fail_close.store(true, Ordering::SeqCst);
+    let f = ready(&context);
+    assert!(
+        f.manager
+            .handle(target("s", "w"), "release".into(), json!({}))
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        f.manager.close_session("s").await.unwrap_err().code,
+        "browser_stop_unconfirmed"
+    );
+    context.crash();
+    f.manager.shutdown().await;
 }

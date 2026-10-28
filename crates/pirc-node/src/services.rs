@@ -262,9 +262,6 @@ impl Services {
             ));
         }
         let sandbox = crate::sandbox::create(&config, &env);
-        // Launches nothing until an agent or a viewer opens a page.
-        let browser: Arc<dyn BrowserService> =
-            Arc::new(crate::browser::manager::BrowserManager::new(&config, &env));
         let events = EventHub::new(config.event_buffer_size);
         let router = Router::new(
             crate::app::routes(&config)
@@ -281,34 +278,40 @@ impl Services {
         }
         let recovery_roots =
             crate::checkpoints::continuation::roots(&db.lock()).map_err(|e| e.startup_text())?;
-        let node = Arc::new_cyclic(|weak: &WeakNode| Services {
-            config,
-            env,
-            db,
-            events,
-            models: ModelStore::new(),
-            modes: RwLock::new(BTreeMap::new()),
-            link: LinkSender::new(),
-            activity: Notify::new(),
-            router,
-            writes: WriteBroker::new(weak.clone()),
-            checkpoints,
-            recovery_roots: RwLock::new(recovery_roots),
-            branches: BranchCache::new(),
-            agent_gateway: AgentGateway::new(weak.clone()),
-            inference: InferenceServer::new(weak.clone()),
-            runners: RunnerManager::new(weak.clone()),
-            pots: crate::pots::Pots::default(),
-            execution_drains: Arc::default(),
-            host_commands: Arc::default(),
-            incarnation: crate::util::uuid(),
-            terminals: Terminals::new(weak.clone()),
-            streams: Streams::new(weak.clone()),
-            mirror: MemoryMirror::new(weak.clone()),
-            sandbox,
-            browser,
-            closing: AtomicBool::new(false),
-            terminate,
+        let node = Arc::new_cyclic(|weak: &WeakNode| {
+            let browser: Arc<dyn BrowserService> = Arc::new(crate::browser::tracked::Tracked::new(
+                weak.clone(),
+                Arc::new(crate::browser::manager::BrowserManager::new(&config, &env)),
+            ));
+            Services {
+                config,
+                env,
+                db,
+                events,
+                models: ModelStore::new(),
+                modes: RwLock::new(BTreeMap::new()),
+                link: LinkSender::new(),
+                activity: Notify::new(),
+                router,
+                writes: WriteBroker::new(weak.clone()),
+                checkpoints,
+                recovery_roots: RwLock::new(recovery_roots),
+                branches: BranchCache::new(),
+                agent_gateway: AgentGateway::new(weak.clone()),
+                inference: InferenceServer::new(weak.clone()),
+                runners: RunnerManager::new(weak.clone()),
+                pots: crate::pots::Pots::default(),
+                execution_drains: Arc::default(),
+                host_commands: Arc::default(),
+                incarnation: crate::util::uuid(),
+                terminals: Terminals::new(weak.clone()),
+                streams: Streams::new(weak.clone()),
+                mirror: MemoryMirror::new(weak.clone()),
+                sandbox,
+                browser,
+                closing: AtomicBool::new(false),
+                terminate,
+            }
         });
         if let Some(capture) = &node.checkpoints {
             tokio::spawn(capture.clone().maintenance(node.terminate.subscribe()));

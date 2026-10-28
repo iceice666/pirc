@@ -31,7 +31,7 @@ mod view;
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock, Weak};
 use std::time::Duration;
 
@@ -153,7 +153,7 @@ impl BrowserService for BrowserManager {
         Box::pin(self.inner.clone().input(target, message))
     }
 
-    fn close_session(&self, session_id: &str) -> BoxFuture<'_, ()> {
+    fn close_session(&self, session_id: &str) -> BoxFuture<'_, ApiResult<()>> {
         Box::pin(self.inner.close_session(session_id))
     }
 
@@ -298,8 +298,9 @@ struct State {
     operations: HashMap<String, usize>,
     operation_waiters: HashMap<String, Vec<oneshot::Sender<()>>>,
     closing_sessions: HashSet<String>,
-    /// Running `closeSession`s: true once done.
-    closures: HashMap<String, watch::Receiver<bool>>,
+    /// A failed close stays fenced and queryable; absence is not proof of exit.
+    closures: HashMap<String, watch::Receiver<Option<ApiResult<()>>>>,
+    unconfirmed_sessions: HashSet<String>,
 }
 
 /// An attached viewer (`attach`).
@@ -374,6 +375,8 @@ pub(crate) struct Tab {
     /// `Inner::emit_state_with`).
     states_emitted: AtomicU64,
     states_sent: Arc<watch::Sender<u64>>,
+    listeners: AtomicUsize,
+    listeners_done: tokio::sync::Notify,
 }
 
 pub(crate) struct TabState {
@@ -425,6 +428,8 @@ impl Tab {
             cast: tokio::sync::Mutex::new(()),
             states_emitted: AtomicU64::new(0),
             states_sent: Arc::new(watch::channel(0).0),
+            listeners: AtomicUsize::new(0),
+            listeners_done: tokio::sync::Notify::new(),
         }
     }
 
@@ -559,6 +564,33 @@ impl Inner {
             inner: self.clone(),
             session: session.to_owned(),
         })
+    }
+
+    /// Internal cleanup is tracked even after admission closes. It may close
+    /// late popups or flush a recording; it never authorizes new user work.
+    fn begin_cleanup(self: &Arc<Self>, session: &str) -> Lease {
+        *self
+            .lock()
+            .operations
+            .entry(session.to_owned())
+            .or_default() += 1;
+        Lease {
+            inner: self.clone(),
+            session: session.to_owned(),
+        }
+    }
+
+    fn retire_popup(self: &Arc<Self>, tab: &Arc<Tab>, popup: PageRef) {
+        let cleanup = self.begin_cleanup(tab.session());
+        let inner = self.clone();
+        let session = tab.session().to_owned();
+        spawn(async move {
+            let _cleanup = cleanup;
+            let result = tokio::time::timeout(CONTEXT_CLOSE_TIMEOUT, popup.close()).await;
+            if !matches!(result, Ok(Ok(()))) || !popup.is_closed() {
+                inner.lock().unconfirmed_sessions.insert(session);
+            }
+        });
     }
 
     async fn wait_for_operations(&self, session: &str) {
@@ -735,8 +767,12 @@ impl Inner {
                     }
                     unused
                 };
-                if let Some(workspace) = unused {
-                    close_context(workspace.launch).await;
+                if let Some(workspace) = unused
+                    && close_context(workspace.launch).await.is_err()
+                {
+                    self.lock()
+                        .unconfirmed_sessions
+                        .insert(target.session_id.clone());
                 }
                 Err(error)
             }
@@ -796,6 +832,9 @@ impl Inner {
 
     /// `newPage(tab)`.
     async fn new_page(self: &Arc<Self>, tab: &Arc<Tab>) -> OpResult<PageRef> {
+        if tab.closed() || self.session_closing(tab.session()) {
+            return Err(closing_error().into());
+        }
         if tab.lock().pages.len() >= TABS_PER_SESSION {
             return Err(
                 ApiError::conflict(format!("At most {TABS_PER_SESSION} tabs per session")).into(),
@@ -811,9 +850,17 @@ impl Inner {
     fn adopt(self: &Arc<Self>, tab: &Arc<Tab>, page: PageRef) {
         let events = page.subscribe();
         {
+            let state = self.lock();
             let mut st = tab.lock();
+            if state.closing || state.closing_sessions.contains(tab.session()) || st.closed {
+                drop(st);
+                drop(state);
+                self.retire_popup(tab, page);
+                return;
+            }
             st.pages.push(page.clone());
             st.active = Some(page.clone());
+            tab.listeners.fetch_add(1, Ordering::AcqRel);
         }
         let overlay = page.clone();
         spawn(async move {
@@ -825,15 +872,15 @@ impl Inner {
     }
 
     fn on_popup(self: &Arc<Self>, tab: &Arc<Tab>, popup: PageRef) {
+        let closing = self.session_closing(tab.session());
         {
             let st = tab.lock();
-            if st.closed || st.pages.iter().any(|p| same(p, &popup)) {
+            if st.pages.iter().any(|p| same(p, &popup)) {
                 return;
             }
-            if st.pages.len() >= TABS_PER_SESSION {
-                spawn(async move {
-                    let _ = popup.close().await;
-                });
+            if closing || st.closed || st.pages.len() >= TABS_PER_SESSION {
+                drop(st);
+                self.retire_popup(tab, popup);
                 return;
             }
         }
@@ -876,8 +923,14 @@ impl Inner {
         };
         if let Some(recording) = stop {
             let stopping = self.finish_recording(tab, recording);
+            let cleanup = self.begin_cleanup(tab.session());
+            let inner = self.clone();
+            let session = tab.session().to_owned();
             spawn(async move {
-                let _ = stopping.await;
+                let _cleanup = cleanup;
+                if stopping.await.is_err() {
+                    inner.lock().unconfirmed_sessions.insert(session);
+                }
             });
         }
         {
@@ -900,7 +953,10 @@ impl Inner {
     /// user, drain accepted requests (pending launches included), then
     /// close the tab and, when no session uses it any more, the context.
     /// Concurrent calls share one closing.
-    fn close_session(self: &Arc<Self>, session: &str) -> impl Future<Output = ()> + Send + 'static {
+    fn close_session(
+        self: &Arc<Self>,
+        session: &str,
+    ) -> impl Future<Output = ApiResult<()>> + Send + 'static {
         let mut done = {
             let mut state = self.lock();
             match state.closures.get(session) {
@@ -913,29 +969,37 @@ impl Inner {
                         let mut st = tab.lock();
                         self.wake_waiters(tab, &mut st, Some(closing_error()));
                     }
-                    let (finished, done) = watch::channel(false);
+                    let (finished, done) = watch::channel(None);
                     state.closures.insert(session.to_owned(), done.clone());
                     let inner = self.clone();
                     let session = session.to_owned();
                     spawn(async move {
-                        inner.closing(&session).await;
-                        {
+                        let result = inner.closing(&session).await;
+                        if result.is_ok() {
                             let mut state = inner.lock();
                             state.closures.remove(&session);
                             state.closing_sessions.remove(&session);
                         }
-                        finished.send_replace(true);
+                        finished.send_replace(Some(result));
                     });
                     done
                 }
             }
         };
         async move {
-            let _ = done.wait_for(|done| *done).await;
+            tokio::time::timeout(Duration::from_secs(30), async {
+                done.wait_for(Option::is_some)
+                    .await
+                    .map_err(|_| super::journal::unresolved())?
+                    .clone()
+                    .unwrap_or_else(|| Err(super::journal::unresolved()))
+            })
+            .await
+            .map_err(|_| super::journal::unresolved())?
         }
     }
 
-    async fn closing(self: &Arc<Self>, session: &str) {
+    async fn closing(self: &Arc<Self>, session: &str) -> ApiResult<()> {
         self.wait_for_operations(session).await;
         let (tab, workspace_ids) = {
             let state = self.lock();
@@ -951,17 +1015,38 @@ impl Inner {
             }
             (tab, ids)
         };
+        let mut confirmed = !self.lock().unconfirmed_sessions.contains(session);
         let pages = tab
             .as_ref()
             .map(|tab| tab.lock().pages.clone())
             .unwrap_or_default();
         if let Some(tab) = &tab {
             if let Some(stopping) = self.stop_recording(tab) {
-                let _ = stopping.await;
+                confirmed &= stopping.await.is_ok();
             }
             self.drop_tab(tab);
         }
-        futures_util::future::join_all(pages.iter().map(|page| page.close())).await;
+        let results = futures_util::future::join_all(pages.iter().map(|page| async move {
+            let result = tokio::time::timeout(CONTEXT_CLOSE_TIMEOUT, page.close()).await;
+            matches!(result, Ok(Ok(()))) && page.is_closed()
+        }))
+        .await;
+        confirmed &= results.into_iter().all(|closed| closed);
+        if let Some(tab) = &tab {
+            // A Page close event follows its earlier popup events. Drain the
+            // listeners before checking cleanup so those popups cannot be lost.
+            confirmed &= tokio::time::timeout(CONTEXT_CLOSE_TIMEOUT, async {
+                while tab.listeners.load(Ordering::Acquire) > 0 {
+                    tab.listeners_done.notified().await;
+                }
+            })
+            .await
+            .is_ok();
+        }
+        confirmed &= tokio::time::timeout(CONTEXT_CLOSE_TIMEOUT, self.wait_for_operations(session))
+            .await
+            .is_ok();
+        confirmed &= !self.lock().unconfirmed_sessions.contains(session);
         // The session may only have reserved a workspace while its launch
         // was pending: remove that too, then close an unused context.
         for id in workspace_ids {
@@ -977,8 +1062,13 @@ impl Inner {
                 state.workspaces.remove(&id)
             };
             if let Some(workspace) = unused {
-                close_context(workspace.launch).await;
+                confirmed &= close_context(workspace.launch).await.is_ok();
             }
+        }
+        if confirmed {
+            Ok(())
+        } else {
+            Err(super::journal::unresolved())
         }
     }
 
@@ -1025,7 +1115,10 @@ impl Inner {
                 .collect()
         };
         for session in idle {
-            spawn(self.close_session(&session));
+            let closing = self.close_session(&session);
+            spawn(async move {
+                let _ = closing.await;
+            });
         }
     }
 
@@ -1065,12 +1158,25 @@ async fn listen(
     page: PageRef,
     mut events: futures_util::stream::BoxStream<'static, seam::PageEvent>,
 ) {
-    use futures_util::StreamExt as _;
-    // A page closed before we listened sends no `Closed` any more.
-    let mut closed = page.is_closed();
+    use futures_util::{FutureExt as _, StreamExt as _};
+    struct Listening(Arc<Tab>);
+    impl Drop for Listening {
+        fn drop(&mut self) {
+            if self.0.listeners.fetch_sub(1, Ordering::AcqRel) == 1 {
+                self.0.listeners_done.notify_one();
+            }
+        }
+    }
+    let _listening = Listening(tab.clone());
+    // If already closed, first consume any queued popup events that precede
+    // Closed. Only an empty closed stream may synthesize the final event.
     loop {
-        let event = if closed {
-            seam::PageEvent::Closed
+        let event = if page.is_closed() {
+            events
+                .next()
+                .now_or_never()
+                .flatten()
+                .unwrap_or(seam::PageEvent::Closed)
         } else {
             // A page whose events end is gone.
             events.next().await.unwrap_or(seam::PageEvent::Closed)
@@ -1084,7 +1190,6 @@ async fn listen(
                 return;
             }
         }
-        closed = false;
     }
 }
 
@@ -1104,12 +1209,17 @@ fn could_not_start(reason: String) -> ApiError {
     ))
 }
 
-/// `closeContext`: close a context once started, giving up after 10 s
-/// (the process is not killed then, as in TS); errors are ignored.
-async fn close_context(launch: Launch) {
-    if let Ok(context) = wait_launch(launch).await {
-        let _ = tokio::time::timeout(CONTEXT_CLOSE_TIMEOUT, context.close()).await;
-    }
+/// A close request is not a close event. Retain uncertainty on timeout.
+async fn close_context(launch: Launch) -> ApiResult<()> {
+    tokio::time::timeout(CONTEXT_CLOSE_TIMEOUT, async {
+        if let Ok(context) = wait_launch(launch).await {
+            context.close().await;
+            context.closed().await;
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|_| super::journal::unresolved())?
 }
 
 /// `mkdirSync(dir, {recursive: true, mode: 0o700})`. A failure answers 500

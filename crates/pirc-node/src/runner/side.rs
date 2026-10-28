@@ -1303,7 +1303,7 @@ mod tests {
             unreachable!()
         }
 
-        fn close_session(&self, _: &str) -> BoxFuture<'_, ()> {
+        fn close_session(&self, _: &str) -> BoxFuture<'_, ApiResult<()>> {
             unreachable!()
         }
 

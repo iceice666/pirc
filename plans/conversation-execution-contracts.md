@@ -27,6 +27,8 @@ The 2026-10-27 publication request covers accumulated commits and plan progress,
 not deployment or release. The [integrated architecture review](unified-architecture-review.md)
 retains the original design review and remaining gates.
 
+The [browser-supervision checkpoint](unified-conversations.md#u4-implementation-checkpoint-durable-browser-supervision-2026-10-28) adds retained close outcomes and deletion/drain blocking in Node schema 2018. This does not fulfill per-effect browser revocation or replacement-policy installation.
+
 The main plan owns domain lifetimes, retained context (decision A), revocation,
 checkpoints and migration. This document refines those contracts. Names below
 are logical concepts, not finalized API fields, database schemas or Rust types.

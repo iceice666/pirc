@@ -1,5 +1,31 @@
 # Upgrades
 
+## Unreleased checkpoint: browser supervision
+
+Node schema **2018** retains browser group identity and close observations.
+Back up matching binaries and private state before migration. Older binaries
+reject this schema; changing the version or deleting the evidence is not a
+rollback. Gateway remains 1025; protocol/client/private envelope remain 15/2/3.
+
+Close can now return `browser_stop_unconfirmed` when the engine did not confirm
+page/context closure, cleanup timed out, or the result could not be saved. Session
+deletion preserves its data and transition drain reports blocked. A Node crash
+with an active group retains uncertainty: a fresh process with no live browser
+entries does not prove the old resources stopped. New browser work for that
+session is refused until safe reconciliation is implemented; no automatic
+replay, forced clearing or manual PID signaling is supported.
+
+Only pirc-owned resources are closed. Other sessions sharing the workspace
+context remain independent. An old request interrupted by a context crash now
+fails with a conflict instead of recreating an untracked tab; a fresh request may
+open a registered tab. The journal stores original session/workspace/root,
+incarnation and outcome/timestamps, not URLs, input, cookies or credentials.
+
+These observations are not OS-wide browser containment or per-CDP-effect
+revocation. Historical coverage and revocation/installation flags remain false.
+Public environment switching and U1 activation remain disabled. See the
+[implementation checkpoint](../../plans/unified-conversations.md#u4-implementation-checkpoint-durable-browser-supervision-2026-10-28).
+
 ## Unreleased local checkpoint: terminal supervision
 
 Node schema **2017** adds a minimal retained panel-terminal journal. Preserve a

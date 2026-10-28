@@ -270,7 +270,7 @@ fn migration_does_not_invent_pre_journal_terminal_history() {
     assert_eq!(
         db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
             .unwrap(),
-        2017
+        crate::store::SCHEMA_VERSION
     );
     assert_eq!(
         serde_json::to_value(journal::summary(&db, "old").unwrap()).unwrap(),

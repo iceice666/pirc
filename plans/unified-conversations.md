@@ -4,13 +4,16 @@
 
 Status: adopted architecture baseline with an authorized staged implementation
 covering first Send, environment bindings, resource transitions, canonical tasks/
-collaboration and bounded pots. The published baseline `303fa8f8` and subsequent local retry-recovery, editor-snapshot, native blob cleanup, Node connection capability fencing and live Web/native acceptance
-checkpoints are summarized below (2026-10-27). UI redesign/navigation reorganization remains deferred;
+collaboration and bounded pots. The last completed remote CI baseline is `303fa8f8`.
+The 2026-10-28 publication batch includes subsequent retry recovery, native blob
+cleanup, live Web/native acceptance, U2 provenance and U4 supervision checkpoints
+summarized below. CI for this batch must be verified independently.
+UI redesign/navigation reorganization remains deferred;
 Web/Android changes are limited to necessary functional integration. Use only
 focused simple Flutter checks when Flutter changes.
 
-The user authorized publication of the accumulated work and subsequent CI repairs;
-remote Check and Android passed at `303fa8f8`. New architecture work retains the
+The user again authorized pull/rebase, plan updates and publication of the
+accumulated work on 2026-10-28. Subsequent architecture work retains the
 local-commit default. This does not enable the new flow, deploy it, change versions
 or create a Release. Undecided numerical settings still need confirmation when
 their implementation stage begins; earlier library/pots work is reused.
@@ -19,7 +22,7 @@ their implementation stage begins; earlier library/pots work is reused.
 
 **U1 is implemented across Gateway, Node, Web and native Android, but is not
 accepted for activation. `canSubmit: false` remains in production.** Current
-formats: Gateway **1025**, Node **2015**, protocol **15**, client contract **2**,
+formats: Gateway **1025**, Node **2018**, protocol **15**, client contract **2**,
 Web IndexedDB **3**, Android private envelope **3**. Package/dependency versions
 and Nix hashes are unchanged. Existing session, memory-deletion and checkpoint
 ownership guarantees remain in effect.
@@ -42,7 +45,7 @@ newer U2 changes.
 
 U4 has begun with an [internal Node admission fence](#u4-implementation-checkpoint-node-transition-admission-fence-2026-10-28)
 and tracked supervisor drain, followed by [runner-scoped inference retirement](#u4-implementation-checkpoint-runner-scoped-inference-retirement-2026-10-28). Linux process scopes now have a [durable launch journal and bounded restart reconciliation](#u4-implementation-checkpoint-durable-sandbox-launch-journal-2026-10-28), followed by [guarded startup](#u4-implementation-checkpoint-guarded-native-linux-launch-2026-10-28) and [terminal effect-boundary checks](#u4-implementation-checkpoint-fenced-terminal-input-2026-10-28). [Approved host-command supervision](#u4-implementation-checkpoint-supervised-host-commands-2026-10-28) now joins Stop/drain with durable launch evidence. Its receipts explicitly deny revocation/installation
-completion. No public workspace switch or new resource grant is enabled; Gateway
+completion. Durable terminal and [browser group supervision](#u4-implementation-checkpoint-durable-browser-supervision-2026-10-28) now also retain uncertain outcomes across restart. No public workspace switch or new resource grant is enabled; Gateway
 coordination, OS enforcement, replacement binding and Web/App controls remain.
 
 Delivered U1 behavior:
@@ -3997,3 +4000,55 @@ These are local macOS process/PTY tests, not Linux kernel containment or Android
 device acceptance. No Flutter source changed, and no browser/emulator, live
 provider or Nix verification was used. The isolated target/log directory is
 removed after validation; shared caches and APKs are retained.
+
+## U4 implementation checkpoint: durable browser supervision (2026-10-28)
+
+Node schema **2018** reserves a browser group before admitting operations to the
+engine. It retains immutable original session/workspace/root/Node-incarnation
+metadata and active/settled/unconfirmed outcomes, without URLs, typed input,
+cookies or PIDs. Older state migrates without invented history; records survive
+session deletion. A failed reservation prevents the operation.
+
+Close now returns a result. A separate observer drains accepted requests, closes
+pages and waits for context closure when no other session uses that context.
+Caller cancellation does not cancel the observer; duplicate close shares its
+result. Late popup retirement and recording cleanup retain in-flight tracking,
+and listeners drain earlier popup events before reporting completion. Shared
+workspace peers remain usable. A failed close or outcome write stays unresolved;
+an empty manager after restart cannot authorize new browser work, deletion or a
+successful transition drain for that group. No force-clear, automatic replay or
+numeric-PID signaling is introduced.
+
+A pending request whose browser context crashes now returns a conflict instead of
+reopening a page on its old, unregistered Tab. A fresh request may create a new
+registered tab. This intentionally changes that error-path behavior while keeping
+normal browser operations and the existing browser protocol.
+
+Deletion preserves session data on `browser_stop_unconfirmed`; internal transition
+receipts expose browser group/settled/unresolved counts. These are group close
+observations, not complete browser process/descendant or CDP effect-boundary
+revocation. Queued CDP effects, resource grants, platform containment, Gateway
+coordination and replacement-policy acknowledgement remain open. Pre-journal
+activity is unknown, so `historyComplete`, `revocationConfirmed` and
+`targetInstalled` remain false. U1 stays disabled with `canSubmit: false`.
+
+Local validation: **550 Node library tests passed**, including nine new browser
+cases (four subprocess helpers remain top-level ignored and are invoked by parent
+tests). Coverage includes canceled closure, failed reservation/outcome storage,
+changed roots, late popups, failed initial-page cleanup, missing close events,
+peer independence, retained data on blocked deletion, transition retries and
+2017→2018 migration. Strict Node/conformance all-target Clippy passed after four
+style-only corrections. Existing memory and checkpoint unit regressions pass.
+Browser lifecycle cases use fake engines; no user Chrome, emulator or device was
+started or stopped. Real browser and native Linux acceptance are separate CI
+gates, and local Nix verification remains waived.
+
+Rebuilt Node/Gateway binaries passed **22 required real-process cases** across
+checkpoints (3), conversation admission (2), creation (2), execution fences (3),
+host commands (1), inference (1), memory (1), Node-link side channels (5),
+terminals (2), project deletion (1) and streams (1). This verifies compatibility
+of the changed close contract with existing session/control/recovery paths; it is
+not real-browser acceptance. Rust fmt, changed-document Prettier, local document
+targets and diff checks passed. No dependency, package version or Nix hash changed.
+The isolated build/log directory is removed after final validation; APKs, shared
+caches, user data and other agents' work are retained.

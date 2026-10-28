@@ -24,8 +24,10 @@
 pub mod assets;
 pub mod engine;
 pub mod hosts;
+pub(crate) mod journal;
 pub mod manager;
 pub mod recording;
+pub(crate) mod tracked;
 pub mod util;
 
 use std::future::Future;
@@ -97,7 +99,7 @@ pub trait BrowserService: Send + Sync {
     ) -> BoxFuture<'_, ApiResult<Option<Value>>>;
 
     /// Close a deleted session's tabs.
-    fn close_session(&self, session_id: &str) -> BoxFuture<'_, ()>;
+    fn close_session(&self, session_id: &str) -> BoxFuture<'_, ApiResult<()>>;
 
     /// Node shutdown.
     fn shutdown(&self) -> BoxFuture<'_, ()>;
