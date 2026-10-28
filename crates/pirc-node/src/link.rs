@@ -765,9 +765,9 @@ pub fn workspace_roles(config: &pirc_config::NodeConfig, root: &str) -> Option<V
 }
 
 /// Every open run and every write-lease holder, whole.
-fn activity(node: &Node) -> Vec<SessionActivity> {
+fn activity(node: &Node) -> crate::error::ApiResult<Vec<SessionActivity>> {
     let mut sessions: Vec<SessionActivity> = Vec::new();
-    let runs = node.db.lock().active_runs().unwrap_or_default();
+    let runs = node.db.lock().active_runs()?;
     for (session_id, status) in runs {
         let run = match status {
             RunStatus::Queued => SessionRun::Queued,
@@ -786,7 +786,7 @@ fn activity(node: &Node) -> Vec<SessionActivity> {
             }),
         }
     }
-    for holder in node.writes.holders() {
+    for holder in node.writes.holders()? {
         match sessions.iter_mut().find(|entry| entry.id == holder) {
             Some(entry) => entry.write_lease = Some(true),
             None => sessions.push(SessionActivity {
@@ -796,14 +796,17 @@ fn activity(node: &Node) -> Vec<SessionActivity> {
             }),
         }
     }
-    sessions
+    Ok(sessions)
 }
 
 fn send_activity(node: &Node) {
     if node.link.is_registered() {
-        node.link.send(&NodeMessage::Activity {
-            sessions: activity(node),
-        });
+        match activity(node) {
+            Ok(sessions) => {
+                node.link.send(&NodeMessage::Activity { sessions });
+            }
+            Err(error) => crate::log::warn(&format!("activity inventory unavailable: {error}")),
+        };
     }
 }
 
@@ -833,6 +836,24 @@ mod tests {
     use pirc_protocol::{NodeRole, Registration};
 
     use super::*;
+
+    #[tokio::test]
+    async fn activity_keeps_orphan_host_owners_and_propagates_inventory_failure() {
+        let f = crate::workspace_memory::tests::Fixture::new().await;
+        f.node.db.lock().execute("INSERT INTO host_command_runs VALUES('orphan','deleted-session','removed-workspace',0,'old-node','request','unconfirmed',1,1)",[]).unwrap();
+        let rows = activity(&f.node).unwrap();
+        assert!(
+            rows.iter()
+                .any(|r| r.id == "deleted-session" && r.write_lease == Some(true))
+        );
+        f.node
+            .db
+            .lock()
+            .execute_batch(include_str!("host_commands/remove_schema.sql"))
+            .unwrap();
+        assert!(activity(&f.node).is_err());
+        f.node.close().await;
+    }
 
     fn register() -> NodeMessage {
         NodeMessage::Register(Registration {

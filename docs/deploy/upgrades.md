@@ -1,5 +1,43 @@
 # Upgrades
 
+## Unreleased local checkpoint: host write-resource retention
+
+Node schema **2016** adds immutable resource snapshots to the approved host-command
+journal. Each new reservation atomically records the original session execution
+root and its currently held write ranges before spawn. This is cooperative
+Node-local write coordination, not cross-Node exclusion, a sandbox permission
+grant or a complete inventory of
+files arbitrary host code can touch. Paths are private coordination metadata in
+the Node database (0600), retained with the minimal execution record after session
+or workspace deletion; commands, outputs and conversation contents are not copied.
+
+Agent settlement and runner exit no longer discard those frozen ranges. Pending
+host observations block overlapping peer writes and new host admissions, including
+across distinct workspace IDs with nested canonical roots. A current live supervisor
+may share ranges only with its own session/epoch/Node incarnation. A new epoch,
+a previous Node incarnation, an unconfirmed outcome, or a failed outcome write
+cannot inherit that exemption. Independent known nonoverlapping ranges continue.
+Workspace-removal preflight and activity include orphaned pending host owners;
+an unreadable inventory is not published as an empty activity frame.
+
+Upgrade from 2015 does not infer old paths from today's workspace configuration.
+A pending legacy command without a resource snapshot, or an invalid snapshot,
+blocks cooperative write grants globally with `host_write_pending`. Reads and
+inference remain available. No automatic replay, guessed PID signaling, manual
+force-clear or supported reconciliation override is introduced. Preserve the
+journal and matching binary/state backup; do not erase it or rewrite the schema
+version to force progress or downgrade.
+
+A settled direct-child/output observation releases this cooperative claim; it
+still does **not** prove detached descendants, ambient filesystem access or every
+previous write capability stopped. Full host containment, alias/descriptor-safe
+authority, memory cold-cutover exclusion for arbitrary host code and restart
+reconciliation remain U4 work. `historyComplete`, `revocationConfirmed` and
+`targetInstalled` stay false; public switching and U1 activation remain disabled.
+Gateway stays 1025; protocol/client/private-envelope formats remain 15/2/3. No
+package version, lockfile or Nix dependency changes are needed. See the
+[resource-retention checkpoint](../../plans/unified-conversations.md#u4-implementation-checkpoint-host-write-resource-retention-2026-10-28).
+
 ## Unreleased local checkpoint: supervised approved host commands
 
 Node schema **2015** adds a minimal durable host-command journal. Older binaries

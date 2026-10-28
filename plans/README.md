@@ -93,7 +93,7 @@ Release. The most recent pull/rebase had no upstream conflicts.
 | U6 — bounded proactive pots                    | Progress-only observation and explicit dispatch exist                                                                                                                                                                                      | Scoped content observation, finite budgets, quiet suggestions and synchronized notification/decision lifecycle      |
 
 **The new U1 flow is still gated by `canSubmit: false`.** Pushing its code does
-not enable it. Current formats are Gateway schema **1025**, Node schema **2015**,
+not enable it. Current formats are Gateway schema **1025**, Node schema **2016**,
 protocol **15**, client recovery contract **2**, and Web IndexedDB/native private
 envelope **3**. Existing ordinary session APIs remain available. Unaccepted
 Gateway attachment staging expires after **seven days**; accepted attachments and
@@ -132,6 +132,7 @@ and a one-time permission record; missing evidence refuses startup. See the
 [guarded launch checkpoint](unified-conversations.md#u4-implementation-checkpoint-guarded-native-linux-launch-2026-10-28).
 Panel terminals now recheck their original binding/controller at each actual write and resize; see the [terminal checkpoint](unified-conversations.md#u4-implementation-checkpoint-fenced-terminal-input-2026-10-28).
 Node schema 2015 journals approved host commands and joins their Node-owned supervision on Stop/deletion/transition drain. Unknown prior observations remain unresolved; see the [host-command checkpoint](unified-conversations.md#u4-implementation-checkpoint-supervised-host-commands-2026-10-28).
+Node schema 2016 retains approved host-command write ranges across Agent settlement and restart. Unknown legacy ranges block writes instead of inventing availability; see the [resource-retention checkpoint](unified-conversations.md#u4-implementation-checkpoint-host-write-resource-retention-2026-10-28).
 Resource grants, project moves and full effect fences remain open. U1 still needs device/deployment acceptance
 before activation. Detailed validation and the previously reproduced macOS snapshot
 limitation are recorded in the checkpoints; no full Linux/device acceptance is claimed.

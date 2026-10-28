@@ -20,6 +20,8 @@ use std::{
 };
 use tokio::sync::watch;
 
+pub(crate) mod resources;
+
 const WAIT: Duration = Duration::from_secs(5);
 #[derive(Default)]
 pub(crate) struct Commands(Mutex<Registry>);
@@ -47,6 +49,7 @@ pub(crate) struct Origin {
     pub epoch: i64,
     pub request: String,
     pub timeout: Duration,
+    pub root: std::path::PathBuf,
 }
 pub(crate) struct Ticket(Arc<Job>);
 impl Drop for Ticket {
@@ -112,6 +115,15 @@ fn finish(db: &Connection, id: &str, state: &str) -> ApiResult<()> {
 }
 
 impl Commands {
+    pub(crate) fn active_runs(&self) -> Vec<String> {
+        self.lock()
+            .jobs
+            .iter()
+            .filter(|(_, job)| job.result.borrow().is_none())
+            .map(|(id, _)| id.clone())
+            .collect()
+    }
+
     /// Caller holds Node's DB and runner-side admission locks through this call.
     /// The journal must commit independently before spawning arbitrary host code.
     pub(crate) fn start(
@@ -136,6 +148,7 @@ impl Commands {
         if db.query_row("SELECT EXISTS(SELECT 1 FROM host_command_runs WHERE session_id=?1 AND runner_epoch=?2 AND incarnation=?3 AND request_id=?4)",params![origin.session,origin.epoch,node.incarnation,origin.request],|r|r.get::<_,bool>(0))? {
             return Err(ApiError::conflict("This host command request was already admitted; it will not be replayed"));
         }
+        let paths = node.writes.host_paths(db, &origin, &node.incarnation)?;
         let mut registry = self.lock();
         if registry.closing || registry.stops.contains_key(&origin.session) || node.closing() {
             return Err(unconfirmed());
@@ -156,18 +169,22 @@ impl Commands {
         }
         let id = uuid();
         let stamp = now_ms();
-        db.execute(
-            "INSERT INTO host_command_runs VALUES(?1,?2,?3,?4,?5,?6,'launching',?7,?7)",
-            params![
-                id,
-                origin.session,
-                origin.workspace,
-                origin.epoch,
-                node.incarnation,
-                origin.request,
-                stamp
-            ],
-        )?;
+        crate::store::atomic(db, |db| {
+            db.execute(
+                "INSERT INTO host_command_runs VALUES(?1,?2,?3,?4,?5,?6,'launching',?7,?7)",
+                params![
+                    id,
+                    origin.session,
+                    origin.workspace,
+                    origin.epoch,
+                    node.incarnation,
+                    origin.request,
+                    stamp
+                ],
+            )?;
+            resources::record(db, &id, &paths)
+        })?;
+        node.activity.notify_one();
         let (cancel, abort) = watch::channel(false);
         let (result_tx, result) = watch::channel(None);
         let job = Arc::new(Job {
@@ -180,6 +197,7 @@ impl Commands {
             Ok(child) => child.into_inner(),
             Err(error) => {
                 finish(db, &id, "not_started")?;
+                node.activity.notify_one();
                 result_tx.send_replace(Some(Ok(crate::runner::host::spawn_error(&error))));
                 return Ok(Ticket(job));
             }
@@ -203,23 +221,24 @@ impl Commands {
             .catch_unwind()
             .await;
             let complete = observed.as_ref().is_ok_and(|v| v.complete);
-            let recorded = weak.upgrade().ok_or_else(unconfirmed).and_then(|node| {
-                finish(
-                    &node.db.lock(),
-                    &id,
-                    if complete { "settled" } else { "unconfirmed" },
-                )
-            });
-            let result = recorded.and_then(|()| {
-                if let Some(error) = journal_error {
-                    return Err(error);
-                }
+            let outcome = if let Some(error) = journal_error {
+                Err(error)
+            } else {
                 match observed {
                     Ok(v) if v.complete => Ok(v.result),
                     _ => Err(unconfirmed()),
                 }
-            });
-            result_tx.send_replace(Some(result));
+            };
+            if let Some(node) = weak.upgrade() {
+                let db = node.db.lock();
+                let recorded = finish(&db, &id, if complete { "settled" } else { "unconfirmed" });
+                // Publish loss of live ownership before releasing admission. A
+                // failed outcome write must not let this epoch reuse the range.
+                result_tx.send_replace(Some(recorded.and(outcome)));
+                node.activity.notify_one();
+            } else {
+                result_tx.send_replace(Some(Err(unconfirmed())));
+            }
             let mut registry = commands.lock();
             if registry
                 .jobs
@@ -308,3 +327,6 @@ fn finish_running(db: &Connection, id: &str) -> ApiResult<()> {
 }
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod resource_tests;

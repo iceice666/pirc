@@ -3,17 +3,25 @@ use crate::store::Db;
 use crate::workspace_memory::tests::Fixture;
 use std::path::Path;
 
-fn origin(f: &Fixture, session: &str, request: &str) -> Origin {
+pub(super) fn origin(f: &Fixture, session: &str, request: &str) -> Origin {
     let row = f.node.db.lock().get_session(session).unwrap();
     Origin {
         session: session.into(),
+        root: f
+            .node
+            .db
+            .lock()
+            .get_workspace(&row.workspace_id)
+            .unwrap()
+            .canonical_path
+            .into(),
         workspace: row.workspace_id,
         epoch: row.runner_epoch,
         request: request.into(),
         timeout: Duration::from_secs(15),
     }
 }
-fn start(
+pub(super) fn start(
     f: &Fixture,
     session: &str,
     request: &str,
@@ -33,12 +41,20 @@ fn snapshot(f: &Fixture, session: &str) -> Summary {
 #[tokio::test]
 async fn lost_waiter_is_cancelled_but_independently_reaped_and_peer_survives() {
     let f = Fixture::new().await;
-    let peer = f
-        .node
-        .db
-        .lock()
-        .create_session("repo", "/unused-peer", "alice")
+    let peer_root = f.dir.join("peer-work");
+    std::fs::create_dir(&peer_root).unwrap();
+    let peer = {
+        let db = f.node.db.lock();
+        db.add_workspace(
+            "other",
+            "memory-test",
+            "Other",
+            peer_root.to_str().unwrap(),
+            crate::store::ModeId::new("directory").unwrap(),
+        )
         .unwrap();
+        db.create_session("other", "/unused-peer", "alice").unwrap()
+    };
     let (_source, source) = watch::channel(false);
     let first = start(
         &f,

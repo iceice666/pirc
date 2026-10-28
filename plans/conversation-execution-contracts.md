@@ -333,6 +333,11 @@ spawn authority is rechecked at the effect boundary, Stop/drain joins the
 independent observer, and interruption/storage failure preserves unresolved
 journal evidence. Settled direct-child/pipes do not establish detached-descendant
 termination; historical host execution is not inventoried.
+Node schema 2016 adds [durable host write-resource retention](unified-conversations.md#u4-implementation-checkpoint-host-write-resource-retention-2026-10-28).
+Agent cleanup cannot clear those frozen claims. Peer writes, host admissions and
+removal preflight consult pending observations; missing prior ranges block rather
+than infer an empty scope. This is cooperative coordination, not complete host
+containment or authority revocation.
 
 - Resolve and validate path components, containment and aliases at the trusted
   boundary. String-prefix checks or one-time symlink canonicalization are not

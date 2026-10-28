@@ -182,6 +182,24 @@ async fn workspace_removal_check_is_read_only_and_uses_authoritative_node_state(
     node.writes.release(&session.id);
     assert!(check().await.is_ok());
 
+    // A removed owner row must not make its still-running host command idle.
+    node.db.lock().execute("INSERT INTO host_command_runs VALUES('orphan','deleted-session','repo',0,'old-node','request','running',1,1)",[]).unwrap();
+    crate::host_commands::resources::record(
+        &node.db.lock(),
+        "orphan",
+        &[repository.to_string_lossy().into_owned()],
+    )
+    .unwrap();
+    assert_eq!(check().await.unwrap_err().code, "host_write_pending");
+    node.db
+        .lock()
+        .execute(
+            "UPDATE host_command_runs SET state='settled' WHERE id='orphan'",
+            [],
+        )
+        .unwrap();
+    assert!(check().await.is_ok());
+
     let other = node
         .db
         .lock()

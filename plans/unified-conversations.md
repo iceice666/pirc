@@ -3764,7 +3764,8 @@ native Linux runtime acceptance and the Gateway replacement coordinator remain
 open. The public switch and U1 activation stay disabled. U2 resource provenance,
 U5 shared task/collaboration state and U6 proactive pots remain incomplete.
 
-The next host-effect requirement is write-lease lifetime: the existing broker
+At this checkpoint the next host-effect requirement was write-lease lifetime
+(addressed for known cooperative ranges by the 2016 checkpoint below): the existing broker
 still releases leases on Agent settlement/runner exit, which may precede the
 independent host observer. Add supervisor-owned lease retention and restart-aware
 blocking before treating that workspace as available to another writer. This
@@ -3795,3 +3796,77 @@ Prettier, local document links and diff checks passed. No Flutter changes, Andro
 device/emulator, live provider, user browser or local Nix verification were used.
 Work remains local. The isolated build/log directory (about **2.5 GiB**) is removed
 after validation; existing APKs, shared caches and user/other-agent files remain.
+
+## U4 implementation checkpoint: host write-resource retention (2026-10-28)
+
+After `5bdb73a0`, Node schema **2016** atomically freezes each approved host
+command's actual session execution root plus currently held write ranges with its
+launch reservation, before spawn. The same DB admission lock covers peer lease
+insertion, so a simultaneous host reservation and overlapping peer write cannot
+both win. Failed resource persistence rolls back the launch reservation and never
+spawns the command. Resource origins cannot be updated/deleted and survive session
+and workspace removal as minimal private coordination metadata.
+
+Ordinary Agent settlement/runner cleanup releases only its ephemeral leases.
+Launching, running and unconfirmed host observations retain their known ranges;
+workspace IDs alone do not distinguish overlapping canonical roots. The same live
+session/epoch/incarnation can reuse its ranges, but a later epoch, restart,
+unconfirmed observation or failed final journal write cannot. Result publication
+and journal completion share the admission lock so lost ownership cannot be
+reused during an outcome-write failure. Independent known ranges remain usable.
+
+Migration never derives an old command's origin from a mutable current workspace.
+A missing pre-2016 snapshot, invalid path list or inventory error fails closed;
+unknown ranges block all cooperative writes until trustworthy reconciliation is
+available. Settled/not-started records do not block and do not require fabricated
+origins. A partial pending index keeps the write check off the settled history.
+No replay, reusable-PID signaling or force-clear endpoint is added.
+
+Existing write-lease activity includes durable owners after Agent cleanup and
+Node restart, even when the owning session was removed. Inventory errors keep the
+last known activity instead of sending an empty frame. Workspace-removal preflight
+also checks retained ranges independently of current session membership. Web and
+Android keep using the existing activity/tool-error contracts; no UI redesign,
+Flutter source change or new wire format is required.
+
+This does not contain arbitrary host code or detached descendants, and the broker
+remains Node-local; separate Nodes sharing a folder still need cross-Node
+coordination. Snapshot paths
+are coordination evidence, never additional filesystem authority. Fully exclusive
+memory cutover against host code, aliases/open descriptors, detached children,
+prior-process reconciliation, macOS containment, native Linux runtime acceptance,
+other admitted effects and Gateway replacement installation remain U4 work. A
+settled observer can release cooperative claims without setting full revocation
+proof. `historyComplete`, `revocationConfirmed` and `targetInstalled` remain false;
+public switching and U1 activation stay disabled. U2 resource enforcement, U5
+shared tasks/collaboration and U6 proactive pots remain open.
+
+Local validation: **528 Node library tests passed** (four subprocess helpers are
+ignored by the top-level harness and invoked by parent tests). New tests cover
+Agent lease release while a host continues, runner exit before host drainage,
+concurrent host/peer admission, nested workspaces, independent ranges, new epochs,
+lost outcome persistence, atomic rollback on resource-write failure, migration
+from 2015 without invented origins, restart with orphaned owners, corrupt/missing
+inventories, immutable ranges, and a 10,000-row settled history using the pending
+index. Existing memory source/deletion and checkpoint regressions also passed.
+An initial compile-only missing test import and two invalid duplicate-workspace
+fixtures were corrected before the successful final run.
+
+**21 required real-process cases passed** across checkpoints (3), conversation
+admission (2), creation (2), execution fences (2), host-command fences (1),
+inference retirement (1), memory (1), Node-link side channels (5), terminals (2),
+project deletion (1) and streams (1). The extended real Node/Agent/PTC case proves
+an overlapping peer `write` is refused while a host command runs, preserves the
+user's later file bytes, permits a fresh peer write after ordinary Stop settles,
+and retains the subsequent transition/restart checks. These use the local fixture
+sandbox, not native Linux containment or Android device acceptance.
+
+All-target Clippy also exposed an existing external checkpoint test using the
+broker's public convenience API; that API was retained while production runner
+requests use the captured-epoch path. **25 checkpoint-safety tests passed** after
+this compatibility fix. Strict Node/conformance all-target Clippy, Rust fmt,
+changed-document Prettier, local document links and diff checks passed.
+No Flutter source, device/emulator, user browser, live provider or local Nix
+validation was involved. This work stays local. The isolated build/log directory
+(about **2.2 GiB**) was removed after all processes completed; existing APKs,
+shared caches and user/other-agent files are preserved.

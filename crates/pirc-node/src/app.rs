@@ -529,6 +529,11 @@ async fn workspace_removal_check(node: Node, request: Request) -> ApiResult<Resp
             "Stop active sessions and delegations before removing this workspace",
         ));
     }
+    crate::host_commands::resources::require_available(
+        &db,
+        std::path::Path::new(&workspace.canonical_path),
+        None,
+    )?;
     Ok(Response::json(json!({ "idle": true })))
 }
 

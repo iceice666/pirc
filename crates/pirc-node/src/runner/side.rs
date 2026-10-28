@@ -122,9 +122,17 @@ impl Runner {
             Some(path) if Path::new(path).is_absolute() => {
                 let canonical =
                     std::fs::canonicalize(path).unwrap_or_else(|_| lexical(Path::new(path)));
-                match node.writes.acquire(&self.session_id, &canonical) {
+                match node
+                    .writes
+                    .acquire_for(&self.session_id, self.epoch, &canonical)
+                {
                     WriteGrant::Granted => {
                         response.insert("granted".into(), json!(true));
+                    }
+                    WriteGrant::Blocked { code, message } => {
+                        response.insert("granted".into(), json!(false));
+                        response.insert("code".into(), json!(code));
+                        response.insert("error".into(), json!(message));
                     }
                     WriteGrant::Refused { holder, path } => {
                         let holder = match node.db.lock().get_session(&holder) {
@@ -995,6 +1003,7 @@ impl Runner {
                 epoch: self.epoch,
                 request: side.id.clone(),
                 timeout,
+                root: root.into(),
             },
             &mut command,
             side.abort.subscribe(),

@@ -1,6 +1,7 @@
 use super::super::side::Side;
 use super::*;
 use crate::workspace_memory::tests::Fixture;
+use std::path::Path;
 
 fn side(runner: &Runner) -> Side {
     let side = Side {
@@ -113,10 +114,25 @@ async fn runner_exit_cancels_host_jobs_even_after_side_entry_is_replaced() {
         .unwrap();
     runner.lock().sandbox_requests.remove(&request.id);
     runner.exit(Some(0), None);
+    let peer = f
+        .node
+        .db
+        .lock()
+        .create_session("repo", "/unused-peer", "alice")
+        .unwrap();
+    assert!(
+        matches!(f.node.writes.acquire(&peer.id, Path::new(&runner.workspace.canonical_path)), crate::write_broker::WriteGrant::Blocked { code, .. } if code == "host_write_pending")
+    );
     // Exit alone sends cancellation; a caller requiring drainage waits for the
     // Node-owned registry even though the runner and side entry are both gone.
     f.node.runners.stop_session(&f.current).await.unwrap();
     assert_eq!(ticket.result().await.unwrap()["aborted"], true);
+    assert_eq!(
+        f.node
+            .writes
+            .acquire(&peer.id, Path::new(&runner.workspace.canonical_path)),
+        crate::write_broker::WriteGrant::Granted
+    );
     f.node.close().await;
 }
 
